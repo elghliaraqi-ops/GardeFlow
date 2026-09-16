@@ -1,0 +1,198 @@
++                  imageFuture: _bytesFor(photo),
++                  canDelete: isAdmin,
++                  onTap: () => _openPhoto(photo),
++                  onDelete: () => _delete(photo),
++                );
++              },
++            );
++          },
++        ),
++      );
++    }
+ 
+     return Scaffold(
+       backgroundColor: AppColors.paper,
+@@ -206,7 +311,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
+           ),
+           if (isAdmin)
+             IconButton(
+-              tooltip: 'Ajouter une photo',
++              tooltip: 'Ajouter une photo pour ${hospitalDisplayName(hospital)}',
+               onPressed: _uploading ? null : _pickImage,
+               icon: _uploading
+                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+@@ -214,50 +319,24 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
+             ),
+         ],
+       ),
+-      body: _loading
+-          ? const Center(child: CircularProgressIndicator())
+-          : _error != null
+-              ? _ErrorState(message: _error!, onRetry: _load)
+-              : RefreshIndicator(
+-                  onRefresh: _load,
+-                  child: LayoutBuilder(
+-                    builder: (context, constraints) {
+-                      final columns = constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 600 ? 3 : 2;
+-                      return GridView.builder(
+-                        physics: const AlwaysScrollableScrollPhysics(),
+-                        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 100),
+-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+-                          crossAxisCount: columns,
+-                          mainAxisSpacing: AppSpace.md,
+-                          crossAxisSpacing: AppSpace.md,
+-                          childAspectRatio: 0.78,
+-                        ),
+-                        itemCount: _photos.length + (isAdmin ? 1 : 0),
+-                        itemBuilder: (context, i) {
+-                          if (isAdmin && i == 0) {
+-                            return _AdminAddTile(uploading: _uploading, onTap: _pickImage);
+-                          }
+-                          final photo = _photos[i - (isAdmin ? 1 : 0)];
+-                          return _AstreintePhotoCard(
+-                            resource: photo,
+-                            imageFuture: _bytesFor(photo),
+-                            canDelete: isAdmin,
+-                            onTap: () => _openPhoto(photo),
+-                            onDelete: () => _delete(photo),
+-                          );
+-                        },
+-                      );
+-                    },
+-                  ),
+-                ),
++      body: Column(
++        children: [
++          _HospitalAstreinteHeader(
++            hospital: hospital,
++            isAdmin: isAdmin,
++            onSelectHospital: _selectHospital,
++          ),
++          Expanded(child: content),
++        ],
++      ),
+       bottomNavigationBar: SafeArea(
+         top: false,
+         child: Padding(
+           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.md),
+           child: Text(
+             isAdmin
+-                ? 'Galerie Supabase partagée. En tant qu’administrateur, vous seul pouvez ajouter ou supprimer les photos.'
+-                : 'Galerie partagée par l’administration. Les photos sont visibles par tous les utilisateurs.',
++                ? 'Vous gérez actuellement les photos de ${hospitalDisplayName(hospital)}. Changez d’établissement en haut pour publier dans une autre galerie.'
++                : 'Vous voyez uniquement les photos d’astreinte de ${hospitalDisplayName(hospital)}.',
+             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft, height: 1.4),
+             textAlign: TextAlign.center,
+           ),
+@@ -267,6 +346,89 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
+   }
+ }
+ 
++class _HospitalAstreinteHeader extends StatelessWidget {
++  final String hospital;
++  final bool isAdmin;
++  final ValueChanged<String> onSelectHospital;
++
++  const _HospitalAstreinteHeader({
++    required this.hospital,
++    required this.isAdmin,
++    required this.onSelectHospital,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      width: double.infinity,
++      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
++      decoration: const BoxDecoration(
++        color: AppColors.card,
++        border: Border(bottom: BorderSide(color: AppColors.line)),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Row(
++            children: [
++              const Icon(Icons.local_hospital_rounded, size: 18, color: AppColors.brand),
++              const SizedBox(width: 8),
++              Expanded(
++                child: Text(
++                  hospitalDisplayName(hospital),
++                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
++                ),
++              ),
++              if (isAdmin)
++                const Text('Galerie à gérer', style: TextStyle(fontSize: 11, color: AppColors.inkSoft)),
++            ],
++          ),
++          if (isAdmin) ...[
++            const SizedBox(height: 9),
++            SingleChildScrollView(
++              scrollDirection: Axis.horizontal,
++              child: Row(
++                children: [
++                  for (final item in kHospitals) ...[
++                    ChoiceChip(
++                      label: Text(hospitalDisplayName(item)),
++                      selected: item == hospital,
++                      onSelected: (_) => onSelectHospital(item),
++                    ),
++                    if (item != kHospitals.last) const SizedBox(width: 8),
++                  ],
++                ],
++              ),
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
++class _EmptyHospitalGallery extends StatelessWidget {
++  final String hospital;
++  const _EmptyHospitalGallery({required this.hospital});
++
++  @override
++  Widget build(BuildContext context) {
++    return ListView(
++      physics: const AlwaysScrollableScrollPhysics(),
++      padding: const EdgeInsets.all(AppSpace.xl),
++      children: [
++        const SizedBox(height: 60),
++        const Icon(Icons.photo_library_outlined, size: 46, color: AppColors.inkSoft),
++        const SizedBox(height: 12),
++        Text(
++          'Aucune photo d’astreinte publiée pour ${hospitalDisplayName(hospital)}.',
++          textAlign: TextAlign.center,
++          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
++        ),
++      ],
++    );
++  }
++}
+ 
+ class _AstreinteGalleryViewer extends StatefulWidget {
+   final List<SharedResource> photos;
+@@ -501,8 +663,9 @@ class _AstreintePhotoCard extends StatelessWidget {
+ 
+ class _AdminAddTile extends StatelessWidget {
+   final bool uploading;
++  final String hospital;
+   final VoidCallback onTap;
+-  const _AdminAddTile({required this.uploading, required this.onTap});
++  const _AdminAddTile({required this.uploading, required this.hospital, required this.onTap});
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -530,8 +693,8 @@ class _AdminAddTile extends StatelessWidget {
+               Text(uploading ? 'Envoi…' : 'Publier des photos', textAlign: TextAlign.center,
+                 style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
+               const SizedBox(height: 4),
+-              const Text('Visible par tous', textAlign: TextAlign.center,
+-                style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft)),
++              Text('Pour ${hospitalDisplayName(hospital)}', textAlign: TextAlign.center,
++                style: const TextStyle(fontSize: 10.5, color: AppColors.inkSoft)),
+             ],
+           ),
+         ),
