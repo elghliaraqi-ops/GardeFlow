@@ -1,0 +1,130 @@
+ import '../data/seed_data.dart';
++import '../data/hospitals.dart';
+ import '../models/app_user.dart';
+ import '../models/directory_contact.dart';
+ import '../models/exchange_request.dart';
+@@ -47,6 +48,7 @@
+   StreamSubscription? _exchangeRealtime;
+   StreamSubscription? _leaveRealtime;
+   StreamSubscription? _profileRealtime;
++  StreamSubscription? _directoryRealtime;
+ 
+   static Future<AppState> load() async {
+     final state = AppState._();
+@@ -111,6 +113,12 @@
+     final planningMonths = await backend.fetchPlanningMonths();
+     final exchanges = await backend.fetchExchanges();
+     final leaves = await backend.fetchLeaveRequests();
++    List<DirectoryContact> manualDirectoryContacts = const [];
++    try {
++      manualDirectoryContacts = await backend.fetchManualDirectoryContacts();
++    } catch (e) {
++      debugPrint('Annuaire manuel indisponible: $e');
++    }
+     _users
+       ..clear()
+       ..addAll(profiles);
+@@ -132,6 +140,9 @@
+     _leaveRequests
+       ..clear()
+       ..addAll(leaves);
++    _manualDirectoryContacts
++      ..clear()
++      ..addAll(manualDirectoryContacts);
+     _rebuildDirectory();
+     _syncCurrentUserRemindersAfterBackend();
+     await _persistNow();
+@@ -156,15 +167,17 @@
+     _exchangeRealtime?.cancel();
+     _leaveRealtime?.cancel();
+     _profileRealtime?.cancel();
++    _directoryRealtime?.cancel();
+     final client=SupabaseBackendService.instance.client;
+     _planningRealtime=client.from('planning_entries').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
+     _planningMonthRealtime=client.from('planning_months').stream(primaryKey:['owner_id','year','month']).listen((_)=>unawaited(_reloadFromBackend()));
+     _exchangeRealtime=client.from('exchange_requests').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
+     _leaveRealtime=client.from('leave_requests').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
+     _profileRealtime=client.from('profiles').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
++    _directoryRealtime=client.from('directory_contacts').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()), onError: (Object e)=>debugPrint('Realtime annuaire indisponible: $e'));
+   }
+ 
+-  void _stopRealtime(){_planningRealtime?.cancel();_planningMonthRealtime?.cancel();_exchangeRealtime?.cancel();_leaveRealtime?.cancel();_profileRealtime?.cancel();_planningRealtime=null;_planningMonthRealtime=null;_exchangeRealtime=null;_leaveRealtime=null;_profileRealtime=null;}
++  void _stopRealtime(){_planningRealtime?.cancel();_planningMonthRealtime?.cancel();_exchangeRealtime?.cancel();_leaveRealtime?.cancel();_profileRealtime?.cancel();_directoryRealtime?.cancel();_planningRealtime=null;_planningMonthRealtime=null;_exchangeRealtime=null;_leaveRealtime=null;_profileRealtime=null;_directoryRealtime=null;}
+ 
+   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+   DateTime get visibleMonth => _visibleMonth;
+@@ -261,27 +274,144 @@
+   List<AppUser> get users=>List.unmodifiable(_users);
+   AppUser? currentUser;
+ 
++  final List<DirectoryContact> _manualDirectoryContacts=[];
++  List<DirectoryContact> get manualDirectoryContacts=>List.unmodifiable(_manualDirectoryContacts);
++
+   final List<DirectorySection> _directory=[];
+   List<DirectorySection> get directory=>_directory;
++
++  String _directoryPhoneKey(String value)=>value.replaceAll(RegExp(r'[^0-9]'), '');
++
+   void _rebuildDirectory(){
+     final base=buildSeedDirectory();
+-    // Les contacts fictifs servent uniquement au mode local de démonstration.
+-    // En production Supabase, l'annuaire médecins est construit depuis les
+-    // profils réellement validés ; aucune fausse identité n'est affichée.
++    // En production Supabase, les contacts fictifs de démonstration sont retirés.
++    // Les médecins actifs viennent des profils et les autres catégories de la
++    // table directory_contacts gérée par les administrateurs.
+     if(backendEnabled){
+       for(final section in base){section.contacts.clear();}
+     }
+     _directory..clear()..addAll(base);
++
+     for(final u in _users.where((u)=>u.accountStatus==AccountStatus.active)){
+-      final id=u.grade==MedicalGrade.senior?'medecins-seniors':'medecins-juniors';
++      final id=u.grade==MedicalGrade.senior?kDirectoryCategorySeniors:kDirectoryCategoryJuniors;
+       final section=_directory.where((s)=>s.id==id).firstOrNull;
+-      if(section!=null&&!section.contacts.any((c)=>c.phone==u.phone)){
++      final phoneKey=_directoryPhoneKey(u.phone);
++      if(section!=null&&!section.contacts.any((c)=>_directoryPhoneKey(c.phone)==phoneKey)){
+         section.contacts.add(DirectoryContact(
+-          id:u.id,name:u.fullName,phone:u.phone,hospital:u.hospital,
+-          service:u.service,gradeLabel:u.gradeLabel,isAdmin:u.role==UserRole.admin,
++          id:u.id,
++          name:u.fullName,
++          phone:u.phone,
++          hospital:u.hospital,
++          service:u.service,
++          gradeLabel:u.gradeLabel,
++          isAdmin:u.role==UserRole.admin,
++          categoryId:id,
+         ));
+       }
+     }
++
++    for(final contact in _manualDirectoryContacts){
++      final section=_directory.where((s)=>s.id==contact.categoryId).firstOrNull;
++      if(section==null)continue;
++      final phoneKey=_directoryPhoneKey(contact.phone);
++      if(_directory.expand((s)=>s.contacts).any((c)=>c.hospital==contact.hospital&&_directoryPhoneKey(c.phone)==phoneKey))continue;
++      section.contacts.add(contact);
++    }
++
++    for(final section in _directory){
++      section.contacts.sort((a,b)=>a.name.toLowerCase().compareTo(b.name.toLowerCase()));
++    }
++  }
++
++  Future<String?> addDirectoryContact({
++    required String categoryId,
++    required String name,
++    required String phone,
++    required String hospital,
++    String? service,
++  }) async {
++    final me=currentUser;
++    if(me==null||me.role!=UserRole.admin)return 'Action réservée à l’administrateur.';
++    final cleanName=name.trim();
++    final cleanPhone=phone.trim();
++    if(!kManualDirectoryCategoryIds.contains(categoryId))return 'Catégorie invalide.';
++    if(cleanName.isEmpty)return 'Le nom / libellé est obligatoire.';
++    if(_directoryPhoneKey(cleanPhone).length<4)return 'Numéro de téléphone invalide.';
++    if(!kHospitals.contains(hospital))return 'Établissement invalide.';
