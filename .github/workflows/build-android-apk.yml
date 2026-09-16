@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'source/**'
+      - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
   contents: read
@@ -38,18 +39,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f "source/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip" ]; then
+          ZIP=""
+          if [ -f "GardeFlow_android_v11_6_0_official_pdf_auto_import.zip" ]; then
+            ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          elif [ -f "source/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip" ]; then
+            ZIP="source/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          fi
+
+          if [ -n "$ZIP" ]; then
             rm -rf .ci-project
             mkdir -p .ci-project
-            unzip -q "source/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip" -d .ci-project
+            unzip -q "$ZIP" -d .ci-project
             PROJECT_DIR="$(find .ci-project -mindepth 1 -maxdepth 1 -type d | head -n 1)"
           elif [ -f "lib/main.dart" ] && [ -f "pubspec.yaml" ]; then
             PROJECT_DIR="$GITHUB_WORKSPACE"
           else
             echo "Projet Flutter complet introuvable."
-            echo "Ajoutez source/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip au repository."
+            echo "Ajoutez GardeFlow_android_v11_6_0_official_pdf_auto_import.zip à la racine du repository."
             exit 1
           fi
+
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
           echo "Project: $PROJECT_DIR"
 
