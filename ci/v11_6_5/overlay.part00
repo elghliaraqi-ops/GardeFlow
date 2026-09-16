@@ -16,7 +16,7 @@
            state._startRealtime();
          }
        } catch (_) {
-@@ -105,6 +107,70 @@
+@@ -105,6 +107,91 @@
      );
    }
  
@@ -27,11 +27,12 @@
 +    return null;
 +  }
 +
-+  /// V11.6.5 : rattache automatiquement le planning officiel Urgences à un
-+  /// profil actif, même si ce profil a été créé après l'import initial du PDF.
++  /// V11.6.5 : synchronise un profil actif avec le dernier PDF Urgences de
++  /// son établissement, y compris si le compte a été créé après l'upload du PDF.
 +  ///
-+  /// Le PDF est reparsé uniquement si ce médecin n'a pas encore été synchronisé
-+  /// pour cette version du document (ou si son identité/établissement a changé).
++  /// Le parsing utilise tous les profils visibles du même établissement : cela
++  /// évite de prendre les noms des autres médecins pour des cellules illisibles
++  /// et permet de retirer proprement une ancienne garde disparue d'un PDF remplacé.
 +  Future<bool> _syncOfficialRosterForProfile(AppUser profile) async {
 +    if (!backendEnabled || profile.accountStatus != AccountStatus.active) return false;
 +    final slot = _officialPlanningSlotForHospital(profile.hospital);
@@ -48,22 +49,36 @@
 +    );
 +    if (alreadyCurrent) return false;
 +
++    final visibleProfiles = _users.isEmpty
++        ? await backend.fetchVisibleProfiles()
++        : List<AppUser>.from(_users);
++    if (!visibleProfiles.any((u) => u.id == profile.id)) {
++      visibleProfiles.add(profile);
++    }
++
 +    final bytes = await backend.downloadSharedResource(resource.storagePath);
 +    final parsed = await OfficialRosterImportService.parse(
 +      bytes: bytes,
 +      displayName: resource.displayName,
 +      hospital: profile.hospital,
-+      profiles: <AppUser>[profile],
++      profiles: visibleProfiles,
 +      resourceUpdatedAt: resource.updatedAt,
 +    );
 +    if (parsed.detectedRows == 0) {
-+      throw StateError('Le planning officiel ${resource.displayName} ne contient aucune ligne Urgences reconnue.');
++      throw StateError(
++        'Le planning officiel ${resource.displayName} ne contient aucune ligne Urgences reconnue.',
++      );
 +    }
++
++    final myAssignments = parsed.assignments
++        .where((a) => a.profileId == profile.id)
++        .map((a) => a.toJson())
++        .toList(growable: false);
 +
 +    final result = await backend.importOfficialEmergencyRosterForProfile(
 +      resource: resource,
 +      profileId: profile.id,
-+      assignments: parsed.assignments.map((a) => a.toJson()).toList(growable: false),
++      assignments: myAssignments,
 +      unmatchedCells: parsed.unmatchedCells,
 +    );
 +    final inserted = (result['inserted'] as num?)?.toInt() ?? 0;
@@ -79,27 +94,39 @@
 +      final changed = await _syncOfficialRosterForProfile(me);
 +      if (changed) await _reloadFromBackend();
 +    } catch (e) {
-+      // Une indisponibilité du PDF ne doit jamais empêcher la connexion.
++      // Le planning officiel ne doit jamais empêcher l'utilisateur de se connecter.
++      // Une prochaine connexion/actualisation retentera la synchronisation.
 +      debugPrint('Synchronisation automatique du planning officiel impossible: $e');
 +    }
++  }
++
++  Future<void> _reloadAndSyncMyOfficialRoster() async {
++    await _reloadFromBackend();
++    await _syncMyOfficialRosterIfNeeded();
 +  }
 +
    Future<void> _reloadFromBackend() async {
      if (!backendEnabled || currentUser == null) return;
      final backend = SupabaseBackendService.instance;
-@@ -149,7 +215,10 @@
+@@ -149,7 +236,7 @@
      notifyListeners();
    }
  
 -  Future<void> refreshBackend() => _reloadFromBackend();
-+  Future<void> refreshBackend() async {
-+    await _reloadFromBackend();
-+    await _syncMyOfficialRosterIfNeeded();
-+  }
++  Future<void> refreshBackend() => _reloadAndSyncMyOfficialRoster();
  
    void _syncCurrentUserRemindersAfterBackend(){
      final me=currentUser;if(me==null)return;
-@@ -467,6 +536,7 @@
+@@ -173,7 +260,7 @@
+     _planningMonthRealtime=client.from('planning_months').stream(primaryKey:['owner_id','year','month']).listen((_)=>unawaited(_reloadFromBackend()));
+     _exchangeRealtime=client.from('exchange_requests').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
+     _leaveRealtime=client.from('leave_requests').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
+-    _profileRealtime=client.from('profiles').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()));
++    _profileRealtime=client.from('profiles').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadAndSyncMyOfficialRoster()));
+     _directoryRealtime=client.from('directory_contacts').stream(primaryKey:['id']).listen((_)=>unawaited(_reloadFromBackend()), onError: (Object e)=>debugPrint('Realtime annuaire indisponible: $e'));
+   }
+ 
+@@ -467,6 +554,7 @@
          }
          currentUser=user;
          await _reloadFromBackend();
@@ -107,19 +134,21 @@
          _startRealtime();
          if(_notificationsOn){
            if(kIsWeb||defaultTargetPlatform==TargetPlatform.android||defaultTargetPlatform==TargetPlatform.iOS){
-@@ -831,6 +901,19 @@
+@@ -831,6 +919,21 @@
        if(backendEnabled){
          await SupabaseBackendService.instance.reviewAccount(profileId,approve?'approve':'suspend',hospital:hospital,service:service,grade:grade);
          await _reloadFromBackend();
 +        if (approve) {
-+          final approvedProfile = _users.where((u) => u.id == profileId && u.accountStatus == AccountStatus.active).firstOrNull;
++          final approvedProfile = _users
++              .where((u) => u.id == profileId && u.accountStatus == AccountStatus.active)
++              .firstOrNull;
 +          if (approvedProfile != null) {
 +            try {
 +              final changed = await _syncOfficialRosterForProfile(approvedProfile);
 +              if (changed) await _reloadFromBackend();
 +            } catch (e) {
-+              // La validation du compte reste acquise ; la synchronisation sera
-+              // retentée automatiquement à la première connexion du médecin.
++              // La validation reste acquise. Si le PDF est momentanément
++              // indisponible, le médecin sera synchronisé à sa connexion.
 +              debugPrint('Synchronisation du nouveau médecin impossible: $e');
 +            }
 +          }
