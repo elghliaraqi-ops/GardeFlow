@@ -1,0 +1,179 @@
++                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft, fontSize: 11),
++                  ),
+                 ],
+               ),
+             ),
+@@ -146,6 +312,20 @@
+               decoration: const BoxDecoration(color: AppColors.conge, shape: BoxShape.circle),
+               child: const Icon(Icons.call_rounded, size: 16, color: AppColors.congeText),
+             ),
++            if (canManage) ...[
++              const SizedBox(width: 2),
++              PopupMenuButton<String>(
++                tooltip: 'Gérer le contact',
++                onSelected: (value) {
++                  if (value == 'edit') onEdit();
++                  if (value == 'delete') onDelete();
++                },
++                itemBuilder: (_) => const [
++                  PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Modifier'))),
++                  PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Supprimer'))),
++                ],
++              ),
++            ],
+           ]),
+         ),
+       ),
+@@ -154,43 +334,44 @@
+ }
+ 
+ class _CategoryBar extends StatelessWidget {
++  final List<DirectorySection> sections;
+   final String activeId;
+   final ValueChanged<String> onSelect;
+-  const _CategoryBar({required this.activeId, required this.onSelect});
++  const _CategoryBar({required this.sections, required this.activeId, required this.onSelect});
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final sections = context.watch<AppState>().directory;
+     return Container(
+       padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.md),
+-      decoration: BoxDecoration(color: AppColors.card, border: const Border(top: BorderSide(color: AppColors.line)), boxShadow: AppShadow.mid),
++      decoration: BoxDecoration(
++        color: AppColors.card,
++        border: const Border(top: BorderSide(color: AppColors.line)),
++        boxShadow: AppShadow.mid,
++      ),
+       child: SizedBox(
+         height: 40,
+         child: ListView.separated(
+           scrollDirection: Axis.horizontal,
+-          itemCount: sections.length,
++          itemCount: sections.length + 1,
+           separatorBuilder: (_, __) => const SizedBox(width: AppSpace.sm),
+           itemBuilder: (context, i) {
+-            final s = sections[i];
+-            final active = s.id == activeId;
+-            return GestureDetector(
+-              onTap: () => onSelect(s.id),
+-              child: AnimatedContainer(
+-                duration: const Duration(milliseconds: 150),
+-                padding: const EdgeInsets.symmetric(horizontal: 14),
+-                alignment: Alignment.center,
+-                decoration: BoxDecoration(
+-                  color: active ? s.color : AppColors.paperAlt,
+-                  borderRadius: AppRadius.pillR,
+-                  border: Border.all(color: active ? Colors.transparent : AppColors.line),
+-                ),
+-                child: Text(s.label,
+-                    style: TextStyle(
+-                      fontSize: 11.5,
+-                      fontWeight: FontWeight.w700,
+-                      color: active ? s.textColor : AppColors.inkSoft,
+-                    )),
+-              ),
++            if (i == 0) {
++              final active = activeId == _kAllCategories;
++              return _CategoryChip(
++                label: 'Tous',
++                active: active,
++                color: AppColors.ink,
++                textColor: Colors.white,
++                onTap: () => onSelect(_kAllCategories),
++              );
++            }
++            final section = sections[i - 1];
++            return _CategoryChip(
++              label: section.label,
++              active: section.id == activeId,
++              color: section.color,
++              textColor: section.textColor,
++              onTap: () => onSelect(section.id),
+             );
+           },
+         ),
+@@ -198,3 +379,181 @@
+     );
+   }
+ }
++
++class _CategoryChip extends StatelessWidget {
++  final String label;
++  final bool active;
++  final Color color;
++  final Color textColor;
++  final VoidCallback onTap;
++  const _CategoryChip({
++    required this.label,
++    required this.active,
++    required this.color,
++    required this.textColor,
++    required this.onTap,
++  });
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: onTap,
++      child: AnimatedContainer(
++        duration: const Duration(milliseconds: 150),
++        padding: const EdgeInsets.symmetric(horizontal: 14),
++        alignment: Alignment.center,
++        decoration: BoxDecoration(
++          color: active ? color : AppColors.paperAlt,
++          borderRadius: AppRadius.pillR,
++          border: Border.all(color: active ? Colors.transparent : AppColors.line),
++        ),
++        child: Text(
++          label,
++          style: TextStyle(
++            fontSize: 11.5,
++            fontWeight: FontWeight.w700,
++            color: active ? textColor : AppColors.inkSoft,
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _DirectoryContactDraft {
++  final String categoryId;
++  final String name;
++  final String phone;
++  final String hospital;
++  final String? service;
++
++  const _DirectoryContactDraft({
++    required this.categoryId,
++    required this.name,
++    required this.phone,
++    required this.hospital,
++    this.service,
++  });
++}
++
++class _DirectoryContactDialog extends StatefulWidget {
++  final DirectoryContact? existing;
++  final String initialHospital;
++  const _DirectoryContactDialog({this.existing, required this.initialHospital});
++
++  @override
++  State<_DirectoryContactDialog> createState() => _DirectoryContactDialogState();
++}
++
++class _DirectoryContactDialogState extends State<_DirectoryContactDialog> {
++  late final TextEditingController _nameController;
++  late final TextEditingController _phoneController;
++  late final TextEditingController _serviceController;
++  late String _categoryId;
++  late String _hospital;
++
++  @override
++  void initState() {
++    super.initState();
++    _nameController = TextEditingController(text: widget.existing?.name ?? '');
++    _phoneController = TextEditingController(text: widget.existing?.phone ?? '');
++    _serviceController = TextEditingController(text: widget.existing?.service ?? '');
++    _categoryId = kManualDirectoryCategoryIds.contains(widget.existing?.categoryId)
