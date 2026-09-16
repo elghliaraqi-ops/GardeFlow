@@ -1,0 +1,156 @@
+ import 'package:url_launcher/url_launcher.dart';
+ 
+ import '../data/hospitals.dart';
++import '../models/app_user.dart';
+ import '../models/directory_contact.dart';
+ import '../state/app_state.dart';
+ import '../theme/app_theme.dart';
+ import '../theme/widgets.dart';
+ 
+ const String _kAllHospitals = 'all';
++const String _kAllCategories = 'all';
+ 
+ class DirectoryScreen extends StatefulWidget {
+   const DirectoryScreen({super.key});
+@@ -18,15 +20,38 @@
+ }
+ 
+ class _DirectoryScreenState extends State<DirectoryScreen> {
++  final TextEditingController _searchController = TextEditingController();
+   String _query = '';
+-  String? _activeCategory;
++  String _activeCategory = _kAllCategories;
+   String? _activeHospital;
+ 
+   @override
++  void dispose() {
++    _searchController.dispose();
++    super.dispose();
++  }
++
++  String _normalized(String value) => value
++      .toLowerCase()
++      .replaceAll(RegExp(r'[àáâäãå]'), 'a')
++      .replaceAll(RegExp(r'[ç]'), 'c')
++      .replaceAll(RegExp(r'[èéêë]'), 'e')
++      .replaceAll(RegExp(r'[ìíîï]'), 'i')
++      .replaceAll(RegExp(r'[òóôöõ]'), 'o')
++      .replaceAll(RegExp(r'[ùúûü]'), 'u')
++      .replaceAll(RegExp(r'[ÿ]'), 'y')
++      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
++      .trim();
++
++  @override
+   Widget build(BuildContext context) {
+     final appState = context.watch<AppState>();
+     final sections = appState.directory;
+-    _activeCategory ??= sections.first.id;
++    final isAdmin = appState.currentUser?.role == UserRole.admin;
++
++    if (_activeCategory != _kAllCategories && !sections.any((s) => s.id == _activeCategory)) {
++      _activeCategory = _kAllCategories;
++    }
+     if (_activeHospital == null) {
+       final userHospital = appState.currentUser?.hospital;
+       _activeHospital = userHospital != null && kHospitals.contains(userHospital)
+@@ -34,27 +59,59 @@
+           : _kAllHospitals;
+     }
+ 
+-    final section = sections.firstWhere((s) => s.id == _activeCategory);
+-    final query = _query.trim().toLowerCase();
+-    final contacts = section.contacts.where((c) {
+-      final matchesSearch = query.isEmpty ||
+-          c.name.toLowerCase().contains(query) ||
+-          c.phone.contains(query);
+-      final matchesHospital = _activeHospital == _kAllHospitals || c.hospital == _activeHospital;
+-      return matchesSearch && matchesHospital;
+-    }).toList();
++    final query = _normalized(_query);
++    final items = <_DirectoryItem>[];
++    for (final section in sections) {
++      if (_activeCategory != _kAllCategories && section.id != _activeCategory) continue;
++      for (final contact in section.contacts) {
++        if (_activeHospital != _kAllHospitals && contact.hospital != _activeHospital) continue;
++        final searchable = _normalized([
++          contact.name,
++          contact.phone,
++          contact.service ?? '',
++          contact.gradeLabel ?? '',
++          section.label,
++          hospitalDisplayName(contact.hospital),
++        ].join(' '));
++        if (query.isNotEmpty && !searchable.contains(query)) continue;
++        items.add(_DirectoryItem(section: section, contact: contact));
++      }
++    }
++    items.sort((a, b) {
++      final byCategory = a.section.label.compareTo(b.section.label);
++      if (byCategory != 0 && _activeCategory == _kAllCategories) return byCategory;
++      return a.contact.name.toLowerCase().compareTo(b.contact.name.toLowerCase());
++    });
+ 
+     return Scaffold(
+       backgroundColor: AppColors.paper,
+       appBar: AppBar(title: const GardeFlowTitle('Annuaire téléphonique')),
++      floatingActionButton: isAdmin
++          ? FloatingActionButton.extended(
++              onPressed: () => _openContactEditor(context, appState),
++              icon: const Icon(Icons.add_call),
++              label: const Text('Ajouter'),
++            )
++          : null,
+       body: Column(
+         children: [
+           Padding(
+             padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
+             child: TextField(
+-              decoration: const InputDecoration(
+-                hintText: 'Rechercher un contact',
+-                prefixIcon: Icon(Icons.search_rounded, size: 20),
++              controller: _searchController,
++              decoration: InputDecoration(
++                hintText: 'Rechercher nom, numéro, service, catégorie',
++                prefixIcon: const Icon(Icons.search_rounded, size: 20),
++                suffixIcon: _query.isEmpty
++                    ? null
++                    : IconButton(
++                        tooltip: 'Effacer la recherche',
++                        onPressed: () {
++                          _searchController.clear();
++                          setState(() => _query = '');
++                        },
++                        icon: const Icon(Icons.close_rounded, size: 19),
++                      ),
+               ),
+               onChanged: (v) => setState(() => _query = v),
+             ),
+@@ -67,53 +124,152 @@
+               decoration: const InputDecoration(labelText: 'Établissement'),
+               items: [
+                 const DropdownMenuItem(value: _kAllHospitals, child: Text('Tous les établissements')),
+-                ...kHospitals.toSet().map((h) => DropdownMenuItem(
++                ...kHospitals.map((h) => DropdownMenuItem(
+                       value: h,
+-                      child: Text(hospitalDisplayName(h), style: const TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis),
++                      child: Text(
++                        hospitalDisplayName(h),
++                        style: const TextStyle(fontSize: 12.5),
++                        overflow: TextOverflow.ellipsis,
++                      ),
+                     )),
+               ],
+               onChanged: (v) => setState(() => _activeHospital = v),
+             ),
+           ),
+-          const SizedBox(height: AppSpace.xs),
++          const SizedBox(height: AppSpace.sm),
+           Expanded(
+-            child: contacts.isEmpty
++            child: items.isEmpty
+                 ? Center(
+                     child: Padding(
+                       padding: const EdgeInsets.all(24),
+                       child: Column(mainAxisSize: MainAxisSize.min, children: [
+                         const Icon(Icons.person_search_rounded, size: 34, color: AppColors.inkFaint),
+                         const SizedBox(height: AppSpace.sm),
