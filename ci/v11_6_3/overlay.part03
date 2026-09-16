@@ -1,0 +1,17 @@
++      'majors-superviseurs',
++      'extensions'
++    )
++  );
+diff --git a/supabase/schema.sql b/supabase/schema.sql
+index 717eb26..af11c66 100644
+--- a/supabase/schema.sql
++++ b/supabase/schema.sql
+@@ -874,7 +874,7 @@ create policy gardeflow_shared_admin_delete on storage.objects for delete to aut
+ -- ================================================================
+ create table if not exists public.directory_contacts (
+   id uuid primary key default gen_random_uuid(),
+-  category text not null check (category in ('medecins-seniors','infirmiers','flottes','majors-superviseurs')),
++  category text not null check (category in ('medecins-seniors','infirmiers','flottes','majors-superviseurs','extensions')),
+   name text not null check (length(trim(name)) > 0),
+   phone text not null check (length(trim(phone)) >= 4),
+   hospital text not null,
