@@ -1,0 +1,51 @@
+name: huim6_planning
+description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
+publish_to: "none"
+version: 11.6.0+160
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  provider: ^6.1.2
+  intl: ^0.20.3
+  image_picker: ^1.1.2
+  file_picker: 10.3.8
+  url_launcher: ^6.3.0
+  pdfrx: 2.4.8
+  photo_view: 0.15.0
+  flutter_local_notifications: 17.2.4
+  timezone: ^0.9.4
+  shared_preferences: ^2.5.3
+  crypto: ^3.0.6
+  supabase_flutter: ^2.0.0
+  firebase_core: ^4.7.0
+  firebase_messaging: ^16.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/LICENSE_OFL.txt
+    - assets/branding/gardeflow_logo.png
+    - assets/branding/login_urgences.jpg
+    - assets/branding/partners/hui_rabat.png
+    - assets/branding/partners/hui_cheikh_khalifa.png
+    - assets/branding/partners/hui_bouskoura.png
+    - assets/branding/partners/amium6.png
+  fonts:
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Regular.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
