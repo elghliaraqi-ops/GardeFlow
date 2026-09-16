@@ -64,7 +64,7 @@ index c1201bc..0d40e78 100644
      await client.storage.from(sharedBucket).uploadBinary(
        path,
        bytes,
-@@ -440,6 +458,7 @@ class SupabaseBackendService {
+@@ -441,6 +459,7 @@ class SupabaseBackendService {
      try {
        await client.from('shared_resources').insert({
          'kind': 'astreinte_photo',
@@ -73,10 +73,10 @@ index c1201bc..0d40e78 100644
          'display_name': fileName,
          'mime_type': mimeType,
 diff --git a/lib/state/app_state.dart b/lib/state/app_state.dart
-index be84dbc..24ac045 100644
+index b072e1a..79d5b19 100644
 --- a/lib/state/app_state.dart
 +++ b/lib/state/app_state.dart
-@@ -161,6 +161,12 @@ class AppState extends ChangeNotifier {
+@@ -161,6 +161,11 @@ class AppState extends ChangeNotifier {
          .where((a) => a.profileId == profile.id)
          .map((a) => a.toJson())
          .toList(growable: false);
@@ -85,12 +85,11 @@ index be84dbc..24ac045 100644
 +        'Le PDF ${resource.displayName} est lisible mais le nom de ${profile.prenom} ${profile.nom} n’y a pas été reconnu. La synchronisation sera retentée automatiquement.',
 +      );
 +    }
-+
  
      final result = await backend.importOfficialEmergencyRosterForProfile(
        resource: resource,
 diff --git a/lib/services/official_roster_import_service.dart b/lib/services/official_roster_import_service.dart
-index 87ea58c..a043665 100644
+index de30061..33c099b 100644
 --- a/lib/services/official_roster_import_service.dart
 +++ b/lib/services/official_roster_import_service.dart
 @@ -90,14 +90,11 @@ class OfficialRosterImportService {
@@ -113,7 +112,7 @@ index 87ea58c..a043665 100644
          if (dayCenters.isEmpty || nightCenters.isEmpty) continue;
  
          final dayCenter = _median(dayCenters);
-@@ -279,10 +276,32 @@ class OfficialRosterImportService {
+@@ -282,11 +279,36 @@ class OfficialRosterImportService {
            break;
          }
        }
@@ -150,7 +149,7 @@ index 87ea58c..a043665 100644
    static bool _approximatelyContains(String cell, String variant) {
      final cellTokens = cell.split(' ').where((t) => t.isNotEmpty).toList();
      final variantTokens = variant.split(' ').where((t) => t.isNotEmpty).toList();
-@@ -369,6 +388,59 @@ class OfficialRosterImportService {
+@@ -366,6 +388,61 @@ class OfficialRosterImportService {
    static String _dateKey(DateTime d) =>
        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
  
