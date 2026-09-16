@@ -1,0 +1,167 @@
++  kDirectoryCategoryFleet: 'Flottes',
++  kDirectoryCategoryMajorsSupervisors: 'Majors / Superviseurs',
++};
++
++String directoryCategoryLabel(String id) => kDirectoryCategoryLabels[id] ?? id;
++
+ class DirectoryContact {
+   final String id;
+   final String name;
+@@ -8,6 +31,8 @@
+   final String? service;
+   final String? gradeLabel;
+   final bool isAdmin;
++  final String categoryId;
++  final bool isManual;
+ 
+   DirectoryContact({
+     this.id = '',
+@@ -17,15 +42,41 @@
+     this.service,
+     this.gradeLabel,
+     this.isAdmin = false,
++    this.categoryId = '',
++    this.isManual = false,
+   });
+ 
+   String get initials {
+-    final cleaned = name.replaceFirst(RegExp(r'^Dr\.\s*'), '').trim();
++    final cleaned = name.replaceFirst(RegExp(r'^Dr\.\s*', caseSensitive: false), '').trim();
+     final parts = cleaned.split(RegExp(r'\s+'));
+     final first = parts.isNotEmpty && parts[0].isNotEmpty ? parts[0][0] : '';
+     final second = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
+     return (first + second).toUpperCase();
+   }
++
++  Map<String, dynamic> toJson() => {
++        'id': id,
++        'name': name,
++        'phone': phone,
++        'hospital': hospital,
++        'service': service,
++        'gradeLabel': gradeLabel,
++        'isAdmin': isAdmin,
++        'categoryId': categoryId,
++        'isManual': isManual,
++      };
++
++  factory DirectoryContact.fromJson(Map<String, dynamic> json) => DirectoryContact(
++        id: (json['id'] as String?) ?? '',
++        name: (json['name'] as String?) ?? '',
++        phone: (json['phone'] as String?) ?? '',
++        hospital: (json['hospital'] as String?) ?? '',
++        service: json['service'] as String?,
++        gradeLabel: json['gradeLabel'] as String?,
++        isAdmin: json['isAdmin'] as bool? ?? false,
++        categoryId: (json['categoryId'] as String?) ?? '',
++        isManual: json['isManual'] as bool? ?? false,
++      );
+ }
+ 
+ class DirectorySection {
+--- a/lib/screens/admin_screen.dart
++++ b/lib/screens/admin_screen.dart
+@@ -27,19 +27,39 @@
+ }
+ 
+ class _AdminScreenState extends State<AdminScreen> {
++  final TextEditingController _doctorSearchController = TextEditingController();
+   String _hospital = _kAllHospitals;
+   String? _doctorId;
++  String _doctorQuery = '';
+   bool _adminActionOpen = false;
+   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
+ 
+   @override
++  void dispose() {
++    _doctorSearchController.dispose();
++    super.dispose();
++  }
++
++  @override
+   Widget build(BuildContext context) {
+     final appState = context.watch<AppState>();
+     final hospitalItems = kHospitals.toSet().toList();
++    final query = _doctorQuery.trim().toLowerCase();
+     final doctors = appState.users.where((user) {
+       if (user.accountStatus != AccountStatus.active) return false;
+-      if (_hospital == _kAllHospitals) return true;
+-      return user.hospital == _hospital;
++      if (_hospital != _kAllHospitals && user.hospital != _hospital) return false;
++      if (query.isEmpty) return true;
++      final searchable = [
++        user.fullName,
++        user.nom,
++        user.prenom,
++        user.phone,
++        user.service,
++        user.gradeLabel,
++        user.roleLabel,
++        hospitalDisplayName(user.hospital),
++      ].join(' ').toLowerCase();
++      return searchable.contains(query);
+     }).toList()
+       ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+ 
+@@ -108,6 +128,25 @@
+                       setState(() { _hospital = value; _doctorId = null; });
+                     },
+                   );
++                  final doctorSearch = TextField(
++                    controller: _doctorSearchController,
++                    decoration: InputDecoration(
++                      labelText: 'Rechercher un médecin',
++                      hintText: 'Nom, prénom, téléphone ou service',
++                      prefixIcon: const Icon(Icons.search_rounded, size: 19),
++                      suffixIcon: _doctorQuery.isEmpty
++                          ? null
++                          : IconButton(
++                              tooltip: 'Effacer la recherche',
++                              onPressed: () {
++                                _doctorSearchController.clear();
++                                setState(() { _doctorQuery = ''; _doctorId = null; });
++                              },
++                              icon: const Icon(Icons.close_rounded, size: 18),
++                            ),
++                    ),
++                    onChanged: (value) => setState(() { _doctorQuery = value; _doctorId = null; }),
++                  );
+                   final doctorFilter = DropdownButtonFormField<String>(
+                     value: selectedId,
+                     isExpanded: true,
+@@ -115,7 +154,7 @@
+                       labelText: 'Médecin',
+                       prefixIcon: Icon(Icons.person_search_outlined, size: 19),
+                     ),
+-                    hint: const Text('Aucun médecin disponible'),
++                    hint: Text(query.isEmpty ? 'Aucun médecin disponible' : 'Aucun résultat'),
+                     items: doctors.map((doctor) => DropdownMenuItem(
+                       value: doctor.id,
+                       child: Text(
+@@ -126,9 +165,21 @@
+                     onChanged: doctors.isEmpty ? null : (value) => setState(() => _doctorId = value),
+                   );
+                   if (narrow) {
+-                    return Column(children: [hospitalFilter, const SizedBox(height: 8), doctorFilter]);
++                    return Column(children: [
++                      hospitalFilter,
++                      const SizedBox(height: 8),
++                      doctorSearch,
++                      const SizedBox(height: 8),
++                      doctorFilter,
++                    ]);
+                   }
+-                  return Row(children: [Expanded(child: hospitalFilter), const SizedBox(width: 10), Expanded(child: doctorFilter)]);
++                  return Row(children: [
++                    Expanded(child: hospitalFilter),
++                    const SizedBox(width: 10),
++                    Expanded(child: doctorSearch),
++                    const SizedBox(width: 10),
++                    Expanded(child: doctorFilter),
++                  ]);
+                 },
+               ),
+             ),
+--- a/lib/screens/directory_screen.dart
++++ b/lib/screens/directory_screen.dart
+@@ -3,12 +3,14 @@
