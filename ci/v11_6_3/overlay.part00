@@ -1,0 +1,221 @@
+diff --git a/CHANGELOG_V11_6_2.md b/CHANGELOG_V11_6_2.md
+new file mode 100644
+index 0000000..a9e6a6b
+--- /dev/null
++++ b/CHANGELOG_V11_6_2.md
+@@ -0,0 +1,5 @@
++# GardeFlow V11.6.2
++
++- Les catégories de l'annuaire sont désormais affichées en haut de l'écran, sous la barre de titre, et ne peuvent plus être masquées par les boutons de navigation Android.
++- Ajout de la catégorie **Extensions** dans l'annuaire et dans le formulaire d'ajout/modification admin.
++- Version : `11.6.2+162`.
+diff --git a/CHANGELOG_V11_6_3.md b/CHANGELOG_V11_6_3.md
+new file mode 100644
+index 0000000..0d28861
+--- /dev/null
++++ b/CHANGELOG_V11_6_3.md
+@@ -0,0 +1,6 @@
++# GardeFlow V11.6.3
++
++- Refonte des accès rapides de la page d’accueil : boutons plus lisibles, zone encadrée et flèches gauche/droite visibles pour signaler clairement le défilement horizontal.
++- Refonte des catégories de l’annuaire : bloc placé en haut, libellé « Catégories », indication « Faites défiler » et flèches de navigation.
++- La catégorie **Extensions** reste disponible dans l’annuaire et dans le formulaire admin.
++- Version : `11.6.3+163`.
+diff --git a/MIGRATION_V11_6_2.md b/MIGRATION_V11_6_2.md
+new file mode 100644
+index 0000000..4802a4f
+--- /dev/null
++++ b/MIGRATION_V11_6_2.md
+@@ -0,0 +1,6 @@
++# Migration V11.6.2
++
++1. Exécuter `PATCH_SUPABASE_V11_6_2_ANNUAIRE_EXTENSIONS.sql` après le patch V11.6.1.
++2. Installer GardeFlow V11.6.2.
++
++Le patch ne supprime aucun contact existant ; il élargit uniquement la contrainte de catégorie pour accepter `extensions`.
+diff --git a/MIGRATION_V11_6_3.md b/MIGRATION_V11_6_3.md
+new file mode 100644
+index 0000000..cf694d7
+--- /dev/null
++++ b/MIGRATION_V11_6_3.md
+@@ -0,0 +1,6 @@
++# Migration V11.6.3
++
++1. Si le patch Extensions n’a pas encore été appliqué, exécuter `PATCH_SUPABASE_V11_6_3_ANNUAIRE_EXTENSIONS.sql`.
++2. Installer GardeFlow V11.6.3.
++
++Le patch SQL ne supprime aucun contact existant.
+diff --git a/PATCH_SUPABASE_V11_6_2_ANNUAIRE_EXTENSIONS.sql b/PATCH_SUPABASE_V11_6_2_ANNUAIRE_EXTENSIONS.sql
+new file mode 100644
+index 0000000..1c698e9
+--- /dev/null
++++ b/PATCH_SUPABASE_V11_6_2_ANNUAIRE_EXTENSIONS.sql
+@@ -0,0 +1,18 @@
++-- GardeFlow V11.6.2
++-- Ajoute la catégorie « Extensions » à l'annuaire existant.
++-- À exécuter UNE FOIS après le patch V11.6.1.
++
++alter table public.directory_contacts
++  drop constraint if exists directory_contacts_category_check;
++
++alter table public.directory_contacts
++  add constraint directory_contacts_category_check
++  check (
++    category in (
++      'medecins-seniors',
++      'infirmiers',
++      'flottes',
++      'majors-superviseurs',
++      'extensions'
++    )
++  );
+diff --git a/PATCH_SUPABASE_V11_6_3_ANNUAIRE_EXTENSIONS.sql b/PATCH_SUPABASE_V11_6_3_ANNUAIRE_EXTENSIONS.sql
+new file mode 100644
+index 0000000..b4e2e95
+--- /dev/null
++++ b/PATCH_SUPABASE_V11_6_3_ANNUAIRE_EXTENSIONS.sql
+@@ -0,0 +1,18 @@
++-- GardeFlow V11.6.3
++-- Autorise la catégorie « Extensions » dans l'annuaire créé par V11.6.1.
++-- Le script peut être relancé sans supprimer les contacts existants.
++
++alter table public.directory_contacts
++  drop constraint if exists directory_contacts_category_check;
++
++alter table public.directory_contacts
++  add constraint directory_contacts_category_check
++  check (
++    category in (
++      'medecins-seniors',
++      'infirmiers',
++      'flottes',
++      'majors-superviseurs',
++      'extensions'
++    )
++  );
+diff --git a/lib/data/seed_data.dart b/lib/data/seed_data.dart
+index cc2256f..a5f03b9 100644
+--- a/lib/data/seed_data.dart
++++ b/lib/data/seed_data.dart
+@@ -127,5 +127,19 @@ List<DirectorySection> buildSeedDirectory() {
+         ),
+       ],
+     ),
++    DirectorySection(
++      id: kDirectoryCategoryExtensions,
++      label: directoryCategoryLabel(kDirectoryCategoryExtensions),
++      color: AppColors.serviceNuit,
++      textColor: AppColors.serviceNuitText,
++      contacts: [
++        DirectoryContact(
++          name: 'Standard / Accueil',
++          phone: '1000',
++          hospital: kHospitals[0],
++          categoryId: kDirectoryCategoryExtensions,
++        ),
++      ],
++    ),
+   ];
+ }
+diff --git a/lib/models/directory_contact.dart b/lib/models/directory_contact.dart
+index 2bda1bc..6f34ed6 100644
+--- a/lib/models/directory_contact.dart
++++ b/lib/models/directory_contact.dart
+@@ -5,12 +5,14 @@ const String kDirectoryCategorySeniors = 'medecins-seniors';
+ const String kDirectoryCategoryNurses = 'infirmiers';
+ const String kDirectoryCategoryFleet = 'flottes';
+ const String kDirectoryCategoryMajorsSupervisors = 'majors-superviseurs';
++const String kDirectoryCategoryExtensions = 'extensions';
+ 
+ const List<String> kManualDirectoryCategoryIds = [
+   kDirectoryCategorySeniors,
+   kDirectoryCategoryNurses,
+   kDirectoryCategoryFleet,
+   kDirectoryCategoryMajorsSupervisors,
++  kDirectoryCategoryExtensions,
+ ];
+ 
+ const Map<String, String> kDirectoryCategoryLabels = {
+@@ -19,6 +21,7 @@ const Map<String, String> kDirectoryCategoryLabels = {
+   kDirectoryCategoryNurses: 'Infirmiers',
+   kDirectoryCategoryFleet: 'Flottes',
+   kDirectoryCategoryMajorsSupervisors: 'Majors / Superviseurs',
++  kDirectoryCategoryExtensions: 'Extensions',
+ };
+ 
+ String directoryCategoryLabel(String id) => kDirectoryCategoryLabels[id] ?? id;
+diff --git a/lib/screens/directory_screen.dart b/lib/screens/directory_screen.dart
+index ed33ce9..93ba4b8 100644
+--- a/lib/screens/directory_screen.dart
++++ b/lib/screens/directory_screen.dart
+@@ -95,6 +95,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
+           : null,
+       body: Column(
+         children: [
++          _CategoryBar(
++            sections: sections,
++            activeId: _activeCategory,
++            onSelect: (id) => setState(() => _activeCategory = id),
++          ),
+           Padding(
+             padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
+             child: TextField(
+@@ -174,11 +179,6 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
+                     },
+                   ),
+           ),
+-          _CategoryBar(
+-            sections: sections,
+-            activeId: _activeCategory,
+-            onSelect: (id) => setState(() => _activeCategory = id),
+-          ),
+         ],
+       ),
+     );
+@@ -333,47 +333,166 @@ class _ContactRow extends StatelessWidget {
+   }
+ }
+ 
+-class _CategoryBar extends StatelessWidget {
++class _CategoryBar extends StatefulWidget {
+   final List<DirectorySection> sections;
+   final String activeId;
+   final ValueChanged<String> onSelect;
+   const _CategoryBar({required this.sections, required this.activeId, required this.onSelect});
+ 
++  @override
++  State<_CategoryBar> createState() => _CategoryBarState();
++}
++
++class _CategoryBarState extends State<_CategoryBar> {
++  final ScrollController _controller = ScrollController();
++  bool _canScrollLeft = false;
++  bool _canScrollRight = true;
++
++  @override
++  void initState() {
++    super.initState();
++    _controller.addListener(_syncScrollState);
++    WidgetsBinding.instance.addPostFrameCallback((_) => _syncScrollState());
++  }
++
++  @override
++  void didUpdateWidget(covariant _CategoryBar oldWidget) {
++    super.didUpdateWidget(oldWidget);
++    WidgetsBinding.instance.addPostFrameCallback((_) => _syncScrollState());
++  }
++
++  @override
++  void dispose() {
++    _controller.removeListener(_syncScrollState);
++    _controller.dispose();
++    super.dispose();
++  }
++
++  void _syncScrollState() {
++    if (!mounted || !_controller.hasClients) return;
++    final position = _controller.position;
++    final left = position.pixels > 4;
++    final right = position.pixels < position.maxScrollExtent - 4;
++    if (left != _canScrollLeft || right != _canScrollRight) {
++      setState(() {
