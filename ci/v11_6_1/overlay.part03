@@ -1,0 +1,160 @@
+-                        Text('Aucun contact ne correspond à cet établissement / cette recherche.',
+-                            textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft)),
++                        Text(
++                          'Aucun contact ne correspond aux filtres.',
++                          textAlign: TextAlign.center,
++                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
++                        ),
+                       ]),
+                     ),
+                   )
+                 : ListView.separated(
+-                    padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.lg),
+-                    itemCount: contacts.length,
++                    padding: EdgeInsets.fromLTRB(
++                      AppSpace.lg,
++                      0,
++                      AppSpace.lg,
++                      isAdmin ? 96 : AppSpace.lg,
++                    ),
++                    itemCount: items.length,
+                     separatorBuilder: (_, __) => const SizedBox(height: AppSpace.sm),
+-                    itemBuilder: (context, i) => _ContactRow(contact: contacts[i], color: section.color, textColor: section.textColor),
++                    itemBuilder: (context, i) {
++                      final item = items[i];
++                      return _ContactRow(
++                        contact: item.contact,
++                        section: item.section,
++                        canManage: isAdmin && item.contact.isManual,
++                        onEdit: () => _openContactEditor(context, appState, existing: item.contact),
++                        onDelete: () => _confirmDelete(context, appState, item.contact),
++                      );
++                    },
+                   ),
+           ),
+           _CategoryBar(
+-            activeId: _activeCategory!,
++            sections: sections,
++            activeId: _activeCategory,
+             onSelect: (id) => setState(() => _activeCategory = id),
+           ),
+         ],
+       ),
+     );
+   }
++
++  Future<void> _openContactEditor(
++    BuildContext context,
++    AppState appState, {
++    DirectoryContact? existing,
++  }) async {
++    final currentHospital = appState.currentUser?.hospital;
++    final initialHospital = existing?.hospital ??
++        (currentHospital != null && kHospitals.contains(currentHospital) ? currentHospital : kHospitals.first);
++    final draft = await showDialog<_DirectoryContactDraft>(
++      context: context,
++      builder: (_) => _DirectoryContactDialog(existing: existing, initialHospital: initialHospital),
++    );
++    if (draft == null || !mounted) return;
++
++    final error = existing == null
++        ? await appState.addDirectoryContact(
++            categoryId: draft.categoryId,
++            name: draft.name,
++            phone: draft.phone,
++            hospital: draft.hospital,
++            service: draft.service,
++          )
++        : await appState.updateDirectoryContact(
++            id: existing.id,
++            categoryId: draft.categoryId,
++            name: draft.name,
++            phone: draft.phone,
++            hospital: draft.hospital,
++            service: draft.service,
++          );
++    if (!mounted) return;
++    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++      content: Text(error ?? (existing == null ? 'Contact ajouté à l’annuaire.' : 'Contact modifié.')),
++    ));
++  }
++
++  Future<void> _confirmDelete(BuildContext context, AppState appState, DirectoryContact contact) async {
++    final confirmed = await showDialog<bool>(
++      context: context,
++      builder: (dialogContext) => AlertDialog(
++        title: const Text('Supprimer ce contact ?'),
++        content: Text('${contact.name}\n${contact.phone}'),
++        actions: [
++          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
++          FilledButton(
++            onPressed: () => Navigator.pop(dialogContext, true),
++            child: const Text('Supprimer'),
++          ),
++        ],
++      ),
++    );
++    if (confirmed != true) return;
++    final error = await appState.deleteDirectoryContact(contact.id);
++    if (!mounted) return;
++    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Contact supprimé.')));
++  }
++}
++
++class _DirectoryItem {
++  final DirectorySection section;
++  final DirectoryContact contact;
++  const _DirectoryItem({required this.section, required this.contact});
+ }
+ 
+ class _ContactRow extends StatelessWidget {
+   final DirectoryContact contact;
+-  final Color color;
+-  final Color textColor;
+-  const _ContactRow({required this.contact, required this.color, required this.textColor});
++  final DirectorySection section;
++  final bool canManage;
++  final VoidCallback onEdit;
++  final VoidCallback onDelete;
++
++  const _ContactRow({
++    required this.contact,
++    required this.section,
++    required this.canManage,
++    required this.onEdit,
++    required this.onDelete,
++  });
+ 
+   @override
+   Widget build(BuildContext context) {
++    final details = <String>[
++      section.label,
++      if ((contact.service ?? '').trim().isNotEmpty) contact.service!.trim(),
++      hospitalDisplayName(contact.hospital),
++    ];
+     return Material(
+       color: Colors.transparent,
+       child: InkWell(
+@@ -124,8 +280,11 @@
+           child: Row(children: [
+             CircleAvatar(
+               radius: 20,
+-              backgroundColor: color,
+-              child: Text(contact.initials, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 12.5)),
++              backgroundColor: section.color,
++              child: Text(
++                contact.initials,
++                style: TextStyle(color: section.textColor, fontWeight: FontWeight.w800, fontSize: 12.5),
++              ),
+             ),
+             const SizedBox(width: AppSpace.md),
+             Expanded(
+@@ -136,6 +295,13 @@
+                   Text(contact.name, style: Theme.of(context).textTheme.titleSmall),
+                   const SizedBox(height: 2),
+                   Text(contact.phone, style: Theme.of(context).textTheme.bodySmall),
++                  const SizedBox(height: 2),
++                  Text(
++                    details.join(' · '),
++                    maxLines: 2,
++                    overflow: TextOverflow.ellipsis,
