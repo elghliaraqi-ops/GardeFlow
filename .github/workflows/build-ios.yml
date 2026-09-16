@@ -9,6 +9,7 @@ on:
       - '.github/workflows/build-ios.yml'
       - 'ci/v11_6_1/**'
       - 'ci/v11_6_3/**'
+      - 'ci/v11_6_5/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -174,6 +175,21 @@ jobs:
           print('Detected symbol bbox:', bbox)
           PY
 
+      - name: Apply V11.6.5 official roster backfill
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/gardeflow_v11_6_5.patch
+          patch -p1 < /tmp/gardeflow_v11_6_5.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pubspec.yaml')
+          s = p.read_text().replace('version: 11.6.4+164', 'version: 11.6.5+165')
+          p.write_text(s)
+          PY
+          grep -q '^version: 11.6.5+165$' pubspec.yaml
+
       - name: Install Flutter dependencies
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
@@ -220,16 +236,16 @@ jobs:
           rm -rf build/ios/package
           mkdir -p build/ios/package/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/package/Payload/Runner.app
-          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/GardeFlow-v11.6.4-Runner.app.zip
-          (cd build/ios/package && zip -qry ../GardeFlow-v11.6.4-unsigned.ipa Payload)
-          ls -lh build/ios/GardeFlow-v11.6.4-Runner.app.zip build/ios/GardeFlow-v11.6.4-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/GardeFlow-v11.6.5-Runner.app.zip
+          (cd build/ios/package && zip -qry ../GardeFlow-v11.6.5-unsigned.ipa Payload)
+          ls -lh build/ios/GardeFlow-v11.6.5-Runner.app.zip build/ios/GardeFlow-v11.6.5-unsigned.ipa
 
       - name: Upload iOS unsigned artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.4-ios-unsigned
+          name: GardeFlow-v11.6.5-ios-unsigned
           path: |
-            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.4-Runner.app.zip
-            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.4-unsigned.ipa
+            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.5-Runner.app.zip
+            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.5-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
