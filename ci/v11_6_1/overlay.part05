@@ -1,0 +1,177 @@
++        ? widget.existing!.categoryId
++        : kDirectoryCategorySeniors;
++    _hospital = widget.initialHospital;
++  }
++
++  @override
++  void dispose() {
++    _nameController.dispose();
++    _phoneController.dispose();
++    _serviceController.dispose();
++    super.dispose();
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final editing = widget.existing != null;
++    return AlertDialog(
++      title: Text(editing ? 'Modifier le contact' : 'Ajouter un numéro'),
++      content: SingleChildScrollView(
++        child: SizedBox(
++          width: 480,
++          child: Column(mainAxisSize: MainAxisSize.min, children: [
++            DropdownButtonFormField<String>(
++              value: _categoryId,
++              isExpanded: true,
++              decoration: const InputDecoration(labelText: 'Catégorie'),
++              items: kManualDirectoryCategoryIds
++                  .map((id) => DropdownMenuItem(value: id, child: Text(directoryCategoryLabel(id))))
++                  .toList(),
++              onChanged: (value) {
++                if (value != null) setState(() => _categoryId = value);
++              },
++            ),
++            const SizedBox(height: 10),
++            TextField(
++              controller: _nameController,
++              textCapitalization: TextCapitalization.words,
++              decoration: InputDecoration(
++                labelText: _categoryId == kDirectoryCategoryFleet ? 'Nom / libellé' : 'Nom et prénom',
++                prefixIcon: const Icon(Icons.badge_outlined),
++              ),
++            ),
++            const SizedBox(height: 10),
++            TextField(
++              controller: _phoneController,
++              keyboardType: TextInputType.phone,
++              decoration: const InputDecoration(
++                labelText: 'Numéro de téléphone',
++                hintText: 'Ex. 0612345678 ou +212…',
++                prefixIcon: Icon(Icons.phone_outlined),
++              ),
++            ),
++            const SizedBox(height: 10),
++            DropdownButtonFormField<String>(
++              value: _hospital,
++              isExpanded: true,
++              decoration: const InputDecoration(labelText: 'Établissement'),
++              items: kHospitals
++                  .map((h) => DropdownMenuItem(value: h, child: Text(hospitalDisplayName(h), overflow: TextOverflow.ellipsis)))
++                  .toList(),
++              onChanged: (value) {
++                if (value != null) setState(() => _hospital = value);
++              },
++            ),
++            const SizedBox(height: 10),
++            TextField(
++              controller: _serviceController,
++              textCapitalization: TextCapitalization.sentences,
++              decoration: const InputDecoration(
++                labelText: 'Service / précision (facultatif)',
++                prefixIcon: Icon(Icons.medical_services_outlined),
++              ),
++            ),
++          ]),
++        ),
++      ),
++      actions: [
++        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
++        FilledButton.icon(
++          onPressed: () {
++            Navigator.pop(
++              context,
++              _DirectoryContactDraft(
++                categoryId: _categoryId,
++                name: _nameController.text,
++                phone: _phoneController.text,
++                hospital: _hospital,
++                service: _serviceController.text.trim().isEmpty ? null : _serviceController.text.trim(),
++              ),
++            );
++          },
++          icon: Icon(editing ? Icons.save_outlined : Icons.add_call),
++          label: Text(editing ? 'Enregistrer' : 'Ajouter'),
++        ),
++      ],
++    );
++  }
++}
+--- a/lib/services/supabase_backend_service.dart
++++ b/lib/services/supabase_backend_service.dart
+@@ -4,6 +4,7 @@
+ 
+ import '../config/backend_config.dart';
+ import '../models/app_user.dart';
++import '../models/directory_contact.dart';
+ import '../models/audit_event.dart';
+ import '../models/exchange_request.dart';
+ import '../models/leave_request.dart';
+@@ -100,6 +101,63 @@
+     return (rows as List).map((e) => _profileToUser(Map<String, dynamic>.from(e))).toList();
+   }
+ 
++  Future<List<DirectoryContact>> fetchManualDirectoryContacts() async {
++    final rows = await client.from('directory_contacts').select().order('name');
++    return (rows as List).map((raw) {
++      final j = Map<String, dynamic>.from(raw as Map);
++      return DirectoryContact(
++        id: j['id'] as String,
++        name: (j['name'] as String?) ?? '',
++        phone: (j['phone'] as String?) ?? '',
++        hospital: (j['hospital'] as String?) ?? '',
++        service: j['service'] as String?,
++        categoryId: (j['category'] as String?) ?? '',
++        isManual: true,
++      );
++    }).toList();
++  }
++
++  Future<void> addManualDirectoryContact({
++    required String categoryId,
++    required String name,
++    required String phone,
++    required String hospital,
++    String? service,
++  }) async {
++    final uid = client.auth.currentUser?.id;
++    if (uid == null) throw StateError('Session Supabase absente.');
++    await client.from('directory_contacts').insert({
++      'category': categoryId,
++      'name': name.trim(),
++      'phone': phone.trim(),
++      'hospital': hospital,
++      'service': (service ?? '').trim().isEmpty ? null : service!.trim(),
++      'created_by': uid,
++    });
++  }
++
++  Future<void> updateManualDirectoryContact({
++    required String id,
++    required String categoryId,
++    required String name,
++    required String phone,
++    required String hospital,
++    String? service,
++  }) async {
++    await client.from('directory_contacts').update({
++      'category': categoryId,
++      'name': name.trim(),
++      'phone': phone.trim(),
++      'hospital': hospital,
++      'service': (service ?? '').trim().isEmpty ? null : service!.trim(),
++      'updated_at': DateTime.now().toUtc().toIso8601String(),
++    }).eq('id', id);
++  }
++
++  Future<void> deleteManualDirectoryContact(String id) async {
++    await client.from('directory_contacts').delete().eq('id', id);
++  }
++
+   AppUser _profileToUser(Map<String, dynamic> j) {
+     final rawGrade = (j['medical_grade'] as String?) ?? (j['fonction'] as String?) ?? 'junior';
+     final grade = rawGrade == 'senior' ? MedicalGrade.senior : MedicalGrade.junior;
+--- a/lib/state/app_state.dart
++++ b/lib/state/app_state.dart
+@@ -7,6 +7,7 @@
+ 
+ import '../config/business_rules.dart';
