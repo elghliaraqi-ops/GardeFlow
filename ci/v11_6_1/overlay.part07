@@ -1,0 +1,93 @@
++    final duplicate=_directory.expand((s)=>s.contacts).any((c)=>c.hospital==hospital&&_directoryPhoneKey(c.phone)==_directoryPhoneKey(cleanPhone));
++    if(duplicate)return 'Ce numéro existe déjà dans l’annuaire de cet établissement.';
++    try{
++      if(backendEnabled){
++        await SupabaseBackendService.instance.addManualDirectoryContact(
++          categoryId:categoryId,name:cleanName,phone:cleanPhone,hospital:hospital,service:service,
++        );
++        await _reloadFromBackend();
++      }else{
++        _manualDirectoryContacts.add(DirectoryContact(
++          id:'local-directory-${DateTime.now().microsecondsSinceEpoch}',
++          name:cleanName,phone:cleanPhone,hospital:hospital,
++          service:(service ?? '').trim().isEmpty?null:service!.trim(),
++          categoryId:categoryId,isManual:true,
++        ));
++        _rebuildDirectory();_persist();notifyListeners();
++      }
++      return null;
++    }catch(e){return 'Ajout du contact impossible : $e';}
++  }
++
++  Future<String?> updateDirectoryContact({
++    required String id,
++    required String categoryId,
++    required String name,
++    required String phone,
++    required String hospital,
++    String? service,
++  }) async {
++    final me=currentUser;
++    if(me==null||me.role!=UserRole.admin)return 'Action réservée à l’administrateur.';
++    final existing=_manualDirectoryContacts.where((c)=>c.id==id).firstOrNull;
++    if(existing==null)return 'Contact manuel introuvable.';
++    final cleanName=name.trim();
++    final cleanPhone=phone.trim();
++    if(!kManualDirectoryCategoryIds.contains(categoryId))return 'Catégorie invalide.';
++    if(cleanName.isEmpty)return 'Le nom / libellé est obligatoire.';
++    if(_directoryPhoneKey(cleanPhone).length<4)return 'Numéro de téléphone invalide.';
++    if(!kHospitals.contains(hospital))return 'Établissement invalide.';
++    final duplicate=_directory.expand((s)=>s.contacts).any((c)=>c.id!=id&&c.hospital==hospital&&_directoryPhoneKey(c.phone)==_directoryPhoneKey(cleanPhone));
++    if(duplicate)return 'Ce numéro existe déjà dans l’annuaire de cet établissement.';
++    try{
++      if(backendEnabled){
++        await SupabaseBackendService.instance.updateManualDirectoryContact(
++          id:id,categoryId:categoryId,name:cleanName,phone:cleanPhone,hospital:hospital,service:service,
++        );
++        await _reloadFromBackend();
++      }else{
++        final index=_manualDirectoryContacts.indexWhere((c)=>c.id==id);
++        _manualDirectoryContacts[index]=DirectoryContact(
++          id:id,name:cleanName,phone:cleanPhone,hospital:hospital,
++          service:(service ?? '').trim().isEmpty?null:service!.trim(),
++          categoryId:categoryId,isManual:true,
++        );
++        _rebuildDirectory();_persist();notifyListeners();
++      }
++      return null;
++    }catch(e){return 'Modification du contact impossible : $e';}
++  }
++
++  Future<String?> deleteDirectoryContact(String id) async {
++    final me=currentUser;
++    if(me==null||me.role!=UserRole.admin)return 'Action réservée à l’administrateur.';
++    if(!_manualDirectoryContacts.any((c)=>c.id==id))return 'Contact manuel introuvable.';
++    try{
++      if(backendEnabled){
++        await SupabaseBackendService.instance.deleteManualDirectoryContact(id);
++        await _reloadFromBackend();
++      }else{
++        _manualDirectoryContacts.removeWhere((c)=>c.id==id);
++        _rebuildDirectory();_persist();notifyListeners();
++      }
++      return null;
++    }catch(e){return 'Suppression du contact impossible : $e';}
+   }
+ 
+   final List<AstreintePhoto> _astreinte=[];
+@@ -1019,6 +1149,7 @@
+   Map<String,dynamic> _toJson()=>{
+     'users':_users.map((e)=>e.toJson()).toList(),'planning':_planning.map((e)=>e.toJson()).toList(),
+     'astreinte':_astreinte.map((e)=>e.toJson()).toList(),'reminders':_reminders.map((e)=>e.toJson()).toList(),
++    'manualDirectoryContacts':_manualDirectoryContacts.map((e)=>e.toJson()).toList(),
+     'exchanges':_exchanges.map((e)=>e.toJson()).toList(),'leaveRequests':_leaveRequests.map((e)=>e.toJson()).toList(),'planningMonths':_planningMonths.map((e)=>e.toJson()).toList(),'dismissedNotifications':_dismissedNotificationKeys.toList(),'delayMinutes':_delayMinutes,'notificationsOn':_notificationsOn,
+     'planningCounter':_planningCounter,'exchangeCounter':_exchangeCounter,'leaveCounter':_leaveCounter,'reminderCounter':_reminderCounter,
+   };
+@@ -1027,6 +1158,7 @@
+     try{_planning.addAll((j['planning'] as List? ?? []).map((e)=>PlanningEntry.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
+     try{_astreinte.addAll((j['astreinte'] as List? ?? []).map((e)=>AstreintePhoto.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
+     try{_reminders.addAll((j['reminders'] as List? ?? []).map((e)=>ReminderNotification.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
++    try{_manualDirectoryContacts.addAll((j['manualDirectoryContacts'] as List? ?? []).map((e)=>DirectoryContact.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
+     try{_exchanges.addAll((j['exchanges'] as List? ?? []).map((e)=>ExchangeRequest.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
+     try{_leaveRequests.addAll((j['leaveRequests'] as List? ?? []).map((e)=>LeaveRequest.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
+     try{_planningMonths.addAll((j['planningMonths'] as List? ?? []).map((e)=>PlanningMonth.fromJson(Map<String,dynamic>.from(e))));}catch(_){}
