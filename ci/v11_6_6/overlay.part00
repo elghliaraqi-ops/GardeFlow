@@ -1,0 +1,214 @@
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 4e4262a..fa7a6c7 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -1,7 +1,7 @@
+ name: huim6_planning
+ description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
+ publish_to: "none"
+-version: 11.6.5+165
++version: 11.6.6+166
+ 
+ environment:
+   sdk: ">=3.3.0 <4.0.0"
+diff --git a/lib/services/supabase_backend_service.dart b/lib/services/supabase_backend_service.dart
+index c1201bc..0d40e78 100644
+--- a/lib/services/supabase_backend_service.dart
++++ b/lib/services/supabase_backend_service.dart
+@@ -3,6 +3,7 @@ import 'dart:typed_data';
+ import 'package:supabase_flutter/supabase_flutter.dart';
+ 
+ import '../config/backend_config.dart';
++import '../data/hospitals.dart';
+ import '../models/app_user.dart';
+ import '../models/directory_contact.dart';
+ import '../models/audit_event.dart';
+@@ -410,8 +411,18 @@ class SupabaseBackendService {
+         .toList();
+   }
+ 
+-  Future<List<SharedResource>> fetchAstreintePhotos() =>
+-      fetchSharedResources(kind: 'astreinte_photo');
++  Future<List<SharedResource>> fetchAstreintePhotos({required String hospital}) async {
++    if (!kHospitals.contains(hospital)) throw ArgumentError('Établissement invalide.');
++    final rows = await client
++        .from('shared_resources')
++        .select()
++        .eq('kind', 'astreinte_photo')
++        .eq('hospital', hospital)
++        .order('updated_at', ascending: false);
++    return (rows as List)
++        .map((e) => SharedResource.fromJson(Map<String, dynamic>.from(e)))
++        .toList();
++  }
+ 
+   Future<List<SharedResource>> fetchOfficialPlanningPdfs() =>
+       fetchSharedResources(kind: 'official_pdf');
+@@ -428,11 +439,18 @@ class SupabaseBackendService {
+     required Uint8List bytes,
+     required String fileName,
+     required String mimeType,
++    required String hospital,
+   }) async {
+     final uid = client.auth.currentUser?.id;
+     if (uid == null) throw StateError('Session Supabase absente.');
++    if (!kHospitals.contains(hospital)) throw ArgumentError('Établissement invalide.');
++    final hospitalSlot = hospital == kHospitalBouskoura
++        ? 'hm6_bouskoura'
++        : hospital == kHospitalRabat
++            ? 'hm6_rabat'
++            : 'hck_casa';
+     final ext = _safeExtension(fileName, fallback: _extensionForMime(mimeType, fallback: 'jpg'));
+-    final path = 'astreinte/${uid}_${DateTime.now().microsecondsSinceEpoch}.$ext';
++    final path = 'astreinte/$hospitalSlot/${uid}_${DateTime.now().microsecondsSinceEpoch}.$ext';
+     await client.storage.from(sharedBucket).uploadBinary(
+       path,
+       bytes,
+@@ -440,6 +458,7 @@ class SupabaseBackendService {
+     try {
+       await client.from('shared_resources').insert({
+         'kind': 'astreinte_photo',
++        'hospital': hospital,
+         'storage_path': path,
+         'display_name': fileName,
+         'mime_type': mimeType,
+diff --git a/lib/state/app_state.dart b/lib/state/app_state.dart
+index be84dbc..24ac045 100644
+--- a/lib/state/app_state.dart
++++ b/lib/state/app_state.dart
+@@ -161,6 +161,12 @@ class AppState extends ChangeNotifier {
+         .where((a) => a.profileId == profile.id)
+         .map((a) => a.toJson())
+         .toList(growable: false);
++    if (myAssignments.isEmpty) {
++      throw StateError(
++        'Le PDF ${resource.displayName} est lisible mais le nom de ${profile.prenom} ${profile.nom} n’y a pas été reconnu. La synchronisation sera retentée automatiquement.',
++      );
++    }
++
+ 
+     final result = await backend.importOfficialEmergencyRosterForProfile(
+       resource: resource,
+diff --git a/lib/services/official_roster_import_service.dart b/lib/services/official_roster_import_service.dart
+index 87ea58c..a043665 100644
+--- a/lib/services/official_roster_import_service.dart
++++ b/lib/services/official_roster_import_service.dart
+@@ -90,14 +90,11 @@ class OfficialRosterImportService {
+             .toList(growable: false);
+         if (fragments.isEmpty) continue;
+ 
+-        final dayCenters = fragments
+-            .where((f) => _isDayHeader(f.text))
+-            .map((f) => f.centerX)
+-            .toList();
+-        final nightCenters = fragments
+-            .where((f) => _isNightHeader(f.text))
+-            .map((f) => f.centerX)
+-            .toList();
++        // Certains PDF (notamment HUICK) exposent parfois « 08H - 20H »
++        // ou « 20H - 08H » en plusieurs fragments structurés. On accepte les
++        // deux formes afin que la lecture automatique reste multi-hôpitaux.
++        final dayCenters = _headerCenters(fragments, day: true);
++        final nightCenters = _headerCenters(fragments, day: false);
+         if (dayCenters.isEmpty || nightCenters.isEmpty) continue;
+ 
+         final dayCenter = _median(dayCenters);
+@@ -279,10 +276,32 @@ class OfficialRosterImportService {
+           break;
+         }
+       }
++      if (!found && _identityFallbackMatch(normalizedCell, profile)) {
++        found = true;
++      }
+       if (found) matches.add(profile);
+     }
+     return matches;
+   }
+ 
++  /// Tolérance contrôlée pour les annuaires où le compte contient plusieurs
++  /// prénoms alors que le PDF n'en affiche qu'un. Le nom complet doit rester
++  /// contigu, ce qui évite de mélanger deux médecins présents dans la même cellule.
++  static bool _identityFallbackMatch(String cell, AppUser profile) {
++    final nom = _normalizeName(profile.nom);
++    final prenom = _normalizeName(profile.prenom);
++    if (nom.isEmpty || prenom.isEmpty) return false;
++
++    final prenomTokens = prenom
++        .split(' ')
++        .where((t) => t.length >= 2)
++        .toSet();
++    for (final token in prenomTokens) {
++      final forward = '$nom $token';
++      final reverse = '$token $nom';
++      if (_approximatelyContains(cell, forward) || _approximatelyContains(cell, reverse)) {
++        return true;
++      }
++    }
++    return false;
++  }
++
+   static bool _approximatelyContains(String cell, String variant) {
+     final cellTokens = cell.split(' ').where((t) => t.isNotEmpty).toList();
+     final variantTokens = variant.split(' ').where((t) => t.isNotEmpty).toList();
+@@ -369,6 +388,59 @@ class OfficialRosterImportService {
+   static String _dateKey(DateTime d) =>
+       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+ 
++  static List<double> _headerCenters(List<_TextFragment> fragments, {required bool day}) {
++    bool matchesTarget(String text) {
++      final isDay = _isDayHeader(text);
++      final isNight = _isNightHeader(text);
++      // Un groupe contenant les deux intitulés à la fois est trop large et ne
++      // doit pas être utilisé comme centre de colonne.
++      return day ? (isDay && !isNight) : (isNight && !isDay);
++    }
++
++    final direct = fragments
++        .where((f) => matchesTarget(f.text))
++        .map((f) => f.centerX)
++        .toList();
++    if (direct.isNotEmpty) return direct;
++
++    final sorted = [...fragments]
++      ..sort((a, b) {
++        final y = a.centerY.compareTo(b.centerY);
++        return y != 0 ? y : a.left.compareTo(b.left);
++      });
++    final centers = <double>[];
++
++    for (var i = 0; i < sorted.length; i++) {
++      final base = sorted[i];
++      var combined = '';
++      var left = base.left;
++      var right = base.right;
++      for (var j = i; j < sorted.length && j < i + 4; j++) {
++        final current = sorted[j];
++        if (j > i) {
++          final verticalTolerance = (base.height * 0.9).clamp(2.5, 6.0).toDouble();
++          if ((current.centerY - base.centerY).abs() > verticalTolerance) break;
++          final gapLimit = (base.height * 4.0).clamp(16.0, 34.0).toDouble();
++          if (current.left - right > gapLimit) break;
++        }
++        combined = combined.isEmpty ? current.text : '$combined ${current.text}';
++        if (current.left < left) left = current.left;
++        if (current.right > right) right = current.right;
++        if (matchesTarget(combined)) {
++          centers.add((left + right) / 2);
++          break;
++        }
++      }
++    }
++
++    centers.sort();
++    final deduped = <double>[];
++    for (final center in centers) {
++      if (deduped.isEmpty || (deduped.last - center).abs() > 2.0) {
++        deduped.add(center);
++      }
++    }
++    return deduped;
++  }
++
+   static bool _isDayHeader(String text) {
+     final compact = _normalizeHeader(text).replaceAll(' ', '');
+     return compact.contains('08h20h') || compact.contains('8h20h');
