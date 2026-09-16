@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - '.github/workflows/build-ios.yml'
+      - 'ci/v11_6_1/**'
+      - 'ci/v11_6_3/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -37,31 +39,51 @@ jobs:
           rm -rf .ci-ios-project
           mkdir -p .ci-ios-project
           ditto -x -k "$ZIP" .ci-ios-project
-          PROJECT_DIR="$(find .ci-ios-project -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          test -n "$PROJECT_DIR"
-          test -f "$PROJECT_DIR/pubspec.yaml"
+          PUBSPEC="$(find .ci-ios-project -type f -name pubspec.yaml -print -quit)"
+          test -n "$PUBSPEC"
+          PROJECT_DIR="$(dirname "$PUBSPEC")"
+          test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
           echo "Project: $PROJECT_DIR"
 
-      - name: Show Xcode and Flutter versions
-        working-directory: ${{ steps.project.outputs.dir }}
-        run: |
-          xcodebuild -version
-          flutter --version
-          flutter doctor -v
-
-      - name: Generate and configure iOS project
+      - name: Apply V11.6.1 overlay
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
           set -euo pipefail
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/gardeflow_v11_6_1.patch
+          patch -p1 < /tmp/gardeflow_v11_6_1.patch
+          grep -q '^version: 11.6.1+161$' pubspec.yaml
+
+      - name: Apply V11.6.3 UI overlay
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/gardeflow_v11_6_3.patch
+          patch -p1 < /tmp/gardeflow_v11_6_3.patch
+          grep -q '^version: 11.6.3+163$' pubspec.yaml
+
+      - name: Set V11.6.4 and configure iOS project
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('pubspec.yaml')
+          s = p.read_text()
+          s = s.replace('version: 11.6.3+163', 'version: 11.6.4+164')
+          p.write_text(s)
+          PY
+          grep -q '^version: 11.6.4+164$' pubspec.yaml
 
           if [ ! -f ios/Runner.xcodeproj/project.pbxproj ]; then
             rm -rf ios
             flutter create --no-pub --platforms=ios --org com.huim6 --project-name huim6_planning .
           fi
 
-          # Firebase Core/Messaging in the current Flutter stack require iOS 15+.
           python3 - <<'PY'
           from pathlib import Path
           p = Path('tool/configure_ios.dart')
@@ -71,10 +93,95 @@ jobs:
           PY
 
           dart tool/configure_ios.dart
+
+      - name: Fix iOS launcher icon scale
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --break-system-packages pillow || python3 -m pip install --quiet --user pillow
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          from PIL import Image
+
+          root = Path('.')
+          source = root / 'tool/android-res/drawable-nodpi/gardeflow_logo.png'
+          if not source.is_file():
+              raise SystemExit(f'Logo source introuvable: {source}')
+
+          img = Image.open(source).convert('RGB')
+          width, height = img.size
+
+          mask = Image.new('1', img.size, 0)
+          mask_px = mask.load()
+          src_px = img.load()
+          for y in range(height):
+              for x in range(width):
+                  r, g, b = src_px[x, y]
+                  if min(r, g, b) < 185 and (max(r, g, b) - min(r, g, b)) > 45:
+                      mask_px[x, y] = 1
+
+          bbox = mask.getbbox()
+          if bbox is None:
+              raise SystemExit('Impossible de détecter le symbole du logo.')
+
+          left, top, right, bottom = bbox
+          pad = max(8, int(min(width, height) * 0.01))
+          left = max(0, left - pad)
+          top = max(0, top - pad)
+          right = min(width, right + pad)
+          bottom = min(height, bottom + pad)
+          symbol = img.crop((left, top, right, bottom))
+
+          def centered_master(symbol_img, canvas_size=1024, symbol_size=655):
+              canvas = Image.new('RGB', (canvas_size, canvas_size), 'white')
+              sw, sh = symbol_img.size
+              scale = min(symbol_size / sw, symbol_size / sh)
+              nw = max(1, round(sw * scale))
+              nh = max(1, round(sh * scale))
+              resized = symbol_img.resize((nw, nh), Image.Resampling.LANCZOS)
+              canvas.paste(resized, ((canvas_size - nw) // 2, (canvas_size - nh) // 2))
+              return canvas
+
+          master = centered_master(symbol)
+          appicon_dir = root / 'ios/Runner/Assets.xcassets/AppIcon.appiconset'
+          contents_path = appicon_dir / 'Contents.json'
+          if not contents_path.is_file():
+              raise SystemExit(f'Contents.json introuvable: {contents_path}')
+
+          data = json.loads(contents_path.read_text())
+          written = 0
+          for item in data.get('images', []):
+              filename = item.get('filename')
+              size_str = item.get('size')
+              scale_str = item.get('scale')
+              if not filename or not size_str or not scale_str:
+                  continue
+              points = float(size_str.split('x')[0])
+              scale = float(scale_str.rstrip('x'))
+              pixels = round(points * scale)
+              target = appicon_dir / filename
+              master.resize((pixels, pixels), Image.Resampling.LANCZOS).save(target, 'PNG', optimize=True)
+              written += 1
+
+          if written == 0:
+              raise SystemExit('Aucune icône iOS générée.')
+
+          master.save(root / 'build_icon_ios_v11_6_4_preview.png', 'PNG', optimize=True)
+          print(f'{written} icônes iOS générées avec padding corrigé.')
+          print('Detected symbol bbox:', bbox)
+          PY
+
+      - name: Install Flutter dependencies
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
           flutter clean
           flutter pub get
 
-          # Podfile can be generated after pub get; force the same target there.
           if [ -f ios/Podfile ]; then
             python3 - <<'PY'
           from pathlib import Path
@@ -89,6 +196,13 @@ jobs:
           PY
             (cd ios && pod install --repo-update)
           fi
+
+      - name: Show Xcode and Flutter versions
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          xcodebuild -version
+          flutter --version
+          flutter doctor -v
 
       - name: Build iOS release without code signing
         working-directory: ${{ steps.project.outputs.dir }}
@@ -106,16 +220,16 @@ jobs:
           rm -rf build/ios/package
           mkdir -p build/ios/package/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/package/Payload/Runner.app
-          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/GardeFlow-v11.6.0-Runner.app.zip
-          (cd build/ios/package && zip -qry ../GardeFlow-v11.6.0-unsigned.ipa Payload)
-          ls -lh build/ios/GardeFlow-v11.6.0-Runner.app.zip build/ios/GardeFlow-v11.6.0-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/GardeFlow-v11.6.4-Runner.app.zip
+          (cd build/ios/package && zip -qry ../GardeFlow-v11.6.4-unsigned.ipa Payload)
+          ls -lh build/ios/GardeFlow-v11.6.4-Runner.app.zip build/ios/GardeFlow-v11.6.4-unsigned.ipa
 
       - name: Upload iOS unsigned artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.0-ios-unsigned
+          name: GardeFlow-v11.6.4-ios-unsigned
           path: |
-            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.0-Runner.app.zip
-            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.0-unsigned.ipa
+            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.4-Runner.app.zip
+            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.4-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
