@@ -1,0 +1,206 @@
++        _canScrollLeft = left;
++        _canScrollRight = right;
++      });
++    }
++  }
++
++  Future<void> _scrollBy(double delta) async {
++    if (!_controller.hasClients) return;
++    final target = (_controller.offset + delta).clamp(
++      _controller.position.minScrollExtent,
++      _controller.position.maxScrollExtent,
++    );
++    await _controller.animateTo(
++      target.toDouble(),
++      duration: const Duration(milliseconds: 240),
++      curve: Curves.easeOutCubic,
++    );
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     return Container(
+-      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.md),
+-      decoration: BoxDecoration(
++      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.sm),
++      decoration: const BoxDecoration(
+         color: AppColors.card,
+-        border: const Border(top: BorderSide(color: AppColors.line)),
+-        boxShadow: AppShadow.mid,
++        border: Border(bottom: BorderSide(color: AppColors.line)),
+       ),
+-      child: SizedBox(
+-        height: 40,
+-        child: ListView.separated(
+-          scrollDirection: Axis.horizontal,
+-          itemCount: sections.length + 1,
+-          separatorBuilder: (_, __) => const SizedBox(width: AppSpace.sm),
+-          itemBuilder: (context, i) {
+-            if (i == 0) {
+-              final active = activeId == _kAllCategories;
+-              return _CategoryChip(
+-                label: 'Tous',
+-                active: active,
+-                color: AppColors.ink,
+-                textColor: Colors.white,
+-                onTap: () => onSelect(_kAllCategories),
+-              );
+-            }
+-            final section = sections[i - 1];
+-            return _CategoryChip(
+-              label: section.label,
+-              active: section.id == activeId,
+-              color: section.color,
+-              textColor: section.textColor,
+-              onTap: () => onSelect(section.id),
+-            );
+-          },
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Row(
++            children: [
++              Text(
++                'Catégories',
++                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
++              ),
++              const Spacer(),
++              const Icon(Icons.swipe_rounded, size: 15, color: AppColors.inkSoft),
++              const SizedBox(width: 4),
++              Text(
++                'Faites défiler',
++                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.inkSoft),
++              ),
++            ],
++          ),
++          const SizedBox(height: 6),
++          SizedBox(
++            height: 42,
++            child: Row(
++              children: [
++                _CategoryScrollButton(
++                  icon: Icons.chevron_left_rounded,
++                  enabled: _canScrollLeft,
++                  onTap: () => _scrollBy(-210),
++                ),
++                Expanded(
++                  child: ListView.separated(
++                    controller: _controller,
++                    scrollDirection: Axis.horizontal,
++                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
++                    padding: const EdgeInsets.symmetric(horizontal: 4),
++                    itemCount: widget.sections.length + 1,
++                    separatorBuilder: (_, __) => const SizedBox(width: AppSpace.sm),
++                    itemBuilder: (context, i) {
++                      if (i == 0) {
++                        final active = widget.activeId == _kAllCategories;
++                        return _CategoryChip(
++                          label: 'Tous',
++                          active: active,
++                          color: AppColors.ink,
++                          textColor: Colors.white,
++                          onTap: () => widget.onSelect(_kAllCategories),
++                        );
++                      }
++                      final section = widget.sections[i - 1];
++                      return _CategoryChip(
++                        label: section.label,
++                        active: section.id == widget.activeId,
++                        color: section.color,
++                        textColor: section.textColor,
++                        onTap: () => widget.onSelect(section.id),
++                      );
++                    },
++                  ),
++                ),
++                _CategoryScrollButton(
++                  icon: Icons.chevron_right_rounded,
++                  enabled: _canScrollRight,
++                  onTap: () => _scrollBy(210),
++                ),
++              ],
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _CategoryScrollButton extends StatelessWidget {
++  final IconData icon;
++  final bool enabled;
++  final VoidCallback onTap;
++  const _CategoryScrollButton({required this.icon, required this.enabled, required this.onTap});
++
++  @override
++  Widget build(BuildContext context) {
++    return AnimatedOpacity(
++      duration: const Duration(milliseconds: 160),
++      opacity: enabled ? 1 : 0.18,
++      child: InkWell(
++        onTap: enabled ? onTap : null,
++        borderRadius: AppRadius.pillR,
++        child: SizedBox(
++          width: 32,
++          height: 42,
++          child: Icon(icon, size: 22, color: enabled ? AppColors.ink : AppColors.inkFaint),
+         ),
+       ),
+     );
+@@ -396,23 +515,30 @@ class _CategoryChip extends StatelessWidget {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    return GestureDetector(
+-      onTap: onTap,
+-      child: AnimatedContainer(
+-        duration: const Duration(milliseconds: 150),
+-        padding: const EdgeInsets.symmetric(horizontal: 14),
+-        alignment: Alignment.center,
+-        decoration: BoxDecoration(
+-          color: active ? color : AppColors.paperAlt,
+-          borderRadius: AppRadius.pillR,
+-          border: Border.all(color: active ? Colors.transparent : AppColors.line),
+-        ),
+-        child: Text(
+-          label,
+-          style: TextStyle(
+-            fontSize: 11.5,
+-            fontWeight: FontWeight.w700,
+-            color: active ? textColor : AppColors.inkSoft,
++    return Material(
++      color: Colors.transparent,
++      child: InkWell(
++        onTap: onTap,
++        borderRadius: AppRadius.pillR,
++        child: AnimatedContainer(
++          duration: const Duration(milliseconds: 150),
++          padding: const EdgeInsets.symmetric(horizontal: 14),
++          alignment: Alignment.center,
++          decoration: BoxDecoration(
++            color: active ? color : AppColors.paperAlt,
++            borderRadius: AppRadius.pillR,
++            border: Border.all(color: active ? color : AppColors.line),
++            boxShadow: active
++                ? const [BoxShadow(color: Color(0x10000000), blurRadius: 5, offset: Offset(0, 2))]
++                : null,
++          ),
++          child: Text(
++            label,
++            style: TextStyle(
++              fontSize: 11.5,
++              fontWeight: FontWeight.w800,
++              color: active ? textColor : AppColors.inkSoft,
++            ),
+           ),
+         ),
+       ),
+diff --git a/lib/screens/home_screen.dart b/lib/screens/home_screen.dart
+index ba87237..b2efba8 100644
+--- a/lib/screens/home_screen.dart
++++ b/lib/screens/home_screen.dart
+@@ -243,10 +243,65 @@ class _BellButton extends StatelessWidget {
+ /// Rangée d'accès rapides — remplace les grandes cartes d'origine par des
+ /// puces compactes icône + libellé, pour libérer de la hauteur au profit
