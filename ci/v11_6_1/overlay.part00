@@ -1,0 +1,181 @@
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -1,7 +1,7 @@
+ name: huim6_planning
+ description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
+ publish_to: "none"
+-version: 11.6.0+160
++version: 11.6.1+161
+ 
+ environment:
+   sdk: ">=3.3.0 <4.0.0"
+--- a/lib/data/seed_data.dart
++++ b/lib/data/seed_data.dart
+@@ -28,71 +28,103 @@
+ List<DirectorySection> buildSeedDirectory() {
+   return [
+     DirectorySection(
+-      id: 'medecins-juniors',
+-      label: 'Médecins Juniors',
++      id: kDirectoryCategoryJuniors,
++      label: directoryCategoryLabel(kDirectoryCategoryJuniors),
+       color: AppColors.serviceJour,
+       textColor: AppColors.serviceJourText,
+       contacts: [
+-        DirectoryContact(name: 'Dr. Amel Haddad', phone: '+33612345601', hospital: kHospitals[0]),
+-        DirectoryContact(name: 'Dr. Karim Bensalem', phone: '+33612345602', hospital: kHospitals[1]),
++        DirectoryContact(
++          name: 'Dr. Amel Haddad',
++          phone: '+33612345601',
++          hospital: kHospitals[0],
++          categoryId: kDirectoryCategoryJuniors,
++        ),
++        DirectoryContact(
++          name: 'Dr. Karim Bensalem',
++          phone: '+33612345602',
++          hospital: kHospitals[1],
++          categoryId: kDirectoryCategoryJuniors,
++        ),
+       ],
+     ),
+     DirectorySection(
+-      id: 'medecins-seniors',
+-      label: 'Médecins Séniors',
++      id: kDirectoryCategorySeniors,
++      label: directoryCategoryLabel(kDirectoryCategorySeniors),
+       color: AppColors.service24h,
+       textColor: AppColors.service24hText,
+       contacts: [
+-        DirectoryContact(name: 'Dr. Nadia Rahal', phone: '+33612345610', hospital: kHospitals[0]),
+-        DirectoryContact(name: 'Dr. Yacine Meziane', phone: '+33612345611', hospital: kHospitals[2]),
++        DirectoryContact(
++          name: 'Dr. Nadia Rahal',
++          phone: '+33612345610',
++          hospital: kHospitals[0],
++          categoryId: kDirectoryCategorySeniors,
++        ),
++        DirectoryContact(
++          name: 'Dr. Yacine Meziane',
++          phone: '+33612345611',
++          hospital: kHospitals[2],
++          categoryId: kDirectoryCategorySeniors,
++        ),
+       ],
+     ),
+     DirectorySection(
+-      id: 'flotte-service',
+-      label: 'Flotte Service',
+-      color: AppColors.urgJour,
+-      textColor: AppColors.urgJourText,
+-      contacts: [
+-        DirectoryContact(name: 'Véhicule 1 — Astreinte', phone: '+33612345630', hospital: kHospitals[0]),
+-        DirectoryContact(name: 'Ambulance A', phone: '+33612345631', hospital: kHospitals[1]),
+-      ],
+-    ),
+-    DirectorySection(
+-      id: 'infirmiers',
+-      label: 'Infirmiers',
++      id: kDirectoryCategoryNurses,
++      label: directoryCategoryLabel(kDirectoryCategoryNurses),
+       color: AppColors.conge,
+       textColor: AppColors.congeText,
+       contacts: [
+-        DirectoryContact(name: 'Sofia Belkacem', phone: '+33612345620', hospital: kHospitals[0]),
+-        DirectoryContact(name: 'Mehdi Ouali', phone: '+33612345621', hospital: kHospitals[1]),
+-      ],
+-    ),
+-    DirectorySection(
+-      id: 'majors',
+-      label: 'Majors',
+-      color: AppColors.urgNuit,
+-      textColor: AppColors.urgNuitText,
+-      contacts: [
+-        DirectoryContact(name: 'Fatima Zerrouki', phone: '+33612345640', hospital: kHospitals[0]),
++        DirectoryContact(
++          name: 'Sofia Belkacem',
++          phone: '+33612345620',
++          hospital: kHospitals[0],
++          categoryId: kDirectoryCategoryNurses,
++        ),
++        DirectoryContact(
++          name: 'Mehdi Ouali',
++          phone: '+33612345621',
++          hospital: kHospitals[1],
++          categoryId: kDirectoryCategoryNurses,
++        ),
+       ],
+     ),
+     DirectorySection(
+-      id: 'superviseurs',
+-      label: 'Superviseurs',
+-      color: AppColors.serviceNuit,
+-      textColor: AppColors.serviceNuitText,
++      id: kDirectoryCategoryFleet,
++      label: directoryCategoryLabel(kDirectoryCategoryFleet),
++      color: AppColors.urgJour,
++      textColor: AppColors.urgJourText,
+       contacts: [
+-        DirectoryContact(name: 'Omar Cherif', phone: '+33612345650', hospital: kHospitals[2]),
++        DirectoryContact(
++          name: 'Véhicule 1 — Astreinte',
++          phone: '+33612345630',
++          hospital: kHospitals[0],
++          categoryId: kDirectoryCategoryFleet,
++        ),
++        DirectoryContact(
++          name: 'Ambulance A',
++          phone: '+33612345631',
++          hospital: kHospitals[1],
++          categoryId: kDirectoryCategoryFleet,
++        ),
+       ],
+     ),
+     DirectorySection(
+-      id: 'extensions',
+-      label: 'Extensions Téléphoniques',
+-      color: AppColors.urg24h,
+-      textColor: AppColors.urg24hText,
++      id: kDirectoryCategoryMajorsSupervisors,
++      label: directoryCategoryLabel(kDirectoryCategoryMajorsSupervisors),
++      color: AppColors.urgNuit,
++      textColor: AppColors.urgNuitText,
+       contacts: [
+-        DirectoryContact(name: 'Accueil', phone: '1000', hospital: kHospitals[0]),
+-        DirectoryContact(name: 'Standard Urgences', phone: '1500', hospital: kHospitals[0]),
++        DirectoryContact(
++          name: 'Fatima Zerrouki',
++          phone: '+33612345640',
++          hospital: kHospitals[0],
++          categoryId: kDirectoryCategoryMajorsSupervisors,
++        ),
++        DirectoryContact(
++          name: 'Omar Cherif',
++          phone: '+33612345650',
++          hospital: kHospitals[2],
++          categoryId: kDirectoryCategoryMajorsSupervisors,
++        ),
+       ],
+     ),
+   ];
+--- a/lib/models/directory_contact.dart
++++ b/lib/models/directory_contact.dart
+@@ -1,5 +1,28 @@
+ import 'package:flutter/material.dart';
+ 
++const String kDirectoryCategoryJuniors = 'medecins-juniors';
++const String kDirectoryCategorySeniors = 'medecins-seniors';
++const String kDirectoryCategoryNurses = 'infirmiers';
++const String kDirectoryCategoryFleet = 'flottes';
++const String kDirectoryCategoryMajorsSupervisors = 'majors-superviseurs';
++
++const List<String> kManualDirectoryCategoryIds = [
++  kDirectoryCategorySeniors,
++  kDirectoryCategoryNurses,
++  kDirectoryCategoryFleet,
++  kDirectoryCategoryMajorsSupervisors,
++];
++
++const Map<String, String> kDirectoryCategoryLabels = {
++  kDirectoryCategoryJuniors: 'Médecins Juniors',
++  kDirectoryCategorySeniors: 'Médecins Séniors',
++  kDirectoryCategoryNurses: 'Infirmiers',
