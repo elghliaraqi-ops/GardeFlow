@@ -1,0 +1,89 @@
+name: Build iOS Unsigned
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-ios.yml'
+      - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Locate GardeFlow project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          test -f "$ZIP"
+          rm -rf .ci-ios-project
+          mkdir -p .ci-ios-project
+          ditto -x -k "$ZIP" .ci-ios-project
+          PROJECT_DIR="$(find .ci-ios-project -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$PROJECT_DIR"
+          test -f "$PROJECT_DIR/pubspec.yaml"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Project: $PROJECT_DIR"
+
+      - name: Show Xcode and Flutter versions
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          xcodebuild -version
+          flutter --version
+          flutter doctor -v
+
+      - name: Generate and configure iOS project
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x tool/ios.sh || true
+          bash tool/ios.sh Prepare
+
+      - name: Build iOS release without code signing
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign
+          test -d build/ios/iphoneos/Runner.app
+
+      - name: Package unsigned iOS artifacts
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/ios/package
+          mkdir -p build/ios/package/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/package/Payload/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/GardeFlow-v11.6.0-Runner.app.zip
+          (cd build/ios/package && zip -qry ../GardeFlow-v11.6.0-unsigned.ipa Payload)
+          ls -lh build/ios/GardeFlow-v11.6.0-Runner.app.zip build/ios/GardeFlow-v11.6.0-unsigned.ipa
+
+      - name: Upload iOS unsigned artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.0-ios-unsigned
+          path: |
+            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.0-Runner.app.zip
+            ${{ steps.project.outputs.dir }}/build/ios/GardeFlow-v11.6.0-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
