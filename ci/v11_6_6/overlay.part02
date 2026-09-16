@@ -1,3 +1,193 @@
+--- a/lib/screens/astreinte_screen.dart
++++ b/lib/screens/astreinte_screen.dart
+@@ -7,6 +7,7 @@
+ import 'package:photo_view/photo_view.dart';
+ import 'package:photo_view/photo_view_gallery.dart';
+ 
++import '../data/hospitals.dart';
+ import '../models/app_user.dart';
+ import '../models/shared_resource.dart';
+ import '../services/supabase_backend_service.dart';
+@@ -27,12 +28,43 @@
+   List<SharedResource> _photos = const [];
+   bool _loading = true;
+   bool _uploading = false;
++  bool _hospitalInitialized = false;
++  String? _selectedHospital;
+   String? _error;
+ 
+   @override
+-  void initState() {
+-    super.initState();
+-    _load();
++  void didChangeDependencies() {
++    super.didChangeDependencies();
++    if (_hospitalInitialized) return;
++    _hospitalInitialized = true;
++    final user = context.read<AppState>().currentUser;
++    final hospital = user != null && kHospitals.contains(user.hospital)
++        ? user.hospital
++        : kHospitals.first;
++    _selectedHospital = hospital;
++    WidgetsBinding.instance.addPostFrameCallback((_) {
++      if (mounted) _load();
++    });
++  }
++
++  String _activeHospital() {
++    final selected = _selectedHospital;
++    if (selected != null && kHospitals.contains(selected)) return selected;
++    final user = context.read<AppState>().currentUser;
++    if (user != null && kHospitals.contains(user.hospital)) return user.hospital;
++    return kHospitals.first;
++  }
++
++  Future<void> _selectHospital(String hospital) async {
++    if (!kHospitals.contains(hospital) || hospital == _selectedHospital) return;
++    setState(() {
++      _selectedHospital = hospital;
++      _loading = true;
++      _error = null;
++      _photos = const [];
++      _imageCache.clear();
++    });
++    await _load();
+   }
+ 
+   Future<void> _load() async {
+@@ -45,8 +77,9 @@
+       }
+       return;
+     }
++    final hospital = _activeHospital();
+     try {
+-      final rows = await _backend.fetchAstreintePhotos();
++      final rows = await _backend.fetchAstreintePhotos(hospital: hospital);
+       if (!mounted) return;
+       setState(() {
+         _photos = rows;
+@@ -57,13 +90,14 @@
+       if (!mounted) return;
+       setState(() {
+         _loading = false;
+-        _error = 'Impossible de charger les astreintes : $e';
++        _error = 'Impossible de charger les astreintes de ${hospitalDisplayName(hospital)} : $e';
+       });
+     }
+   }
+ 
+   Future<void> _pickImage() async {
+     if (_uploading) return;
++    final hospital = _activeHospital();
+     final picker = ImagePicker();
+     final action = await showModalBottomSheet<_AstreintePickAction>(
+       context: context,
+@@ -71,6 +105,21 @@
+         child: Column(
+           mainAxisSize: MainAxisSize.min,
+           children: [
++            Padding(
++              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
++              child: Row(
++                children: [
++                  const Icon(Icons.local_hospital_outlined, size: 19),
++                  const SizedBox(width: 8),
++                  Expanded(
++                    child: Text(
++                      'Publication pour ${hospitalDisplayName(hospital)}',
++                      style: const TextStyle(fontWeight: FontWeight.w800),
++                    ),
++                  ),
++                ],
++              ),
++            ),
+             if (!kIsWeb)
+               ListTile(
+                 leading: const Icon(Icons.photo_camera_outlined),
+@@ -119,6 +168,7 @@
+             bytes: bytes,
+             fileName: file.name,
+             mimeType: mime,
++            hospital: hospital,
+           );
+           uploaded++;
+         } catch (_) {
+@@ -129,11 +179,12 @@
+       _imageCache.clear();
+       await _load();
+       if (mounted) {
++        final target = hospitalDisplayName(hospital);
+         final message = failed == 0
+             ? (uploaded == 1
+-                ? 'Photo d’astreinte publiée pour tous les utilisateurs.'
+-                : '$uploaded photos d’astreinte publiées pour tous les utilisateurs.')
+-            : '$uploaded photo${uploaded > 1 ? 's' : ''} publiée${uploaded > 1 ? 's' : ''}, $failed échec${failed > 1 ? 's' : ''}.';
++                ? 'Photo d’astreinte publiée pour $target.'
++                : '$uploaded photos d’astreinte publiées pour $target.')
++            : '$uploaded photo${uploaded > 1 ? 's' : ''} publiée${uploaded > 1 ? 's' : ''} pour $target, $failed échec${failed > 1 ? 's' : ''}.';
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+       }
+     } finally {
+@@ -150,11 +201,14 @@
+   }
+ 
+   Future<void> _delete(SharedResource resource) async {
++    final hospital = _activeHospital();
+     final confirm = await showDialog<bool>(
+       context: context,
+       builder: (ctx) => AlertDialog(
+         title: const Text('Supprimer cette photo ?'),
+-        content: const Text('Elle disparaîtra de la galerie d’astreinte pour tous les utilisateurs.'),
++        content: Text(
++          'Elle disparaîtra de la galerie des Séniors d’astreinte de ${hospitalDisplayName(hospital)}.',
++        ),
+         actions: [
+           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Supprimer')),
+@@ -192,7 +246,56 @@
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final isAdmin = context.watch<AppState>().currentUser?.role == UserRole.admin;
++    final user = context.watch<AppState>().currentUser;
++    final isAdmin = user?.role == UserRole.admin;
++    final hospital = _selectedHospital ??
++        (user != null && kHospitals.contains(user.hospital) ? user.hospital : kHospitals.first);
++
++    Widget content;
++    if (_loading) {
++      content = const Center(child: CircularProgressIndicator());
++    } else if (_error != null) {
++      content = _ErrorState(message: _error!, onRetry: _load);
++    } else if (_photos.isEmpty && !isAdmin) {
++      content = _EmptyHospitalGallery(hospital: hospital);
++    } else {
++      content = RefreshIndicator(
++        onRefresh: _load,
++        child: LayoutBuilder(
++          builder: (context, constraints) {
++            final columns = constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 600 ? 3 : 2;
++            return GridView.builder(
++              physics: const AlwaysScrollableScrollPhysics(),
++              padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 100),
++              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
++                crossAxisCount: columns,
++                mainAxisSpacing: AppSpace.md,
++                crossAxisSpacing: AppSpace.md,
++                childAspectRatio: 0.78,
++              ),
++              itemCount: _photos.length + (isAdmin ? 1 : 0),
++              itemBuilder: (context, i) {
++                if (isAdmin && i == 0) {
++                  return _AdminAddTile(
++                    uploading: _uploading,
++                    hospital: hospital,
++                    onTap: _pickImage,
++                  );
++                }
++                final photo = _photos[i - (isAdmin ? 1 : 0)];
++                return _AstreintePhotoCard(
++                  resource: photo,
 +                  imageFuture: _bytesFor(photo),
 +                  canDelete: isAdmin,
 +                  onTap: () => _openPhoto(photo),
@@ -12,7 +202,7 @@
  
      return Scaffold(
        backgroundColor: AppColors.paper,
-@@ -206,7 +311,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
+@@ -206,7 +309,7 @@
            ),
            if (isAdmin)
              IconButton(
@@ -21,7 +211,7 @@
                onPressed: _uploading ? null : _pickImage,
                icon: _uploading
                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-@@ -214,50 +319,24 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
+@@ -214,50 +317,24 @@
              ),
          ],
        ),
@@ -80,11 +270,11 @@
 -                ? 'Galerie Supabase partagée. En tant qu’administrateur, vous seul pouvez ajouter ou supprimer les photos.'
 -                : 'Galerie partagée par l’administration. Les photos sont visibles par tous les utilisateurs.',
 +                ? 'Vous gérez actuellement les photos de ${hospitalDisplayName(hospital)}. Changez d’établissement en haut pour publier dans une autre galerie.'
-+                : 'Vous voyez uniquement les photos d’astreinte de ${hospitalDisplayName(hospital)}.',
++                : 'Tous les médecins peuvent consulter les photos des trois hôpitaux. Sélectionnez l’établissement en haut.',
              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft, height: 1.4),
              textAlign: TextAlign.center,
            ),
-@@ -267,6 +346,89 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
+@@ -267,6 +344,89 @@
    }
  }
  
@@ -121,28 +311,28 @@
 +                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
 +                ),
 +              ),
-+              if (isAdmin)
-+                const Text('Galerie à gérer', style: TextStyle(fontSize: 11, color: AppColors.inkSoft)),
++              Text(
++                isAdmin ? 'Galerie à gérer' : 'Toutes les galeries',
++                style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
++              ),
 +            ],
 +          ),
-+          if (isAdmin) ...[
-+            const SizedBox(height: 9),
-+            SingleChildScrollView(
-+              scrollDirection: Axis.horizontal,
-+              child: Row(
-+                children: [
-+                  for (final item in kHospitals) ...[
-+                    ChoiceChip(
-+                      label: Text(hospitalDisplayName(item)),
-+                      selected: item == hospital,
-+                      onSelected: (_) => onSelectHospital(item),
-+                    ),
-+                    if (item != kHospitals.last) const SizedBox(width: 8),
-+                  ],
++          const SizedBox(height: 9),
++          SingleChildScrollView(
++            scrollDirection: Axis.horizontal,
++            child: Row(
++              children: [
++                for (final item in kHospitals) ...[
++                  ChoiceChip(
++                    label: Text(hospitalDisplayName(item)),
++                    selected: item == hospital,
++                    onSelected: (_) => onSelectHospital(item),
++                  ),
++                  if (item != kHospitals.last) const SizedBox(width: 8),
 +                ],
-+              ),
++              ],
 +            ),
-+          ],
++          ),
 +        ],
 +      ),
 +    );
@@ -174,7 +364,7 @@
  
  class _AstreinteGalleryViewer extends StatefulWidget {
    final List<SharedResource> photos;
-@@ -501,8 +663,9 @@ class _AstreintePhotoCard extends StatelessWidget {
+@@ -501,8 +661,9 @@
  
  class _AdminAddTile extends StatelessWidget {
    final bool uploading;
@@ -185,7 +375,7 @@
  
    @override
    Widget build(BuildContext context) {
-@@ -530,8 +693,8 @@ class _AdminAddTile extends StatelessWidget {
+@@ -530,8 +691,8 @@
                Text(uploading ? 'Envoi…' : 'Publier des photos', textAlign: TextAlign.center,
                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
                const SizedBox(height: 4),
