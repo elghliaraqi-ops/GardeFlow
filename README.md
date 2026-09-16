@@ -1,17 +1,32 @@
-# GardeFlow — Android + notifications push — V11.1.5
+# GardeFlow — V11.6.0
 
-**Commencer par [DEMARRAGE_ANDROID.md](DEMARRAGE_ANDROID.md).**
-Le guide ci-dessous est l’historique du projet ; pour Android, utiliser désormais
-`tool/android.ps1`, qui configure Firebase, Gradle et les notifications.
-
-# HUIM6 Planning des gardes — V5 consolidée
-
-Application Flutter de planning des gardes : comptes médecins/admin, calendrier,
-annuaire, gardes Service/Urgences, congés, échanges avec règles métier par type de garde,
-photos d'astreinte, rappels et vue administrateur par médecin.
+Application Flutter de planning des gardes pour le réseau HUIM6 / HUICK.
 
 ## V11.6.0 — Transposition automatique des plannings Urgences
 
-Après application de `PATCH_SUPABASE_V11_6_0_OFFICIAL_PDF_AUTO_IMPORT.sql`, les PDF du bouton **Planning de Garde Officiel** sont analysés automatiquement par l'application. Les cases 08h–20h, 20h–08h et les grandes cases 24H sont converties respectivement en `urg-jour`, `urg-nuit` et `urg-24h` dans les calendriers individuels des médecins reconnus.
+Les PDF déjà publiés dans **Planning de Garde Officiel** peuvent désormais être analysés automatiquement pour préremplir les calendriers individuels :
 
-Les PDF déjà stockés dans Supabase sont repris automatiquement au premier passage d'un administrateur sur cette page ; aucun nouvel upload n'est requis.
+- **08h–20h** → `urg-jour`
+- **20h–08h** → `urg-nuit`
+- **grande cellule fusionnée** → `urg-24h`
+
+Les gardes reconnues sont transposées automatiquement, sans validation admin intermédiaire. Le médecin peut ensuite les modifier tant que son mois n'est pas validé définitivement.
+
+### Fichiers principaux V11.6.0
+
+- `lib/services/official_roster_import_service.dart` — lecture structurée des PDF et rapprochement des médecins
+- `lib/screens/official_planning_screen.dart` — déclenchement automatique de la transposition
+- `lib/services/supabase_backend_service.dart` — appels RPC Supabase
+- `PATCH_SUPABASE_V11_6_0_OFFICIAL_PDF_AUTO_IMPORT.sql` — migration à exécuter une fois dans Supabase
+- `supabase/patch_v11_6_0_official_pdf_auto_import.sql` — copie de la migration dans le dossier Supabase
+- `CHANGELOG_V11_6_0.md` — détail fonctionnel
+- `MIGRATION_V11_6_0.md` — procédure de migration
+
+## Migration
+
+1. Exécuter `PATCH_SUPABASE_V11_6_0_OFFICIAL_PDF_AUTO_IMPORT.sql` dans **Supabase → SQL Editor**.
+2. Compiler/installer GardeFlow V11.6.0.
+3. Se connecter avec un compte admin et ouvrir **Planning de Garde Officiel**.
+4. Les PDF déjà présents seront analysés automatiquement.
+
+Les mois déjà validés définitivement ne sont jamais modifiés par l'import automatique.
