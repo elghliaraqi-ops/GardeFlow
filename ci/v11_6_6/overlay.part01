@@ -192,4 +192,3 @@ index a66e4ba..57fd26d 100644
 +                final photo = _photos[i - (isAdmin ? 1 : 0)];
 +                return _AstreintePhotoCard(
 +                  resource: photo,
-+
