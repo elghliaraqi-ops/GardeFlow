@@ -1,0 +1,166 @@
+--- a/lib/state/app_state.dart
++++ b/lib/state/app_state.dart
+@@ -18,6 +18,7 @@
+ import '../models/shift_type.dart';
+ import '../services/local_storage_service.dart';
+ import '../services/notification_service.dart';
++import '../services/official_roster_import_service.dart';
+ import '../services/password_service.dart';
+ import '../services/push_notification_service.dart';
+ import '../services/supabase_backend_service.dart';
+@@ -74,6 +75,7 @@
+         }else{
+           state.currentUser=profile;
+           await state._reloadFromBackend();
++          await state._syncMyOfficialRosterIfNeeded();
+           state._startRealtime();
+         }
+       } catch (_) {
+@@ -105,6 +107,70 @@
+     );
+   }
+ 
++  String? _officialPlanningSlotForHospital(String hospital) {
++    if (hospital == kHospitalBouskoura) return 'hm6_bouskoura';
++    if (hospital == kHospitalRabat) return 'hm6_rabat';
++    if (hospital == kHospitalCasa) return 'hck_casa';
++    return null;
++  }
++
++  /// V11.6.5 : rattache automatiquement le planning officiel Urgences à un
++  /// profil actif, même si ce profil a été créé après l'import initial du PDF.
++  ///
++  /// Le PDF est reparsé uniquement si ce médecin n'a pas encore été synchronisé
++  /// pour cette version du document (ou si son identité/établissement a changé).
++  Future<bool> _syncOfficialRosterForProfile(AppUser profile) async {
++    if (!backendEnabled || profile.accountStatus != AccountStatus.active) return false;
++    final slot = _officialPlanningSlotForHospital(profile.hospital);
++    if (slot == null) return false;
++
++    final backend = SupabaseBackendService.instance;
++    final resources = await backend.fetchOfficialPlanningPdfs();
++    final resource = resources.where((r) => r.slot == slot).firstOrNull;
++    if (resource == null) return false;
++
++    final alreadyCurrent = await backend.officialRosterProfileSyncIsCurrent(
++      resource: resource,
++      profileId: profile.id,
++    );
++    if (alreadyCurrent) return false;
++
++    final bytes = await backend.downloadSharedResource(resource.storagePath);
++    final parsed = await OfficialRosterImportService.parse(
++      bytes: bytes,
++      displayName: resource.displayName,
++      hospital: profile.hospital,
++      profiles: <AppUser>[profile],
++      resourceUpdatedAt: resource.updatedAt,
++    );
++    if (parsed.detectedRows == 0) {
++      throw StateError('Le planning officiel ${resource.displayName} ne contient aucune ligne Urgences reconnue.');
++    }
++
++    final result = await backend.importOfficialEmergencyRosterForProfile(
++      resource: resource,
++      profileId: profile.id,
++      assignments: parsed.assignments.map((a) => a.toJson()).toList(growable: false),
++      unmatchedCells: parsed.unmatchedCells,
++    );
++    final inserted = (result['inserted'] as num?)?.toInt() ?? 0;
++    final updated = (result['updated'] as num?)?.toInt() ?? 0;
++    final removed = (result['removed'] as num?)?.toInt() ?? 0;
++    return inserted + updated + removed > 0;
++  }
++
++  Future<void> _syncMyOfficialRosterIfNeeded() async {
++    final me = currentUser;
++    if (!backendEnabled || me == null || me.accountStatus != AccountStatus.active) return;
++    try {
++      final changed = await _syncOfficialRosterForProfile(me);
++      if (changed) await _reloadFromBackend();
++    } catch (e) {
++      // Une indisponibilité du PDF ne doit jamais empêcher la connexion.
++      debugPrint('Synchronisation automatique du planning officiel impossible: $e');
++    }
++  }
++
+   Future<void> _reloadFromBackend() async {
+     if (!backendEnabled || currentUser == null) return;
+     final backend = SupabaseBackendService.instance;
+@@ -149,7 +215,10 @@
+     notifyListeners();
+   }
+ 
+-  Future<void> refreshBackend() => _reloadFromBackend();
++  Future<void> refreshBackend() async {
++    await _reloadFromBackend();
++    await _syncMyOfficialRosterIfNeeded();
++  }
+ 
+   void _syncCurrentUserRemindersAfterBackend(){
+     final me=currentUser;if(me==null)return;
+@@ -467,6 +536,7 @@
+         }
+         currentUser=user;
+         await _reloadFromBackend();
++        await _syncMyOfficialRosterIfNeeded();
+         _startRealtime();
+         if(_notificationsOn){
+           if(kIsWeb||defaultTargetPlatform==TargetPlatform.android||defaultTargetPlatform==TargetPlatform.iOS){
+@@ -831,6 +901,19 @@
+       if(backendEnabled){
+         await SupabaseBackendService.instance.reviewAccount(profileId,approve?'approve':'suspend',hospital:hospital,service:service,grade:grade);
+         await _reloadFromBackend();
++        if (approve) {
++          final approvedProfile = _users.where((u) => u.id == profileId && u.accountStatus == AccountStatus.active).firstOrNull;
++          if (approvedProfile != null) {
++            try {
++              final changed = await _syncOfficialRosterForProfile(approvedProfile);
++              if (changed) await _reloadFromBackend();
++            } catch (e) {
++              // La validation du compte reste acquise ; la synchronisation sera
++              // retentée automatiquement à la première connexion du médecin.
++              debugPrint('Synchronisation du nouveau médecin impossible: $e');
++            }
++          }
++        }
+       }else{
+         return 'La validation des comptes nécessite Supabase.';
+       }
+--- a/lib/services/supabase_backend_service.dart
++++ b/lib/services/supabase_backend_service.dart
+@@ -505,6 +505,34 @@
+     return Map<String, dynamic>.from(result as Map);
+   }
+ 
++  Future<bool> officialRosterProfileSyncIsCurrent({
++    required SharedResource resource,
++    required String profileId,
++  }) async {
++    final result = await client.rpc('official_roster_profile_sync_is_current', params: {
++      'p_resource_id': resource.id,
++      'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
++      'p_profile_id': profileId,
++    });
++    return result == true;
++  }
++
++  Future<Map<String, dynamic>> importOfficialEmergencyRosterForProfile({
++    required SharedResource resource,
++    required String profileId,
++    required List<Map<String, dynamic>> assignments,
++    required List<Map<String, dynamic>> unmatchedCells,
++  }) async {
++    final result = await client.rpc('import_official_emergency_roster_for_profile', params: {
++      'p_resource_id': resource.id,
++      'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
++      'p_profile_id': profileId,
++      'p_assignments': assignments,
++      'p_unmatched_cells': unmatchedCells,
++    });
++    return Map<String, dynamic>.from(result as Map);
++  }
++
+   Future<void> deleteSharedResource(SharedResource resource) async {
+     await client.storage.from(sharedBucket).remove([resource.storagePath]);
+     await client.from('shared_resources').delete().eq('id', resource.id);
