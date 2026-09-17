@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble current project and print auth sources
+      - name: Inspect Supabase auth and push infrastructure
         shell: bash
         run: |
           set -euo pipefail
@@ -26,35 +26,13 @@ jobs:
           PROJECT_DIR="$(dirname "$PUBSPEC")"
           cd "$PROJECT_DIR"
 
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v1161.patch
-          patch -p1 < /tmp/v1161.patch >/dev/null
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v1163.patch
-          patch -p1 < /tmp/v1163.patch >/dev/null
-          sed -i 's/^version: 11.6.3+163$/version: 11.6.4+164/' pubspec.yaml
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/v1165.patch
-          patch -p1 < /tmp/v1165.patch >/dev/null
-          sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v1166.patch
-          patch -p1 < /tmp/v1166.patch >/dev/null
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_7/apply_v11_6_7.py" >/dev/null
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py" >/dev/null
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py" >/dev/null
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_10/apply_v11_6_10.py" >/dev/null
-
-          echo '===== SCREEN FILES ====='
-          find lib/screens -maxdepth 1 -type f -name '*.dart' -print | sort
-
-          echo '===== AUTH MATCHES ====='
-          grep -RInE "Mot de passe oublié|mot de passe oublié|forgot|password|Connexion|Se connecter|signIn\(|signUp\(" lib/screens lib/state lib/services | head -n 400 || true
-
-          echo '===== AUTH-RELATED FILE CONTENT ====='
-          for f in $(grep -RIlE "Mot de passe oublié|mot de passe oublié|forgot|Connexion|Se connecter|signIn\(" lib/screens lib/state lib/services || true); do
-            echo "===== FILE: $f ====="
-            sed -n '1,320p' "$f"
-          done
-
-          echo '===== SUPABASE AUTH SERVICE TOP ====='
-          sed -n '1,150p' lib/services/supabase_backend_service.dart
-
-          echo '===== PUBSPEC ====='
-          cat pubspec.yaml
+          echo '===== SUPABASE TREE ====='
+          find supabase -maxdepth 4 -type f -print 2>/dev/null | sort || true
+          echo '===== SEND PUSH FUNCTION ====='
+          if [ -f supabase/functions/send-push/index.ts ]; then
+            sed -n '1,360p' supabase/functions/send-push/index.ts
+          else
+            find . -path '*send-push*' -type f -print -exec sed -n '1,360p' {} \; || true
+          fi
+          echo '===== CONFIG / DEEPLINK MATCHES ====='
+          grep -RInE "scheme|deep.?link|redirectTo|onAuthStateChange|passwordRecovery|AuthChangeEvent|android:host|intent-filter" lib tool android ios 2>/dev/null | head -n 500 || true
