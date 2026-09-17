@@ -1,0 +1,180 @@
+                          child: Text(
+                            appState.reminderDelayLabel(minutes),
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink),
+                          ),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Supprimer ce rappel',
+                          onPressed: _saving ? null : () => _removeDelay(appState, minutes),
+                          icon: const Icon(Icons.close_rounded, size: 19),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _saving || appState.reminderDelays.length >= 3 ? null : () => _chooseDelay(appState),
+                    icon: const Icon(Icons.add_alarm_rounded),
+                    label: const Text('Ajouter un rappel'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+
+          AppCard(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.volume_up_rounded, color: AppColors.brand),
+                    const SizedBox(width: 9),
+                    Expanded(child: Text('Sonnerie et répétition', style: Theme.of(context).textTheme.titleMedium)),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md),
+                DropdownButtonFormField<String>(
+                  value: appState.reminderSoundMode,
+                  decoration: const InputDecoration(labelText: 'Sonnerie'),
+                  dropdownColor: Colors.white,
+                  style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w700),
+                  items: const [
+                    DropdownMenuItem(value: 'urgent', child: Text('Urgente · priorité maximale')),
+                    DropdownMenuItem(value: 'system', child: Text('Standard · son du téléphone')),
+                    DropdownMenuItem(value: 'silent', child: Text('Silencieuse · sans son')),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          _run(() async {
+                            await appState.setReminderSoundMode(value);
+                            await appState.rescheduleAllReminders();
+                          });
+                        },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Vibration'),
+                  subtitle: const Text('Vibrer avec le rappel sonore.'),
+                  value: appState.reminderVibration,
+                  onChanged: _saving || appState.reminderSoundMode == 'silent'
+                      ? null
+                      : (v) => _run(() async {
+                            await appState.setReminderVibration(v);
+                            await appState.rescheduleAllReminders();
+                          }),
+                ),
+                const Divider(height: AppSpace.lg),
+                Text('Répéter après le premier rappel', style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: appState.reminderRepeatCount,
+                        decoration: const InputDecoration(labelText: 'Répéter'),
+                        dropdownColor: Colors.white,
+                        style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600),
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('Non')),
+                          DropdownMenuItem(value: 1, child: Text('1 fois')),
+                          DropdownMenuItem(value: 2, child: Text('2 fois')),
+                          DropdownMenuItem(value: 3, child: Text('3 fois')),
+                        ],
+                        onChanged: _saving
+                            ? null
+                            : (v) {
+                                if (v == null) return;
+                                _run(() async {
+                                  await appState.setReminderRepeatCount(v);
+                                  await appState.rescheduleAllReminders();
+                                });
+                              },
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: <int>[5, 10, 15, 30, 60].contains(appState.reminderRepeatMinutes)
+                            ? appState.reminderRepeatMinutes
+                            : 15,
+                        decoration: const InputDecoration(labelText: 'Après'),
+                        dropdownColor: Colors.white,
+                        style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600),
+                        items: const [
+                          DropdownMenuItem(value: 5, child: Text('5 min')),
+                          DropdownMenuItem(value: 10, child: Text('10 min')),
+                          DropdownMenuItem(value: 15, child: Text('15 min')),
+                          DropdownMenuItem(value: 30, child: Text('30 min')),
+                          DropdownMenuItem(value: 60, child: Text('1 h')),
+                        ],
+                        onChanged: _saving || appState.reminderRepeatCount == 0
+                            ? null
+                            : (v) {
+                                if (v == null) return;
+                                _run(() async {
+                                  await appState.setReminderRepeatMinutes(v);
+                                  await appState.rescheduleAllReminders();
+                                });
+                              },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpace.md),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _saving
+                        ? null
+                        : () => _run(() async {
+                              await appState.testGuardReminder();
+                            }),
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Tester la sonnerie maintenant'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+
+          AppCard(
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: NotificationService.instance.reminderStatus,
+                  builder: (context, status, _) => Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 19, color: AppColors.brand),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(status, style: Theme.of(context).textTheme.bodySmall)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  appState.nextReminderSummary ?? 'Aucun rappel futur : validez un calendrier contenant une garde.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.lg),
+
+          const SectionLabel('Notifications réseau'),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
