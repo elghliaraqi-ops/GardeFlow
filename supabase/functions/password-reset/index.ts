@@ -7,9 +7,6 @@ const corsHeaders = {
 };
 
 const enc = new TextEncoder();
-const RESET_TTL_MS = 10 * 60 * 1000;
-const RESEND_DELAY_MS = 60 * 1000;
-const MAX_ATTEMPTS = 5;
 
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status, headers: corsHeaders });
@@ -23,19 +20,6 @@ function normalizePhone(raw: unknown): string {
   if (p.startsWith('0') && p.length >= 10) return `+212${p.slice(1)}`;
   if (p.startsWith('212')) return `+${p}`;
   return p;
-}
-
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', enc.encode(value));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-function randomCode(): string {
-  const value = new Uint32Array(1);
-  crypto.getRandomValues(value);
-  return (value[0] % 1000000).toString().padStart(6, '0');
 }
 
 function b64url(input: Uint8Array | string): string {
@@ -93,20 +77,18 @@ async function sendFcm(
   accessToken: string,
   token: string,
   platform: string,
-  code: string,
   profile: { id: string; prenom?: string; nom?: string; phone?: string; hospital?: string },
 ) {
   const displayName = `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || 'Un médecin';
-  const title = 'Réinitialisation de mot de passe';
-  const body = `${displayName} (${profile.phone ?? ''}) demande un nouveau mot de passe. Code : ${code}. Valable 10 min.`;
+  const title = 'Mot de passe oublié';
+  const body = `${displayName} (${profile.phone ?? ''}) demande un nouveau mot de passe. Ouvrez Réglages > Administration des comptes.`;
   const message: Record<string, unknown> = {
     token,
     data: {
       title,
       body,
-      kind: 'password_reset_code',
+      kind: 'password_reset_request',
       resourceId: profile.id,
-      code,
       requesterName: displayName,
       requesterPhone: profile.phone ?? '',
       requesterHospital: profile.hospital ?? '',
@@ -147,8 +129,8 @@ async function sendFcm(
   return { ok: res.ok, status: res.status, text: await res.text() };
 }
 
-async function genericRequestResponse() {
-  await new Promise((resolve) => setTimeout(resolve, 220));
+async function genericResponse() {
+  await new Promise((resolve) => setTimeout(resolve, 180));
   return json({ ok: true });
 }
 
@@ -165,159 +147,75 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'service_unavailable' }, 503);
     }
 
-    const serviceAccount = JSON.parse(rawSa);
-    const admin = createClient(supabaseUrl, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
     const payload = await req.json().catch(() => ({}));
     const action = typeof payload?.action === 'string' ? payload.action : '';
     const phone = normalizePhone(payload?.phone);
+    if (action !== 'request') return json({ ok: false, error: 'invalid_action' }, 400);
+    if (!phone) return genericResponse();
 
-    if (action === 'request') {
-      if (!phone) return genericRequestResponse();
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('id,account_status,nom,prenom,phone,hospital')
-        .eq('phone', phone)
-        .maybeSingle();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('id,account_status,nom,prenom,phone,hospital')
+      .eq('phone', phone)
+      .maybeSingle();
 
-      // Never disclose whether the phone exists.
-      if (!profile || profile.account_status !== 'active') return genericRequestResponse();
+    // Same response whether the account exists or not: do not expose the directory.
+    if (!profile || profile.account_status !== 'active') return genericResponse();
 
-      const { data: authData, error: authError } = await admin.auth.admin.getUserById(profile.id);
-      if (authError || !authData.user) return genericRequestResponse();
+    let { data: adminRows, error: adminsError } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('account_status', 'active')
+      .eq('hospital', profile.hospital);
+    if (adminsError) throw adminsError;
 
-      const appMetadata = { ...(authData.user.app_metadata ?? {}) } as Record<string, any>;
-      const previous = appMetadata.gardeflow_password_reset as Record<string, any> | undefined;
-      const now = Date.now();
-      const lastRequestedAt = Number(previous?.requested_at ?? 0);
-      if (lastRequestedAt > 0 && now - lastRequestedAt < RESEND_DELAY_MS) {
-        return genericRequestResponse();
-      }
-
-      const code = randomCode();
-      appMetadata.gardeflow_password_reset = {
-        code_hash: await sha256(code),
-        expires_at: now + RESET_TTL_MS,
-        requested_at: now,
-        attempts: 0,
-      };
-
-      const { error: metaError } = await admin.auth.admin.updateUserById(profile.id, {
-        app_metadata: appMetadata,
-      });
-      if (metaError) throw metaError;
-
-      let { data: adminRows, error: adminsError } = await admin
+    if (!adminRows?.length) {
+      const fallback = await admin
         .from('profiles')
         .select('id')
         .eq('role', 'admin')
-        .eq('account_status', 'active')
-        .eq('hospital', profile.hospital);
-      if (adminsError) throw adminsError;
+        .eq('account_status', 'active');
+      if (fallback.error) throw fallback.error;
+      adminRows = fallback.data;
+    }
 
-      // Network-admin fallback when the hospital has no active admin.
-      if (!adminRows?.length) {
-        const fallback = await admin
-          .from('profiles')
-          .select('id')
-          .eq('role', 'admin')
-          .eq('account_status', 'active');
-        if (fallback.error) throw fallback.error;
-        adminRows = fallback.data;
-      }
+    const adminIds = [...new Set((adminRows ?? []).map((row: any) => row.id as string).filter(Boolean))];
+    if (!adminIds.length) return genericResponse();
 
-      const adminIds = [...new Set((adminRows ?? []).map((row: any) => row.id as string).filter(Boolean))];
-      if (adminIds.length) {
-        const { data: tokenRows, error: tokenError } = await admin
-          .from('push_tokens')
-          .select('token,platform,owner_id')
-          .in('owner_id', adminIds);
-        if (tokenError) throw tokenError;
+    const { data: tokenRows, error: tokenError } = await admin
+      .from('push_tokens')
+      .select('token,platform,owner_id')
+      .in('owner_id', adminIds);
+    if (tokenError) throw tokenError;
+    if (!tokenRows?.length) return genericResponse();
 
-        if (tokenRows?.length) {
-          const accessToken = await googleAccessToken(serviceAccount);
-          for (const row of tokenRows) {
-            const result = await sendFcm(
-              serviceAccount,
-              accessToken,
-              row.token,
-              row.platform ?? 'android',
-              code,
-              profile,
-            );
-            if (!result.ok) {
-              console.error('password-reset FCM failed', result.status, result.text);
-              if (
-                result.text.includes('UNREGISTERED') ||
-                result.text.includes('registration-token-not-registered')
-              ) {
-                await admin.from('push_tokens').delete().eq('token', row.token);
-              }
-            }
-          }
+    const serviceAccount = JSON.parse(rawSa);
+    const accessToken = await googleAccessToken(serviceAccount);
+    for (const row of tokenRows) {
+      const result = await sendFcm(
+        serviceAccount,
+        accessToken,
+        row.token,
+        row.platform ?? 'android',
+        profile,
+      );
+      if (!result.ok) {
+        console.error('password-reset FCM failed', result.status, result.text);
+        if (
+          result.text.includes('UNREGISTERED') ||
+          result.text.includes('registration-token-not-registered')
+        ) {
+          await admin.from('push_tokens').delete().eq('token', row.token);
         }
       }
-
-      return genericRequestResponse();
     }
 
-    if (action === 'confirm') {
-      const code = typeof payload?.code === 'string' ? payload.code.trim() : '';
-      const newPassword = typeof payload?.newPassword === 'string' ? payload.newPassword : '';
-      if (!phone || !/^\d{6}$/.test(code) || newPassword.length < 8 || newPassword.length > 72) {
-        return json({ ok: false, error: 'invalid_input' });
-      }
-
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('id,account_status')
-        .eq('phone', phone)
-        .maybeSingle();
-      if (!profile || profile.account_status !== 'active') {
-        return json({ ok: false, error: 'invalid_code' });
-      }
-
-      const { data: authData, error: authError } = await admin.auth.admin.getUserById(profile.id);
-      if (authError || !authData.user) return json({ ok: false, error: 'invalid_code' });
-
-      const appMetadata = { ...(authData.user.app_metadata ?? {}) } as Record<string, any>;
-      const reset = appMetadata.gardeflow_password_reset as Record<string, any> | undefined;
-      const now = Date.now();
-      if (!reset || Number(reset.expires_at ?? 0) < now) {
-        delete appMetadata.gardeflow_password_reset;
-        await admin.auth.admin.updateUserById(profile.id, { app_metadata: appMetadata });
-        return json({ ok: false, error: 'expired_code' });
-      }
-
-      const attempts = Number(reset.attempts ?? 0);
-      if (attempts >= MAX_ATTEMPTS) {
-        return json({ ok: false, error: 'too_many_attempts' });
-      }
-
-      const submittedHash = await sha256(code);
-      if (submittedHash !== String(reset.code_hash ?? '')) {
-        reset.attempts = attempts + 1;
-        appMetadata.gardeflow_password_reset = reset;
-        await admin.auth.admin.updateUserById(profile.id, { app_metadata: appMetadata });
-        return json({
-          ok: false,
-          error: attempts + 1 >= MAX_ATTEMPTS ? 'too_many_attempts' : 'invalid_code',
-        });
-      }
-
-      delete appMetadata.gardeflow_password_reset;
-      const { error: updateError } = await admin.auth.admin.updateUserById(profile.id, {
-        password: newPassword,
-        app_metadata: appMetadata,
-      });
-      if (updateError) throw updateError;
-
-      return json({ ok: true });
-    }
-
-    return json({ ok: false, error: 'invalid_action' }, 400);
+    return genericResponse();
   } catch (e) {
     console.error('password-reset error', e);
     return json({ ok: false, error: 'service_unavailable' }, 500);
