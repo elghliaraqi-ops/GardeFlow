@@ -1,0 +1,82 @@
+name: Inspect Materialized V11.6.13 Source
+
+on:
+  push:
+    branches:
+      - feature/reminders-junior-roster-v11-6-14
+    paths:
+      - '.github/workflows/inspect-v11614.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Materialize current application source
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          rm -rf .ci-inspect
+          mkdir -p .ci-inspect
+          unzip -q "$ZIP" -d .ci-inspect
+          PUBSPEC="$(find .ci-inspect -type f -name pubspec.yaml -print -quit)"
+          test -n "$PUBSPEC"
+          PROJECT_DIR="$(dirname "$PUBSPEC")"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          cd "$PROJECT_DIR"
+
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v1161.patch
+          patch -p1 < /tmp/v1161.patch
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v1163.patch
+          patch -p1 < /tmp/v1163.patch
+          sed -i 's/^version: 11.6.3+163$/version: 11.6.4+164/' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/v1165.patch
+          patch -p1 < /tmp/v1165.patch
+          sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v1166.patch
+          patch -p1 < /tmp/v1166.patch
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_7/apply_v11_6_7.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_10/apply_v11_6_10.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_11/apply_v11_6_11.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_12/apply_v11_6_12.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_13/apply_v11_6_13.py"
+          grep -q '^version: 11.6.13+173$' pubspec.yaml
+
+          find lib -maxdepth 3 -type f | sort > current_files.txt
+          grep -RIlE "Juniors d.?astreinte|Astreintes Juniors|junior_oncall|junior.*astreinte" lib/screens lib/state lib/services 2>/dev/null > junior_candidates.txt || true
+
+      - name: Collect relevant source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_DIR="${{ steps.project.outputs.dir }}"
+          OUT="$RUNNER_TEMP/gardeflow-current-source"
+          rm -rf "$OUT"
+          mkdir -p "$OUT/lib/screens" "$OUT/lib/services" "$OUT/lib/state" "$OUT/lib/models" "$OUT/lib/data" "$OUT/tool"
+          cp "$PROJECT_DIR/pubspec.yaml" "$OUT/"
+          cp "$PROJECT_DIR/current_files.txt" "$OUT/"
+          cp "$PROJECT_DIR/junior_candidates.txt" "$OUT/"
+          cp "$PROJECT_DIR/lib/screens/"*.dart "$OUT/lib/screens/"
+          cp "$PROJECT_DIR/lib/services/notification_service.dart" "$OUT/lib/services/"
+          cp "$PROJECT_DIR/lib/state/app_state.dart" "$OUT/lib/state/"
+          cp "$PROJECT_DIR/lib/models/"*.dart "$OUT/lib/models/" || true
+          cp "$PROJECT_DIR/lib/data/hospitals.dart" "$OUT/lib/data/" || true
+          cp "$PROJECT_DIR/tool/configure_android.dart" "$OUT/tool/"
+
+      - name: Upload materialized source
+        uses: actions/upload-artifact@v4
+        with:
+          name: gardeflow-v11.6.13-materialized-source
+          path: ${{ runner.temp }}/gardeflow-current-source
+          if-no-files-found: error
+          retention-days: 2
