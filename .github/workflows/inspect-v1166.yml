@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble V11.6.6 project and print reminder source
+      - name: Assemble V11.6.6 project and print target sources
         shell: bash
         run: |
           set -euo pipefail
@@ -35,13 +35,21 @@ jobs:
           sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
           cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v1166.patch
           patch -p1 < /tmp/v1166.patch >/dev/null
-          echo '===== APP STATE REMINDER SECTIONS ====='
-          grep -n -C 25 -E 'notificationsOn|delayMinutes|rescheduleAllReminders|scheduleReminder|reminders|SharedPreferences|NotificationService' lib/state/app_state.dart || true
-          echo '===== MAIN INITIALIZATION ====='
-          cat lib/main.dart
-          echo '===== SHIFT CATALOG ====='
-          cat lib/models/shift_type.dart
-          echo '===== APP USER ====='
-          cat lib/models/app_user.dart
+          echo '===== MATCHING FILES ====='
+          find lib -type f | sort | grep -Ei 'notif|remind|setting|preference|official|planning|pdf|viewer' || true
+          echo '===== NOTIFICATION SERVICE ====='
+          cat lib/services/notification_service.dart || true
+          echo '===== SETTINGS / REMINDER UI CANDIDATES ====='
+          for f in $(find lib -type f | grep -Ei 'setting|preference|notif|remind'); do echo "===== FILE $f ====="; cat "$f"; done
+          echo '===== OFFICIAL PLANNING SCREEN ====='
+          cat lib/screens/official_planning_screen.dart || true
+          echo '===== PDF VIEWERS / PDFRX USAGE ====='
+          grep -R -n -C 12 -E 'PdfViewer|pdfrx|PdfDocument|PdfViewerParams|PdfText|searchText|showSearch' lib || true
+          echo '===== APP STATE REMINDER CORE ====='
+          grep -n -C 35 -E 'notificationsOn|delayMinutes|rescheduleAllReminders|scheduleReminder|isPlanningEntryApproved|_syncCurrentUserRemindersAfterBackend|_toJson|_restore' lib/state/app_state.dart || true
+          echo '===== ANDROID CONFIG ====='
+          cat tool/configure_android.dart || true
+          echo '===== ANDROID MANIFEST ====='
+          cat android/app/src/main/AndroidManifest.xml || true
           echo '===== PUBSPEC ====='
           cat pubspec.yaml
