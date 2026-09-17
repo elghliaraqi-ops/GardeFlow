@@ -1,0 +1,200 @@
+  const _DayChip({required this.date, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final shortDay = DateFormat('EEE', 'fr_FR').format(date).replaceAll('.', '');
+    return Material(
+      color: selected ? AppColors.brand : AppColors.card,
+      borderRadius: AppRadius.smR,
+      child: InkWell(
+        borderRadius: AppRadius.smR,
+        onTap: onTap,
+        child: Container(
+          height: 66,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.smR,
+            border: Border.all(color: selected ? AppColors.brand : AppColors.line),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                shortDay.length <= 3 ? shortDay[0].toUpperCase() + shortDay.substring(1) : shortDay[0].toUpperCase() + shortDay.substring(1, 3),
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : AppColors.inkSoft,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${date.day}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: selected ? Colors.white : AppColors.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HospitalFilter extends StatelessWidget {
+  final String selectedHospital;
+  final ValueChanged<String> onChanged;
+
+  const _HospitalFilter({required this.selectedHospital, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: 4),
+        itemCount: kHospitals.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final hospital = kHospitals[index];
+          return ChoiceChip(
+            label: Text(_juniorHospitalLabel(hospital)),
+            selected: selectedHospital == hospital,
+            onSelected: (_) => onChanged(hospital),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ServiceFilter extends StatelessWidget {
+  final List<String> services;
+  final String value;
+  final String allValue;
+  final ValueChanged<String?> onChanged;
+
+  const _ServiceFilter({
+    required this.services,
+    required this.value,
+    required this.allValue,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpace.lg, 6, AppSpace.lg, 4),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_outlined, color: AppColors.brand, size: 22),
+          const SizedBox(width: 8),
+          Text('Service', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: value,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              ),
+              dropdownColor: Colors.white,
+              items: [
+                DropdownMenuItem(value: allValue, child: const Text('Tous les services')),
+                for (final service in services) DropdownMenuItem(value: service, child: Text(service, overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceDayCard extends StatelessWidget {
+  final _ServiceDayGroup group;
+  const _ServiceDayCard({required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = group.rows.length;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpace.md),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: AppRadius.mdR,
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppShadow.low,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 13),
+            decoration: const BoxDecoration(
+              color: AppColors.brandSoft,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(AppRadius.md),
+                topRight: Radius.circular(AppRadius.md),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.medical_services_rounded, size: 21, color: AppColors.brand),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    group.service,
+                    style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900, fontSize: 16),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(color: AppColors.card, borderRadius: AppRadius.pillR),
+                  child: Text(
+                    '$total astreinte${total > 1 ? 's' : ''}',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < group.rows.length; i++) ...[
+            _JuniorDutyLine(row: group.rows[i]),
+            if (i != group.rows.length - 1) const Divider(height: 1, indent: AppSpace.md, endIndent: AppSpace.md),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _JuniorDutyLine extends StatelessWidget {
+  final _JuniorOnCallRow row;
+  const _JuniorDutyLine({required this.row});
+
+  String _timeLabel(ShiftType shift) {
+    String compact(String? value) => (value ?? '').replaceAll(':00', 'h');
+    if (shift.id == 'service-24h') return '08h - 08h';
+    return '${compact(shift.start)} - ${compact(shift.end)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shift = ShiftCatalog.byId(row.shiftId);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: shift.color, shape: BoxShape.circle),
+            child: Icon(shift.icon, color: shift.textColor, size: 23),
