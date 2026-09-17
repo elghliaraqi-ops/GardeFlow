@@ -1,0 +1,71 @@
+                Row(children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: AppColors.paperAlt, borderRadius: AppRadius.smR),
+                    child: const Icon(Icons.notifications_active_rounded, size: 16, color: AppColors.ink),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: ValueListenableBuilder<String>(
+                      valueListenable: PushNotificationService.instance.status,
+                      builder: (context, status, _) => Text(status, style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                  ),
+                ]),
+                if (appState.notificationsOn && appState.backendEnabled) ...[
+                  const SizedBox(height: AppSpace.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () async => PushNotificationService.instance.activateForSignedInUser(),
+                      child: const Text('Activer / réessayer les notifications push'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: AppSpace.xl),
+          const SectionLabel('Synchronisation'),
+          AppCard(
+            child: Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.paperAlt, borderRadius: AppRadius.smR),
+                child: Icon(appState.backendEnabled ? Icons.cloud_done_rounded : Icons.cloud_off_rounded, size: 20, color: AppColors.ink),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(appState.backendModeLabel, style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(
+                      appState.backendEnabled
+                          ? 'Comptes, planning et transferts/échanges synchronisés avec Supabase.'
+                          : 'Aucune clé Supabase fournie : fonctionnement local de démonstration.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (appState.backendEnabled)
+                SoftIconButton(icon: Icons.sync_rounded, onTap: () => appState.refreshBackend(), size: 36, tooltip: 'Synchroniser'),
+            ]),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(
+            'Les paramètres de rappel sont enregistrés localement pour chaque compte sur cet appareil et restaurés après fermeture ou redémarrage.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.6),
+          ),
+        ],
+      ),
+    );
+  }
+}
