@@ -1,12 +1,11 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+import { JWT } from 'npm:google-auth-library@11.0.2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-
-const enc = new TextEncoder();
 
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status, headers: corsHeaders });
@@ -22,62 +21,24 @@ function normalizePhone(raw: unknown): string {
   return p;
 }
 
-function b64url(input: Uint8Array | string): string {
-  const bytes = typeof input === 'string' ? enc.encode(input) : input;
-  let binary = '';
-  bytes.forEach((b) => binary += String.fromCharCode(b));
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function pemPkcs8ToArrayBuffer(pem: string): ArrayBuffer {
-  const base64 = pem.replace(/-----BEGIN PRIVATE KEY-----/g, '')
-    .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\s/g, '');
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
-
-async function googleAccessToken(sa: any): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claim = b64url(JSON.stringify({
-    iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  }));
-  const unsigned = `${header}.${claim}`;
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pemPkcs8ToArrayBuffer(sa.private_key),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(unsigned));
-  const assertion = `${unsigned}.${b64url(new Uint8Array(signature))}`;
-  const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-    assertion,
+async function googleAccessToken(sa: Record<string, string>): Promise<string> {
+  const auth = new JWT({
+    email: sa.client_email,
+    key: sa.private_key,
+    scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
   });
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error(`OAuth Google ${res.status}: ${await res.text()}`);
-  return (await res.json()).access_token;
+  const result = await auth.getAccessToken();
+  const token = typeof result === 'string' ? result : result?.token;
+  if (!token) throw new Error('Google OAuth token unavailable');
+  return token;
 }
 
 async function sendFcm(
-  sa: any,
+  sa: Record<string, string>,
   accessToken: string,
   token: string,
   platform: string,
-  profile: { id: string; prenom?: string; nom?: string; phone?: string; hospital?: string },
+  profile: Record<string, string>,
 ) {
   const displayName = `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || 'Un médecin';
   const title = 'Mot de passe oublié';
@@ -95,6 +56,7 @@ async function sendFcm(
     },
     notification: { title, body },
   };
+
   if (platform === 'android') {
     message.android = {
       priority: 'HIGH',
@@ -115,17 +77,14 @@ async function sendFcm(
     message.webpush = { headers: { Urgency: 'high' } };
   }
 
-  const res = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message }),
+  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
     },
-  );
+    body: JSON.stringify({ message }),
+  });
   return { ok: res.ok, status: res.status, text: await res.text() };
 }
 
@@ -139,18 +98,17 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const rawSa = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON');
-    if (!supabaseUrl || !serviceKey || !rawSa) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const rawServiceAccount = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON');
+    if (!supabaseUrl || !serviceKey || !rawServiceAccount) {
       console.error('password-reset: configuration serveur incomplète');
       return json({ ok: false, error: 'service_unavailable' }, 503);
     }
 
     const payload = await req.json().catch(() => ({}));
-    const action = typeof payload?.action === 'string' ? payload.action : '';
+    if (payload?.action !== 'request') return json({ ok: false, error: 'invalid_action' }, 400);
     const phone = normalizePhone(payload?.phone);
-    if (action !== 'request') return json({ ok: false, error: 'invalid_action' }, 400);
     if (!phone) return genericResponse();
 
     const admin = createClient(supabaseUrl, serviceKey, {
@@ -163,7 +121,7 @@ Deno.serve(async (req) => {
       .eq('phone', phone)
       .maybeSingle();
 
-    // Same response whether the account exists or not: do not expose the directory.
+    // Keep the same response whether an account exists or not.
     if (!profile || profile.account_status !== 'active') return genericResponse();
 
     let { data: adminRows, error: adminsError } = await admin
@@ -184,7 +142,7 @@ Deno.serve(async (req) => {
       adminRows = fallback.data;
     }
 
-    const adminIds = [...new Set((adminRows ?? []).map((row: any) => row.id as string).filter(Boolean))];
+    const adminIds = [...new Set((adminRows ?? []).map((row: { id: string }) => row.id).filter(Boolean))];
     if (!adminIds.length) return genericResponse();
 
     const { data: tokenRows, error: tokenError } = await admin
@@ -194,7 +152,7 @@ Deno.serve(async (req) => {
     if (tokenError) throw tokenError;
     if (!tokenRows?.length) return genericResponse();
 
-    const serviceAccount = JSON.parse(rawSa);
+    const serviceAccount = JSON.parse(rawServiceAccount) as Record<string, string>;
     const accessToken = await googleAccessToken(serviceAccount);
     for (const row of tokenRows) {
       const result = await sendFcm(
@@ -202,14 +160,11 @@ Deno.serve(async (req) => {
         accessToken,
         row.token,
         row.platform ?? 'android',
-        profile,
+        profile as Record<string, string>,
       );
       if (!result.ok) {
         console.error('password-reset FCM failed', result.status, result.text);
-        if (
-          result.text.includes('UNREGISTERED') ||
-          result.text.includes('registration-token-not-registered')
-        ) {
+        if (result.text.includes('UNREGISTERED') || result.text.includes('registration-token-not-registered')) {
           await admin.from('push_tokens').delete().eq('token', row.token);
         }
       }
