@@ -1,0 +1,180 @@
+    if (choice == -1) {
+      await _addCustomDelay(appState);
+    } else {
+      await _addPresetDelay(appState, choice);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final user = appState.currentUser;
+
+    return Scaffold(
+      backgroundColor: AppColors.paper,
+      appBar: AppBar(title: const GardeFlowTitle('Réglages')),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        children: [
+          if (user != null)
+            AppCard(
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.paperAlt,
+                    child: Text(
+                      user.fullName.isEmpty ? '?' : user.fullName.trim()[0].toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user.fullName, style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${user.gradeLabel} · ${user.roleLabel} · ${user.service} · ${hospitalDisplayName(user.hospital)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: AppSpace.sm),
+          if (user != null)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  await appState.logout();
+                  if (!context.mounted) return;
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    (route) => false,
+                  );
+                },
+                icon: const Icon(Icons.logout_rounded, size: 17, color: AppColors.danger),
+                label: const Text('Déconnexion', style: TextStyle(color: AppColors.danger)),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.line)),
+              ),
+            ),
+          const SizedBox(height: AppSpace.xl),
+
+          if (user?.role == UserRole.admin) ...[
+            const SectionLabel('Administration des comptes'),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.paperAlt,
+                          borderRadius: AppRadius.smR,
+                        ),
+                        child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.brand),
+                      ),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Gérer les comptes utilisateurs', style: Theme.of(context).textTheme.titleMedium),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Réinitialisez un mot de passe ou supprimez définitivement un compte et ses données.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpace.md),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminPasswordResetScreen()),
+                      ),
+                      icon: const Icon(Icons.lock_reset_rounded),
+                      label: const Text('Gérer les comptes'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpace.xl),
+          ],
+
+          const SectionLabel('Rappels de garde'),
+          AppCard(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.xs),
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.notifications_active_rounded, color: AppColors.brand),
+              title: Text('Rappels de garde', style: Theme.of(context).textTheme.titleMedium),
+              subtitle: const Text(
+                'Actifs uniquement pour les gardes d’un calendrier définitivement validé.',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: appState.notificationsOn,
+              onChanged: _saving
+                  ? null
+                  : (v) => _run(() async {
+                        await appState.setNotificationsOn(v);
+                        await appState.rescheduleAllReminders();
+                      }),
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+
+          AppCard(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.schedule_rounded, color: AppColors.brand),
+                    const SizedBox(width: 9),
+                    Expanded(child: Text('Quand me rappeler ?', style: Theme.of(context).textTheme.titleMedium)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(color: AppColors.paperAlt, borderRadius: AppRadius.smR),
+                      child: Text('${appState.reminderDelays.length}/3', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Vos rappels actifs. Appuyez sur + pour en ajouter un.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                ),
+                const SizedBox(height: AppSpace.md),
+                for (final minutes in ([...appState.reminderDelays]..sort((a, b) => b.compareTo(a)))) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: AppColors.paperAlt,
+                      borderRadius: AppRadius.smR,
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.alarm_rounded, color: AppColors.brand, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
