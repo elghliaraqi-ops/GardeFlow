@@ -1,0 +1,200 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../data/hospitals.dart';
+import '../models/app_user.dart';
+import '../models/planning_entry.dart';
+import '../models/shift_type.dart';
+import '../services/supabase_backend_service.dart';
+import '../state/app_state.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
+
+/// Astreintes Juniors : lecture par jour, hôpital et service.
+///
+/// V11.6.14 : un seul établissement est affiché à la fois, la semaine est
+/// navigable jour par jour et une liste permet de filtrer les services.
+class JuniorOnCallScreen extends StatefulWidget {
+  const JuniorOnCallScreen({super.key});
+
+  @override
+  State<JuniorOnCallScreen> createState() => _JuniorOnCallScreenState();
+}
+
+class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
+  static const _allServices = '__all_services__';
+
+  late DateTime _weekStart;
+  late int _selectedDayIndex;
+  bool _loading = true;
+  bool _hospitalInitialized = false;
+  String? _error;
+  String? _selectedHospital;
+  String _selectedService = _allServices;
+  List<_JuniorOnCallRow> _rows = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _weekStart = _startOfWeek(now);
+    _selectedDayIndex = now.weekday - DateTime.monday;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_hospitalInitialized) return;
+    _hospitalInitialized = true;
+    final user = context.read<AppState>().currentUser;
+    _selectedHospital = user != null && kHospitals.contains(user.hospital)
+        ? user.hospital
+        : kHospitals.first;
+  }
+
+  DateTime get _weekEnd => _weekStart.add(const Duration(days: 6));
+  DateTime get _selectedDay => _weekStart.add(Duration(days: _selectedDayIndex));
+  String get _selectedDateStr => DateFormat('yyyy-MM-dd').format(_selectedDay);
+  String get _activeHospital => _selectedHospital ?? kHospitals.first;
+
+  static DateTime _startOfWeek(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return normalized.subtract(Duration(days: normalized.weekday - DateTime.monday));
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final appState = context.read<AppState>();
+      final List<_JuniorOnCallRow> rows;
+      if (appState.backendEnabled) {
+        final data = await SupabaseBackendService.instance.fetchJuniorOnCallRoster(
+          from: _weekStart,
+          to: _weekEnd,
+        );
+        rows = data.map(_JuniorOnCallRow.fromRpc).toList()..sort(_compareRows);
+      } else {
+        rows = _buildLocalRows(appState)..sort(_compareRows);
+      }
+      if (!mounted) return;
+      setState(() {
+        _rows = rows;
+        _normalizeServiceFilter();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _rows = const [];
+        _error = 'Impossible de charger les Juniors d’astreinte.\n$e';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  List<_JuniorOnCallRow> _buildLocalRows(AppState appState) {
+    final usersById = <String, AppUser>{for (final user in appState.users) user.id: user};
+    final usersByPhone = <String, AppUser>{for (final user in appState.users) user.phone: user};
+    final result = <_JuniorOnCallRow>[];
+    final start = DateTime(_weekStart.year, _weekStart.month, _weekStart.day);
+    final endExclusive = _weekEnd.add(const Duration(days: 1));
+
+    for (final PlanningEntry entry in appState.planning) {
+      if (!entry.shiftId.startsWith('service-')) continue;
+      final date = DateTime.tryParse(entry.dateStr);
+      if (date == null || date.isBefore(start) || !date.isBefore(endExclusive)) continue;
+      if (!appState.isPlanningEntryApproved(entry)) continue;
+
+      final user = usersById[entry.ownerId] ?? usersByPhone[entry.ownerPhone];
+      if (user == null || user.grade != MedicalGrade.junior || user.accountStatus != AccountStatus.active) continue;
+
+      result.add(_JuniorOnCallRow(
+        dateStr: entry.dateStr,
+        shiftId: entry.shiftId,
+        ownerName: entry.ownerName,
+        service: user.service,
+        hospital: user.hospital,
+      ));
+    }
+    return result;
+  }
+
+  static int _compareRows(_JuniorOnCallRow a, _JuniorOnCallRow b) {
+    var c = a.dateStr.compareTo(b.dateStr);
+    if (c != 0) return c;
+    c = _hospitalRank(a.hospital).compareTo(_hospitalRank(b.hospital));
+    if (c != 0) return c;
+    c = a.service.toLowerCase().compareTo(b.service.toLowerCase());
+    if (c != 0) return c;
+    c = _shiftRank(a.shiftId).compareTo(_shiftRank(b.shiftId));
+    if (c != 0) return c;
+    return a.ownerName.toLowerCase().compareTo(b.ownerName.toLowerCase());
+  }
+
+  static int _hospitalRank(String hospital) {
+    final index = kHospitals.indexOf(hospital);
+    return index < 0 ? 999 : index;
+  }
+
+  static int _shiftRank(String shiftId) {
+    switch (shiftId) {
+      case 'service-jour':
+        return 0;
+      case 'service-24h':
+        return 1;
+      case 'service-nuit':
+        return 2;
+      default:
+        return 99;
+    }
+  }
+
+  void _changeWeek(int delta) {
+    setState(() => _weekStart = _weekStart.add(Duration(days: 7 * delta)));
+    _load();
+  }
+
+  void _goToCurrentWeek() {
+    final now = DateTime.now();
+    final current = _startOfWeek(now);
+    if (_sameDay(current, _weekStart) && _selectedDayIndex == now.weekday - DateTime.monday) return;
+    setState(() {
+      _weekStart = current;
+      _selectedDayIndex = now.weekday - DateTime.monday;
+    });
+    _load();
+  }
+
+  void _selectHospital(String hospital) {
+    if (!kHospitals.contains(hospital) || hospital == _selectedHospital) return;
+    setState(() {
+      _selectedHospital = hospital;
+      _normalizeServiceFilter();
+    });
+  }
+
+  void _selectDay(int index) {
+    if (index < 0 || index > 6 || index == _selectedDayIndex) return;
+    setState(() => _selectedDayIndex = index);
+  }
+
+  List<String> get _availableServices {
+    final values = _rows
+        .where((row) => row.hospital == _activeHospital)
+        .map((row) => row.service.trim())
+        .where((service) => service.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return values;
+  }
