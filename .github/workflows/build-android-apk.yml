@@ -14,6 +14,7 @@ on:
       - 'ci/v11_6_6/**'
       - 'ci/v11_6_7/**'
       - 'ci/v11_6_8/**'
+      - 'ci/v11_6_9/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -108,6 +109,14 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py"
           grep -q '^version: 11.6.8+168$' pubspec.yaml
 
+      - name: Apply V11.6.9 PDF and reminder UI fixes
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py"
+          grep -q '^version: 11.6.9+169$' pubspec.yaml
+
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
@@ -155,7 +164,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.8-release-apk
+          name: GardeFlow-v11.6.9-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
