@@ -1,0 +1,199 @@
+
+  void _normalizeServiceFilter() {
+    if (_selectedService == _allServices) return;
+    final available = _rows
+        .where((row) => row.hospital == _activeHospital)
+        .map((row) => row.service)
+        .toSet();
+    if (!available.contains(_selectedService)) _selectedService = _allServices;
+  }
+
+  List<_JuniorOnCallRow> get _visibleRows {
+    return _rows.where((row) {
+      if (row.hospital != _activeHospital) return false;
+      if (row.dateStr != _selectedDateStr) return false;
+      if (_selectedService != _allServices && row.service != _selectedService) return false;
+      return true;
+    }).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.paper,
+      appBar: AppBar(
+        title: const GardeFlowTitle('Astreintes Juniors'),
+        actions: [
+          IconButton(
+            tooltip: 'Aujourd’hui',
+            onPressed: _loading ? null : _goToCurrentWeek,
+            icon: const Icon(Icons.today_rounded),
+          ),
+          IconButton(
+            tooltip: 'Actualiser',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _WeekSelector(
+            start: _weekStart,
+            end: _weekEnd,
+            onPrevious: _loading ? null : () => _changeWeek(-1),
+            onNext: _loading ? null : () => _changeWeek(1),
+          ),
+          _DaySelector(
+            weekStart: _weekStart,
+            selectedIndex: _selectedDayIndex,
+            onSelected: _selectDay,
+          ),
+          _HospitalFilter(
+            selectedHospital: _activeHospital,
+            onChanged: _selectHospital,
+          ),
+          _ServiceFilter(
+            services: _availableServices,
+            value: _selectedService,
+            allValue: _allServices,
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedService = value);
+            },
+          ),
+          Expanded(child: _buildBody()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) return _JuniorErrorState(message: _error!, onRetry: _load);
+
+    final rows = _visibleRows;
+    if (rows.isEmpty) {
+      final day = DateFormat('EEEE d MMMM', 'fr_FR').format(_selectedDay);
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
+          children: [
+            const SizedBox(height: 78),
+            const Icon(Icons.event_available_outlined, size: 50, color: AppColors.inkFaint),
+            const SizedBox(height: AppSpace.md),
+            Text(
+              'Aucune astreinte Junior validée $day\nà ${_juniorHospitalLabel(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft, height: 1.45),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final groups = _groupRowsByServiceForDay(rows);
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 36),
+        itemCount: groups.length,
+        itemBuilder: (context, index) => _ServiceDayCard(group: groups[index]),
+      ),
+    );
+  }
+}
+
+String _juniorHospitalLabel(String hospital) {
+  if (hospital == kHospitalCasa) return 'HUICK de Casablanca';
+  return hospitalDisplayName(hospital);
+}
+
+class _WeekSelector extends StatelessWidget {
+  final DateTime start;
+  final DateTime end;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  const _WeekSelector({required this.start, required this.end, this.onPrevious, this.onNext});
+
+  String _label() {
+    final startDay = DateFormat('d', 'fr_FR').format(start);
+    final startMonth = DateFormat('MMMM', 'fr_FR').format(start);
+    final endDay = DateFormat('d', 'fr_FR').format(end);
+    final endMonth = DateFormat('MMMM', 'fr_FR').format(end);
+    final year = DateFormat('yyyy', 'fr_FR').format(end);
+
+    if (start.year == end.year && start.month == end.month) {
+      return 'Semaine du $startDay au $endDay $endMonth $year';
+    }
+    if (start.year == end.year) {
+      return 'Semaine du $startDay $startMonth au $endDay $endMonth $year';
+    }
+    return 'Semaine du $startDay $startMonth ${start.year} au $endDay $endMonth ${end.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: AppRadius.mdR,
+        border: Border.all(color: AppColors.line),
+        boxShadow: AppShadow.low,
+      ),
+      child: Row(
+        children: [
+          IconButton(onPressed: onPrevious, tooltip: 'Semaine précédente', icon: const Icon(Icons.chevron_left_rounded)),
+          Expanded(
+            child: Text(
+              _label(),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ),
+          IconButton(onPressed: onNext, tooltip: 'Semaine suivante', icon: const Icon(Icons.chevron_right_rounded)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DaySelector extends StatelessWidget {
+  final DateTime weekStart;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  const _DaySelector({required this.weekStart, required this.selectedIndex, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpace.lg, 2, AppSpace.lg, AppSpace.sm),
+      child: Row(
+        children: [
+          for (var i = 0; i < 7; i++) ...[
+            Expanded(
+              child: _DayChip(
+                date: weekStart.add(Duration(days: i)),
+                selected: i == selectedIndex,
+                onTap: () => onSelected(i),
+              ),
+            ),
+            if (i != 6) const SizedBox(width: 5),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DayChip extends StatelessWidget {
+  final DateTime date;
+  final bool selected;
+  final VoidCallback onTap;
