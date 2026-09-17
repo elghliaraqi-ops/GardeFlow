@@ -25,6 +25,11 @@ must_replace(
     'flutter_local_notifications: 17.2.4',
     'flutter_local_notifications: 19.5.0',
 )
+must_replace(
+    'pubspec.yaml',
+    'timezone: ^0.9.4',
+    'timezone: ^0.10.1',
+)
 
 base = Path(__file__).parent
 for source_name, target in [
