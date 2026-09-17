@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble V11.6.6 project and print relevant source
+      - name: Assemble V11.6.6 project and print reminder source
         shell: bash
         run: |
           set -euo pipefail
@@ -35,13 +35,13 @@ jobs:
           sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
           cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v1166.patch
           patch -p1 < /tmp/v1166.patch >/dev/null
-          echo '===== MATCHING FILES ====='
-          find lib -type f | grep -Ei 'notif|remind|setting|preference|planning|pdf' || true
+          echo '===== APP STATE REMINDER SECTIONS ====='
+          grep -n -C 25 -E 'notificationsOn|delayMinutes|rescheduleAllReminders|scheduleReminder|reminders|SharedPreferences|NotificationService' lib/state/app_state.dart || true
+          echo '===== MAIN INITIALIZATION ====='
+          cat lib/main.dart
+          echo '===== SHIFT CATALOG ====='
+          cat lib/models/shift_type.dart
+          echo '===== APP USER ====='
+          cat lib/models/app_user.dart
           echo '===== PUBSPEC ====='
-          grep -nEi 'notification|timezone|shared_preferences|pdf|permission' pubspec.yaml || true
-          echo '===== ANDROID MANIFEST ====='
-          find android -name AndroidManifest.xml -print -exec cat {} \; || true
-          for f in $(find lib -type f | grep -Ei 'notif|remind|setting|preference|planning|pdf'); do
-            echo "===== FILE: $f ====="
-            cat "$f"
-          done
+          cat pubspec.yaml
