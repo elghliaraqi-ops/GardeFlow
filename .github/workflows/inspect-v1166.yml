@@ -1,0 +1,47 @@
+name: Inspect V11.6.6 Source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-v1166.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble V11.6.6 project and print relevant source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          rm -rf /tmp/gfinspect && mkdir -p /tmp/gfinspect
+          unzip -q "$ZIP" -d /tmp/gfinspect
+          PUBSPEC="$(find /tmp/gfinspect -type f -name pubspec.yaml -print -quit)"
+          PROJECT_DIR="$(dirname "$PUBSPEC")"
+          cd "$PROJECT_DIR"
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v1161.patch
+          patch -p1 < /tmp/v1161.patch >/dev/null
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v1163.patch
+          patch -p1 < /tmp/v1163.patch >/dev/null
+          sed -i 's/^version: 11.6.3+163$/version: 11.6.4+164/' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/v1165.patch
+          patch -p1 < /tmp/v1165.patch >/dev/null
+          sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v1166.patch
+          patch -p1 < /tmp/v1166.patch >/dev/null
+          echo '===== MATCHING FILES ====='
+          find lib -type f | grep -Ei 'notif|remind|setting|preference|planning|pdf' || true
+          echo '===== PUBSPEC ====='
+          grep -nEi 'notification|timezone|shared_preferences|pdf|permission' pubspec.yaml || true
+          echo '===== ANDROID MANIFEST ====='
+          find android -name AndroidManifest.xml -print -exec cat {} \; || true
+          for f in $(find lib -type f | grep -Ei 'notif|remind|setting|preference|planning|pdf'); do
+            echo "===== FILE: $f ====="
+            cat "$f"
+          done
