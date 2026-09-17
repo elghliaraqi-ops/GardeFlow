@@ -1,4 +1,4 @@
-name: Inspect V11.6.6 Source
+name: Inspect Current Auth Source
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble V11.6.6 project and print target sources
+      - name: Assemble current project and print auth sources
         shell: bash
         run: |
           set -euo pipefail
@@ -25,6 +25,7 @@ jobs:
           PUBSPEC="$(find /tmp/gfinspect -type f -name pubspec.yaml -print -quit)"
           PROJECT_DIR="$(dirname "$PUBSPEC")"
           cd "$PROJECT_DIR"
+
           cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v1161.patch
           patch -p1 < /tmp/v1161.patch >/dev/null
           cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v1163.patch
@@ -35,25 +36,25 @@ jobs:
           sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
           cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v1166.patch
           patch -p1 < /tmp/v1166.patch >/dev/null
-          echo '===== PLANNING ENTRY MODEL ====='
-          cat lib/models/planning_entry.dart
-          echo '===== LOCAL STORAGE SERVICE ====='
-          cat lib/services/local_storage_service.dart
-          echo '===== SHIFT TYPE ====='
-          cat lib/models/shift_type.dart
-          echo '===== NOTIFICATION SERVICE ====='
-          cat lib/services/notification_service.dart
-          echo '===== SETTINGS SCREEN ====='
-          cat lib/screens/settings_screen.dart
-          echo '===== OFFICIAL PLANNING SCREEN ====='
-          cat lib/screens/official_planning_screen.dart
-          echo '===== APP STATE TARGET SECTIONS ====='
-          sed -n '40,110p' lib/state/app_state.dart
-          sed -n '190,370p' lib/state/app_state.dart
-          sed -n '700,770p' lib/state/app_state.dart
-          sed -n '930,985p' lib/state/app_state.dart
-          sed -n '1240,1305p' lib/state/app_state.dart
-          echo '===== ANDROID CONFIG ====='
-          cat tool/configure_android.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_7/apply_v11_6_7.py" >/dev/null
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py" >/dev/null
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py" >/dev/null
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_10/apply_v11_6_10.py" >/dev/null
+
+          echo '===== SCREEN FILES ====='
+          find lib/screens -maxdepth 1 -type f -name '*.dart' -print | sort
+
+          echo '===== AUTH MATCHES ====='
+          grep -RInE "Mot de passe oublié|mot de passe oublié|forgot|password|Connexion|Se connecter|signIn\(|signUp\(" lib/screens lib/state lib/services | head -n 400 || true
+
+          echo '===== AUTH-RELATED FILE CONTENT ====='
+          for f in $(grep -RIlE "Mot de passe oublié|mot de passe oublié|forgot|Connexion|Se connecter|signIn\(" lib/screens lib/state lib/services || true); do
+            echo "===== FILE: $f ====="
+            sed -n '1,320p' "$f"
+          done
+
+          echo '===== SUPABASE AUTH SERVICE TOP ====='
+          sed -n '1,150p' lib/services/supabase_backend_service.dart
+
           echo '===== PUBSPEC ====='
           cat pubspec.yaml
