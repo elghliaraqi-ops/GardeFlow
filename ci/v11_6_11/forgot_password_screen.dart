@@ -95,8 +95,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() {
         _codeStep = true;
         _info = resend
-            ? 'Un nouveau code a été demandé.'
-            : 'Si ce numéro correspond à un compte actif, un code à 6 chiffres a été envoyé sur un appareil GardeFlow déjà associé au compte.';
+            ? 'Un nouveau code a été demandé aux administrateurs GardeFlow.'
+            : 'Si ce numéro correspond à un compte actif, un code à 6 chiffres a été envoyé aux administrateurs GardeFlow de votre établissement. Contactez un administrateur pour l’obtenir.';
       });
       _startCooldown();
     } catch (e) {
@@ -220,7 +220,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Le code expire après 10 minutes et le nombre de tentatives est limité. GardeFlow ne vous demandera jamais votre ancien mot de passe.',
+                            'Le code est envoyé uniquement aux administrateurs GardeFlow. Il expire après 10 minutes et le nombre de tentatives est limité.',
                             style: TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xFF3E5C4B)),
                           ),
                         ),
@@ -249,7 +249,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Saisissez le numéro de téléphone utilisé pour votre compte GardeFlow.',
+            'Saisissez le numéro utilisé pour votre compte. Un administrateur GardeFlow recevra le code de récupération et vous le transmettra.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13.5, height: 1.4, color: Color(0xFF68757A)),
           ),
@@ -276,8 +276,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               icon: _busy
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.sms_rounded),
-              label: Text(_busy ? 'Envoi…' : 'Recevoir mon code'),
+                  : const Icon(Icons.admin_panel_settings_rounded),
+              label: Text(_busy ? 'Demande en cours…' : 'Demander mon code'),
             ),
           ),
         ],
@@ -290,13 +290,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const Icon(Icons.verified_user_rounded, size: 48, color: _recoveryGreen),
           const SizedBox(height: 10),
           const Text(
-            'Saisissez votre code',
+            'Code transmis par l’administrateur',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _recoveryGreenDark),
           ),
           const SizedBox(height: 6),
           Text(
-            'Code envoyé pour ${_phoneCtrl.text.trim()}',
+            'Demandez à votre administrateur le code envoyé pour ${_phoneCtrl.text.trim()}',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13, color: Color(0xFF68757A)),
           ),
@@ -364,10 +364,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           TextButton.icon(
             onPressed: _busy || _resendSeconds > 0 ? null : () => _requestCode(resend: true),
             icon: const Icon(Icons.refresh_rounded),
-            label: Text(_resendSeconds > 0 ? 'Renvoyer dans ${_resendSeconds}s' : 'Renvoyer un code'),
+            label: Text(_resendSeconds > 0 ? 'Nouvelle demande dans ${_resendSeconds}s' : 'Demander un nouveau code'),
           ),
           const Text(
-            'Si vous n’avez plus accès à aucun appareil déjà associé à votre compte, contactez un administrateur GardeFlow.',
+            'Le médecin ne reçoit pas le code directement : il doit être communiqué par un administrateur GardeFlow.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 11.5, height: 1.35, color: Color(0xFF7A8589)),
           ),
