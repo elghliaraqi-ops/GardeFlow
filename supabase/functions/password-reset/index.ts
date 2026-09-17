@@ -94,18 +94,22 @@ async function sendFcm(
   token: string,
   platform: string,
   code: string,
-  profileId: string,
+  profile: { id: string; prenom?: string; nom?: string; phone?: string; hospital?: string },
 ) {
-  const title = 'Code de récupération GardeFlow';
-  const body = `Votre code est ${code}. Il expire dans 10 minutes.`;
+  const displayName = `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || 'Un médecin';
+  const title = 'Réinitialisation de mot de passe';
+  const body = `${displayName} (${profile.phone ?? ''}) demande un nouveau mot de passe. Code : ${code}. Valable 10 min.`;
   const message: Record<string, unknown> = {
     token,
     data: {
       title,
       body,
       kind: 'password_reset_code',
-      resourceId: profileId,
+      resourceId: profile.id,
       code,
+      requesterName: displayName,
+      requesterPhone: profile.phone ?? '',
+      requesterHospital: profile.hospital ?? '',
     },
     notification: { title, body },
   };
@@ -116,7 +120,7 @@ async function sendFcm(
         channel_id: 'huim6_push',
         icon: 'ic_stat_huim6',
         sound: 'default',
-        tag: `password-reset:${profileId}`,
+        tag: `password-reset:${profile.id}`,
         visibility: 'PRIVATE',
       },
     };
@@ -144,7 +148,6 @@ async function sendFcm(
 }
 
 async function genericRequestResponse() {
-  // Small fixed delay reduces useful timing differences for account enumeration.
   await new Promise((resolve) => setTimeout(resolve, 220));
   return json({ ok: true });
 }
@@ -175,7 +178,7 @@ Deno.serve(async (req) => {
 
       const { data: profile } = await admin
         .from('profiles')
-        .select('id,account_status')
+        .select('id,account_status,nom,prenom,phone,hospital')
         .eq('phone', phone)
         .maybeSingle();
 
@@ -206,30 +209,52 @@ Deno.serve(async (req) => {
       });
       if (metaError) throw metaError;
 
-      const { data: tokenRows, error: tokenError } = await admin
-        .from('push_tokens')
-        .select('token,platform')
-        .eq('owner_id', profile.id);
-      if (tokenError) throw tokenError;
+      let { data: adminRows, error: adminsError } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .eq('account_status', 'active')
+        .eq('hospital', profile.hospital);
+      if (adminsError) throw adminsError;
 
-      if (tokenRows?.length) {
-        const accessToken = await googleAccessToken(serviceAccount);
-        for (const row of tokenRows) {
-          const result = await sendFcm(
-            serviceAccount,
-            accessToken,
-            row.token,
-            row.platform ?? 'android',
-            code,
-            profile.id,
-          );
-          if (!result.ok) {
-            console.error('password-reset FCM failed', result.status, result.text);
-            if (
-              result.text.includes('UNREGISTERED') ||
-              result.text.includes('registration-token-not-registered')
-            ) {
-              await admin.from('push_tokens').delete().eq('token', row.token);
+      // Network-admin fallback when the hospital has no active admin.
+      if (!adminRows?.length) {
+        const fallback = await admin
+          .from('profiles')
+          .select('id')
+          .eq('role', 'admin')
+          .eq('account_status', 'active');
+        if (fallback.error) throw fallback.error;
+        adminRows = fallback.data;
+      }
+
+      const adminIds = [...new Set((adminRows ?? []).map((row: any) => row.id as string).filter(Boolean))];
+      if (adminIds.length) {
+        const { data: tokenRows, error: tokenError } = await admin
+          .from('push_tokens')
+          .select('token,platform,owner_id')
+          .in('owner_id', adminIds);
+        if (tokenError) throw tokenError;
+
+        if (tokenRows?.length) {
+          const accessToken = await googleAccessToken(serviceAccount);
+          for (const row of tokenRows) {
+            const result = await sendFcm(
+              serviceAccount,
+              accessToken,
+              row.token,
+              row.platform ?? 'android',
+              code,
+              profile,
+            );
+            if (!result.ok) {
+              console.error('password-reset FCM failed', result.status, result.text);
+              if (
+                result.text.includes('UNREGISTERED') ||
+                result.text.includes('registration-token-not-registered')
+              ) {
+                await admin.from('push_tokens').delete().eq('token', row.token);
+              }
             }
           }
         }
