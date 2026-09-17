@@ -6,6 +6,7 @@ on:
       - feature/reminders-junior-roster-v11-6-14
     paths:
       - '.github/workflows/inspect-v11614.yml'
+      - 'ci/v11_6_14/**'
   workflow_dispatch:
 
 permissions:
@@ -54,6 +55,7 @@ jobs:
 
           grep -q '^version: 11.6.14+174$' pubspec.yaml
           grep -q 'flutter_local_notifications: 19.5.0' pubspec.yaml
+          grep -q 'timezone: ^0.10.1' pubspec.yaml
           grep -q 'gardeflow_guard_urgent_v3' lib/services/notification_service.dart
           ! grep -q 'requestExactAlarmsPermission' lib/services/notification_service.dart
           grep -q 'Tous les services' lib/screens/junior_oncall_screen.dart
