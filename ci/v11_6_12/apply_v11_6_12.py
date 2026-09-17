@@ -12,6 +12,44 @@ def must_replace(path: str, old: str, new: str, count: int = 1) -> None:
 
 must_replace('pubspec.yaml', 'version: 11.6.11+171', 'version: 11.6.12+172')
 
+# Forgot-password is now a simple admin notification request: no code and no
+# password is changed from the unauthenticated screen.
+must_replace(
+    'lib/services/supabase_backend_service.dart',
+    """  Future<void> requestPasswordResetCode(String rawPhone) async {
+    if (!enabled) {
+      throw StateError('La récupération du mot de passe nécessite une connexion au serveur.');
+    }
+    final phone = authPhone(rawPhone);
+    if (phone.trim().isEmpty) throw ArgumentError('Numéro de téléphone invalide.');
+
+    final response = await client.functions.invoke(
+      'password-reset',
+      body: {'action': 'request', 'phone': phone},
+    );
+    final raw = response.data;
+    if (raw is Map && raw['ok'] == true) return;
+    throw StateError('Le service de récupération est momentanément indisponible.');
+  }
+""",
+    """  Future<void> requestPasswordResetHelp(String rawPhone) async {
+    if (!enabled) {
+      throw StateError('La récupération du mot de passe nécessite une connexion au serveur.');
+    }
+    final phone = authPhone(rawPhone);
+    if (phone.trim().isEmpty) throw ArgumentError('Numéro de téléphone invalide.');
+
+    final response = await client.functions.invoke(
+      'password-reset',
+      body: {'action': 'request', 'phone': phone},
+    );
+    final raw = response.data;
+    if (raw is Map && raw['ok'] == true) return;
+    throw StateError('La demande n’a pas pu être envoyée à l’administrateur. Réessayez.');
+  }
+""",
+)
+
 must_replace(
     'lib/services/supabase_backend_service.dart',
     """  Future<void> signOut() => client.auth.signOut();
@@ -139,9 +177,13 @@ must_replace(
 """,
 )
 
-source = Path(__file__).with_name('admin_password_reset_screen.dart')
-target = Path('lib/screens/admin_password_reset_screen.dart')
-target.parent.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(source, target)
+admin_source = Path(__file__).with_name('admin_password_reset_screen.dart')
+admin_target = Path('lib/screens/admin_password_reset_screen.dart')
+admin_target.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(admin_source, admin_target)
 
-print('GardeFlow V11.6.12 admin password reset applied successfully')
+forgot_source = Path(__file__).with_name('forgot_password_screen.dart')
+forgot_target = Path('lib/screens/forgot_password_screen.dart')
+shutil.copyfile(forgot_source, forgot_target)
+
+print('GardeFlow V11.6.12 admin-mediated password reset applied successfully')
