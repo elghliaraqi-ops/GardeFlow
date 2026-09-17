@@ -1,0 +1,106 @@
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 76,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(shift.label, style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink)),
+                const SizedBox(height: 2),
+                Text(_timeLabel(shift), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft)),
+              ],
+            ),
+          ),
+          Container(width: 1, height: 42, color: AppColors.line),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.ownerName,
+                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text('Junior', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JuniorErrorState extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+  const _JuniorErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpace.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 44, color: AppColors.danger),
+            const SizedBox(height: AppSpace.md),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpace.md),
+            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Réessayer')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _JuniorOnCallRow {
+  final String dateStr;
+  final String shiftId;
+  final String ownerName;
+  final String service;
+  final String hospital;
+
+  const _JuniorOnCallRow({
+    required this.dateStr,
+    required this.shiftId,
+    required this.ownerName,
+    required this.service,
+    required this.hospital,
+  });
+
+  factory _JuniorOnCallRow.fromRpc(Map<String, dynamic> json) => _JuniorOnCallRow(
+        dateStr: json['date_str'].toString(),
+        shiftId: json['shift_id'] as String,
+        ownerName: json['owner_name'] as String,
+        service: json['service'] as String,
+        hospital: json['hospital'] as String,
+      );
+}
+
+class _ServiceDayGroup {
+  final String service;
+  final List<_JuniorOnCallRow> rows;
+  const _ServiceDayGroup(this.service, this.rows);
+}
+
+List<_ServiceDayGroup> _groupRowsByServiceForDay(List<_JuniorOnCallRow> rows) {
+  final map = <String, List<_JuniorOnCallRow>>{};
+  for (final row in rows) {
+    map.putIfAbsent(row.service, () => []).add(row);
+  }
+  final services = map.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return services.map((service) {
+    final members = map[service]!
+      ..sort((a, b) {
+        final c = _JuniorOnCallScreenState._shiftRank(a.shiftId).compareTo(_JuniorOnCallScreenState._shiftRank(b.shiftId));
+        return c != 0 ? c : a.ownerName.toLowerCase().compareTo(b.ownerName.toLowerCase());
+      });
+    return _ServiceDayGroup(service, members);
+  }).toList(growable: false);
+}
