@@ -27,6 +27,7 @@ on:
       - 'ci/v11_6_21/**'
       - 'ci/v11_6_22/**'
       - 'ci/v11_6_23/**'
+      - 'ci/v11_6_24/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -67,7 +68,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.23
+      - name: Apply patches V11.6.1 to V11.6.24
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -147,8 +148,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_21/apply_v11_6_21.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_22/apply_v11_6_22.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_23/apply_v11_6_23.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_24/apply_v11_6_24.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.23+183$' pubspec.yaml
+          grep -q '^version: 11.6.24+184$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "label: 'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
@@ -167,6 +169,10 @@ jobs:
           grep -q 'Planning validé · tuiles verrouillées' lib/screens/home_screen.dart
           grep -q 'NeverScrollableScrollPhysics' lib/screens/home_screen.dart
           grep -q 'class _CompactShiftTile' lib/screens/home_screen.dart
+          grep -q 'assets/branding/gardeflow_logo.png' lib/screens/home_screen.dart
+          grep -q 'assets/branding/gardeflow_logo.png' lib/theme/widgets.dart
+          grep -q 'static const brand = Color(0xFF138A55)' lib/theme/app_theme.dart
+          grep -q 'static const cyan = Color(0xFFD94A43)' lib/theme/app_theme.dart
           if grep -q 'floatingActionButton:' lib/screens/home_screen.dart; then echo 'Unexpected central FAB'; exit 1; fi
           grep -q 'Compte, accès et préférences' lib/screens/profile_screen.dart
 
@@ -181,7 +187,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.23+183'),
+              ('pubspec.yaml', 'version: 11.6.24+184'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -254,7 +260,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.23-release-apk
+          name: GardeFlow-v11.6.24-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
