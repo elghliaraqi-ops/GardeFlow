@@ -21,6 +21,7 @@ on:
       - 'ci/v11_6_13/**'
       - 'ci/v11_6_16_bundle/**'
       - 'ci/v11_6_17/**'
+      - 'ci/v11_6_18/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -61,7 +62,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.17
+      - name: Apply patches V11.6.1 to V11.6.18
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -135,6 +136,14 @@ jobs:
               print('AppColors theme import already present')
           PY
 
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_18/apply_v11_6_18.py"
+          test -f lib/screens/profile_screen.dart
+          grep -q '^version: 11.6.18+178$' pubspec.yaml
+          grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
+          grep -q 'const ProfileScreen(embedded: true)' lib/screens/home_screen.dart
+          grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
+          grep -q 'Compte, accès et préférences' lib/screens/profile_screen.dart
+
           python3 - <<'PY'
           from pathlib import Path
           candidates = list(Path('lib').rglob('*.dart')) + list(Path('tool').rglob('*.dart'))
@@ -146,7 +155,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.17+177'),
+              ('pubspec.yaml', 'version: 11.6.18+178'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -199,18 +208,6 @@ jobs:
           test -f android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -f android/app/src/main/res/drawable-nodpi/gardeflow_launcher_logo.png
 
-      - name: Upload V11.6.17 source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: GardeFlow-v11.6.17-source-snapshot
-          path: |
-            ${{ steps.project.outputs.dir }}/lib
-            ${{ steps.project.outputs.dir }}/tool
-            ${{ steps.project.outputs.dir }}/pubspec.yaml
-            ${{ steps.project.outputs.dir }}/android/app/src/main
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Install Flutter dependencies
         working-directory: ${{ steps.project.outputs.dir }}
         run: |
@@ -231,7 +228,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.17-release-apk
+          name: GardeFlow-v11.6.18-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
