@@ -93,7 +93,17 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_16/apply_v11_6_16.py"
 
           # Hotfix alarm 5.13.1 + Dart actuel
-          sed -i 's/const VolumeSettings\\.fade(/VolumeSettings.fade(/g' lib/services/alarm_ring_service.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/services/alarm_ring_service.dart')
+          s = p.read_text()
+          old = 'const VolumeSettings.fade('
+          count = s.count(old)
+          if count == 0:
+              raise SystemExit('VolumeSettings.fade const hotfix: pattern not found')
+          p.write_text(s.replace(old, 'VolumeSettings.fade('))
+          print(f'VolumeSettings.fade const hotfix applied: {count} occurrence(s)')
+          PY
           if grep -q 'const VolumeSettings.fade' lib/services/alarm_ring_service.dart; then
             echo "VolumeSettings.fade const hotfix failed"
             exit 1
