@@ -156,7 +156,7 @@ jobs:
           grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
           grep -q 'Bonjour Dr' lib/screens/home_screen.dart
           grep -q 'Prochaine garde à venir' lib/screens/home_screen.dart
-          grep -q 'Ajouter au planning' lib/screens/home_screen.dart
+          grep -q 'Glisser une tuile' lib/screens/home_screen.dart
           grep -q 'Planning officiel' lib/screens/home_screen.dart
           grep -q 'Astreintes séniors' lib/screens/home_screen.dart
           grep -q 'Astreintes juniors' lib/screens/home_screen.dart
