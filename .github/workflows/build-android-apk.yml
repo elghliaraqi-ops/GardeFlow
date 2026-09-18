@@ -19,6 +19,7 @@ on:
       - 'ci/v11_6_11/**'
       - 'ci/v11_6_12/**'
       - 'ci/v11_6_13/**'
+      - 'ci/v11_6_16_bundle/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -32,6 +33,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Extract V11.6.14 to V11.6.16 patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ci/v11_6_16_bundle/bundle.part*.b64 | base64 -d > /tmp/GardeFlow-v11.6.16-ci-bundle.zip
+          unzip -oq /tmp/GardeFlow-v11.6.16-ci-bundle.zip -d "$GITHUB_WORKSPACE"
+          test -f ci/v11_6_14/apply_v11_6_14.py
+          test -f ci/v11_6_15/apply_v11_6_15.py
+          test -f ci/v11_6_16/apply_v11_6_16.py
 
       - name: Locate GardeFlow project
         id: project
@@ -48,118 +59,45 @@ jobs:
           PROJECT_DIR="$(dirname "$PUBSPEC")"
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-          echo "Project: $PROJECT_DIR"
 
-      - name: Apply V11.6.1 overlay
+      - name: Apply patches V11.6.1 to V11.6.16
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
           set -euo pipefail
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/gardeflow_v11_6_1.patch
-          patch -p1 < /tmp/gardeflow_v11_6_1.patch
-          grep -q '^version: 11.6.1+161$' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v11_6_1.patch
+          patch -p1 < /tmp/v11_6_1.patch
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v11_6_3.patch
+          patch -p1 < /tmp/v11_6_3.patch
 
-      - name: Apply V11.6.3 UI overlay
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/gardeflow_v11_6_3.patch
-          patch -p1 < /tmp/gardeflow_v11_6_3.patch
-          grep -q '^version: 11.6.3+163$' pubspec.yaml
-
-      - name: Apply V11.6.4 launcher icon fix
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           sed -i 's/^version: 11.6.3+163$/version: 11.6.4+164/' pubspec.yaml
           python3 -m pip install --quiet --break-system-packages pillow
           python3 "$GITHUB_WORKSPACE/ci/v11_6_6/fix_launcher_icons.py" --android
-          grep -q '^version: 11.6.4+164$' pubspec.yaml
 
-      - name: Apply V11.6.5 official roster backfill
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/gardeflow_v11_6_5.patch
-          patch -p1 < /tmp/gardeflow_v11_6_5.patch
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/v11_6_5.patch
+          patch -p1 < /tmp/v11_6_5.patch
           sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
-          grep -q '^version: 11.6.5+165$' pubspec.yaml
 
-      - name: Apply V11.6.6 HUICK and astreinte hospitals
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/gardeflow_v11_6_6.patch
-          patch -p1 < /tmp/gardeflow_v11_6_6.patch
-          grep -q '^version: 11.6.6+166$' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v11_6_6.patch
+          patch -p1 < /tmp/v11_6_6.patch
 
-      - name: Apply V11.6.7 reminders and PDF search
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_7/apply_v11_6_7.py"
-          grep -q '^version: 11.6.7+167$' pubspec.yaml
-
-      - name: Apply V11.6.8 PDF viewer hotfix
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py"
-          grep -q '^version: 11.6.8+168$' pubspec.yaml
-
-      - name: Apply V11.6.9 PDF and reminder UI fixes
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py"
-          grep -q '^version: 11.6.9+169$' pubspec.yaml
-
-      - name: Apply V11.6.10 notification startup hotfix
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_10/apply_v11_6_10.py"
-          grep -q '^version: 11.6.10+170$' pubspec.yaml
-          ! grep -q '_plugin.cancelAll()' lib/services/notification_service.dart
-
-      - name: Apply V11.6.11 functional password recovery
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_11/apply_v11_6_11.py"
-          grep -q '^version: 11.6.11+171$' pubspec.yaml
-          test -f lib/screens/forgot_password_screen.dart
-          grep -q "password-reset" lib/services/supabase_backend_service.dart
-
-      - name: Apply V11.6.12 admin-mediated password reset
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_12/apply_v11_6_12.py"
-          grep -q '^version: 11.6.12+172$' pubspec.yaml
-          test -f lib/screens/admin_password_reset_screen.dart
-          grep -q "requestPasswordResetHelp" lib/services/supabase_backend_service.dart
-          grep -q "adminResetUserPassword" lib/services/supabase_backend_service.dart
-
-      - name: Apply V11.6.13 admin account deletion
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          set -euo pipefail
           python3 "$GITHUB_WORKSPACE/ci/v11_6_13/apply_v11_6_13.py"
-          grep -q '^version: 11.6.13+173$' pubspec.yaml
-          grep -q "adminDeleteUserAccount" lib/services/supabase_backend_service.dart
-          grep -q "delete_forever_rounded" lib/screens/admin_password_reset_screen.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_14/apply_v11_6_14.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_15/apply_v11_6_15.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_16/apply_v11_6_16.py"
+
+          grep -q '^version: 11.6.16+176$' pubspec.yaml
+          grep -q 'alarm: ^5.13.1' pubspec.yaml
+          test -f lib/services/alarm_ring_service.dart
+          grep -q "AlarmRingService" lib/services/notification_service.dart
+          grep -q "AppColors.success" lib/screens/admin_password_reset_screen.dart
+          grep -q "AppColors.danger" lib/screens/audit_screen.dart
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -185,6 +123,8 @@ jobs:
           test -f google-services.json
           cp -f google-services.json android/app/google-services.json
           dart tool/configure_android.dart
+          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK' android/app/src/main/AndroidManifest.xml
           test -f android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -f android/app/src/main/res/drawable-nodpi/gardeflow_launcher_logo.png
 
@@ -208,7 +148,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.13-release-apk
+          name: GardeFlow-v11.6.16-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
