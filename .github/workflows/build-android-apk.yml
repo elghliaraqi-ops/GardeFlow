@@ -117,6 +117,24 @@ jobs:
 
           # V11.6.17 is a visual redesign: restore the proven stable state logic.
           cp /tmp/app_state_v11_6_16.dart lib/state/app_state.dart
+
+          # Ensure redesigned password-recovery screen imports the shared theme.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/screens/forgot_password_screen.dart')
+          s = p.read_text()
+          theme_import = "import '../theme/app_theme.dart';"
+          if theme_import not in s:
+              anchor = "import 'package:flutter/material.dart';"
+              if anchor not in s:
+                  raise SystemExit('forgot_password_screen.dart: Flutter material import missing')
+              s = s.replace(anchor, anchor + "\n" + theme_import, 1)
+              p.write_text(s)
+              print('Added AppColors theme import to forgot_password_screen.dart')
+          else:
+              print('AppColors theme import already present')
+          PY
+
           python3 - <<'PY'
           from pathlib import Path
           candidates = list(Path('lib').rglob('*.dart')) + list(Path('tool').rglob('*.dart'))
