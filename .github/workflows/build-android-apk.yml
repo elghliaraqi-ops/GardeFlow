@@ -126,7 +126,6 @@ jobs:
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/state/app_state.dart', 'GARDE DE NUIT'),
-              ('tool/configure_android.dart', 'class AlarmActivity'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
               ('lib/screens/admin_password_reset_screen.dart', 'AppColors.success'),
               ('lib/screens/audit_screen.dart', 'AppColors.danger'),
@@ -167,11 +166,13 @@ jobs:
           test -f google-services.json
           cp -f google-services.json android/app/google-services.json
           dart tool/configure_android.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_17/install_alarm_activity.py"
           grep -q 'android.permission.USE_FULL_SCREEN_INTENT' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK' android/app/src/main/AndroidManifest.xml
           grep -q 'com.gdelataillade.alarm.action.RING' android/app/src/main/AndroidManifest.xml
           test -f android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
-          grep -q 'ACTION_SNOOZE' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'ACTION_ALARM_SNOOZE' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'ACTION_ALARM_STOP' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
           test -f android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -f android/app/src/main/res/drawable-nodpi/gardeflow_launcher_logo.png
 
