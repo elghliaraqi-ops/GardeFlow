@@ -62,7 +62,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.18
+      - name: Apply patches V11.6.1 to V11.6.19
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -138,7 +138,7 @@ jobs:
 
           python3 "$GITHUB_WORKSPACE/ci/v11_6_18/apply_v11_6_18.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.18+178$' pubspec.yaml
+          grep -q '^version: 11.6.19+179$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q 'const ProfileScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
@@ -155,7 +155,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.18+178'),
+              ('pubspec.yaml', 'version: 11.6.19+179'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -228,7 +228,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.18-release-apk
+          name: GardeFlow-v11.6.19-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
