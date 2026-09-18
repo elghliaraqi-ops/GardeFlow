@@ -97,7 +97,7 @@ jobs:
           sed -i 's/const VolumeSettings\.fade(/VolumeSettings.fade(/g' lib/services/alarm_ring_service.dart
           ! grep -q 'const VolumeSettings.fade' lib/services/alarm_ring_service.dart
 
-          grep -q '^version: 11.6.16+176
+          grep -q '^version: 11.6.16+176$' pubspec.yaml
           grep -q 'alarm: ^5.13.1' pubspec.yaml
           test -f lib/services/alarm_ring_service.dart
           grep -q "AlarmRingService" lib/services/notification_service.dart
