@@ -1,0 +1,59 @@
+name: Inspect V11.6.20 navigation source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-v11620-nav.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct current source and inspect navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          rm -rf /tmp/gfnav && mkdir -p /tmp/gfnav
+          unzip -q "$ZIP" -d /tmp/gfnav
+          PUBSPEC="$(find /tmp/gfnav -type f -name pubspec.yaml -print -quit)"
+          PROJECT_DIR="$(dirname "$PUBSPEC")"
+          cd "$PROJECT_DIR"
+
+          patch -p1 < "$GITHUB_WORKSPACE/ci/v11_6_1/patch.diff"
+          patch -p1 < "$GITHUB_WORKSPACE/ci/v11_6_2/patch.diff"
+          patch -p1 < "$GITHUB_WORKSPACE/ci/v11_6_3/patch.diff"
+          patch -p1 < "$GITHUB_WORKSPACE/ci/v11_6_4/patch.diff"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_4/generate_launcher_icon.py"
+          patch -p1 < "$GITHUB_WORKSPACE/ci/v11_6_5/patch.diff"
+          patch -p1 < "$GITHUB_WORKSPACE/ci/v11_6_6/patch.diff"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_7/apply_v11_6_7.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_10/apply_v11_6_10.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_11/apply_v11_6_11.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_12/apply_v11_6_12.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_13/apply_v11_6_13.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_14/apply_v11_6_14.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_15/apply_v11_6_15.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_16/apply_v11_6_16.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_17/apply_v11_6_17.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_18/apply_v11_6_18.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_19/apply_v11_6_19.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_20/apply_v11_6_20.py"
+
+          echo '===== HOME TOP ====='
+          sed -n '1,180p' lib/screens/home_screen.dart
+          echo '===== PROFILE CONSTRUCTOR ====='
+          grep -n -A35 -B5 'class ProfileScreen' lib/screens/profile_screen.dart || true
+          echo '===== SETTINGS CONSTRUCTOR ====='
+          grep -n -A20 -B5 'class SettingsScreen' lib/screens/settings_screen.dart || true
+          echo '===== ASTREINTE CONSTRUCTORS ====='
+          grep -n -A15 -B3 'class AstreinteScreen' lib/screens/astreinte_screen.dart || true
+          grep -n -A15 -B3 'class JuniorOnCallScreen' lib/screens/junior_oncall_screen.dart || true
