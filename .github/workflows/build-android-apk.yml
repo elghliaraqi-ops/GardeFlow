@@ -199,6 +199,18 @@ jobs:
           test -f android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -f android/app/src/main/res/drawable-nodpi/gardeflow_launcher_logo.png
 
+      - name: Upload V11.6.17 source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.17-source-snapshot
+          path: |
+            ${{ steps.project.outputs.dir }}/lib
+            ${{ steps.project.outputs.dir }}/tool
+            ${{ steps.project.outputs.dir }}/pubspec.yaml
+            ${{ steps.project.outputs.dir }}/android/app/src/main
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Install Flutter dependencies
         working-directory: ${{ steps.project.outputs.dir }}
         run: |
