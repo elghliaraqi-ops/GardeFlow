@@ -113,6 +113,14 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_17/apply_v11_6_17.py"
           python3 - <<'PY'
           from pathlib import Path
+          candidates = list(Path('lib').rglob('*.dart')) + list(Path('tool').rglob('*.dart'))
+          for p in candidates:
+              raw = p.read_bytes()
+              try:
+                  raw.decode('utf-8')
+              except UnicodeDecodeError as exc:
+                  print(f'Normalizing UTF-8 in {p}: {exc}')
+                  p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
               ('pubspec.yaml', 'version: 11.6.17+177'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
