@@ -12,7 +12,8 @@ pubspec.write_text(pub.replace(EXPECTED, TARGET, 1))
 home = Path("lib/screens/home_screen.dart")
 text = home.read_text()
 
-text = text.replace("      extendBody: true,", "      extendBody: false,", 1)\ntext = text.replace("const SettingsScreen()", "SettingsScreen()")
+text = text.replace("      extendBody: true,", "      extendBody: false,", 1)
+text = text.replace("const SettingsScreen()", "SettingsScreen()")
 
 old_shell = """      floatingActionButton: FloatingActionButton(
         heroTag: 'gardeflow-main-add',
