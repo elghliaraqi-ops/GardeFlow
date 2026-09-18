@@ -14,6 +14,12 @@ text = home.read_text()
 
 text = text.replace("      extendBody: true,", "      extendBody: false,", 1)
 text = text.replace("const SettingsScreen()", "SettingsScreen()")
+settings_import = "import 'settings_screen.dart';"
+if settings_import not in text:
+    profile_import = "import 'profile_screen.dart';"
+    if profile_import not in text:
+        raise SystemExit("V11.6.19: profile_screen import anchor missing")
+    text = text.replace(profile_import, profile_import + "\n" + settings_import, 1)
 
 old_shell = """      floatingActionButton: FloatingActionButton(
         heroTag: 'gardeflow-main-add',
