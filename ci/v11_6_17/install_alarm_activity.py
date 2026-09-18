@@ -85,7 +85,7 @@ class AlarmActivity : Activity() {{
         val snoozeAvailable =
             !intent.getStringExtra("alarmSnoozeLabel").isNullOrBlank()
 
-        val background = Color.rgb(246, 248, 252)
+        val screenBackground = Color.rgb(246, 248, 252)
         val primary = Color.rgb(37, 99, 235)
         val primaryDark = Color.rgb(30, 64, 175)
         val ink = Color.rgb(15, 23, 42)
@@ -96,7 +96,7 @@ class AlarmActivity : Activity() {{
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(28), dp(48), dp(28), dp(30))
-            setBackgroundColor(background)
+            setBackgroundColor(screenBackground)
         }}
 
         val badge = TextView(this).apply {{
