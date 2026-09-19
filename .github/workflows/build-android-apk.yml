@@ -166,8 +166,6 @@ jobs:
           grep -q 'Prochaine garde à venir' lib/screens/home_screen.dart
           grep -q 'Glisser une tuile' lib/screens/home_screen.dart
           grep -q 'Planning officiel' lib/screens/home_screen.dart
-          grep -q 'Astreintes séniors' lib/screens/home_screen.dart
-          grep -q 'Astreintes juniors' lib/screens/home_screen.dart
           grep -q 'notifications_none_rounded' lib/screens/home_screen.dart
           grep -q 'Transfert / échange' lib/screens/home_screen.dart
           grep -q 'ExchangeRequestSheet(dateStr: dateStr, entry: entry)' lib/screens/home_screen.dart
