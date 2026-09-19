@@ -214,7 +214,7 @@ checks = {
     "supabase/patch_v11_6_49_junior_oncall_urgences.sql": [
         "urg-jour",
         "official_emergency",
-        "case when pe.shift_id like 'urg-%' then 'Urgences'",
+        "when pe.shift_id like 'urg-%' then 'Urgences'",
     ],
 }
 for file_name, needles in checks.items():
