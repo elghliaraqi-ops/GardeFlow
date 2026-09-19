@@ -1,0 +1,90 @@
+     try{
+@@ -1166,7 +1168,7 @@
+     // Une garde du même jour reste échangeable (ex. Jour ↔ Nuit le 26/09).
+     // excludingDate est conservé dans la signature pour compatibilité UI, mais
+     // n'est plus utilisé pour filtrer les gardes cibles.
+-    final result=_planning.where((e)=>(e.ownerId==phone||e.ownerPhone==phone)&&ShiftCatalog.byId(e.shiftId).hasSchedule&&(!serviceOnly||e.shiftId.startsWith('service-'))&&isPlanningEntryApproved(e)&&!_isEntryLocked(e.id)&&!_guardHasStarted(e)).toList();
++    final result=_planning.where((e)=>(e.ownerId==phone||e.ownerPhone==phone)&&!e.isDisciplinary&&ShiftCatalog.byId(e.shiftId).hasSchedule&&(!serviceOnly||e.shiftId.startsWith('service-'))&&isPlanningEntryApproved(e)&&!_isEntryLocked(e.id)&&!_guardHasStarted(e)).toList();
+     result.sort((a,b)=>a.dateStr.compareTo(b.dateStr));
+     return result;
+   }
+@@ -1174,6 +1176,7 @@
+   Future<String?> createTransferRequest(String date,PlanningEntry entry,DirectoryContact target) async {
+     final me=currentUser;if(me==null)return 'Session expirée.';
+     if(entry.ownerId!=me.id&&entry.ownerPhone!=me.phone)return 'Cette garde ne vous appartient plus.';
++    if(entry.isDisciplinary)return 'Une garde disciplinaire ne peut être ni transférée ni échangée.';
+     if(!isPlanningEntryApproved(entry))return 'Votre calendrier doit être validé avant un transfert ou un échange.';
+     if(entry.dateStr!=date)return 'La date de la garde est incohérente.';
+     if(_guardHasStarted(entry))return 'Une garde commencée ou passée ne peut plus être transférée.';
+@@ -1195,6 +1198,7 @@
+   Future<String?> createSwapRequest(String date,PlanningEntry entry,DirectoryContact target,PlanningEntry targetEntry) async {
+     final me=currentUser;if(me==null)return 'Session expirée.';
+     if(entry.ownerId!=me.id&&entry.ownerPhone!=me.phone)return 'Cette garde ne vous appartient plus.';
++    if(entry.isDisciplinary||targetEntry.isDisciplinary)return 'Une garde disciplinaire ne peut être ni transférée ni échangée.';
+     if(!isPlanningEntryApproved(entry)||!isPlanningEntryApproved(targetEntry))return 'Les deux calendriers doivent être validés avant un échange.';
+     if(_guardHasStarted(entry))return 'Une garde commencée ou passée ne peut plus être échangée.';
+     if(_guardHasStarted(targetEntry))return 'La garde choisie est déjà commencée ou passée.';
+@@ -1230,6 +1234,7 @@
+   String? _validateRequestState(ExchangeRequest ex){
+     final source=_planning.where((e)=>e.id==ex.planningEntryId).firstOrNull;
+     if(source==null||(source.ownerId!=ex.fromId&&source.ownerPhone!=ex.fromPhone))return 'La garde proposée a été modifiée ou supprimée.';
++    if(source.isDisciplinary)return 'La garde proposée est disciplinaire et ne peut pas être transférée ou échangée.';
+     if(!isPlanningEntryApproved(source))return 'Le calendrier de la garde source n’est pas validé.';
+     if(_guardHasStarted(source))return 'La garde proposée est déjà commencée ou passée.';
+     if(ex.isTransfer){
+@@ -1242,6 +1247,7 @@
+     if(targetId==null)return 'La deuxième garde de l’échange est introuvable.';
+     final target=_planning.where((e)=>e.id==targetId).firstOrNull;
+     if(target==null||(target.ownerId!=ex.toId&&target.ownerPhone!=ex.toPhone))return 'La garde de ${ex.toName} a été modifiée ou supprimée.';
++    if(target.isDisciplinary)return 'La garde de ${ex.toName} est disciplinaire et ne peut pas être échangée.';
+     if(!isPlanningEntryApproved(target))return 'Le calendrier de ${ex.toName} n’est pas validé.';
+     if(!isUserPlanningMonthApproved(ex.fromId,target.dateStr)||!isUserPlanningMonthApproved(ex.toId,source.dateStr))return 'Les mois de destination ne sont pas tous validés.';
+     if(_guardHasStarted(target))return 'La garde de ${ex.toName} est déjà commencée ou passée.';
+--- a/lib/screens/home_screen.dart
++++ b/lib/screens/home_screen.dart
+@@ -2448,9 +2448,10 @@
+       final entry = appState.myEntryForDate(dateStr);
+       final editable = monthEditable &&
+           !appState.dateIsPast(dateStr) &&
+-          (entry == null || !appState.isApprovedLeaveEntry(entry));
++          (entry == null || (!entry.isDisciplinary && !appState.isApprovedLeaveEntry(entry)));
+       final canExchange = monthApproved &&
+           entry != null &&
++          !entry.isDisciplinary &&
+           ShiftCatalog.byId(entry.shiftId).hasSchedule &&
+           !appState.guardHasStarted(entry);
+ 
+@@ -2557,6 +2558,7 @@
+         currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
+     final isUrgence = shift?.id.startsWith('urg-') ?? false;
+     final isLeave = shift?.id == 'conge';
++    final isDisciplinary = currentEntry?.isDisciplinary ?? false;
+ 
+     String? groupLabel;
+     String? shiftLabel;
+@@ -2688,7 +2690,30 @@
+                     ),
+                   ),
+                 ),
+-                if (editable && currentEntry != null && onRemove != null)
++                if (isDisciplinary)
++                  const Positioned(
++                    top: -4,
++                    right: -4,
++                    child: Tooltip(
++                      message: 'Garde disciplinaire · suppression admin uniquement',
++                      child: DecoratedBox(
++                        decoration: BoxDecoration(
++                          color: Color(0xFFB42318),
++                          shape: BoxShape.circle,
++                        ),
++                        child: SizedBox(
++                          width: 26,
++                          height: 26,
++                          child: Icon(
++                            Icons.lock_rounded,
++                            color: Colors.white,
++                            size: 14,
++                          ),
++                        ),
++                      ),
