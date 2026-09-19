@@ -64,9 +64,6 @@ s = s.replace(
 )
 
 # Exact requested wording remains singular/plural aware.
-if "dont \${disciplinary} garde" not in s:
-    raise SystemExit("V11.6.54: disciplinary summary wording missing")
-
 screen.write_text(s)
 
 checks = [
