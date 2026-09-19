@@ -1,0 +1,95 @@
+  end if;
+
+  if new.target_planning_entry_id is not null and exists (
+    select 1
+    from public.planning_entries e
+    where e.id = new.target_planning_entry_id
+      and e.deleted_at is null
+      and e.is_disciplinary
+  ) then
+    raise exception 'Une garde disciplinaire ne peut être ni transférée ni échangée.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists reject_disciplinary_exchange_request_trigger on public.exchange_requests;
+create trigger reject_disciplinary_exchange_request_trigger
+before insert or update on public.exchange_requests
+for each row execute function public.reject_disciplinary_exchange_request();
+
+-- ---------------------------------------------------------------------------
+-- Conserver les importeurs V11.6.46 sous un nom interne et envelopper leur
+-- fonctionnement : la logique d'import existante reste intacte, puis la couche
+-- V11.6.47 applique le statut disciplinaire issu de la couleur rouge du PDF.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if to_regprocedure('public.import_official_emergency_roster(uuid,timestamp with time zone,jsonb,jsonb)') is not null
+     and to_regprocedure('public.import_official_emergency_roster_legacy_v46(uuid,timestamp with time zone,jsonb,jsonb)') is null then
+    execute 'alter function public.import_official_emergency_roster(uuid,timestamp with time zone,jsonb,jsonb) rename to import_official_emergency_roster_legacy_v46';
+  end if;
+
+  if to_regprocedure('public.import_official_emergency_roster_for_profile(uuid,timestamp with time zone,uuid,jsonb,jsonb)') is not null
+     and to_regprocedure('public.import_official_emergency_roster_for_profile_legacy_v46(uuid,timestamp with time zone,uuid,jsonb,jsonb)') is null then
+    execute 'alter function public.import_official_emergency_roster_for_profile(uuid,timestamp with time zone,uuid,jsonb,jsonb) rename to import_official_emergency_roster_for_profile_legacy_v46';
+  end if;
+end
+$$;
+
+create or replace function public.import_official_emergency_roster(
+  p_resource_id uuid,
+  p_resource_updated_at timestamptz,
+  p_assignments jsonb,
+  p_unmatched_cells jsonb default '[]'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result jsonb;
+  v_resource public.shared_resources%rowtype;
+  v_profile public.profiles%rowtype;
+  v_entry public.planning_entries%rowtype;
+  v_item jsonb;
+  v_profile_id uuid;
+  v_date date;
+  v_shift text;
+  v_disciplinary boolean;
+  v_hospital text;
+  v_revision constant text := 'v11.6.47-r1';
+begin
+  if not public.is_admin() then
+    raise exception 'Réservé à l’administrateur';
+  end if;
+
+  select * into v_resource
+  from public.shared_resources
+  where id = p_resource_id and kind = 'official_pdf'
+  for update;
+  if not found then raise exception 'Planning officiel introuvable'; end if;
+  if v_resource.updated_at is distinct from p_resource_updated_at then
+    raise exception 'Le PDF a été remplacé pendant son analyse. Relancer la synchronisation.';
+  end if;
+
+  v_hospital := case v_resource.slot
+    when 'hm6_bouskoura' then 'Hôpital Universitaire International Mohammed VI de Bouskoura'
+    when 'hm6_rabat' then 'Hôpital Universitaire International Mohammed VI de Rabat'
+    when 'hck_casa' then 'Hôpital Universitaire International Cheikh Khalifa de Casablanca'
+    else null
+  end;
+  if v_hospital is null then raise exception 'Établissement du PDF invalide'; end if;
+
+  v_result := public.import_official_emergency_roster_legacy_v46(
+    p_resource_id,
+    p_resource_updated_at,
+    p_assignments,
+    p_unmatched_cells
+  );
+
+  perform set_config('gardeflow.official_import', '1', true);
+
+  for v_item in select value from jsonb_array_elements(coalesce(p_assignments, '[]'::jsonb))
