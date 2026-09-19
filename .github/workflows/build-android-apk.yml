@@ -306,7 +306,7 @@ jobs:
           grep -q "registerOfficialDisciplinaryMarks" lib/services/supabase_backend_service.dart
           grep -q "official_disciplinary_name_rules" supabase/patch_v11_6_52_disciplinary_rules.sql
           test -f supabase/patch_v11_6_53_official_resync_summary.sql
-          grep -q "Resynchroniser" lib/screens/official_planning_screen.dart
+          grep -q "Refaire la superposition" lib/screens/official_planning_screen.dart
           grep -q "_myDisciplinaryCounts" lib/screens/official_planning_screen.dart
           grep -q "forceSyncMyOfficialRoster" lib/state/app_state.dart
           grep -q "reset_my_official_roster_profile_sync" supabase/patch_v11_6_53_official_resync_summary.sql
