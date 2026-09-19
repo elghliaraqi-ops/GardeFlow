@@ -10,7 +10,14 @@ pubspec = Path("pubspec.yaml")
 pub = pubspec.read_text()
 if EXPECTED not in pub:
     raise SystemExit("V11.6.40: base version mismatch")
-pubspec.write_text(pub.replace(EXPECTED, TARGET, 1))
+pub = pub.replace(EXPECTED, TARGET, 1)
+asset_line = "    - assets/branding/elghali_signature.webp"
+if asset_line not in pub:
+    logo_line = "    - assets/branding/gardeflow_logo.png"
+    if logo_line not in pub:
+        raise SystemExit("V11.6.40: branding assets anchor missing")
+    pub = pub.replace(logo_line, logo_line + "\n" + asset_line, 1)
+pubspec.write_text(pub)
 
 def replace_class(source: str, class_name: str, replacement: str) -> str:
     marker = f"class {class_name} "
