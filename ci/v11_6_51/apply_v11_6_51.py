@@ -90,6 +90,12 @@ if old_ratio not in s:
     raise SystemExit("V11.6.51: red ratio anchor missing")
 s = s.replace(old_ratio, new_ratio, 1)
 
+old_ink = "          if (r < 238 || g < 238 || b < 238) inkPixels++;"
+new_ink = "          if (r < 170 || g < 170 || b < 170) inkPixels++;"
+if old_ink not in s:
+    raise SystemExit("V11.6.51: ink threshold anchor missing")
+s = s.replace(old_ink, new_ink, 1)
+
 service.write_text(s)
 
 source_sql = Path(__file__).resolve().parent / "disciplinary_registry_hotfix.sql"
@@ -103,6 +109,7 @@ checks = {
         "minRatio: 0.55",
         "extracted.replaceAll(' ', '').isEmpty",
         "double minRatio = 0.08",
+        "r < 170 || g < 170 || b < 170",
     ],
     "supabase/patch_v11_6_51_disciplinary_registry_hotfix.sql": [
         "official_disciplinary_guards",
