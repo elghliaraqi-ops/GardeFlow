@@ -188,13 +188,6 @@ if old_call not in o:
     raise SystemExit("V11.6.52: official import call anchor missing")
 o = o.replace(old_call, new_call, 1)
 
-suffix_anchor = """          if (parsed.unmatchedCells.isNotEmpty) '\${parsed.unmatchedCells.length} cellule(s) sans médecin reconnu',"""
-if suffix_anchor in o:
-    o = o.replace(
-        suffix_anchor,
-        suffix_anchor + "\n          if (parsed.disciplinaryMarks.isNotEmpty) '\${parsed.disciplinaryMarks.length} garde(s) disciplinaire(s) détectée(s)',",
-        1,
-    )
 screen.write_text(o)
 
 source_sql = Path(__file__).resolve().parent / "disciplinary_rules.sql"
@@ -217,7 +210,6 @@ checks = {
     ],
     "lib/screens/official_planning_screen.dart": [
         "parsed.disciplinaryMarks",
-        "garde(s) disciplinaire(s) détectée(s)",
     ],
     "supabase/patch_v11_6_52_disciplinary_rules.sql": [
         "official_disciplinary_name_rules",
