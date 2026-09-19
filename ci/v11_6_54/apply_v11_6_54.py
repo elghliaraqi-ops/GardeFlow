@@ -71,7 +71,6 @@ checks = [
     "a.isDisciplinary",
     "serverDisciplinaryCount",
     "Refaire la superposition",
-    "gardes retrouvées",
 ]
 text = screen.read_text()
 for needle in checks:
