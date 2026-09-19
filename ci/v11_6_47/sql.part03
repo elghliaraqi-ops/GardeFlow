@@ -65,31 +65,22 @@ begin
       and deleted_at is null
     for update;
 
-    if v_disciplinary then
-      if found then
-        update public.exchange_requests
-        set status = 'cancelled'
-        where status in ('pendingB','pendingAdmin')
-          and (planning_entry_id = v_entry.id or target_planning_entry_id = v_entry.id);
+    -- La synchronisation individuelle peut ajouter le verrou disciplinaire
+    -- à une garde déjà reconnue par l'import officiel, mais elle ne peut ni
+    -- fabriquer une garde disciplinaire arbitraire ni retirer un verrou existant.
+    -- La suppression du marqueur reste réservée à l'import administrateur.
+    if v_disciplinary
+       and found
+       and v_entry.source_type = 'official_emergency'
+       and v_entry.source_resource_id = p_resource_id
+       and v_entry.shift_id = v_shift
+       and not v_entry.is_disciplinary then
+      update public.exchange_requests
+      set status = 'cancelled'
+      where status in ('pendingB','pendingAdmin')
+        and (planning_entry_id = v_entry.id or target_planning_entry_id = v_entry.id);
 
-        update public.planning_entries
-        set shift_id = v_shift,
-            owner_phone = v_profile.phone,
-            owner_name = trim(v_profile.prenom || ' ' || v_profile.nom),
-            leave_request_id = null,
-            source_type = 'official_emergency',
-            source_resource_id = p_resource_id,
-            source_resource_updated_at = p_resource_updated_at,
-            is_disciplinary = true
-        where id = v_entry.id;
-      else
-        insert into public.planning_entries(
-          id,date_str,shift_id,owner_id,owner_phone,owner_name,created_at,
-          source_type,source_resource_id,source_resource_updated_at,is_disciplinary
-        ) values (
-          'pdf-' || replace(gen_random_uuid()::text,'-',''),
-          v_date,v_shift,v_profile.id,v_profile.phone,
-          trim(v_profile.prenom || ' ' || v_profile.nom),now(),
-          'official_emergency',p_resource_id,p_resource_updated_at,true
-        );
-      end if;
+      update public.planning_entries
+      set is_disciplinary = true
+      where id = v_entry.id;
+    end if;
