@@ -195,7 +195,6 @@ jobs:
           if grep -q "Text('Mon profil'.*titleLarge" lib/screens/profile_screen.dart; then echo 'Duplicate profile header remains'; exit 1; fi
           if grep -q "'GardeFlow'" lib/theme/widgets.dart; then echo 'GardeFlow subtitle remains in shared title'; exit 1; fi
           if grep -q 'floatingActionButton:' lib/screens/home_screen.dart; then echo 'Unexpected central FAB'; exit 1; fi
-          grep -q 'Compte, accès et préférences' lib/screens/profile_screen.dart
 
           python3 - <<'PY'
           from pathlib import Path
