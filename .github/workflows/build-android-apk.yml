@@ -52,6 +52,7 @@ on:
       - 'ci/v11_6_46/**'
       - 'ci/v11_6_47/**'
       - 'ci/v11_6_48/**'
+      - 'ci/v11_6_49/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -92,7 +93,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.48
+      - name: Apply patches V11.6.1 to V11.6.49
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -197,8 +198,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_46/apply_v11_6_46.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_47/apply_v11_6_47.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_48/apply_v11_6_48.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_49/apply_v11_6_49.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.48+208$' pubspec.yaml
+          grep -q '^version: 11.6.49+209$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
@@ -279,6 +281,9 @@ jobs:
           test -f supabase/functions/auto-validate-plannings/index.ts
           grep -q "7 days" supabase/patch_v11_6_48_auto_validate_plannings.sql
           grep -q "planning_auto_validated" supabase/functions/auto-validate-plannings/index.ts
+          test -f supabase/patch_v11_6_49_junior_oncall_urgences.sql
+          grep -q "Junior · Urgences" lib/screens/junior_oncall_screen.dart
+          grep -q "official_emergency" supabase/patch_v11_6_49_junior_oncall_urgences.sql
           grep -q "keyboard_arrow_down_rounded" lib/screens/home_screen.dart
           grep -q "guard_fullscreen_alarm" lib/screens/settings_screen.dart
           grep -q "Alarme plein écran" lib/screens/settings_screen.dart
@@ -312,7 +317,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.48+208'),
+              ('pubspec.yaml', 'version: 11.6.49+209'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -388,7 +393,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.48-release-apk
+          name: GardeFlow-v11.6.49-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
