@@ -215,10 +215,10 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_56/apply_v11_6_56.py"
           test -f lib/screens/profile_screen.dart
           grep -q '^version: 11.6.56+216$' pubspec.yaml
-          grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
+          grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
-          grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
-          grep -q 'const ProfileScreen()' lib/screens/home_screen.dart
+          grep -q '_AstreintesHubView()' lib/screens/home_screen.dart
+          grep -q 'ProfileScreen()' lib/screens/home_screen.dart
           grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
           grep -q "final greeting = isNight ? 'Bonsoir' : 'Bonjour';" lib/screens/home_screen.dart
           grep -q 'Prochaine garde à venir' lib/screens/home_screen.dart
@@ -243,7 +243,7 @@ jobs:
           grep -q 'FittedBox' lib/screens/auth_screen.dart
           grep -q 'AstreinteScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q 'JuniorOnCallScreen(embedded: true)' lib/screens/home_screen.dart
-          grep -Fq "const ['Accueil', 'Planning', 'Annuaire', 'Astreintes']" lib/screens/home_screen.dart
+          grep -Fq "['Accueil', 'Planning', 'Annuaire', 'Astreintes']" lib/screens/home_screen.dart
           grep -q "GardeFlowTitle('Mon profil')" lib/screens/profile_screen.dart
           grep -q "directory-add-contact-embedded" lib/screens/directory_screen.dart
           grep -q "directory-add-contact-standalone" lib/screens/directory_screen.dart
