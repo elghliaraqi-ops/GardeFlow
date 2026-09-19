@@ -1,0 +1,83 @@
+name: Inspect Astreintes V11.6.26
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-v11626-astreintes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and inspect astreintes
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          rm -rf /tmp/gfast && mkdir -p /tmp/gfast
+          unzip -q "$ZIP" -d /tmp/gfast
+          PUBSPEC="$(find /tmp/gfast -type f -name pubspec.yaml -print -quit)"
+          PROJECT_DIR="$(dirname "$PUBSPEC")"
+          cat ci/v11_6_16_bundle/bundle.part*.b64 | base64 -d > /tmp/bundle.zip
+          unzip -oq /tmp/bundle.zip -d "$GITHUB_WORKSPACE"
+          cd "$PROJECT_DIR"
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v11_6_1.patch
+          patch -p1 < /tmp/v11_6_1.patch
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v11_6_3.patch
+          patch -p1 < /tmp/v11_6_3.patch
+          sed -i 's/^version: 11.6.3+163$/version: 11.6.4+164/' pubspec.yaml
+          python3 -m pip install --quiet --break-system-packages pillow
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_6/fix_launcher_icons.py" --android
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/v11_6_5.patch
+          patch -p1 < /tmp/v11_6_5.patch
+          sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v11_6_6.patch
+          patch -p1 < /tmp/v11_6_6.patch
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_7/apply_v11_6_7.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_8/apply_v11_6_8.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_9/apply_v11_6_9.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_10/apply_v11_6_10.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_11/apply_v11_6_11.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_12/apply_v11_6_12.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_13/apply_v11_6_13.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_14/apply_v11_6_14.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_15/apply_v11_6_15.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_16/apply_v11_6_16.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/services/alarm_ring_service.dart')
+          p.write_text(p.read_text().replace('const VolumeSettings.fade(', 'VolumeSettings.fade('))
+          PY
+          cp lib/state/app_state.dart /tmp/app_state_v11_6_16.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_17/apply_v11_6_17.py"
+          cp /tmp/app_state_v11_6_16.dart lib/state/app_state.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/screens/forgot_password_screen.dart')
+          s=p.read_text()
+          imp="import '../theme/app_theme.dart';"
+          if imp not in s:
+              s=s.replace("import 'package:flutter/material.dart';","import 'package:flutter/material.dart';\n"+imp,1)
+              p.write_text(s)
+          PY
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_18/apply_v11_6_18.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_19/apply_v11_6_19.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_20/apply_v11_6_20.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_21/apply_v11_6_21.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_22/apply_v11_6_22.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_23/apply_v11_6_23.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_24/apply_v11_6_24.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_25/apply_v11_6_25.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_26/apply_v11_6_26.py"
+          echo "===== ASTREINTE ====="
+          sed -n '1,760p' lib/screens/astreinte_screen.dart
+          echo "===== JUNIOR ====="
+          FILE="$(find lib/screens -type f -iname '*junior*on*call*.dart' -o -iname '*junior*astreinte*.dart' | head -n1)"
+          echo "$FILE"
+          sed -n '1,860p' "$FILE"
