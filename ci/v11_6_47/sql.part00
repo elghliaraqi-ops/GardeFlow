@@ -39,8 +39,6 @@ begin
        new.date_str is distinct from old.date_str
        or new.shift_id is distinct from old.shift_id
        or new.owner_id is distinct from old.owner_id
-       or new.owner_phone is distinct from old.owner_phone
-       or new.owner_name is distinct from old.owner_name
        or new.deleted_at is distinct from old.deleted_at
        or new.is_disciplinary is distinct from old.is_disciplinary
      ) then
@@ -55,8 +53,6 @@ begin
        and new.date_str is not distinct from old.date_str
        and new.shift_id is not distinct from old.shift_id
        and new.owner_id is not distinct from old.owner_id
-       and new.owner_phone is not distinct from old.owner_phone
-       and new.owner_name is not distinct from old.owner_name
        and new.is_disciplinary is not distinct from old.is_disciplinary then
       return new;
     end if;
