@@ -58,6 +58,7 @@ on:
       - 'ci/v11_6_52/**'
       - 'ci/v11_6_53/**'
       - 'ci/v11_6_54/**'
+      - 'ci/v11_6_55/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -98,7 +99,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.54
+      - name: Apply patches V11.6.1 to V11.6.55
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -209,8 +210,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_52/apply_v11_6_52.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_53/apply_v11_6_53.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_54/apply_v11_6_54.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_55/apply_v11_6_55.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.54+214$' pubspec.yaml
+          grep -q '^version: 11.6.55+215$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
@@ -313,6 +315,10 @@ jobs:
           grep -q "Refaire la superposition" lib/screens/official_planning_screen.dart
           grep -q "final myAssignments = parsed.assignments" lib/screens/official_planning_screen.dart
           grep -q "serverDisciplinaryCount" lib/screens/official_planning_screen.dart
+          test -f supabase/patch_v11_6_55_resync_validation_lock.sql
+          grep -q "_myCanResync" lib/screens/official_planning_screen.dart
+          grep -q "isMyHospital && canResync" lib/screens/official_planning_screen.dart
+          grep -q "can_resync" supabase/patch_v11_6_55_resync_validation_lock.sql
           grep -q "keyboard_arrow_down_rounded" lib/screens/home_screen.dart
           grep -q "guard_fullscreen_alarm" lib/screens/settings_screen.dart
           grep -q "Alarme plein écran" lib/screens/settings_screen.dart
@@ -346,7 +352,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.54+214'),
+              ('pubspec.yaml', 'version: 11.6.55+215'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -422,7 +428,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.54-release-apk
+          name: GardeFlow-v11.6.55-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
