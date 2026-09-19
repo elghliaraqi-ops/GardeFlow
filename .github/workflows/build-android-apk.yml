@@ -178,6 +178,7 @@ jobs:
           grep -q 'Actualités du jour' lib/screens/daily_news_section.dart
           grep -q 'Bonsoir' lib/screens/home_screen.dart
           grep -q 'ce mois-ci' lib/screens/home_screen.dart
+          grep -q 'FontWeight.w600' lib/screens/home_screen.dart
           if grep -q 'floatingActionButton:' lib/screens/home_screen.dart; then echo 'Unexpected central FAB'; exit 1; fi
           grep -q 'Compte, accès et préférences' lib/screens/profile_screen.dart
 
