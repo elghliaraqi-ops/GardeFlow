@@ -63,7 +63,12 @@ begin
     select
       r.id,
       r.updated_at,
-      r.hospital,
+      case r.slot
+        when 'hm6_bouskoura' then 'Hôpital Universitaire International Mohammed VI de Bouskoura'
+        when 'hm6_rabat' then 'Hôpital Universitaire International Mohammed VI de Rabat'
+        when 'hck_casa' then 'Hôpital Universitaire International Cheikh Khalifa de Casablanca'
+        else r.hospital
+      end as hospital,
       r.slot,
       r.display_name
     from public.shared_resources r
