@@ -1,0 +1,90 @@
++    if (nom.isEmpty || !padded.contains(' $nom ')) return false;
++    return prenomTokens.any((token) => padded.contains(' $token '));
++  }
++
++  static String _extractRedText(
++    PdfImage image,
++    String text,
++    List<dynamic> charRects,
++    double pageWidth,
++    double pageHeight, {
++    required dynamic fallbackBounds,
++  }) {
++    if (text.isEmpty) return '';
++    if (charRects.isEmpty) {
++      return _rectLooksRed(
++        image,
++        fallbackBounds,
++        pageWidth,
++        pageHeight,
++      )
++          ? text
++          : '';
++    }
++
++    final output = StringBuffer();
++    final limit = text.length < charRects.length ? text.length : charRects.length;
++    for (var i = 0; i < limit; i++) {
++      final char = text.substring(i, i + 1);
++      if (char.trim().isEmpty) {
++        output.write(' ');
++        continue;
++      }
++      output.write(
++        _rectLooksRed(image, charRects[i], pageWidth, pageHeight)
++            ? char
++            : ' ',
++      );
++    }
++
++    // Si le moteur renvoie moins de rectangles que de caractères, la couleur
++    // du fragment entier reste un filet de sécurité pour les PDF atypiques.
++    if (limit == 0 &&
++        _rectLooksRed(image, fallbackBounds, pageWidth, pageHeight)) {
++      return text;
++    }
++    return output.toString();
++  }
++
++  static bool _rectLooksRed(
++    PdfImage image,
++    dynamic rect,
++    double pageWidth,
++    double pageHeight,
++  ) {
++    final left = (rect.left as num).toDouble();
++    final right = (rect.right as num).toDouble();
++    final top = (rect.top as num).toDouble();
++    final bottom = (rect.bottom as num).toDouble();
++
++    final minX = left < right ? left : right;
++    final maxX = left > right ? left : right;
++    final minY = top < bottom ? top : bottom;
++    final maxY = top > bottom ? top : bottom;
++    if (maxX <= minX || maxY <= minY || pageWidth <= 0 || pageHeight <= 0) {
++      return false;
++    }
++
++    bool sample(double y0Page, double y1Page) {
++      final xScale = image.width / pageWidth;
++      final yScale = image.height / pageHeight;
++      var x0 = (minX * xScale).floor() - 1;
++      var x1 = (maxX * xScale).ceil() + 1;
++      var y0 = (y0Page * yScale).floor() - 1;
++      var y1 = (y1Page * yScale).ceil() + 1;
++      if (x0 < 0) x0 = 0;
++      if (y0 < 0) y0 = 0;
++      if (x1 >= image.width) x1 = image.width - 1;
++      if (y1 >= image.height) y1 = image.height - 1;
++      if (x1 < x0 || y1 < y0) return false;
++
++      var redPixels = 0;
++      var inkPixels = 0;
++      final pixels = image.pixels;
++      for (var y = y0; y <= y1; y++) {
++        for (var x = x0; x <= x1; x++) {
++          final offset = (y * image.width + x) * 4;
++          if (offset + 3 >= pixels.length) continue;
++          final b = pixels[offset];
++          final g = pixels[offset + 1];
++          final r = pixels[offset + 2];
