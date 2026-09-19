@@ -40,6 +40,7 @@ on:
       - 'ci/v11_6_34/**'
       - 'ci/v11_6_35/**'
       - 'ci/v11_6_36/**'
+      - 'ci/v11_6_37/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -80,7 +81,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.36
+      - name: Apply patches V11.6.1 to V11.6.37
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -173,8 +174,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_34/apply_v11_6_34.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_35/apply_v11_6_35.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_36/apply_v11_6_36.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_37/apply_v11_6_37.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.36+196$' pubspec.yaml
+          grep -q '^version: 11.6.37+197$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
@@ -199,7 +201,6 @@ jobs:
           grep -q 'Bonsoir' lib/screens/home_screen.dart
           grep -q 'ce mois-ci' lib/screens/home_screen.dart
           grep -q 'FontWeight.w600' lib/screens/home_screen.dart
-          grep -q 'Le planning de garde pour garder le' lib/screens/auth_screen.dart
           grep -q 'subtitleColor: _loginGreen' lib/screens/auth_screen.dart
           grep -q 'FittedBox' lib/screens/auth_screen.dart
           grep -q 'Astreinte Senior' lib/screens/home_screen.dart
@@ -223,8 +224,11 @@ jobs:
           grep -q "MediaQuery.viewPaddingOf(context).bottom" lib/screens/home_screen.dart
           grep -q "width: 235" lib/screens/profile_screen.dart
           grep -q "À venir" lib/screens/daily_news_section.dart
-          grep -q "Publications Instagram officielles" lib/screens/daily_news_section.dart
           grep -q "Voir sur Instagram" lib/screens/daily_news_section.dart
+          grep -q "LE PLANNING DE GARDE POUR GARDER LE FLOW" lib/widgets/brand_identity.dart
+          grep -q "AMI UM6 en priorité" lib/screens/daily_news_section.dart
+          grep -q "request_daily_news_refresh" lib/screens/daily_news_section.dart
+          grep -q "take(12)" lib/screens/daily_news_section.dart
           grep -q "GardeFlowTitle('Alarme de garde')" lib/screens/settings_screen.dart
           grep -q "Configurer les autorisations Android" lib/screens/settings_screen.dart
           grep -q "Lancer le test" lib/screens/settings_screen.dart
@@ -249,7 +253,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.36+196'),
+              ('pubspec.yaml', 'version: 11.6.37+197'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -322,7 +326,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.36-release-apk
+          name: GardeFlow-v11.6.37-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
