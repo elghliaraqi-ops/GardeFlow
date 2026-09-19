@@ -222,15 +222,14 @@ jobs:
           grep -q "Elghali Production © 2026" lib/screens/profile_screen.dart
           grep -q "elghali_signature.webp" lib/screens/profile_screen.dart
           grep -q "MediaQuery.viewPaddingOf(context).bottom" lib/screens/home_screen.dart
-          grep -q "width: 235" lib/screens/profile_screen.dart
+          grep -q "width: 245" lib/screens/profile_screen.dart
           grep -q "À venir" lib/screens/daily_news_section.dart
           grep -q "Voir sur Instagram" lib/screens/daily_news_section.dart
           grep -q "LE PLANNING DE GARDE POUR GARDER LE FLOW" lib/widgets/brand_identity.dart
           grep -q "AMI UM6 en priorité" lib/screens/daily_news_section.dart
           grep -q "request_daily_news_refresh" lib/screens/daily_news_section.dart
           grep -q "take(12)" lib/screens/daily_news_section.dart
-          grep -q "Gardes ce mois-ci" lib/screens/home_screen.dart
-          grep -q "label: 'Total'" lib/screens/home_screen.dart
+          grep -q "au total ce mois" lib/screens/home_screen.dart
           grep -q "label: 'Urgences'" lib/screens/home_screen.dart
           grep -q "label: 'Service'" lib/screens/home_screen.dart
           grep -q "GardeFlowTitle('Alarme de garde')" lib/screens/settings_screen.dart
