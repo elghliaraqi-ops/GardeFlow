@@ -68,14 +68,14 @@ def replace_method_in_class(source: str, class_name: str, signature: str, replac
 home = Path("lib/screens/home_screen.dart")
 h = home.read_text()
 
-hub = r"""class _AstreintesHubView extends StatefulWidget {
+hub_widget = r"""class _AstreintesHubView extends StatefulWidget {
   const _AstreintesHubView();
 
   @override
   State<_AstreintesHubView> createState() => _AstreintesHubViewState();
-}
+}"""
 
-class _AstreintesHubViewState extends State<_AstreintesHubView> {
+hub_state = r"""class _AstreintesHubViewState extends State<_AstreintesHubView> {
   bool _showSenior = false;
 
   @override
@@ -109,7 +109,8 @@ class _AstreintesHubViewState extends State<_AstreintesHubView> {
   }
 }"""
 
-h = replace_class(h, "_AstreintesHubView", hub)
+h = replace_class(h, "_AstreintesHubView", hub_widget)
+h = replace_class(h, "_AstreintesHubViewState", hub_state)
 
 switch_cls = r"""class _AstreinteModeSwitch extends StatelessWidget {
   final bool showSenior;
