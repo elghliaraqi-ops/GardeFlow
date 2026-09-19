@@ -317,6 +317,14 @@ jobs:
           print('V11.6.17 validation completed')
           PY
 
+      - name: Archive patched source for V11.6.47 inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.46-patched-source
+          path: ${{ steps.project.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
