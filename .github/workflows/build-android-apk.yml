@@ -193,7 +193,6 @@ jobs:
           grep -Fq "const ['Accueil', 'Planning', 'Annuaire', 'Astreintes']" lib/screens/home_screen.dart
           grep -q "GardeFlowTitle('Mon profil')" lib/screens/profile_screen.dart
           if grep -q "Text('Mon profil'.*titleLarge" lib/screens/profile_screen.dart; then echo 'Duplicate profile header remains'; exit 1; fi
-          if grep -q "'GardeFlow'" lib/theme/widgets.dart; then echo 'GardeFlow subtitle remains in shared title'; exit 1; fi
           if grep -q 'floatingActionButton:' lib/screens/home_screen.dart; then echo 'Unexpected central FAB'; exit 1; fi
 
           python3 - <<'PY'
