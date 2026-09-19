@@ -251,8 +251,8 @@ detail="""class _NewsDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = item.cachedMediaUrl ?? item.thumbnailUrl ?? item.mediaUrl;
-    final caption = _DailyNewsSectionState._cleanCaption(item.caption);
-    final time = _DailyNewsSectionState._relativeDate(item.postedAt.toLocal());
+    final caption = _NewsCard._cleanCaption(item.caption);
+    final time = _NewsCard._relativeDate(item.postedAt.toLocal());
     return Material(
       color: Colors.transparent,
       child: InkWell(
