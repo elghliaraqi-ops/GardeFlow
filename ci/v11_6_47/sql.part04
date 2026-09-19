@@ -1,3 +1,5 @@
+  end loop;
+
   update public.official_roster_profile_sync
   set sync_revision = v_revision,
       synced_at = now()
