@@ -1,0 +1,90 @@
++                    ),
++                  )
++                else if (editable && currentEntry != null && onRemove != null)
+                   Positioned(
+                     top: -4,
+                     right: -4,
+--- a/lib/services/official_roster_import_service.dart
++++ b/lib/services/official_roster_import_service.dart
+@@ -8,17 +8,20 @@
+   final String profileId;
+   final String dateStr;
+   final String shiftId;
++  final bool isDisciplinary;
+ 
+   const OfficialRosterAssignment({
+     required this.profileId,
+     required this.dateStr,
+     required this.shiftId,
++    this.isDisciplinary = false,
+   });
+ 
+   Map<String, dynamic> toJson() => {
+         'profile_id': profileId,
+         'date': dateStr,
+         'shift_id': shiftId,
++        'is_disciplinary': isDisciplinary,
+       };
+ }
+ 
+@@ -77,18 +80,41 @@
+       for (var pageIndex = 0; pageIndex < document.pages.length; pageIndex++) {
+         final page = document.pages[pageIndex];
+         final text = await page.loadStructuredText();
+-        final fragments = text.fragments
+-            .where((f) => f.text.trim().isNotEmpty)
+-            .map((f) => _TextFragment(
+-                  text: f.text.trim(),
+-                  left: f.bounds.left,
+-                  right: f.bounds.right,
+-                  top: f.bounds.top,
+-                  bottom: f.bounds.bottom,
+-                  index: f.index,
+-                ))
+-            .toList(growable: false);
+-        if (fragments.isEmpty) continue;
++
++        // Les gardes disciplinaires sont écrites en rouge sur le planning PDF.
++        // pdfrx expose les coordonnées de chaque caractère mais pas directement
++        // sa couleur : on rend donc la page une seule fois et on échantillonne
++        // les pixels BGRA dans les rectangles de caractères.
++        PdfImage? rendered;
++        try {
++          final scale = (page.width > 1100 || page.height > 1100) ? 1.5 : 2.0;
++          rendered = await page.render(
++            width: (page.width * scale).round(),
++            height: (page.height * scale).round(),
++          );
++
++          final fragments = text.fragments
++              .where((f) => f.text.trim().isNotEmpty)
++              .map((f) => _TextFragment(
++                    text: f.text.trim(),
++                    redText: rendered == null
++                        ? ''
++                        : _extractRedText(
++                            rendered!,
++                            f.text,
++                            f.charRects,
++                            page.width,
++                            page.height,
++                            fallbackBounds: f.bounds,
++                          ),
++                    left: f.bounds.left,
++                    right: f.bounds.right,
++                    top: f.bounds.top,
++                    bottom: f.bounds.bottom,
++                    index: f.index,
++                  ))
++              .toList(growable: false);
++          if (fragments.isEmpty) continue;
+ 
+         // Certains PDF (notamment HUICK) exposent parfois « 08H - 20H »
+         // ou « 20H - 08H » en plusieurs fragments structurés. On accepte les
+@@ -137,6 +163,7 @@
+                 _RosterCell(
+                   shiftId: 'urg-24h',
+                   text: rowFragments.map((f) => f.text).join(' '),
++                  fragments: rowFragments,
+                 ),
+               ],
