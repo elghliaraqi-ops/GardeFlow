@@ -288,11 +288,11 @@ checks = {
     "lib/state/app_state.dart": [
         "forceSyncMyOfficialRoster",
         "applyCurrentDisciplinaryRulesForMe",
-        "officialRosterMySummary",
     ],
     "lib/services/supabase_backend_service.dart": [
         "resetMyOfficialRosterProfileSync",
         "applyCurrentDisciplinaryRulesForMe",
+        "officialRosterMySummary",
     ],
     "supabase/patch_v11_6_53_official_resync_summary.sql": [
         "reset_my_official_roster_profile_sync",
