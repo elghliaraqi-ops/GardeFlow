@@ -1,0 +1,48 @@
++          final a = pixels[offset + 3];
++          if (a < 20) continue;
++          if (r < 238 || g < 238 || b < 238) inkPixels++;
++          if (r >= 145 && r >= g + 35 && r >= b + 35) redPixels++;
++        }
++      }
++      if (redPixels < 2 || inkPixels == 0) return false;
++      return redPixels / inkPixels >= 0.08;
++    }
++
++    // Selon le backend PDF, les rectangles peuvent être exprimés dans un
++    // repère Y descendant ou Y montant. Tester les deux garde la détection
++    // fiable sur Android/iOS/web sans OCR.
++    if (sample(minY, maxY)) return true;
++    final flippedTop = pageHeight - maxY;
++    final flippedBottom = pageHeight - minY;
++    return sample(flippedTop, flippedBottom);
++  }
++
+   static List<AppUser> _matchProfiles(String cellText, List<AppUser> profiles) {
+     final normalizedCell = _normalizeName(cellText);
+     if (normalizedCell.isEmpty) return const <AppUser>[];
+@@ -500,9 +677,11 @@
+   final double top;
+   final double bottom;
+   final int index;
++  final String redText;
+ 
+   const _TextFragment({
+     required this.text,
++    this.redText = '',
+     required this.left,
+     required this.right,
+     required this.top,
+@@ -546,7 +725,12 @@
+ class _RosterCell {
+   final String shiftId;
+   final String text;
+-  const _RosterCell({required this.shiftId, required this.text});
++  final List<_TextFragment> fragments;
++  const _RosterCell({
++    required this.shiftId,
++    required this.text,
++    required this.fragments,
++  });
+ }
+ 
+ class _RosterRow {
