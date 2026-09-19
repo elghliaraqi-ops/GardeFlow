@@ -45,6 +45,7 @@ on:
       - 'ci/v11_6_39/**'
       - 'ci/v11_6_40/**'
       - 'ci/v11_6_41/**'
+      - 'ci/v11_6_42/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -85,7 +86,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.41
+      - name: Apply patches V11.6.1 to V11.6.42
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -183,8 +184,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_39/apply_v11_6_39.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_40/apply_v11_6_40.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_41/apply_v11_6_41.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_42/apply_v11_6_42.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.41+201$' pubspec.yaml
+          grep -q '^version: 11.6.42+202$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
@@ -249,6 +251,11 @@ jobs:
           grep -q "ListView.separated(" lib/screens/junior_oncall_screen.dart
           grep -q "Astreinte Junior" lib/screens/junior_oncall_screen.dart
           grep -q "GardeFlowTitle('Alarme de garde')" lib/screens/settings_screen.dart
+          grep -q "guard_fullscreen_alarm" lib/screens/settings_screen.dart
+          grep -q "Alarme plein écran" lib/screens/settings_screen.dart
+          grep -q "guardBackground" lib/screens/home_screen.dart
+          grep -q "0xFF55C2FF" lib/screens/home_screen.dart
+          grep -q "0xFF071426" lib/screens/home_screen.dart
           grep -q "Configurer les autorisations Android" lib/screens/settings_screen.dart
           grep -q "Lancer le test" lib/screens/settings_screen.dart
           test -f assets/branding/elghali_signature.webp
@@ -272,7 +279,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.41+201'),
+              ('pubspec.yaml', 'version: 11.6.42+202'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -315,13 +322,16 @@ jobs:
           test -f google-services.json
           cp -f google-services.json android/app/google-services.json
           dart tool/configure_android.dart
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_17/install_alarm_activity.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_42/install_alarm_activity_v42.py"
           grep -q 'android.permission.USE_FULL_SCREEN_INTENT' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK' android/app/src/main/AndroidManifest.xml
           grep -q 'com.gdelataillade.alarm.action.RING' android/app/src/main/AndroidManifest.xml
           test -f android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
           grep -q 'ACTION_ALARM_SNOOZE' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
           grep -q 'ACTION_ALARM_STOP' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'guard_fullscreen_alarm' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'Rappel dans' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'shiftKind' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
           test -f android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -f android/app/src/main/res/drawable-nodpi/gardeflow_launcher_logo.png
 
@@ -345,7 +355,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.41-release-apk
+          name: GardeFlow-v11.6.42-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
