@@ -237,3 +237,105 @@ drop trigger if exists reject_disciplinary_exchange_request_trigger
 create trigger reject_disciplinary_exchange_request_trigger
 before insert or update on public.exchange_requests
 for each row execute function public.reject_disciplinary_exchange_request();
+
+
+-- ---------------------------------------------------------------------------
+-- Forcer une nouvelle lecture des PDF avec le détecteur rouge corrigé.
+-- Les wrappers V11.6.47 écrivent encore leur ancienne révision ; ce trigger
+-- la convertit en V11.6.51 après la nouvelle analyse, afin d'éviter de
+-- retraiter le PDF à chaque ouverture.
+-- ---------------------------------------------------------------------------
+create or replace function public.normalize_v11_6_51_roster_revision()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.sync_revision = 'v11.6.47-r1' then
+    new.sync_revision := 'v11.6.51-r1';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists normalize_v11_6_51_profile_sync_revision
+  on public.official_roster_profile_sync;
+create trigger normalize_v11_6_51_profile_sync_revision
+before insert or update of sync_revision
+on public.official_roster_profile_sync
+for each row execute function public.normalize_v11_6_51_roster_revision();
+
+drop trigger if exists normalize_v11_6_51_import_run_revision
+  on public.official_roster_import_runs;
+create trigger normalize_v11_6_51_import_run_revision
+before insert or update of sync_revision
+on public.official_roster_import_runs
+for each row execute function public.normalize_v11_6_51_roster_revision();
+
+create or replace function public.official_roster_profile_sync_is_current(
+  p_resource_id uuid,
+  p_resource_updated_at timestamptz,
+  p_profile_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles%rowtype;
+  v_signature text;
+  v_revision constant text := 'v11.6.51-r1';
+begin
+  if auth.uid() is null then raise exception 'Session requise'; end if;
+  if p_profile_id <> auth.uid() and not public.is_admin() then
+    raise exception 'Accès refusé';
+  end if;
+
+  select * into v_profile
+  from public.profiles p
+  where p.id = p_profile_id and p.account_status = 'active';
+  if not found then return false; end if;
+
+  v_signature := md5(
+    lower(trim(coalesce(v_profile.prenom,''))) || '|' ||
+    lower(trim(coalesce(v_profile.nom,''))) || '|' ||
+    coalesce(v_profile.phone,'') || '|' ||
+    coalesce(v_profile.hospital,'') || '|' ||
+    coalesce(v_profile.account_status,'')
+  );
+
+  return exists(
+    select 1 from public.official_roster_profile_sync ps
+    where ps.resource_id = p_resource_id
+      and ps.resource_updated_at = p_resource_updated_at
+      and ps.profile_id = p_profile_id
+      and ps.profile_signature = v_signature
+      and ps.sync_revision = v_revision
+  );
+end;
+$$;
+
+create or replace function public.official_roster_import_is_current(
+  p_resource_id uuid,
+  p_resource_updated_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Réservé à l’administrateur';
+  end if;
+
+  return exists(
+    select 1 from public.official_roster_import_runs r
+    where r.resource_id = p_resource_id
+      and r.resource_updated_at = p_resource_updated_at
+      and r.sync_revision = 'v11.6.51-r1'
+  );
+end;
+$$;
