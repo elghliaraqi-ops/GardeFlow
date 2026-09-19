@@ -63,3 +63,23 @@ jobs:
           PY
           echo "===== NEWS ====="
           sed -n '1,760p' lib/screens/daily_news_section.dart
+          echo "===== NOTIFICATIONS ====="
+          sed -n '1,900p' lib/screens/notifications_screen.dart
+          echo "===== APPSTATE METHODS ====="
+          grep -n -A90 -B30 -E "clearReadAndPastNotifications|clearSentReminders|logout\(|reminders|fetchAudit|audit" lib/state/app_state.dart || true
+          echo "===== BACKEND AUDIT ====="
+          grep -n -A80 -B30 -E "fetchAudit|audit_events|audit" lib/services/supabase_backend_service.dart || true
+          echo "===== SIGNATURE META ====="
+          python3 - <<'PY'
+          from PIL import Image
+          p='assets/branding/elghali_signature.webp'
+          im=Image.open(p).convert('RGBA')
+          print('size', im.size, 'bbox', im.getbbox())
+          a=im.getchannel('A')
+          print('alpha extrema', a.getextrema(), 'alpha bbox', a.getbbox())
+          pix=list(im.getdata())
+          visible=[px for px in pix if px[3]>10]
+          print('visible pixels',len(visible),'of',len(pix))
+          if visible:
+              print('rgb visible minmax', tuple((min(px[i] for px in visible),max(px[i] for px in visible)) for i in range(3)))
+          PY
