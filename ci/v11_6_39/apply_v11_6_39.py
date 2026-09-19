@@ -258,7 +258,7 @@ junior_build = r"""  @override
 j = replace_method_in_class(
     j,
     "_JuniorOnCallScreenState",
-    "  @override\\n  Widget build(BuildContext context)",
+    "  @override\n  Widget build(BuildContext context)",
     junior_build,
 )
 
