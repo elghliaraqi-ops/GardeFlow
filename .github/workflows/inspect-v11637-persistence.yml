@@ -39,6 +39,13 @@ jobs:
           if imp not in s: p.write_text(s.replace("import 'package:flutter/material.dart';","import 'package:flutter/material.dart';\n"+imp,1))
           PY
           for v in 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37; do python3 "$GITHUB_WORKSPACE/ci/v11_6_$v/apply_v11_6_$v.py"; done
+          echo "=== APPSTATE LOGIN ==="
+          sed -n '650,760p' lib/state/app_state.dart
+          sed -n '1380,1455p' lib/state/app_state.dart
+          echo "=== AUDIT FILE ==="
+          sed -n '1,360p' lib/screens/audit_screen.dart
+          echo "=== HOME DASH ==="
+          sed -n '550,760p' lib/screens/home_screen.dart
           echo "=== HOME TARGETS ==="
           grep -n -E "DashboardView|AstreintesHubView|monthGuard|Garde ce mois|Gardes ce mois|Ce mois" lib/screens/home_screen.dart || true
           echo "=== NOTIFICATIONS ==="
