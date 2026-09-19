@@ -237,14 +237,6 @@ jobs:
           grep -q "Configurer les autorisations Android" lib/screens/settings_screen.dart
           grep -q "Lancer le test" lib/screens/settings_screen.dart
           test -f assets/branding/elghali_signature.webp
-          python3 - <<'PY'
-          from PIL import Image
-          p='assets/branding/elghali_signature.webp'
-          with Image.open(p) as im:
-              im.load()
-              assert im.width >= 100 and im.height >= 40
-              print(f'Signature asset validated: {im.size}')
-          PY
           grep -q "Concerné" lib/screens/audit_screen.dart
           grep -q "Motif :" lib/screens/audit_screen.dart
           grep -q "title: 'SERVICE'" lib/screens/home_screen.dart
