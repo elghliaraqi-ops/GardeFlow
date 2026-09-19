@@ -177,7 +177,6 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_36/apply_v11_6_36.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_37/apply_v11_6_37.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_38/apply_v11_6_38.py"
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/point1_dashboard.py"
           test -f lib/screens/profile_screen.dart
           grep -q '^version: 11.6.38+198$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
@@ -331,7 +330,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.38-point1-dashboard-apk
+          name: GardeFlow-v11.6.38-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
