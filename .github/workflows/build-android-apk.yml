@@ -170,7 +170,7 @@ jobs:
           grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
           grep -q "final greeting = isNight ? 'Bonsoir' : 'Bonjour';" lib/screens/home_screen.dart
           grep -q 'Prochaine garde à venir' lib/screens/home_screen.dart
-          grep -q 'Glisser une tuile' lib/screens/home_screen.dart
+          grep -q 'class _PlanningShiftGroup' lib/screens/home_screen.dart
           grep -q 'Planning officiel' lib/screens/home_screen.dart
           grep -q 'notifications_none_rounded' lib/screens/home_screen.dart
           grep -q 'Transfert / échange' lib/screens/home_screen.dart
