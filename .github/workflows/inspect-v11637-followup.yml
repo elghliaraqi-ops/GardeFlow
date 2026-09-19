@@ -1,0 +1,63 @@
+name: Inspect V11.6.37 followup targets
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-v11637-followup.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .inspect && mkdir .inspect
+          unzip -q GardeFlow_android_v11_6_0_official_pdf_auto_import.zip -d .inspect
+          PUBSPEC="$(find .inspect -type f -name pubspec.yaml -print -quit)"
+          PROJECT_DIR="$(dirname "$PUBSPEC")"
+          cat ci/v11_6_16_bundle/bundle.part*.b64 | base64 -d > /tmp/bundle.zip
+          unzip -oq /tmp/bundle.zip -d "$GITHUB_WORKSPACE"
+          cd "$PROJECT_DIR"
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_1/overlay.part* > /tmp/v1.patch
+          patch -p1 < /tmp/v1.patch
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_3/overlay.part* > /tmp/v3.patch
+          patch -p1 < /tmp/v3.patch
+          sed -i 's/^version: 11.6.3+163$/version: 11.6.4+164/' pubspec.yaml
+          python3 -m pip install --quiet --break-system-packages pillow
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_6/fix_launcher_icons.py" --android
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_5/overlay.part* > /tmp/v5.patch
+          patch -p1 < /tmp/v5.patch
+          sed -i 's/^version: 11.6.4+164$/version: 11.6.5+165/' pubspec.yaml
+          cat "$GITHUB_WORKSPACE"/ci/v11_6_6/overlay.part* > /tmp/v6.patch
+          patch -p1 < /tmp/v6.patch
+          for v in 7 8 9 10 11 12 13 14 15 16; do python3 "$GITHUB_WORKSPACE/ci/v11_6_$v/apply_v11_6_$v.py"; done
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/services/alarm_ring_service.dart')
+          p.write_text(p.read_text().replace('const VolumeSettings.fade(', 'VolumeSettings.fade('))
+          PY
+          cp lib/state/app_state.dart /tmp/state.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_17/apply_v11_6_17.py"
+          cp /tmp/state.dart lib/state/app_state.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/screens/forgot_password_screen.dart')
+          s=p.read_text(); imp="import '../theme/app_theme.dart';"
+          if imp not in s:
+              s=s.replace("import 'package:flutter/material.dart';","import 'package:flutter/material.dart';\n"+imp,1); p.write_text(s)
+          PY
+          for v in 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37; do python3 "$GITHUB_WORKSPACE/ci/v11_6_$v/apply_v11_6_$v.py"; done
+          echo "===== JUNIOR ====="
+          sed -n '1,920p' lib/screens/junior_oncall_screen.dart
+          echo "===== NOTIFICATIONS ====="
+          sed -n '1,920p' lib/screens/notifications_screen.dart
+          echo "===== AUDIT ====="
+          sed -n '1,920p' lib/screens/audit_screen.dart
+          echo "===== STATE NOTIF HITS ====="
+          grep -n -E "notification|read|cleared|dismiss|seen|badge|audit" lib/state/app_state.dart | head -n 260 || true
+          echo "===== BACKEND HITS ====="
+          grep -n -E "notification|audit|read|cleared|dismiss|seen" lib/services/supabase_backend_service.dart | head -n 260 || true
