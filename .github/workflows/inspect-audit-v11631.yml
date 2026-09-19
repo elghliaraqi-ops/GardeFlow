@@ -72,5 +72,6 @@ jobs:
           echo "===== AUDIT SCREEN ====="
           sed -n '1,760p' lib/screens/audit_screen.dart
           echo "===== AUDIT MODEL ====="
-          find lib -type f \( -iname '*audit*.dart' -o -iname '*action*log*.dart' \) -print
-          grep -R -n "class .*Audit\|auditEvents\|auditLog\|actionType\|actor" lib/models lib/state lib/services | head -220 || true
+          cat lib/models/audit_event.dart
+          echo "===== AUDIT ACTIONS ====="
+          grep -R -n -E "planning\.|exchange\.|leave\.|account\.|audit" lib/state lib/services lib/screens | head -420 || true
