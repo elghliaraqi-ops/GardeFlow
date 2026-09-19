@@ -116,15 +116,16 @@ if old_sort not in s:
     raise SystemExit("V11.6.59: directory sort anchor missing")
 s = s.replace(old_sort, new_sort, 1)
 
-old_hospitals = """                ...kHospitals.map((h) => DropdownMenuItem(
-                      value: h,
-                      child: Text("""
-new_hospitals = """                ...hospitalItems.map((h) => DropdownMenuItem(
-                      value: h,
-                      child: Text("""
-if old_hospitals not in s:
-    raise SystemExit("V11.6.59: directory dropdown anchor missing")
-s = s.replace(old_hospitals, new_hospitals, 1)
+hospital_anchor = "const DropdownMenuItem(value: _kAllHospitals, child: Text('Tous les établissements')),"
+hospital_pos = s.find(hospital_anchor)
+if hospital_pos < 0:
+    raise SystemExit("V11.6.59: all-hospitals dropdown anchor missing")
+hospital_tail_end = min(len(s), hospital_pos + 1800)
+hospital_tail = s[hospital_pos:hospital_tail_end]
+if "...kHospitals" not in hospital_tail:
+    raise SystemExit("V11.6.59: hospital list source missing near dropdown")
+hospital_tail = hospital_tail.replace("...kHospitals", "...hospitalItems", 1)
+s = s[:hospital_pos] + hospital_tail + s[hospital_tail_end:]
 
 directory.write_text(s)
 
