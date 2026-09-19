@@ -80,7 +80,5 @@ jobs:
           echo '===== LOGIN FILES ====='
           find lib -type f \( -iname '*login*.dart' -o -iname '*auth*.dart' \) -print
           echo '===== LOGIN SCREEN ====='
-          FILE="$(find lib -type f -iname '*login*.dart' -print -quit)"
-          if [ -n "$FILE" ]; then
-            sed -n '1,380p' "$FILE"
-          fi
+          FILE="lib/screens/auth_screen.dart"
+          sed -n '1,460p' "$FILE"
