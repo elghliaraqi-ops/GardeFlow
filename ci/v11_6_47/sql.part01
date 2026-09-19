@@ -24,7 +24,7 @@ for each row execute function public.reject_disciplinary_exchange_request();
 -- fonctionnement : la logique d'import existante reste intacte, puis la couche
 -- V11.6.47 applique le statut disciplinaire issu de la couleur rouge du PDF.
 -- ---------------------------------------------------------------------------
-do $$
+do $do$
 begin
   if to_regprocedure('public.import_official_emergency_roster(uuid,timestamp with time zone,jsonb,jsonb)') is not null
      and to_regprocedure('public.import_official_emergency_roster_legacy_v46(uuid,timestamp with time zone,jsonb,jsonb)') is null then
@@ -36,7 +36,7 @@ begin
     execute 'alter function public.import_official_emergency_roster_for_profile(uuid,timestamp with time zone,uuid,jsonb,jsonb) rename to import_official_emergency_roster_for_profile_legacy_v46';
   end if;
 end
-$;
+$do$;
 
 revoke execute on function public.import_official_emergency_roster_legacy_v46(uuid,timestamptz,jsonb,jsonb) from public;
 revoke execute on function public.import_official_emergency_roster_legacy_v46(uuid,timestamptz,jsonb,jsonb) from anon, authenticated;
