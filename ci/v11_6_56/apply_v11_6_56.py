@@ -255,6 +255,47 @@ settings.write_text(s)
 
 
 # ---------------------------------------------------------------------------
+# Shared widgets: keep Pill const-compatible while its default background
+# becomes adaptive at render time.
+# ---------------------------------------------------------------------------
+widgets = Path("lib/theme/widgets.dart")
+s = widgets.read_text()
+old_pill = """  final Color background;
+  final Color foreground;
+  final double fontSize;
+
+  const Pill({
+    super.key,
+    required this.text,
+    this.icon,
+    this.background = AppColors.brandSoft,
+    this.foreground = AppColors.brand,
+    this.fontSize = 11,
+  });"""
+new_pill = """  final Color? background;
+  final Color foreground;
+  final double fontSize;
+
+  const Pill({
+    super.key,
+    required this.text,
+    this.icon,
+    this.background,
+    this.foreground = AppColors.brand,
+    this.fontSize = 11,
+  });"""
+if old_pill not in s:
+    raise SystemExit("V11.6.56: Pill adaptive default anchor missing")
+s = s.replace(old_pill, new_pill, 1)
+s = s.replace(
+    "        color: background,",
+    "        color: background ?? AppColors.brandSoft,",
+    1,
+)
+widgets.write_text(s)
+
+
+# ---------------------------------------------------------------------------
 # Neutral AppColors are runtime-adaptive getters. Any const expression that
 # embeds one of those colors must become runtime-built. We only de-const
 # semicolon-delimited Dart expressions containing an adaptive color.
@@ -291,6 +332,16 @@ for dart in Path("lib").rglob("*.dart"):
     chunks.append(tail)
     if changed:
         dart.write_text("".join(chunks))
+
+# A local const variable becomes a normal final variable when its adaptive
+# color is evaluated at runtime.
+theme_text = theme.read_text()
+theme_text = theme_text.replace(
+    "    displayBase = TextStyle(",
+    "    final displayBase = TextStyle(",
+    1,
+)
+theme.write_text(theme_text)
 
 checks = {
     "lib/main.dart": [
