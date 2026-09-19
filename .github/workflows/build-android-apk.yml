@@ -156,6 +156,10 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_25/apply_v11_6_25.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_26/apply_v11_6_26.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_27/apply_v11_6_27.py"
+          echo "===== HEADER INSPECT DIRECTORY ====="
+          grep -n -A90 -B25 "Contacts et extensions internes" lib/screens/directory_screen.dart || true
+          echo "===== HEADER INSPECT PROFILE ====="
+          grep -n -A100 -B35 "Mon profil" lib/screens/profile_screen.dart || true
           python3 "$GITHUB_WORKSPACE/ci/v11_6_28/apply_v11_6_28.py"
           test -f lib/screens/profile_screen.dart
           grep -q '^version: 11.6.28+188$' pubspec.yaml
