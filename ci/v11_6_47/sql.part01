@@ -36,7 +36,12 @@ begin
     execute 'alter function public.import_official_emergency_roster_for_profile(uuid,timestamp with time zone,uuid,jsonb,jsonb) rename to import_official_emergency_roster_for_profile_legacy_v46';
   end if;
 end
-$$;
+$;
+
+revoke execute on function public.import_official_emergency_roster_legacy_v46(uuid,timestamptz,jsonb,jsonb) from public;
+revoke execute on function public.import_official_emergency_roster_legacy_v46(uuid,timestamptz,jsonb,jsonb) from anon, authenticated;
+revoke execute on function public.import_official_emergency_roster_for_profile_legacy_v46(uuid,timestamptz,uuid,jsonb,jsonb) from public;
+revoke execute on function public.import_official_emergency_roster_for_profile_legacy_v46(uuid,timestamptz,uuid,jsonb,jsonb) from anon, authenticated;
 
 create or replace function public.import_official_emergency_roster(
   p_resource_id uuid,
