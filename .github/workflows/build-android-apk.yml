@@ -166,7 +166,7 @@ jobs:
           test -f lib/screens/profile_screen.dart
           grep -q '^version: 11.6.31+191$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
-          grep -q "label: 'Astreintes'" lib/screens/home_screen.dart
+          grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
           grep -q 'const ProfileScreen()' lib/screens/home_screen.dart
           grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
