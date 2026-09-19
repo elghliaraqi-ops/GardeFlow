@@ -81,4 +81,6 @@ jobs:
           find lib -type f \( -iname '*login*.dart' -o -iname '*auth*.dart' \) -print
           echo '===== LOGIN SCREEN ====='
           FILE="lib/screens/auth_screen.dart"
-          sed -n '1,460p' "$FILE"
+          sed -n '1,760p' "$FILE"
+          echo '===== BRAND IDENTITY ====='
+          sed -n '1,320p' lib/widgets/brand_identity.dart
