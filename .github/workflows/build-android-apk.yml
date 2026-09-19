@@ -63,6 +63,7 @@ on:
       - 'ci/v11_6_57/**'
       - 'ci/v11_6_58/**'
       - 'ci/v11_6_59/**'
+      - 'ci/v11_6_60/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -103,7 +104,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.59
+      - name: Apply patches V11.6.1 to V11.6.60
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -219,8 +220,249 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_57/apply_v11_6_57.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_58/apply_v11_6_58.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_59/apply_v11_6_59.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_60/apply_v11_6_60.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.59+219$' pubspec.yaml
+          grep -q '^version: 11.6.60+220
+          grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
+          grep -q "'Astreintes'" lib/screens/home_screen.dart
+          grep -q '_AstreintesHubView()' lib/screens/home_screen.dart
+          grep -q 'ProfileScreen()' lib/screens/home_screen.dart
+          grep -q 'class _MainBottomBar' lib/screens/home_screen.dart
+          grep -q "final greeting = isNight ? 'Bonsoir' : 'Bonjour';" lib/screens/home_screen.dart
+          grep -q 'Prochaine garde à venir' lib/screens/home_screen.dart
+          grep -q 'class _PlanningShiftGroup' lib/screens/home_screen.dart
+          grep -q 'Planning officiel' lib/screens/home_screen.dart
+          grep -q 'notifications_none_rounded' lib/screens/home_screen.dart
+          grep -q 'Transfert / échange' lib/screens/home_screen.dart
+          grep -q 'ExchangeRequestSheet(dateStr: dateStr, entry: entry)' lib/screens/home_screen.dart
+          grep -q 'Effacer les rappels déjà envoyés' lib/screens/notifications_screen.dart
+          grep -q 'Planning validé · tuiles verrouillées' lib/screens/home_screen.dart
+          grep -q 'NeverScrollableScrollPhysics' lib/screens/home_screen.dart
+          grep -q 'class _CompactShiftTile' lib/screens/home_screen.dart
+          grep -q 'GardeFlowLogo(size: 38)' lib/screens/home_screen.dart
+          grep -q 'assets/branding/gardeflow_logo.png' lib/theme/widgets.dart
+          grep -q 'static const brand = Color(0xFF138A55)' lib/theme/app_theme.dart
+          grep -q 'static const cyan = Color(0xFFD94A43)' lib/theme/app_theme.dart
+          grep -q 'Actualités du jour' lib/screens/daily_news_section.dart
+          grep -q 'Bonsoir' lib/screens/home_screen.dart
+          grep -q 'au total ce mois' lib/screens/home_screen.dart
+          grep -q 'FontWeight.w600' lib/screens/home_screen.dart
+          grep -q 'subtitleColor: _loginGreen' lib/screens/auth_screen.dart
+          grep -q 'FittedBox' lib/screens/auth_screen.dart
+          grep -q 'AstreinteScreen(embedded: true)' lib/screens/home_screen.dart
+          grep -q 'JuniorOnCallScreen(embedded: true)' lib/screens/home_screen.dart
+          grep -Fq "['Accueil', 'Planning', 'Annuaire', 'Astreintes']" lib/screens/home_screen.dart
+          grep -q "GardeFlowTitle('Mon profil')" lib/screens/profile_screen.dart
+          grep -q "directory-add-contact-embedded" lib/screens/directory_screen.dart
+          grep -q "directory-add-contact-standalone" lib/screens/directory_screen.dart
+          grep -q "class _PlanningShiftGroup" lib/screens/home_screen.dart
+          grep -q "SettingsScreen(reminderFocus: true)" lib/screens/home_screen.dart
+          grep -q "notifications_active_rounded" lib/screens/home_screen.dart
+          grep -q "final bool reminderFocus" lib/screens/settings_screen.dart
+          grep -q "Calendrier mensuel validé" lib/screens/audit_screen.dart
+          grep -q "Calendrier rouvert" lib/screens/audit_screen.dart
+          grep -q "Historique administratif" lib/screens/audit_screen.dart
+          grep -q "GardeFlowTitle('Gestion des gardes')" lib/screens/admin_screen.dart
+          grep -q "Elghali Production © 2026" lib/screens/profile_screen.dart
+          grep -q "elghali_signature.webp" lib/screens/profile_screen.dart
+          grep -q "MediaQuery.viewPaddingOf(context).bottom" lib/screens/home_screen.dart
+          grep -q "width: 260" lib/screens/profile_screen.dart
+          grep -q "assets/branding/elghali_signature.webp" pubspec.yaml
+          grep -q "À venir" lib/screens/daily_news_section.dart
+          grep -q "Voir sur Instagram" lib/screens/daily_news_section.dart
+          grep -q "LE PLANNING DE GARDE POUR GARDER LE FLOW" lib/widgets/brand_identity.dart
+          grep -Fq "Dernières publications des comptes officiels" lib/screens/daily_news_section.dart
+          grep -Fq "Lire la suite sur Instagram" lib/screens/daily_news_section.dart
+          grep -Fq "static List<String> _paragraphs" lib/screens/daily_news_section.dart
+          if grep -Fq "Instagram officiel · AMI UM6 en priorité" lib/screens/daily_news_section.dart; then echo "Old news subtitle remains"; exit 1; fi
+          grep -q "request_daily_news_refresh" lib/screens/daily_news_section.dart
+          grep -q "take(12)" lib/screens/daily_news_section.dart
+          grep -q "au total ce mois" lib/screens/home_screen.dart
+          grep -q "label: 'Urgences'" lib/screens/home_screen.dart
+          grep -q "label: 'Service'" lib/screens/home_screen.dart
+          grep -q "label: 'Juniors'" lib/screens/home_screen.dart
+          grep -q "bool _showSenior = false" lib/screens/home_screen.dart
+          grep -q "height: 50" lib/screens/junior_oncall_screen.dart
+          grep -q "width: 47" lib/screens/junior_oncall_screen.dart
+          grep -q "ListView.separated(" lib/screens/junior_oncall_screen.dart
+          grep -q "Astreinte Junior" lib/screens/junior_oncall_screen.dart
+          grep -q "GardeFlowTitle('Alarme de garde')" lib/screens/settings_screen.dart
+          grep -Fq "exactement comme ils apparaissent sur le PDF du planning de garde" lib/screens/auth_screen.dart
+          grep -Fq "Actualités plus bas" lib/screens/home_screen.dart
+          grep -q "height: 430" lib/screens/daily_news_section.dart
+          grep -q "width: 286" lib/screens/daily_news_section.dart
+          grep -q "aspectRatio: 1" lib/screens/daily_news_section.dart
+          grep -q "fit: BoxFit.contain" lib/screens/daily_news_section.dart
+          grep -q "isDisciplinary" lib/models/planning_entry.dart
+          grep -q "is_disciplinary" lib/services/supabase_backend_service.dart
+          grep -q "_extractRedText" lib/services/official_roster_import_service.dart
+          grep -q "page.render" lib/services/official_roster_import_service.dart
+          grep -q "suppression admin uniquement" lib/screens/home_screen.dart
+          test -f supabase/patch_v11_6_47_disciplinary_guards.sql
+          test -f supabase/patch_v11_6_48_auto_validate_plannings.sql
+          test -f supabase/functions/auto-validate-plannings/index.ts
+          grep -q "7 days" supabase/patch_v11_6_48_auto_validate_plannings.sql
+          grep -q "planning_auto_validated" supabase/functions/auto-validate-plannings/index.ts
+          test -f supabase/patch_v11_6_49_junior_oncall_urgences.sql
+          grep -q "Junior · Urgences" lib/screens/junior_oncall_screen.dart
+          grep -q "official_emergency" supabase/patch_v11_6_49_junior_oncall_urgences.sql
+          grep -q "Calendrier du mois" lib/screens/junior_oncall_screen.dart
+          grep -q "_openMonthCalendar" lib/screens/junior_oncall_screen.dart
+          grep -q "useSafeArea: true" lib/screens/home_screen.dart
+          grep -q "isDisciplinary" lib/state/app_state.dart
+          grep -q "minRatio: 0.55" lib/services/official_roster_import_service.dart
+          test -f supabase/patch_v11_6_51_disciplinary_registry_hotfix.sql
+          grep -q "official_disciplinary_guards" supabase/patch_v11_6_51_disciplinary_registry_hotfix.sql
+          test -f supabase/patch_v11_6_52_disciplinary_rules.sql
+          grep -q "OfficialRosterDisciplinaryMark" lib/services/official_roster_import_service.dart
+          grep -q "registerOfficialDisciplinaryMarks" lib/services/supabase_backend_service.dart
+          grep -q "official_disciplinary_name_rules" supabase/patch_v11_6_52_disciplinary_rules.sql
+          test -f supabase/patch_v11_6_53_official_resync_summary.sql
+          grep -q "Refaire la superposition" lib/screens/official_planning_screen.dart
+          grep -q "_myDisciplinaryCounts" lib/screens/official_planning_screen.dart
+          grep -q "forceSyncMyOfficialRoster" lib/state/app_state.dart
+          grep -q "reset_my_official_roster_profile_sync" supabase/patch_v11_6_53_official_resync_summary.sql
+          grep -q "Refaire la superposition" lib/screens/official_planning_screen.dart
+          grep -q "final myAssignments = parsed.assignments" lib/screens/official_planning_screen.dart
+          grep -q "serverDisciplinaryCount" lib/screens/official_planning_screen.dart
+          test -f supabase/patch_v11_6_55_resync_validation_lock.sql
+          grep -q "_myCanResync" lib/screens/official_planning_screen.dart
+          grep -q "isMyHospital && canResync" lib/screens/official_planning_screen.dart
+          grep -q "can_resync" supabase/patch_v11_6_55_resync_validation_lock.sql
+          grep -q "Mode sombre" lib/screens/settings_screen.dart
+          grep -q "AppTheme.dark()" lib/main.dart
+          grep -q "0xFF07110C" lib/screens/auth_screen.dart
+          grep -q "AppColors.isDarkMode" lib/screens/auth_screen.dart
+          grep -q "static ThemeData dark()" lib/theme/app_theme.dart
+          grep -q "Icons.phone_rounded" lib/screens/junior_oncall_screen.dart
+          grep -q "ownerPhone" lib/screens/junior_oncall_screen.dart
+          grep -q "theme.scaffoldBackgroundColor" lib/screens/junior_oncall_screen.dart
+          grep -q "bool _darkMode = true" lib/state/app_state.dart
+          grep -q "darkDefaultAppliedV58" lib/state/app_state.dart
+          grep -q "AppColors.isDarkMode" lib/screens/home_screen.dart
+          grep -q "datePickerTheme: DatePickerThemeData" lib/theme/app_theme.dart
+          grep -q "dropdownMenuTheme: DropdownMenuThemeData" lib/theme/app_theme.dart
+          grep -q "fillColor: AppColors.card" lib/screens/forgot_password_screen.dart
+          test -f supabase/patch_v11_6_59_global_directory.sql
+          grep -q "directory_contacts_all" lib/services/supabase_backend_service.dart
+          grep -q "_activeHospital = _kAllHospitals" lib/screens/directory_screen.dart
+          grep -q "aMine ? -1 : 1" lib/screens/directory_screen.dart
+          grep -q "colorScheme.surface" lib/screens/junior_oncall_screen.dart
+          test -f supabase/patch_v11_6_57_junior_oncall_phone.sql
+          grep -q "keyboard_arrow_down_rounded" lib/screens/home_screen.dart
+          grep -q "guard_fullscreen_alarm" lib/screens/settings_screen.dart
+          grep -q "Alarme plein écran" lib/screens/settings_screen.dart
+          grep -q "class _NextGuardInfoLine" lib/screens/home_screen.dart
+          grep -q "PROCHAINE GARDE" lib/screens/home_screen.dart
+          grep -q "URGENCES" lib/screens/home_screen.dart
+          grep -q "Garde de service" lib/screens/home_screen.dart
+          grep -q "0xFF071426" lib/screens/home_screen.dart
+          grep -q "0xFF55C2FF" lib/screens/home_screen.dart
+          grep -q "0xFF071426" lib/screens/home_screen.dart
+          grep -q "Configurer les autorisations Android" lib/screens/settings_screen.dart
+          grep -q "Lancer le test" lib/screens/settings_screen.dart
+          test -f assets/branding/elghali_signature.webp
+          grep -q "Concerné" lib/screens/audit_screen.dart
+          grep -q "Motif :" lib/screens/audit_screen.dart
+          grep -q "title: 'SERVICE'" lib/screens/home_screen.dart
+          grep -q "title: 'URGENCES'" lib/screens/home_screen.dart
+          grep -q "'CONGÉ'" lib/screens/home_screen.dart
+          grep -q "FloatingActionButton(" lib/screens/directory_screen.dart
+          if grep -q "Text('Mon profil'.*titleLarge" lib/screens/profile_screen.dart; then echo 'Duplicate profile header remains'; exit 1; fi
+          if grep -q 'floatingActionButton:' lib/screens/home_screen.dart; then echo 'Unexpected central FAB'; exit 1; fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = list(Path('lib').rglob('*.dart')) + list(Path('tool').rglob('*.dart'))
+          for p in candidates:
+              raw = p.read_bytes()
+              try:
+                  raw.decode('utf-8')
+              except UnicodeDecodeError as exc:
+                  print(f'Normalizing UTF-8 in {p}: {exc}')
+                  p.write_text(raw.decode('utf-8', errors='replace'))
+          checks = [
+              ('pubspec.yaml', 'version: 11.6.60+220'),
+              ('pubspec.yaml', 'alarm: ^5.13.1'),
+              ('lib/screens/home_screen.dart', 'class _DashboardView'),
+              ('lib/services/notification_service.dart', 'AlarmRingService'),
+              ('lib/screens/admin_password_reset_screen.dart', 'AppColors.success'),
+              ('lib/screens/audit_screen.dart', 'AppColors.danger'),
+          ]
+          for file_name, needle in checks:
+              p = Path(file_name)
+              if not p.exists():
+                  raise SystemExit(f'V11.6.17 validation: missing {file_name}')
+              if needle not in p.read_text():
+                  raise SystemExit(f'V11.6.17 validation: {needle!r} missing in {file_name}')
+              print(f'OK {file_name}: {needle}')
+          if not Path('lib/services/alarm_ring_service.dart').exists():
+              raise SystemExit('V11.6.17 validation: alarm_ring_service.dart missing')
+          print('V11.6.17 validation completed')
+          PY
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Prepare Android project
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f android/gradlew ] || [ ! -f android/app/src/main/AndroidManifest.xml ]; then
+            rm -rf android
+            flutter create --no-pub --platforms=android --org com.huim6 --project-name huim6_planning .
+          fi
+          test -f google-services.json
+          cp -f google-services.json android/app/google-services.json
+          dart tool/configure_android.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_42/install_alarm_activity_v42.py"
+          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK' android/app/src/main/AndroidManifest.xml
+          grep -q 'com.gdelataillade.alarm.action.RING' android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'ACTION_ALARM_SNOOZE' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'ACTION_ALARM_STOP' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'guard_fullscreen_alarm' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'Rappel dans' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          grep -q 'shiftKind' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+          test -f android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          test -f android/app/src/main/res/drawable-nodpi/gardeflow_launcher_logo.png
+
+      - name: Install Flutter dependencies
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Build release APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: flutter build apk --release
+
+      - name: Verify APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          test -f build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload GardeFlow APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.60-release-apk
+          path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+ pubspec.yaml
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q '_AstreintesHubView()' lib/screens/home_screen.dart
