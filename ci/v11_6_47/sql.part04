@@ -1,0 +1,95 @@
+    elsif found
+       and v_entry.source_type = 'official_emergency'
+       and v_entry.source_resource_id = p_resource_id then
+      -- Un médecin ne peut pas faire disparaître un verrou disciplinaire par
+      -- une modification manuelle : seul une nouvelle lecture du PDF officiel
+      -- (même ressource/version) peut faire évoluer ce marqueur.
+      update public.planning_entries
+      set is_disciplinary = false
+      where id = v_entry.id;
+    end if;
+  end loop;
+
+  update public.official_roster_profile_sync
+  set sync_revision = v_revision,
+      synced_at = now()
+  where resource_id = p_resource_id
+    and resource_updated_at = p_resource_updated_at
+    and profile_id = p_profile_id;
+
+  return coalesce(v_result, '{}'::jsonb) || jsonb_build_object(
+    'disciplinary_revision', v_revision
+  );
+end;
+$$;
+
+create or replace function public.official_roster_import_is_current(
+  p_resource_id uuid,
+  p_resource_updated_at timestamptz
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then raise exception 'Réservé à l’administrateur'; end if;
+  return exists(
+    select 1 from public.official_roster_import_runs r
+    where r.resource_id = p_resource_id
+      and r.resource_updated_at = p_resource_updated_at
+      and r.sync_revision = 'v11.6.47-r1'
+  );
+end;
+$$;
+
+create or replace function public.official_roster_profile_sync_is_current(
+  p_resource_id uuid,
+  p_resource_updated_at timestamptz,
+  p_profile_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_profile public.profiles%rowtype;
+  v_signature text;
+  v_revision constant text := 'v11.6.47-r1';
+begin
+  if auth.uid() is null then raise exception 'Session requise'; end if;
+  if p_profile_id <> auth.uid() and not public.is_admin() then
+    raise exception 'Accès refusé';
+  end if;
+
+  select * into v_profile
+  from public.profiles p
+  where p.id = p_profile_id and p.account_status = 'active';
+  if not found then return false; end if;
+
+  v_signature := md5(
+    lower(trim(coalesce(v_profile.prenom,''))) || '|' ||
+    lower(trim(coalesce(v_profile.nom,''))) || '|' ||
+    coalesce(v_profile.phone,'') || '|' ||
+    coalesce(v_profile.hospital,'') || '|' ||
+    coalesce(v_profile.account_status,'')
+  );
+
+  return exists(
+    select 1 from public.official_roster_profile_sync s
+    where s.resource_id = p_resource_id
+      and s.resource_updated_at = p_resource_updated_at
+      and s.profile_id = p_profile_id
+      and s.profile_signature = v_signature
+      and s.sync_revision = v_revision
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Suppression admin : une garde disciplinaire peut être retirée par un admin
+-- même si le mois n'est pas encore validé, avec motif et journal d'audit.
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_delete_planning(p_entry_id text, p_reason text)
+returns void
