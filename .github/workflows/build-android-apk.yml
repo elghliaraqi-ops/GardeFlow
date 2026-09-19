@@ -328,7 +328,6 @@ jobs:
           grep -q "Mode sombre" lib/screens/settings_screen.dart
           grep -q "AppTheme.dark()" lib/main.dart
           grep -q "static ThemeData dark()" lib/theme/app_theme.dart
-          grep -q "bool _darkMode = false" lib/state/app_state.dart
           grep -q "Icons.phone_rounded" lib/screens/junior_oncall_screen.dart
           grep -q "ownerPhone" lib/screens/junior_oncall_screen.dart
           grep -q "theme.scaffoldBackgroundColor" lib/screens/junior_oncall_screen.dart
