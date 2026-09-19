@@ -1,15 +1,3 @@
-    elsif found
-       and v_entry.source_type = 'official_emergency'
-       and v_entry.source_resource_id = p_resource_id then
-      -- Un médecin ne peut pas faire disparaître un verrou disciplinaire par
-      -- une modification manuelle : seul une nouvelle lecture du PDF officiel
-      -- (même ressource/version) peut faire évoluer ce marqueur.
-      update public.planning_entries
-      set is_disciplinary = false
-      where id = v_entry.id;
-    end if;
-  end loop;
-
   update public.official_roster_profile_sync
   set sync_revision = v_revision,
       synced_at = now()
