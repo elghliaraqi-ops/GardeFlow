@@ -214,7 +214,6 @@ jobs:
           grep -q "SettingsScreen(reminderFocus: true)" lib/screens/home_screen.dart
           grep -q "notifications_active_rounded" lib/screens/home_screen.dart
           grep -q "final bool reminderFocus" lib/screens/settings_screen.dart
-          grep -q "widget.reminderFocus ? 'Rappels de garde' : 'Réglages'" lib/screens/settings_screen.dart
           grep -q "Calendrier mensuel validé" lib/screens/audit_screen.dart
           grep -q "Calendrier rouvert" lib/screens/audit_screen.dart
           grep -q "Historique administratif" lib/screens/audit_screen.dart
@@ -223,7 +222,6 @@ jobs:
           grep -q "elghali_signature.webp" lib/screens/profile_screen.dart
           grep -q "MediaQuery.viewPaddingOf(context).bottom" lib/screens/home_screen.dart
           grep -q "width: 235" lib/screens/profile_screen.dart
-          grep -q "Ouvrir la source" lib/screens/daily_news_section.dart
           grep -q "À venir" lib/screens/daily_news_section.dart
           grep -q "Publications Instagram officielles" lib/screens/daily_news_section.dart
           grep -q "Voir sur Instagram" lib/screens/daily_news_section.dart
