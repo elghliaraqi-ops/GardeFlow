@@ -178,7 +178,7 @@ detail_class = r"""class _NewsDetailCard extends StatelessWidget {
                       for (var i = 0; i < paragraphs.length; i++) ...[
                         Text(
                           i == paragraphs.length - 1 && truncated
-                              ? '\${paragraphs[i]}…'
+                              ? '${paragraphs[i]}…'
                               : paragraphs[i],
                           style: const TextStyle(
                             color: AppColors.inkSoft,
