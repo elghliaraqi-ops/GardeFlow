@@ -25,56 +25,18 @@ brand.write_text(b)
 auth = Path("lib/screens/auth_screen.dart")
 a = auth.read_text()
 
-old_bottom = """        const InstitutionalLogosPanel(compact: true),
-        SizedBox(height: compactLogin ? 8 : 12),
-        RichText(
-          textAlign: TextAlign.center,
-          text: const TextSpan(
-            style: TextStyle(
-              fontFamily: 'SpaceGrotesk',
-              fontSize: 11.5,
-              height: 1.2,
-              fontWeight: FontWeight.w800,
-            ),
-            children: [
-              TextSpan(
-                text: 'Le planning de garde pour garder le ',
-                style: TextStyle(color: _loginGreenDark),
-              ),
-              TextSpan(
-                text: 'flow',
-                style: TextStyle(color: AppColors.danger),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(height: compactLogin ? 7 : 12),
-        const Text(
-          'AU SERVICE DES SOIGNANTS\nAU SERVICE DES PATIENTS',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 9,
-            height: 1.35,
-            letterSpacing: 2.2,
-            color: _loginGreenDark,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Container(
-          width: 42,
-          height: 2,
-          decoration: BoxDecoration(
-            color: _loginGreen,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),"""
+panel_marker = "        const InstitutionalLogosPanel(compact: true),"
+panel_start = a.find(panel_marker)
+if panel_start < 0:
+    raise SystemExit("V11.6.37: institutional logos panel missing")
+tail_start = panel_start + len(panel_marker)
+tail_end_marker = "\n      ],\n    );\n  }\n\n  Widget _buildLoginForm()"
+tail_end = a.find(tail_end_marker, tail_start)
+if tail_end < 0:
+    raise SystemExit("V11.6.37: auth content tail marker missing")
 
-new_bottom = """        const InstitutionalLogosPanel(compact: true),"""
-
-if old_bottom not in a:
-    raise SystemExit("V11.6.37: auth bottom-slogans block missing")
-a = a.replace(old_bottom, new_bottom, 1)
+# Keep the institutional logos but remove every slogan below them.
+a = a[:tail_start] + a[tail_end:]
 auth.write_text(a)
 
 # ---------------------------------------------------------------------------
