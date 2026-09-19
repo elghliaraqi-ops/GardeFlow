@@ -1,0 +1,95 @@
+  v_date date;
+  v_shift text;
+  v_disciplinary boolean;
+  v_hospital text;
+  v_revision constant text := 'v11.6.47-r1';
+begin
+  if auth.uid() is null then raise exception 'Session requise'; end if;
+  if p_profile_id <> auth.uid() and not public.is_admin() then
+    raise exception 'Accès refusé';
+  end if;
+
+  select * into v_profile
+  from public.profiles
+  where id = p_profile_id and account_status = 'active'
+  for update;
+  if not found then raise exception 'Médecin actif introuvable'; end if;
+
+  select * into v_resource
+  from public.shared_resources
+  where id = p_resource_id and kind = 'official_pdf'
+  for update;
+  if not found then raise exception 'Planning officiel introuvable'; end if;
+  if v_resource.updated_at is distinct from p_resource_updated_at then
+    raise exception 'Le PDF a été remplacé pendant son analyse. Relancer la synchronisation.';
+  end if;
+
+  v_hospital := case v_resource.slot
+    when 'hm6_bouskoura' then 'Hôpital Universitaire International Mohammed VI de Bouskoura'
+    when 'hm6_rabat' then 'Hôpital Universitaire International Mohammed VI de Rabat'
+    when 'hck_casa' then 'Hôpital Universitaire International Cheikh Khalifa de Casablanca'
+    else null
+  end;
+  if v_profile.hospital is distinct from v_hospital then
+    raise exception 'Le planning officiel ne correspond pas à l’établissement du médecin';
+  end if;
+
+  v_result := public.import_official_emergency_roster_for_profile_legacy_v46(
+    p_resource_id,
+    p_resource_updated_at,
+    p_profile_id,
+    p_assignments,
+    p_unmatched_cells
+  );
+
+  perform set_config('gardeflow.official_import', '1', true);
+
+  for v_item in select value from jsonb_array_elements(coalesce(p_assignments, '[]'::jsonb))
+  loop
+    begin
+      v_item_profile_id := nullif(v_item->>'profile_id','')::uuid;
+      v_date := nullif(v_item->>'date','')::date;
+      v_shift := v_item->>'shift_id';
+      v_disciplinary := coalesce(nullif(v_item->>'is_disciplinary','')::boolean, false);
+    exception when others then
+      continue;
+    end;
+
+    if v_item_profile_id <> p_profile_id then continue; end if;
+    if v_shift not in ('urg-jour','urg-nuit','urg-24h') then continue; end if;
+
+    select * into v_entry
+    from public.planning_entries
+    where owner_id = p_profile_id
+      and date_str = v_date
+      and deleted_at is null
+    for update;
+
+    if v_disciplinary then
+      if found then
+        update public.exchange_requests
+        set status = 'cancelled'
+        where status in ('pendingB','pendingAdmin')
+          and (planning_entry_id = v_entry.id or target_planning_entry_id = v_entry.id);
+
+        update public.planning_entries
+        set shift_id = v_shift,
+            owner_phone = v_profile.phone,
+            owner_name = trim(v_profile.prenom || ' ' || v_profile.nom),
+            leave_request_id = null,
+            source_type = 'official_emergency',
+            source_resource_id = p_resource_id,
+            source_resource_updated_at = p_resource_updated_at,
+            is_disciplinary = true
+        where id = v_entry.id;
+      else
+        insert into public.planning_entries(
+          id,date_str,shift_id,owner_id,owner_phone,owner_name,created_at,
+          source_type,source_resource_id,source_resource_updated_at,is_disciplinary
+        ) values (
+          'pdf-' || replace(gen_random_uuid()::text,'-',''),
+          v_date,v_shift,v_profile.id,v_profile.phone,
+          trim(v_profile.prenom || ' ' || v_profile.nom),now(),
+          'official_emergency',p_resource_id,p_resource_updated_at,true
+        );
+      end if;
