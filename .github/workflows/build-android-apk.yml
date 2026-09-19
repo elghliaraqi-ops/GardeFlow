@@ -35,6 +35,7 @@ on:
       - 'ci/v11_6_29/**'
       - 'ci/v11_6_30/**'
       - 'ci/v11_6_31/**'
+      - 'ci/v11_6_32/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -75,7 +76,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.31
+      - name: Apply patches V11.6.1 to V11.6.32
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -163,8 +164,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_29/apply_v11_6_29.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_30/apply_v11_6_30.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_31/apply_v11_6_31.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_32/apply_v11_6_32.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.31+191$' pubspec.yaml
+          grep -q '^version: 11.6.32+192$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q 'const _AstreintesHubView()' lib/screens/home_screen.dart
@@ -205,6 +207,11 @@ jobs:
           grep -q "notifications_active_rounded" lib/screens/home_screen.dart
           grep -q "final bool reminderFocus" lib/screens/settings_screen.dart
           grep -q "widget.reminderFocus ? 'Rappels de garde' : 'Réglages'" lib/screens/settings_screen.dart
+          grep -q "Calendrier mensuel validé" lib/screens/audit_screen.dart
+          grep -q "Calendrier rouvert" lib/screens/audit_screen.dart
+          grep -q "Historique administratif" lib/screens/audit_screen.dart
+          grep -q "Concerné" lib/screens/audit_screen.dart
+          grep -q "Motif :" lib/screens/audit_screen.dart
           grep -q "title: 'SERVICE'" lib/screens/home_screen.dart
           grep -q "title: 'URGENCES'" lib/screens/home_screen.dart
           grep -q "'CONGÉ'" lib/screens/home_screen.dart
@@ -223,7 +230,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.31+191'),
+              ('pubspec.yaml', 'version: 11.6.32+192'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -296,7 +303,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.31-release-apk
+          name: GardeFlow-v11.6.32-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
