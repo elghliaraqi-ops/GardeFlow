@@ -1,0 +1,90 @@
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -1,7 +1,7 @@
+ name: huim6_planning
+ description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
+ publish_to: "none"
+-version: 11.6.46+206
++version: 11.6.47+207
+ 
+ environment:
+   sdk: ">=3.3.0 <4.0.0"
+--- a/lib/models/planning_entry.dart
++++ b/lib/models/planning_entry.dart
+@@ -6,6 +6,7 @@
+   String ownerPhone;
+   String ownerName;
+   String? leaveRequestId;
++  bool isDisciplinary;
+   final DateTime createdAt;
+ 
+   PlanningEntry({
+@@ -16,6 +17,7 @@
+     required this.ownerPhone,
+     required this.ownerName,
+     this.leaveRequestId,
++    this.isDisciplinary = false,
+     DateTime? createdAt,
+   }) : createdAt = createdAt ?? DateTime.now();
+ 
+@@ -27,6 +29,7 @@
+         'ownerPhone': ownerPhone,
+         'ownerName': ownerName,
+         'leaveRequestId': leaveRequestId,
++        'isDisciplinary': isDisciplinary,
+         'createdAt': createdAt.toIso8601String(),
+       };
+ 
+@@ -38,6 +41,7 @@
+         ownerPhone: j['ownerPhone'] as String,
+         ownerName: j['ownerName'] as String,
+         leaveRequestId: j['leaveRequestId'] as String?,
++        isDisciplinary: j['isDisciplinary'] as bool? ?? false,
+         createdAt: DateTime.parse(j['createdAt'] as String),
+       );
+ }
+--- a/lib/services/supabase_backend_service.dart
++++ b/lib/services/supabase_backend_service.dart
+@@ -319,6 +319,7 @@
+         ownerPhone: j['owner_phone'] as String,
+         ownerName: j['owner_name'] as String,
+         leaveRequestId: j['leave_request_id'] as String?,
++        isDisciplinary: j['is_disciplinary'] as bool? ?? false,
+         createdAt: DateTime.parse(j['created_at'] as String),
+       );
+     }).toList();
+--- a/lib/state/app_state.dart
++++ b/lib/state/app_state.dart
+@@ -341,7 +341,7 @@
+   bool canAdminDeleteEntry(PlanningEntry entry){
+     final me=currentUser;
+     if(me==null||me.role!=UserRole.admin)return false;
+-    return isPlanningEntryApproved(entry)||isApprovedLeaveEntry(entry);
++    return entry.isDisciplinary||isPlanningEntryApproved(entry)||isApprovedLeaveEntry(entry);
+   }
+ 
+   bool isUserPlanningMonthApproved(String ownerId,String dateStr){
+@@ -753,6 +753,7 @@
+     if(status==PlanningMonthStatus.approved)return 'Ce calendrier est validé définitivement. Utilisez ensuite transfert/échange ou contactez un administrateur.';
+     if(!ShiftCatalog.all.any((s)=>s.id==shiftId))return 'Type de tuile invalide.';
+     final existing=myEntryForDate(dateStr);
++    if(existing?.isDisciplinary==true)return 'Cette garde disciplinaire est verrouillée. Seul un administrateur peut la supprimer.';
+     if(existing!=null&&isApprovedLeaveEntry(existing))return 'Ce congé a déjà été approuvé. Seul un administrateur peut le supprimer.';
+     if(existing!=null&&_isEntryLocked(existing.id))return 'Cette garde est verrouillée par une demande active.';
+     try{
+@@ -792,6 +793,7 @@
+     final me=currentUser;if(me==null)return 'Session expirée.';
+     final entry=_planning.where((e)=>e.id==entryId).firstOrNull;
+     if(entry==null||(entry.ownerId!=me.id&&entry.ownerPhone!=me.phone))return 'Affectation introuvable.';
++    if(entry.isDisciplinary)return 'Cette garde disciplinaire ne peut pas être annulée. Seul un administrateur peut la supprimer.';
+     final date=DateTime.parse(entry.dateStr);
+     final status=myPlanningMonth(date)?.status ?? PlanningMonthStatus.draft;
+     if(status==PlanningMonthStatus.approved)return 'Un calendrier validé ne peut plus être modifié directement. Seul un administrateur peut supprimer une garde validée.';
+@@ -994,7 +996,7 @@
+     if(me==null||me.role!=UserRole.admin)return 'Suppression réservée à l’administrateur.';
+     final entry=_planning.where((x)=>x.id==entryId).firstOrNull;
+     if(entry==null)return 'Affectation introuvable.';
+-    if(!canAdminDeleteEntry(entry))return 'Seules les gardes et congés validés peuvent être supprimés par l’administrateur.';
++    if(!canAdminDeleteEntry(entry))return 'Seules les gardes disciplinaires, les gardes validées et les congés validés peuvent être supprimés par l’administrateur.';
+     final cleanReason=reason.trim();
+     if(cleanReason.length<3)return 'Indiquez un motif de suppression.';
