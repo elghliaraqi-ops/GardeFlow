@@ -1,0 +1,95 @@
+-- GardeFlow V11.6.47 — gardes disciplinaires détectées par les noms rouges des PDF
+
+alter table public.planning_entries
+  add column if not exists is_disciplinary boolean not null default false;
+
+alter table public.official_roster_import_runs
+  add column if not exists sync_revision text not null default 'legacy';
+
+-- ---------------------------------------------------------------------------
+-- Protection serveur : une garde disciplinaire ne peut être ni modifiée,
+-- ni annulée, ni transférée/échangée. Seuls l'import PDF officiel et la
+-- suppression explicite par un administrateur peuvent la modifier.
+-- ---------------------------------------------------------------------------
+create or replace function public.protect_disciplinary_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if not old.is_disciplinary then
+      return old;
+    end if;
+
+    if coalesce(current_setting('gardeflow.official_import', true), '0') = '1' then
+      return old;
+    end if;
+
+    if coalesce(current_setting('gardeflow.disciplinary_admin_delete', true), '0') = '1'
+       and public.is_admin() then
+      return old;
+    end if;
+
+    raise exception 'Garde disciplinaire : suppression réservée à l’administrateur.';
+  end if;
+
+  if old.is_disciplinary and (
+       new.date_str is distinct from old.date_str
+       or new.shift_id is distinct from old.shift_id
+       or new.owner_id is distinct from old.owner_id
+       or new.owner_phone is distinct from old.owner_phone
+       or new.owner_name is distinct from old.owner_name
+       or new.deleted_at is distinct from old.deleted_at
+       or new.is_disciplinary is distinct from old.is_disciplinary
+     ) then
+    if coalesce(current_setting('gardeflow.official_import', true), '0') = '1' then
+      return new;
+    end if;
+
+    if coalesce(current_setting('gardeflow.disciplinary_admin_delete', true), '0') = '1'
+       and public.is_admin()
+       and old.deleted_at is null
+       and new.deleted_at is not null
+       and new.date_str is not distinct from old.date_str
+       and new.shift_id is not distinct from old.shift_id
+       and new.owner_id is not distinct from old.owner_id
+       and new.owner_phone is not distinct from old.owner_phone
+       and new.owner_name is not distinct from old.owner_name
+       and new.is_disciplinary is not distinct from old.is_disciplinary then
+      return new;
+    end if;
+
+    raise exception 'Garde disciplinaire : annulation, modification et échange interdits. Seul un administrateur peut la supprimer.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_disciplinary_guard_trigger on public.planning_entries;
+create trigger protect_disciplinary_guard_trigger
+before update or delete on public.planning_entries
+for each row execute function public.protect_disciplinary_guard();
+
+create or replace function public.reject_disciplinary_exchange_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Refuser/annuler une ancienne demande reste toujours possible.
+  if new.status in ('declinedB', 'rejectedAdmin', 'cancelled') then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from public.planning_entries e
+    where e.id = new.planning_entry_id
+      and e.deleted_at is null
+      and e.is_disciplinary
+  ) then
+    raise exception 'Une garde disciplinaire ne peut être ni transférée ni échangée.';
