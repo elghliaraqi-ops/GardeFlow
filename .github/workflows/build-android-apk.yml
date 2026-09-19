@@ -176,11 +176,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_35/apply_v11_6_35.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_36/apply_v11_6_36.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_37/apply_v11_6_37.py"
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/part1_home_astreintes.py"
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/part2_news.py"
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/part3_signature.py"
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/part4_notifications.py"
-          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/part5_audit.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_38/point1_dashboard.py"
           test -f lib/screens/profile_screen.dart
           grep -q '^version: 11.6.38+198$' pubspec.yaml
           grep -q 'const DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
@@ -234,15 +230,9 @@ jobs:
           grep -q "request_daily_news_refresh" lib/screens/daily_news_section.dart
           grep -q "take(12)" lib/screens/daily_news_section.dart
           grep -q "Gardes ce mois-ci" lib/screens/home_screen.dart
-          grep -q "monthlyCounts\['urgences'\]" lib/screens/home_screen.dart
-          grep -q "monthlyCounts\['service'\]" lib/screens/home_screen.dart
-          grep -q "Fil Instagram" lib/screens/daily_news_section.dart
-          grep -q "items.take(20)" lib/screens/daily_news_section.dart
-          grep -q "bool _showSenior = false" lib/screens/home_screen.dart
-          grep -q "Astreintes Junior" lib/screens/home_screen.dart
-          grep -q "dismissedReminders" lib/state/app_state.dart
-          grep -q "admin_clear_audit_log" lib/services/supabase_backend_service.dart
-          grep -q "Nettoyer l’historique" lib/screens/audit_screen.dart
+          grep -q "label: 'Total'" lib/screens/home_screen.dart
+          grep -q "label: 'Urgences'" lib/screens/home_screen.dart
+          grep -q "label: 'Service'" lib/screens/home_screen.dart
           grep -q "GardeFlowTitle('Alarme de garde')" lib/screens/settings_screen.dart
           grep -q "Configurer les autorisations Android" lib/screens/settings_screen.dart
           grep -q "Lancer le test" lib/screens/settings_screen.dart
@@ -348,7 +338,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.38-release-apk
+          name: GardeFlow-v11.6.38-point1-dashboard-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
