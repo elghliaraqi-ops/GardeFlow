@@ -58,7 +58,7 @@ s = s.replace(old_gradient, new_gradient, 1)
 # Make text fields follow the adaptive palette whenever they still use a
 # hardcoded white fill.
 s = re.sub(
-    r"fillColor:\\s*(?:const\\s+)?Colors\\.white",
+    r"fillColor:\s*(?:const\s+)?Colors\.white",
     "fillColor: AppColors.paperAlt",
     s,
 )
