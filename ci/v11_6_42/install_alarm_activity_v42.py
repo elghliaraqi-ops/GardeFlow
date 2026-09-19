@@ -86,8 +86,8 @@ class AlarmActivity : Activity() {{
 
         val semantic = "$title $body"
             .lowercase()
-            .replace("\n", " ")
-            .replace(Regex("\\s+"), " ")
+            .replace("\\n", " ")
+            .replace(Regex("\\\\s+"), " ")
 
         val is24h = semantic.contains("24h") ||
             semantic.contains("24 h") ||
