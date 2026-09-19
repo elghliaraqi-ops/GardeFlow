@@ -1,0 +1,12 @@
+name: Inspect V11.6.37 methods
+on: {workflow_dispatch: {}}
+permissions: {contents: read}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          # Reuse source reconstruction from inspector by copying its script body is cumbersome; inspect patch sources instead.
+          grep -R -n -E "Future<void>.*login|Future<.*login|loadBackend|fetchAudit|class AuditScreen|clearReadAndPastNotifications" ci | tail -300 || true
