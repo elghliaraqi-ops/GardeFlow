@@ -384,6 +384,14 @@ jobs:
           print('V11.6.17 validation completed')
           PY
 
+      - name: Archive patched source for dark-mode inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.57-patched-source-dark-inspection
+          path: ${{ steps.project.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
