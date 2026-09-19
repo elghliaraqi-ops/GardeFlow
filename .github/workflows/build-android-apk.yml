@@ -62,6 +62,7 @@ on:
       - 'ci/v11_6_56/**'
       - 'ci/v11_6_57/**'
       - 'ci/v11_6_58/**'
+      - 'ci/v11_6_59/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -102,7 +103,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.58
+      - name: Apply patches V11.6.1 to V11.6.59
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -217,8 +218,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_56/apply_v11_6_56.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_57/apply_v11_6_57.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_58/apply_v11_6_58.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_59/apply_v11_6_59.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.58+218$' pubspec.yaml
+          grep -q '^version: 11.6.59+219$' pubspec.yaml
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q '_AstreintesHubView()' lib/screens/home_screen.dart
@@ -337,6 +339,10 @@ jobs:
           grep -q "datePickerTheme: DatePickerThemeData" lib/theme/app_theme.dart
           grep -q "dropdownMenuTheme: DropdownMenuThemeData" lib/theme/app_theme.dart
           grep -q "fillColor: AppColors.card" lib/screens/forgot_password_screen.dart
+          test -f supabase/patch_v11_6_59_global_directory.sql
+          grep -q "directory_contacts_all" lib/services/supabase_backend_service.dart
+          grep -q "_activeHospital = _kAllHospitals" lib/screens/directory_screen.dart
+          grep -q "aMine ? -1 : 1" lib/screens/directory_screen.dart
           grep -q "colorScheme.surface" lib/screens/junior_oncall_screen.dart
           test -f supabase/patch_v11_6_57_junior_oncall_phone.sql
           grep -q "keyboard_arrow_down_rounded" lib/screens/home_screen.dart
@@ -372,7 +378,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.58+218'),
+              ('pubspec.yaml', 'version: 11.6.59+219'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -448,7 +454,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.58-release-apk
+          name: GardeFlow-v11.6.59-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
