@@ -222,7 +222,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_59/apply_v11_6_59.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_60/apply_v11_6_60.py"
           test -f lib/screens/profile_screen.dart
-          grep -q '^version: 11.6.60+220
+          grep -Fq "version: 11.6.60+220" pubspec.yaml
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q '_AstreintesHubView()' lib/screens/home_screen.dart
@@ -462,7 +462,6 @@ jobs:
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
- pubspec.yaml
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
           grep -q "'Astreintes'" lib/screens/home_screen.dart
           grep -q '_AstreintesHubView()' lib/screens/home_screen.dart
