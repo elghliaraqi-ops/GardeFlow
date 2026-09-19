@@ -1,0 +1,90 @@
+             ));
+@@ -150,12 +177,14 @@
+             cells.add(_RosterCell(
+               shiftId: 'urg-jour',
+               text: day.map((f) => f.text).join(' '),
++              fragments: day,
+             ));
+           }
+           if (night.isNotEmpty) {
+             cells.add(_RosterCell(
+               shiftId: 'urg-nuit',
+               text: night.map((f) => f.text).join(' '),
++              fragments: night,
+             ));
+           }
+           if (cells.isNotEmpty) {
+@@ -167,6 +196,9 @@
+             ));
+           }
+         }
++        } finally {
++          rendered?.dispose();
++        }
+       }
+     } finally {
+       await document.dispose();
+@@ -207,6 +239,7 @@
+             profileId: profile.id,
+             dateStr: dateStr,
+             shiftId: cell.shiftId,
++            isDisciplinary: _profileMarkedRed(profile, cell.fragments),
+           ));
+         }
+       }
+@@ -226,8 +259,12 @@
+     List<OfficialRosterAssignment> input,
+   ) {
+     final byDoctorDate = <String, Set<String>>{};
++    final disciplinaryByDoctorDate = <String, bool>{};
+     for (final a in input) {
+-      byDoctorDate.putIfAbsent('${a.profileId}|${a.dateStr}', () => <String>{}).add(a.shiftId);
++      final key = '${a.profileId}|${a.dateStr}';
++      byDoctorDate.putIfAbsent(key, () => <String>{}).add(a.shiftId);
++      disciplinaryByDoctorDate[key] =
++          (disciplinaryByDoctorDate[key] ?? false) || a.isDisciplinary;
+     }
+ 
+     final output = <OfficialRosterAssignment>[];
+@@ -247,6 +284,7 @@
+         profileId: split[0],
+         dateStr: split[1],
+         shiftId: shiftId,
++        isDisciplinary: disciplinaryByDoctorDate[entry.key] ?? false,
+       ));
+     }
+     output.sort((a, b) {
+@@ -256,6 +294,145 @@
+     return output;
+   }
+ 
++  static bool _profileMarkedRed(
++    AppUser profile,
++    List<_TextFragment> fragments,
++  ) {
++    final red = _normalizeName(
++      fragments
++          .map((f) => f.redText)
++          .where((value) => value.trim().isNotEmpty)
++          .join(' '),
++    );
++    if (red.isEmpty) return false;
++
++    final padded = ' $red ';
++    final variants = <String>{
++      _normalizeName('${profile.prenom} ${profile.nom}'),
++      _normalizeName('${profile.nom} ${profile.prenom}'),
++    }..removeWhere((v) => v.isEmpty);
++
++    for (final variant in variants) {
++      if (padded.contains(' $variant ') || _approximatelyContains(red, variant)) {
++        return true;
++      }
++    }
++
++    // Cas des comptes avec plusieurs prénoms alors que le PDF n'en affiche
++    // qu'un : on exige toujours le nom + au moins un prénom rouge.
++    final nom = _normalizeName(profile.nom);
++    final prenomTokens = _normalizeName(profile.prenom)
++        .split(' ')
++        .where((t) => t.length >= 2);
