@@ -59,6 +59,7 @@ on:
       - 'ci/v11_6_53/**'
       - 'ci/v11_6_54/**'
       - 'ci/v11_6_55/**'
+      - 'ci/v11_6_56/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
