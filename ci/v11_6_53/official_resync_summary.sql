@@ -170,3 +170,43 @@ $$;
 
 grant execute on function public.apply_current_disciplinary_rules_for_me()
   to authenticated;
+
+
+create or replace function public.official_roster_my_summary(
+  p_resource_id uuid,
+  p_resource_updated_at timestamptz
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  total_count int := 0;
+  disciplinary_count int := 0;
+begin
+  if uid is null then raise exception 'Session requise'; end if;
+
+  select
+    count(*)::int,
+    count(*) filter (
+      where e.is_disciplinary
+         or public.is_current_disciplinary_guard(e.owner_id,e.date_str)
+    )::int
+  into total_count, disciplinary_count
+  from public.planning_entries e
+  where e.owner_id=uid
+    and e.deleted_at is null
+    and e.source_resource_id=p_resource_id
+    and e.source_resource_updated_at=p_resource_updated_at;
+
+  return jsonb_build_object(
+    'total',coalesce(total_count,0),
+    'disciplinary',coalesce(disciplinary_count,0)
+  );
+end;
+$$;
+
+grant execute on function public.official_roster_my_summary(uuid,timestamptz)
+  to authenticated;
