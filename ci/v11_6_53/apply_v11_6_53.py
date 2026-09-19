@@ -33,6 +33,19 @@ methods = r"""  Future<void> resetMyOfficialRosterProfileSync({
     return Map<String, dynamic>.from(result as Map);
   }
 
+  Future<Map<String, dynamic>> officialRosterMySummary({
+    required SharedResource resource,
+  }) async {
+    final result = await client.rpc(
+      'official_roster_my_summary',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
+      },
+    );
+    return Map<String, dynamic>.from(result as Map);
+  }
+
 """
 b = b.replace(anchor, methods + anchor, 1)
 backend.write_text(b)
@@ -93,6 +106,19 @@ force_method = r"""  Future<void> forceSyncMyOfficialRoster() async {
 
 """
 a = a.replace(public_anchor, force_method + public_anchor, 1)
+
+sync_old = """      final changed = await _syncOfficialRosterForProfile(me);
+      if (changed) await _reloadFromBackend();"""
+sync_new = """      final changed = await _syncOfficialRosterForProfile(me);
+      final disciplinary = await SupabaseBackendService.instance.applyCurrentDisciplinaryRulesForMe();
+      final disciplinaryChanged =
+          ((disciplinary['inserted'] as num?)?.toInt() ?? 0) > 0 ||
+          ((disciplinary['updated'] as num?)?.toInt() ?? 0) > 0;
+      if (changed || disciplinaryChanged) await _reloadFromBackend();"""
+if sync_old not in a:
+    raise SystemExit("V11.6.53: automatic disciplinary refresh anchor missing")
+a = a.replace(sync_old, sync_new, 1)
+
 state.write_text(a)
 
 screen = Path("lib/screens/official_planning_screen.dart")
@@ -108,9 +134,9 @@ o = o.replace(
 
 old_count = """      final count = parsed.assignments.where((a) => a.profileId == me.id).length;
       if (mounted) setState(() => _myGuardCounts[slot.id] = count);"""
-new_count = """      final mine = parsed.assignments.where((a) => a.profileId == me.id).toList(growable: false);
-      final count = mine.length;
-      final disciplinaryCount = mine.where((a) => a.isDisciplinary).length;
+new_count = """      final summary = await _backend.officialRosterMySummary(resource: resource);
+      final count = (summary['total'] as num?)?.toInt() ?? 0;
+      final disciplinaryCount = (summary['disciplinary'] as num?)?.toInt() ?? 0;
       if (mounted) {
         setState(() {
           _myGuardCounts[slot.id] = count;
@@ -262,6 +288,7 @@ checks = {
     "lib/state/app_state.dart": [
         "forceSyncMyOfficialRoster",
         "applyCurrentDisciplinaryRulesForMe",
+        "officialRosterMySummary",
     ],
     "lib/services/supabase_backend_service.dart": [
         "resetMyOfficialRosterProfileSync",
@@ -270,6 +297,7 @@ checks = {
     "supabase/patch_v11_6_53_official_resync_summary.sql": [
         "reset_my_official_roster_profile_sync",
         "apply_current_disciplinary_rules_for_me",
+        "official_roster_my_summary",
     ],
 }
 for file_name, needles in checks.items():
