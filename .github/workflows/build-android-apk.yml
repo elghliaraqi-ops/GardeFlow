@@ -232,6 +232,30 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_64/apply_v11_6_64.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_65/apply_v11_6_65.py"
 
+          # TEMP V11.6.65 diagnostics: inspect splash, settings sections and past-month editing.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          targets = {
+            'lib/screens/splash_screen.dart': [r'GardeFlow', r'Planning', r'SERVICE DES', r'FLOW', r'slogan'],
+            'lib/screens/settings_screen.dart': [r'Apparence', r'Thème', r'Rappel', r'signature', r'Elghali', r'Production', r'version', r'Alarme de garde'],
+            'lib/screens/home_screen.dart': [r'DragTarget', r'Draggable', r'onAccept', r'canAccept', r'isBefore', r'focusedDay', r'selectedDay', r'DateTime.now', r'addEntry', r'planning'],
+            'lib/state/app_state.dart': [r'addPlanning', r'addEntry', r'createPlanning', r'past', r'isBefore', r'validate', r'calendar'],
+          }
+          for file_name, pats in targets.items():
+              p=Path(file_name)
+              print(f"===== DIAG {file_name} =====")
+              lines=p.read_text().splitlines()
+              hit=set()
+              for i,line in enumerate(lines):
+                  if any(re.search(pat,line,re.I) for pat in pats):
+                      for j in range(max(0,i-18), min(len(lines),i+24)):
+                          hit.add(j)
+              for j in sorted(hit):
+                  print(f"{j+1:04d}: {lines[j]}")
+          PY
+          echo 'TEMP_V11665_DIAG_COMPLETE'; exit 1
+
 
 
           test -f lib/screens/profile_screen.dart
