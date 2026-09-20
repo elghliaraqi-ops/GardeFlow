@@ -233,7 +233,9 @@ jobs:
           for file_name, patterns in {
               'lib/screens/auth_screen.dart': [r'Créer', r'compte', r'create', r'register'],
               'lib/screens/home_screen.dart': [r'notification', r'badge', r'pending', r'account', r'compte'],
-              'lib/screens/notifications_screen.dart': [r'notification', r'pending', r'account', r'compte', r'approb'],
+              'lib/screens/notifications_screen.dart': [r'notification', r'pending', r'account', r'compte', r'approb', r'TabBar', r'Tab\('],
+              'lib/state/app_state.dart': [r'totalBadgeCount', r'pending', r'account', r'compte', r'approve', r'profile'],
+              'lib/screens/admin_screen.dart': [r'pending', r'account', r'compte', r'approb', r'profile'],
           }.items():
               p=Path(file_name)
               print(f"===== DIAG {file_name} =====")
