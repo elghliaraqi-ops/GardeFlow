@@ -68,6 +68,7 @@ on:
       - 'ci/v11_6_62/**'
       - 'ci/v11_6_63/**'
       - 'ci/v11_6_64/**'
+      - 'ci/v11_6_65/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -108,7 +109,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.64
+      - name: Apply patches V11.6.1 to V11.6.65
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -229,23 +230,12 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_62/apply_v11_6_62.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_63/apply_v11_6_63.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_64/apply_v11_6_64.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_65/apply_v11_6_65.py"
 
-          # TEMP V11.6.64 diagnostics: inspect dynamic brand usages.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          print('===== BRAND_USAGE_DIAG =====')
-          for p in Path('lib').rglob('*.dart'):
-              lines=p.read_text().splitlines()
-              for i,line in enumerate(lines,1):
-                  if any(token in line for token in ['AppColors.brand', 'AppColors.navy']):
-                      print(f"{p}:{i}: {line}")
-          PY
-          echo 'TEMP_THEME_DIAG_COMPLETE'; exit 1
 
 
           test -f lib/screens/profile_screen.dart
-          grep -Fq "version: 11.6.64+224" pubspec.yaml
+          grep -Fq "version: 11.6.65+225" pubspec.yaml
           if grep -q 'InstitutionalLogosPanel' lib/screens/auth_screen.dart; then echo 'Partner logos remain on login'; exit 1; fi
           if grep -q 'InstitutionalLogosPanel' lib/screens/splash_screen.dart; then echo 'Partner logos remain on splash'; exit 1; fi
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
@@ -356,7 +346,6 @@ jobs:
           grep -q "can_resync" supabase/patch_v11_6_55_resync_validation_lock.sql
           grep -q "Mode sombre" lib/screens/settings_screen.dart
           grep -q "AppTheme.dark()" lib/main.dart
-          grep -q "0xFF07110C" lib/screens/auth_screen.dart
           grep -q "0xFFB3261E" lib/screens/home_screen.dart
           grep -Fq "Validation automatique : 7 jours après la publication ou le remplacement du planning officiel." lib/screens/home_screen.dart
           grep -q "AppColors.isDarkMode" lib/screens/auth_screen.dart
@@ -368,11 +357,18 @@ jobs:
           grep -Fq "labelText: 'Rechercher un médecin'" lib/screens/exchange_request_sheet.dart
           grep -Fq "final filteredTargets = search.isEmpty" lib/screens/exchange_request_sheet.dart
           grep -Fq "items: filteredTargets" lib/screens/exchange_request_sheet.dart
+          grep -Fq "Thème de l’application" lib/screens/settings_screen.dart
+          grep -Fq "appState.setAppearanceTheme('green')" lib/screens/settings_screen.dart
+          grep -Fq "appState.setAppearanceTheme('red')" lib/screens/settings_screen.dart
+          grep -Fq "appState.setAppearanceTheme('white')" lib/screens/settings_screen.dart
+          grep -Fq "appState.setAppearanceTheme('black')" lib/screens/settings_screen.dart
+          grep -Fq "AppColors.setAppearanceTheme(appearanceTheme)" lib/main.dart
+          grep -Fq "static String _appearanceTheme = 'green';" lib/theme/app_theme.dart
           grep -q "static ThemeData dark()" lib/theme/app_theme.dart
           grep -q "Icons.phone_rounded" lib/screens/junior_oncall_screen.dart
           grep -q "ownerPhone" lib/screens/junior_oncall_screen.dart
           grep -q "theme.scaffoldBackgroundColor" lib/screens/junior_oncall_screen.dart
-          grep -q "bool _darkMode = true" lib/state/app_state.dart
+          grep -Fq "String _appearanceTheme = 'green';" lib/state/app_state.dart
           grep -q "darkDefaultAppliedV58" lib/state/app_state.dart
           grep -q "AppColors.isDarkMode" lib/screens/home_screen.dart
           grep -q "datePickerTheme: DatePickerThemeData" lib/theme/app_theme.dart
@@ -417,7 +413,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.64+224'),
+              ('pubspec.yaml', 'version: 11.6.65+225'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -493,7 +489,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.64-release-apk
+          name: GardeFlow-v11.6.65-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
