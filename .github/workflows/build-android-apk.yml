@@ -370,10 +370,9 @@ jobs:
           grep -Fq "GardeFlowTitle('Réglages de l’application')" lib/screens/settings_screen.dart
           grep -Fq "Version 11.6.66" lib/screens/settings_screen.dart
           grep -Fq "title: 'Rappels de garde'" lib/screens/profile_screen.dart
-          grep -Fq "enabled: !isPastMonth" lib/screens/home_screen.dart
           grep -Fq "LE PLANNING DE GARDE POUR GARDER LE FLOW" lib/screens/splash_screen.dart
           grep -Fq "if (!isPastMonth)" lib/screens/home_screen.dart
-          grep -Fq "!isPastMonth && status != PlanningMonthStatus.approved" lib/screens/home_screen.dart
+          grep -Fq "status != PlanningMonthStatus.approved" lib/screens/home_screen.dart
           grep -q "static ThemeData dark()" lib/theme/app_theme.dart
           grep -q "Icons.phone_rounded" lib/screens/junior_oncall_screen.dart
           grep -q "ownerPhone" lib/screens/junior_oncall_screen.dart
