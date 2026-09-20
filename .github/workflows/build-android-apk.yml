@@ -239,6 +239,7 @@ jobs:
           targets = {
             'lib/screens/splash_screen.dart': [r'GardeFlow', r'Planning', r'SERVICE DES', r'FLOW', r'slogan'],
             'lib/screens/settings_screen.dart': [r'Apparence', r'Thème', r'Rappel', r'signature', r'Elghali', r'Production', r'version', r'Alarme de garde'],
+            'lib/screens/profile_screen.dart': [r'Réglages', r'Notifications', r'Plannings officiels', r'Astreintes', r'Mon espace', r'Elghali', r'Production', r'SettingsScreen'],
             'lib/screens/home_screen.dart': [r'DragTarget', r'Draggable', r'onAccept', r'canAccept', r'isBefore', r'focusedDay', r'selectedDay', r'DateTime.now', r'addEntry', r'planning'],
             'lib/state/app_state.dart': [r'addPlanning', r'addEntry', r'createPlanning', r'past', r'isBefore', r'validate', r'calendar'],
           }
