@@ -612,6 +612,11 @@ dynamic_tokens = (
     "AppColors.inkSoft",
     "AppColors.inkFaint",
     "AppColors.line",
+    "_brandGreen",
+    "_loginGreen",
+    "_loginGreenDark",
+    "_recoveryGreen",
+    "_recoveryGreenDark",
 )
 
 for dart in Path("lib").rglob("*.dart"):
