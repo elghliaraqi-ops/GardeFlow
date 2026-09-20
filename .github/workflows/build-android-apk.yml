@@ -67,6 +67,7 @@ on:
       - 'ci/v11_6_61/**'
       - 'ci/v11_6_62/**'
       - 'ci/v11_6_63/**'
+      - 'ci/v11_6_64/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -107,7 +108,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.63
+      - name: Apply patches V11.6.1 to V11.6.64
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -227,20 +228,11 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_61/apply_v11_6_61.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_62/apply_v11_6_62.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_63/apply_v11_6_63.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_64/apply_v11_6_64.py"
 
-          # TEMP V11.6.63 diagnostics: inspect transfer/exchange doctor selector.
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('lib/screens/exchange_request_sheet.dart')
-          print('===== DIAG lib/screens/exchange_request_sheet.dart =====')
-          lines=p.read_text().splitlines()
-          for i,line in enumerate(lines,1):
-              print(f"{i:04d}: {line}")
-          PY
-          echo 'TEMP_EXCHANGE_DIAG_COMPLETE'; exit 1
 
           test -f lib/screens/profile_screen.dart
-          grep -Fq "version: 11.6.63+223" pubspec.yaml
+          grep -Fq "version: 11.6.64+224" pubspec.yaml
           if grep -q 'InstitutionalLogosPanel' lib/screens/auth_screen.dart; then echo 'Partner logos remain on login'; exit 1; fi
           if grep -q 'InstitutionalLogosPanel' lib/screens/splash_screen.dart; then echo 'Partner logos remain on splash'; exit 1; fi
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
@@ -360,6 +352,9 @@ jobs:
           grep -Fq "class _AccountsTab extends StatelessWidget" lib/screens/notifications_screen.dart
           grep -Fq "appState.reviewAccount(user.id, approve)" lib/screens/notifications_screen.dart
           grep -Fq 'Comptes ($accountCount)' lib/screens/notifications_screen.dart
+          grep -Fq "labelText: 'Rechercher un médecin'" lib/screens/exchange_request_sheet.dart
+          grep -Fq "final filteredTargets = search.isEmpty" lib/screens/exchange_request_sheet.dart
+          grep -Fq "items: filteredTargets" lib/screens/exchange_request_sheet.dart
           grep -q "static ThemeData dark()" lib/theme/app_theme.dart
           grep -q "Icons.phone_rounded" lib/screens/junior_oncall_screen.dart
           grep -q "ownerPhone" lib/screens/junior_oncall_screen.dart
@@ -485,7 +480,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.63-release-apk
+          name: GardeFlow-v11.6.64-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
