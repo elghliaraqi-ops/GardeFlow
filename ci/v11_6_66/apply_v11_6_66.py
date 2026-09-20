@@ -22,6 +22,20 @@ if EXPECTED not in pub:
 else:
     pubspec.write_text(pub.replace(EXPECTED, TARGET, 1))
 
+# Ensure the reusable GardeFlowLogo widget is available on the splash screen.
+splash = Path("lib/screens/splash_screen.dart")
+splash_text = splash.read_text()
+if "import '../theme/widgets.dart';" not in splash_text:
+    import_anchor = "import '../theme/app_theme.dart';\n"
+    if import_anchor not in splash_text:
+        raise SystemExit("V11.6.66: splash theme import anchor missing")
+    splash_text = splash_text.replace(
+        import_anchor,
+        import_anchor + "import '../theme/widgets.dart';\n",
+        1,
+    )
+    splash.write_text(splash_text)
+
 # ---------------------------------------------------------------------------
 # 1) Splash screen: high-contrast branding/slogans on the bright hospital
 #    background. Keep the logo and GardeFlow identity but strengthen font size,
