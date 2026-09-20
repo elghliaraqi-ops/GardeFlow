@@ -284,7 +284,7 @@ jobs:
           grep -q "Elghali Production © 2026" lib/screens/settings_screen.dart
           grep -q "elghali_signature.webp" lib/screens/settings_screen.dart
           grep -q "MediaQuery.viewPaddingOf(context).bottom" lib/screens/home_screen.dart
-          grep -q "width: 260" lib/screens/profile_screen.dart
+          grep -q "width: 260" lib/screens/settings_screen.dart
           grep -q "assets/branding/elghali_signature.webp" pubspec.yaml
           grep -q "À venir" lib/screens/daily_news_section.dart
           grep -q "Voir sur Instagram" lib/screens/daily_news_section.dart
