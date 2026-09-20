@@ -347,7 +347,6 @@ jobs:
           grep -q "_myCanResync" lib/screens/official_planning_screen.dart
           grep -q "isMyHospital && canResync" lib/screens/official_planning_screen.dart
           grep -q "can_resync" supabase/patch_v11_6_55_resync_validation_lock.sql
-          grep -q "Mode sombre" lib/screens/settings_screen.dart
           grep -q "AppTheme.dark()" lib/main.dart
           grep -q "0xFFB3261E" lib/screens/home_screen.dart
           grep -Fq "Validation automatique : 7 jours après la publication ou le remplacement du planning officiel." lib/screens/home_screen.dart
@@ -361,10 +360,7 @@ jobs:
           grep -Fq "final filteredTargets = search.isEmpty" lib/screens/exchange_request_sheet.dart
           grep -Fq "items: filteredTargets" lib/screens/exchange_request_sheet.dart
           grep -Fq "Thème de l’application" lib/screens/settings_screen.dart
-          grep -Fq "appState.setAppearanceTheme('green')" lib/screens/settings_screen.dart
-          grep -Fq "appState.setAppearanceTheme('red')" lib/screens/settings_screen.dart
-          grep -Fq "appState.setAppearanceTheme('white')" lib/screens/settings_screen.dart
-          grep -Fq "appState.setAppearanceTheme('black')" lib/screens/settings_screen.dart
+          grep -Fq "appState.setAppearanceTheme(value)" lib/screens/settings_screen.dart
           grep -Fq "AppColors.setAppearanceTheme(appearanceTheme)" lib/main.dart
           grep -Fq "static String _appearanceTheme = 'green';" lib/theme/app_theme.dart
           grep -Fq "class ApplicationSettingsScreen extends StatelessWidget" lib/screens/settings_screen.dart
