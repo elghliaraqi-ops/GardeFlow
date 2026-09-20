@@ -230,24 +230,16 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_63/apply_v11_6_63.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_64/apply_v11_6_64.py"
 
-          # TEMP V11.6.64 diagnostics: inspect appearance/theme implementation.
+          # TEMP V11.6.64 diagnostics: inspect dynamic brand usages.
           python3 - <<'PY'
           from pathlib import Path
-          for file_name in [
-              'lib/theme/app_theme.dart',
-              'lib/screens/settings_screen.dart',
-              'lib/state/app_state.dart',
-              'lib/main.dart',
-          ]:
-              print(f"===== THEME_DIAG {file_name} =====")
-              p=Path(file_name)
+          import re
+          print('===== BRAND_USAGE_DIAG =====')
+          for p in Path('lib').rglob('*.dart'):
               lines=p.read_text().splitlines()
               for i,line in enumerate(lines,1):
-                  if file_name.endswith('app_theme.dart') or file_name.endswith('main.dart'):
-                      print(f"{i:04d}: {line}")
-                  elif any(k in line.lower() for k in ['darkmode','dark mode','mode sombre','apparence','setdarkmode','darkdefault']):
-                      for j in range(max(1,i-18), min(len(lines),i+28)+1):
-                          print(f"{j:04d}: {lines[j-1]}")
+                  if any(token in line for token in ['AppColors.brand', 'AppColors.navy']):
+                      print(f"{p}:{i}: {line}")
           PY
           echo 'TEMP_THEME_DIAG_COMPLETE'; exit 1
 
