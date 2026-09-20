@@ -249,6 +249,7 @@ jobs:
               for j in sorted(hit):
                   print(f"{j+1:04d}: {lines[j]}")
           PY
+          echo 'TEMP_DIAG_COMPLETE'; exit 1
           test -f lib/screens/profile_screen.dart
           grep -Fq "version: 11.6.62+222" pubspec.yaml
           if grep -q 'InstitutionalLogosPanel' lib/screens/auth_screen.dart; then echo 'Partner logos remain on login'; exit 1; fi
