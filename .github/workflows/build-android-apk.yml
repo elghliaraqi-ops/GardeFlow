@@ -228,6 +228,17 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_62/apply_v11_6_62.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_63/apply_v11_6_63.py"
 
+          # TEMP V11.6.63 diagnostics: inspect transfer/exchange doctor selector.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/screens/exchange_request_sheet.dart')
+          print('===== DIAG lib/screens/exchange_request_sheet.dart =====')
+          lines=p.read_text().splitlines()
+          for i,line in enumerate(lines,1):
+              print(f"{i:04d}: {line}")
+          PY
+          echo 'TEMP_EXCHANGE_DIAG_COMPLETE'; exit 1
+
           test -f lib/screens/profile_screen.dart
           grep -Fq "version: 11.6.63+223" pubspec.yaml
           if grep -q 'InstitutionalLogosPanel' lib/screens/auth_screen.dart; then echo 'Partner logos remain on login'; exit 1; fi
