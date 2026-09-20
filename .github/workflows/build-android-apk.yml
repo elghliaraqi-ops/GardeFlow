@@ -256,7 +256,7 @@ jobs:
           grep -q 'class _CompactShiftTile' lib/screens/home_screen.dart
           grep -q 'GardeFlowLogo(size: 38)' lib/screens/home_screen.dart
           grep -q 'assets/branding/gardeflow_logo.png' lib/theme/widgets.dart
-          grep -q 'static const brand = Color(0xFF138A55)' lib/theme/app_theme.dart
+          grep -q 'static Color get brand' lib/theme/app_theme.dart
           grep -q 'static const cyan = Color(0xFFD94A43)' lib/theme/app_theme.dart
           grep -q 'Actualités du jour' lib/screens/daily_news_section.dart
           grep -q 'Bonsoir' lib/screens/home_screen.dart
