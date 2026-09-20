@@ -70,6 +70,7 @@ on:
       - 'ci/v11_6_64/**'
       - 'ci/v11_6_65/**'
       - 'ci/v11_6_66/**'
+      - 'ci/v11_6_67/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -110,7 +111,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.66
+      - name: Apply patches V11.6.1 to V11.6.67
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -233,37 +234,14 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_64/apply_v11_6_64.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_65/apply_v11_6_65.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_66/apply_v11_6_66.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_67/apply_v11_6_67.py"
 
-          # TEMP V11.6.66 diagnostics: past-month validation UI.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p=Path('lib/screens/home_screen.dart')
-          lines=p.read_text().splitlines()
-          print('===== PAST_MONTH_UI_DIAG =====')
-          hit=set()
-          for i,line in enumerate(lines):
-              if any(k in line for k in [
-                  'Validation automatique',
-                  'En préparation',
-                  'Planning validé',
-                  'Valider',
-                  'monthStatus',
-                  'monthEditable',
-                  'isPastMonth',
-              ]):
-                  for j in range(max(0,i-45), min(len(lines),i+65)):
-                      hit.add(j)
-          for j in sorted(hit):
-              print(f"{j+1:04d}: {lines[j]}")
-          PY
-          echo 'TEMP_PAST_MONTH_UI_DIAG_COMPLETE'; exit 1
 
 
 
 
           test -f lib/screens/profile_screen.dart
-          grep -Fq "version: 11.6.66+226" pubspec.yaml
+          grep -Fq "version: 11.6.67+227" pubspec.yaml
           if grep -q 'InstitutionalLogosPanel' lib/screens/auth_screen.dart; then echo 'Partner logos remain on login'; exit 1; fi
           if grep -q 'InstitutionalLogosPanel' lib/screens/splash_screen.dart; then echo 'Partner logos remain on splash'; exit 1; fi
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
@@ -394,6 +372,8 @@ jobs:
           grep -Fq "title: 'Rappels de garde'" lib/screens/profile_screen.dart
           grep -Fq "enabled: !isPastMonth" lib/screens/home_screen.dart
           grep -Fq "LE PLANNING DE GARDE POUR GARDER LE FLOW" lib/screens/splash_screen.dart
+          grep -Fq "if (!isPastMonth)" lib/screens/home_screen.dart
+          grep -Fq "!isPastMonth && status != PlanningMonthStatus.approved" lib/screens/home_screen.dart
           grep -q "static ThemeData dark()" lib/theme/app_theme.dart
           grep -q "Icons.phone_rounded" lib/screens/junior_oncall_screen.dart
           grep -q "ownerPhone" lib/screens/junior_oncall_screen.dart
@@ -443,7 +423,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.66+226'),
+              ('pubspec.yaml', 'version: 11.6.67+227'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -519,7 +499,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.66-release-apk
+          name: GardeFlow-v11.6.67-release-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
