@@ -34,9 +34,27 @@ replace_once(
     """  String? _doctorId;
   String? _targetEntryId;
   String _doctorSearch = '';
+  final TextEditingController _doctorSearchController = TextEditingController();
   String? _error;
 """,
     "doctor search state",
+)
+
+replace_once(
+    "lib/screens/exchange_request_sheet.dart",
+    """  @override
+  Widget build(BuildContext context) {
+""",
+    """  @override
+  void dispose() {
+    _doctorSearchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+""",
+    "dispose doctor search controller",
 )
 
 replace_once(
@@ -74,6 +92,7 @@ replace_once(
               ),
 """,
     """              TextField(
+                controller: _doctorSearchController,
                 onChanged: (value) => setState(() {
                   _doctorSearch = value;
                   _doctorId = null;
@@ -90,6 +109,7 @@ replace_once(
                       : IconButton(
                           tooltip: 'Effacer la recherche',
                           onPressed: () => setState(() {
+                            _doctorSearchController.clear();
                             _doctorSearch = '';
                             _doctorId = null;
                             _targetEntryId = null;
@@ -142,6 +162,8 @@ replace_once(
 final = sheet.read_text()
 checks = [
     "String _doctorSearch = '';",
+    "final TextEditingController _doctorSearchController = TextEditingController();",
+    "_doctorSearchController.dispose();",
     "final filteredTargets = search.isEmpty",
     "labelText: 'Rechercher un médecin'",
     "hintText: 'Nom ou service'",
