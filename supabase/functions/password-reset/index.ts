@@ -39,6 +39,7 @@ async function sendFcm(
   token: string,
   platform: string,
   profile: Record<string, string>,
+  recipientId: string,
 ) {
   const displayName = `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || 'Un médecin';
   const title = 'Mot de passe oublié';
@@ -53,6 +54,7 @@ async function sendFcm(
       requesterName: displayName,
       requesterPhone: profile.phone ?? '',
       requesterHospital: profile.hospital ?? '',
+      recipientId,
     },
     notification: { title, body },
   };
@@ -170,6 +172,7 @@ Deno.serve(async (req) => {
         row.token,
         row.platform ?? 'android',
         profile as Record<string, string>,
+        row.owner_id,
       );
       if (!result.ok) {
         console.error('password-reset FCM failed', result.status, result.text);
