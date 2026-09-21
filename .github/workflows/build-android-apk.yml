@@ -7,6 +7,7 @@ on:
       - main
       - audit-fixes-v11.6.68
       - audit-fixes-v11.6.69
+      - audit-fixes-v11.6.70
     paths:
       - '.github/workflows/build-android-apk.yml'
       - 'source/**'
@@ -78,7 +79,7 @@ on:
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-apk:
@@ -90,6 +91,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extract V11.6.14 to V11.6.16 patches
+        if: github.ref_name != 'audit-fixes-v11.6.70'
         shell: bash
         run: |
           set -euo pipefail
@@ -106,16 +108,39 @@ jobs:
           set -euo pipefail
           ZIP="GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
           test -f "$ZIP"
-          rm -rf .ci-project
-          mkdir -p .ci-project
-          unzip -q "$ZIP" -d .ci-project
-          PUBSPEC="$(find .ci-project -type f -name pubspec.yaml -print -quit)"
-          test -n "$PUBSPEC"
-          PROJECT_DIR="$(dirname "$PUBSPEC")"
-          test -f "$PROJECT_DIR/lib/main.dart"
+
+          if [ "$GITHUB_REF_NAME" = "audit-fixes-v11.6.70" ]; then
+            PROJECT_DIR="$GITHUB_WORKSPACE/source"
+            test -f "$PROJECT_DIR/pubspec.yaml"
+            test -f "$PROJECT_DIR/lib/main.dart"
+            grep -Fq "version: 11.6.70+230" "$PROJECT_DIR/pubspec.yaml"
+
+            rm -rf .v1170-base
+            mkdir -p .v1170-base
+            unzip -q "$ZIP" -d .v1170-base
+            GOOGLE_SERVICES="$(find .v1170-base -type f -name google-services.json -print -quit)"
+            test -n "$GOOGLE_SERVICES"
+            cp "$GOOGLE_SERVICES" "$PROJECT_DIR/google-services.json"
+
+            grep -Fq "recipientId" "$PROJECT_DIR/lib/services/push_notification_service.dart"
+            grep -Fq "loadPushActiveUserId" "$PROJECT_DIR/lib/services/push_notification_service.dart"
+            grep -Fq "message.android = { priority: 'HIGH' }" supabase/functions/send-push/index.ts
+            grep -Fq "message.android = { priority: 'HIGH' }" supabase/functions/password-reset/index.ts
+            grep -Fq "message.android = { priority: 'HIGH' }" supabase/functions/auto-validate-plannings/index.ts
+          else
+            rm -rf .ci-project
+            mkdir -p .ci-project
+            unzip -q "$ZIP" -d .ci-project
+            PUBSPEC="$(find .ci-project -type f -name pubspec.yaml -print -quit)"
+            test -n "$PUBSPEC"
+            PROJECT_DIR="$(dirname "$PUBSPEC")"
+            test -f "$PROJECT_DIR/lib/main.dart"
+          fi
+
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Apply patches V11.6.1 to V11.6.69
+        if: github.ref_name != 'audit-fixes-v11.6.70'
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -526,42 +551,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.69-audit-fixes-apk
+          name: GardeFlow-v11.6.70-final-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
-
-      - name: Persist consolidated V11.6.69 source
-        if: github.ref_name == 'audit-fixes-v11.6.69'
-        shell: bash
-        run: |
-          set -euo pipefail
-          PROJECT_DIR="${{ steps.project.outputs.dir }}"
-          rm -rf source
-          mkdir -p source
-          cp -a "$PROJECT_DIR/lib" source/
-          cp -a "$PROJECT_DIR/assets" source/
-          cp -a "$PROJECT_DIR/tool" source/
-          cp -a "$PROJECT_DIR/supabase" source/
-          cp -a "$PROJECT_DIR/test" source/
-          cp "$PROJECT_DIR/pubspec.yaml" source/pubspec.yaml
-          if [ -f "$PROJECT_DIR/analysis_options.yaml" ]; then cp "$PROJECT_DIR/analysis_options.yaml" source/analysis_options.yaml; fi
-          if [ -f "$PROJECT_DIR/pubspec.lock" ]; then cp "$PROJECT_DIR/pubspec.lock" source/pubspec.lock; fi
-
-          git config user.name "GardeFlow CI"
-          git config user.email "actions@users.noreply.github.com"
-
-          git fetch origin "${GITHUB_REF_NAME}"
-          REMOTE_HEAD="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
-          if [ "$REMOTE_HEAD" != "$GITHUB_SHA" ]; then
-            echo "A newer branch commit exists; skip stale source consolidation."
-            exit 0
-          fi
-
-          git add source
-          if git diff --cached --quiet; then
-            echo "Consolidated source already current."
-          else
-            git commit -m "Consolidate GardeFlow V11.6.69 source [skip ci]"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
