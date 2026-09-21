@@ -1085,6 +1085,25 @@ replace_once(
   'remove obsolete dark default restore assignment',
 )
 
+
+replace_once(
+  'lib/screens/notifications_screen.dart',
+  """          children: [
+            _RemindersTab(),
+            _ExchangesTab(),
+            _LeavesTab(),
+            _LeavesTab(),
+            if (isAdmin) _AccountsTab(),
+          ],""",
+  """          children: [
+            _RemindersTab(),
+            _ExchangesTab(),
+            _LeavesTab(),
+            if (isAdmin) _AccountsTab(),
+          ],""",
+  'fix notifications tab count mismatch',
+)
+
 checks={
  'pubspec.yaml':['version: 11.6.69+229'],
  'lib/models/password_reset_request.dart':['class PasswordResetRequest'],
