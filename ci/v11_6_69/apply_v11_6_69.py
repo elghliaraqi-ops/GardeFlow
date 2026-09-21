@@ -648,6 +648,44 @@ replace_once(
   'rotate current push device token',
 )
 
+
+Path('test').mkdir(exist_ok=True)
+Path('test/audit_smoke_test.dart').write_text('''import 'package:flutter_test/flutter_test.dart';
+import 'package:huim6_planning/config/business_rules.dart';
+import 'package:huim6_planning/models/password_reset_request.dart';
+import 'package:huim6_planning/services/supabase_backend_service.dart';
+
+void main() {
+  test('Moroccan phone normalization stays stable', () {
+    expect(SupabaseBackendService.authPhone('0612345678'), '+212612345678');
+    expect(SupabaseBackendService.authPhone('212612345678'), '+212612345678');
+    expect(SupabaseBackendService.authPhone('+212612345678'), '+212612345678');
+  });
+
+  test('password reset request payload parses correctly', () {
+    final request = PasswordResetRequest.fromJson({
+      'request_id': 'request-1',
+      'profile_id': 'profile-1',
+      'requested_at': '2026-09-21T10:00:00Z',
+      'full_name': 'Dr Test',
+      'phone': '+212600000000',
+      'hospital': 'Hospital',
+      'service': 'Imagerie Médicale',
+      'grade_label': 'Médecin junior',
+    });
+    expect(request.id, 'request-1');
+    expect(request.profileId, 'profile-1');
+    expect(request.service, 'Imagerie Médicale');
+    expect(request.requestedAt.isUtc, isTrue);
+  });
+
+  test('cross-hospital exchanges remain forbidden globally', () {
+    expect(BusinessRules.sameHospitalRequired, isTrue);
+  });
+}
+''')
+print('V11.6.69: audit smoke tests created')
+
 checks={
  'pubspec.yaml':['version: 11.6.69+229'],
  'lib/models/password_reset_request.dart':['class PasswordResetRequest'],
@@ -657,6 +695,7 @@ checks={
  'lib/screens/admin_password_reset_screen.dart':['initialUserId','_openedInitialUser'],
  'lib/services/push_notification_service.dart':['password_reset_request','initialIndex','registerPushDevice'],
  'lib/services/local_storage_service.dart':['loadOrCreatePushDeviceId','gardeflow_push_device_id_v1'],
+ 'test/audit_smoke_test.dart':['Moroccan phone normalization','password reset request payload'],
 }
 for file_name,needles in checks.items():
     text=Path(file_name).read_text()
