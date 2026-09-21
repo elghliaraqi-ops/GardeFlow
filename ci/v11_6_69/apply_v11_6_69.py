@@ -650,7 +650,7 @@ replace_once(
 
 
 Path('test').mkdir(exist_ok=True)
-Path('test/audit_smoke_test.dart').write_text('''import 'package:flutter_test/flutter_test.dart';
+Path('test/audit_smoke_test.dart').write_text('''import 'package:flutter/material.dart';\nimport 'package:flutter_test/flutter_test.dart';
 import 'package:huim6_planning/config/business_rules.dart';
 import 'package:huim6_planning/models/password_reset_request.dart';
 import 'package:huim6_planning/services/supabase_backend_service.dart';
