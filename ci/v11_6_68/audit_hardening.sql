@@ -13,6 +13,12 @@ as $$
 declare
   month_start date := date_trunc('month', current_date)::date;
 begin
+  -- Trusted server maintenance (for example account deletion) may clean up
+  -- historical rows. Human/API sessions remain strictly read-only.
+  if auth.role() = 'service_role' then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
   if tg_op = 'INSERT' then
     if new.date_str < month_start then
       raise exception 'Un mois passé est en lecture seule';
