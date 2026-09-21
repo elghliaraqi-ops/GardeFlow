@@ -135,6 +135,12 @@ Deno.serve(async (req) => {
     if (rateError) throw rateError;
     if (rateAllowed !== true) return genericResponse();
 
+    const { error: requestError } = await admin.rpc(
+      'create_or_refresh_password_reset_request',
+      { p_profile_id: profile.id },
+    );
+    if (requestError) throw requestError;
+
     let { data: adminRows, error: adminsError } = await admin
       .from('profiles')
       .select('id')
