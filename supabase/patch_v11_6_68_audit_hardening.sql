@@ -98,7 +98,7 @@ begin
 
   -- Trusted maintenance may remove historical data as part of a full
   -- account deletion. Human/admin sessions remain read-only.
-  if coalesce(current_setting('request.jwt.claim.role', true),'') = 'service_role' then
+  if coalesce(auth.jwt()->>'role','') = 'service_role' then
     if tg_op = 'DELETE' then return old; end if;
     return new;
   end if;
@@ -148,7 +148,7 @@ begin
 
   v_first_day := make_date(v_year, v_month, 1);
 
-  if coalesce(current_setting('request.jwt.claim.role', true),'') = 'service_role' then
+  if coalesce(auth.jwt()->>'role','') = 'service_role' then
     if tg_op = 'DELETE' then return old; end if;
     return new;
   end if;
