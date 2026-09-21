@@ -88,7 +88,15 @@ Deno.serve(async (req: Request) => {
       .select('storage_path')
       .or(`owner_id.eq.${targetUserId},owner_phone.eq.${targetProfile.phone}`);
 
-    if (photoLookupError) {
+    const legacyAstreinteTableMissing =
+      photoLookupError != null &&
+      (
+        photoLookupError.code === '42P01' ||
+        photoLookupError.code === 'PGRST205' ||
+        String(photoLookupError.message ?? '').includes('astreinte_photos')
+      );
+
+    if (photoLookupError && !legacyAstreinteTableMissing) {
       console.error('admin-delete-user photo lookup failed', photoLookupError);
       return json({ ok: false, error: 'storage_cleanup_failed' }, 500);
     }
@@ -133,9 +141,13 @@ Deno.serve(async (req: Request) => {
       () => adminClient.from('planning_entries').delete().or(
         `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
       ),
-      () => adminClient.from('astreinte_photos').delete().or(
-        `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
-      ),
+      ...(legacyAstreinteTableMissing
+        ? []
+        : [
+            () => adminClient.from('astreinte_photos').delete().or(
+              `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
+            ),
+          ]),
       () => adminClient.from('planning_months').update({ reviewed_by: null }).eq(
         'reviewed_by',
         targetUserId,
