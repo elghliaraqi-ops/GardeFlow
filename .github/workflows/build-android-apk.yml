@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - audit-fixes-v11.6.68
+      - audit-fixes-v11.6.69
     paths:
       - '.github/workflows/build-android-apk.yml'
       - 'source/**'
@@ -73,6 +74,7 @@ on:
       - 'ci/v11_6_66/**'
       - 'ci/v11_6_67/**'
       - 'ci/v11_6_68/**'
+      - 'ci/v11_6_69/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -113,7 +115,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.68
+      - name: Apply patches V11.6.1 to V11.6.69
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -238,13 +240,14 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_66/apply_v11_6_66.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_67/apply_v11_6_67.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_68/apply_v11_6_68.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_69/apply_v11_6_69.py"
 
 
 
 
 
           test -f lib/screens/profile_screen.dart
-          grep -Fq "version: 11.6.68+228" pubspec.yaml
+          grep -Fq "version: 11.6.69+229" pubspec.yaml
           if grep -q 'InstitutionalLogosPanel' lib/screens/auth_screen.dart; then echo 'Partner logos remain on login'; exit 1; fi
           if grep -q 'InstitutionalLogosPanel' lib/screens/splash_screen.dart; then echo 'Partner logos remain on splash'; exit 1; fi
           grep -q 'DirectoryScreen(embedded: true)' lib/screens/home_screen.dart
@@ -425,7 +428,7 @@ jobs:
                   print(f'Normalizing UTF-8 in {p}: {exc}')
                   p.write_text(raw.decode('utf-8', errors='replace'))
           checks = [
-              ('pubspec.yaml', 'version: 11.6.68+228'),
+              ('pubspec.yaml', 'version: 11.6.69+229'),
               ('pubspec.yaml', 'alarm: ^5.13.1'),
               ('lib/screens/home_screen.dart', 'class _DashboardView'),
               ('lib/services/notification_service.dart', 'AlarmRingService'),
@@ -445,10 +448,10 @@ jobs:
           PY
 
       - name: Upload reconstructed source snapshot
-        if: github.ref_name == 'audit-fixes-v11.6.68'
+        if: github.ref_name == 'audit-fixes-v11.6.68' || github.ref_name == 'audit-fixes-v11.6.69'
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.68-source-snapshot
+          name: GardeFlow-v11.6.69-source-snapshot
           path: |
             ${{ steps.project.outputs.dir }}/lib
             ${{ steps.project.outputs.dir }}/pubspec.yaml
@@ -519,7 +522,7 @@ jobs:
       - name: Upload GardeFlow APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.68-audit-fixes-apk
+          name: GardeFlow-v11.6.69-audit-fixes-apk
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
