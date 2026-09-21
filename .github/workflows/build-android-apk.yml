@@ -550,6 +550,14 @@ jobs:
 
           git config user.name "GardeFlow CI"
           git config user.email "actions@users.noreply.github.com"
+
+          git fetch origin "${GITHUB_REF_NAME}"
+          REMOTE_HEAD="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
+          if [ "$REMOTE_HEAD" != "$GITHUB_SHA" ]; then
+            echo "A newer branch commit exists; skip stale source consolidation."
+            exit 0
+          fi
+
           git add source
           if git diff --cached --quiet; then
             echo "Consolidated source already current."
