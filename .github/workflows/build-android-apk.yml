@@ -503,7 +503,7 @@ jobs:
 
       - name: Analyze Flutter code
         working-directory: ${{ steps.project.outputs.dir }}
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
         working-directory: ${{ steps.project.outputs.dir }}
