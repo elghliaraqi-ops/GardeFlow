@@ -173,6 +173,76 @@ replace_once(
     "unique PDF doctor matching",
 )
 
+
+# Accent-insensitive doctor search.
+replace_once(
+    "lib/screens/exchange_request_sheet.dart",
+    """  @override
+  void dispose() {
+    _doctorSearchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {""",
+    """  @override
+  void dispose() {
+    _doctorSearchController.dispose();
+    super.dispose();
+  }
+
+  String _normalizeDoctorSearch(String value) {
+    var s = value.toLowerCase();
+    const replacements = <String, String>{
+      'à': 'a', 'á': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a',
+      'ç': 'c',
+      'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+      'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+      'ñ': 'n',
+      'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o', 'œ': 'oe',
+      'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
+      'ý': 'y', 'ÿ': 'y', 'æ': 'ae',
+      '’': ' ', "'": ' ', '-': ' ',
+    };
+    for (final entry in replacements.entries) {
+      s = s.replaceAll(entry.key, entry.value);
+    }
+    return s.replaceAll(RegExp(r'\\s+'), ' ').trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {""",
+    "accent-insensitive doctor search helper",
+)
+
+replace_once(
+    "lib/screens/exchange_request_sheet.dart",
+    """    final search = _doctorSearch.trim().toLowerCase();
+    final filteredTargets = search.isEmpty
+        ? targets
+        : targets.where((c) {
+            final haystack = '${c.name} ${c.service}'.toLowerCase();
+            return haystack.contains(search);
+          }).toList();""",
+    """    final search = _normalizeDoctorSearch(_doctorSearch);
+    final filteredTargets = search.isEmpty
+        ? targets
+        : targets.where((c) {
+            final haystack = _normalizeDoctorSearch('${c.name} ${c.service}');
+            return haystack.contains(search);
+          }).toList();""",
+    "accent-insensitive doctor filtering",
+)
+
+# Play-policy hardening: keep SCHEDULE_EXACT_ALARM (user special access) and
+# remove the additional restricted USE_EXACT_ALARM declaration.
+replace_once(
+    "tool/configure_android.dart",
+    """'SCHEDULE_EXACT_ALARM', 'VIBRATE', 'WAKE_LOCK', 'USE_FULL_SCREEN_INTENT', 'USE_EXACT_ALARM', 'FOREGROUND_SERVICE'""",
+    """'SCHEDULE_EXACT_ALARM', 'VIBRATE', 'WAKE_LOCK', 'USE_FULL_SCREEN_INTENT', 'FOREGROUND_SERVICE'""",
+    "remove restricted USE_EXACT_ALARM permission",
+)
+
 checks = {
     "pubspec.yaml": ["version: 11.6.68+228"],
     "lib/state/app_state.dart": [
@@ -187,6 +257,14 @@ checks = {
         "'ambiguous_match'",
         "matched.single",
     ],
+    "lib/screens/exchange_request_sheet.dart": [
+        "_normalizeDoctorSearch",
+        "final search = _normalizeDoctorSearch(_doctorSearch);",
+    ],
+    "tool/configure_android.dart": [
+        "'SCHEDULE_EXACT_ALARM'",
+        "'USE_FULL_SCREEN_INTENT'",
+    ],
 }
 for file_name, needles in checks.items():
     text = Path(file_name).read_text()
@@ -196,4 +274,7 @@ for file_name, needles in checks.items():
                 f"V11.6.68 validation failed: {needle!r} missing in {file_name}"
             )
 
-print("GardeFlow V11.6.68 account isolation + PDF matching hardening applied")
+if "USE_EXACT_ALARM" in Path("tool/configure_android.dart").read_text():
+    raise SystemExit("V11.6.68 validation failed: restricted USE_EXACT_ALARM still declared")
+
+print("GardeFlow V11.6.68 audit hardening applied")
