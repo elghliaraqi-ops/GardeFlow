@@ -35,6 +35,13 @@ begin
     and device_id=v_device_id
     and token<>p_token;
 
+  -- Migrate away old registrations that predate stable installation IDs.
+  delete from public.push_tokens
+  where owner_id=p.id
+    and platform=coalesce(nullif(trim(p_platform),''),'web')
+    and device_id is null
+    and token<>p_token;
+
   insert into public.push_tokens(
     token,owner_id,owner_phone,platform,device_id,created_at,updated_at
   )
