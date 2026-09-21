@@ -973,6 +973,118 @@ replace_once(
   'theme contrast smoke test',
 )
 
+
+# Async-context safety: guard the exact BuildContext passed across awaits.
+for old,new,label in [
+  ("if (!mounted || reason == null) return;\n      final error = await appState.adminReopenPlanningMonth",
+   "if (!context.mounted || reason == null) return;\n      final error = await appState.adminReopenPlanningMonth",
+   'admin reopen dialog context guard'),
+  ("final error = await appState.adminReopenPlanningMonth(doctor, month, reason: reason);\n      if (!mounted) return;",
+   "final error = await appState.adminReopenPlanningMonth(doctor, month, reason: reason);\n      if (!context.mounted) return;",
+   'admin reopen result context guard'),
+  ("final err = await appState.reviewAccount(user.id, true, hospital: hospital, service: service, grade: grade);\n    if (!mounted) return;",
+   "final err = await appState.reviewAccount(user.id, true, hospital: hospital, service: service, grade: grade);\n    if (!context.mounted) return;",
+   'account approval context guard'),
+  ("if (!mounted || reason == null) return;\n      final error = await appState.adminDeleteShift",
+   "if (!context.mounted || reason == null) return;\n      final error = await appState.adminDeleteShift",
+   'admin delete dialog context guard'),
+  ("final error = await appState.adminDeleteShift(entry.id, reason: reason);\n      if (!mounted) return;",
+   "final error = await appState.adminDeleteShift(entry.id, reason: reason);\n      if (!context.mounted) return;",
+   'admin delete result context guard'),
+]:
+    replace_once('lib/screens/admin_screen.dart',old,new,label)
+
+for old,new,label in [
+  ("if (draft == null || !mounted) return;",
+   "if (draft == null || !context.mounted) return;",
+   'directory editor context guard'),
+  ("    if (!mounted) return;\n    ScaffoldMessenger.of(context).showSnackBar(SnackBar(\n      content: Text(error ?? (existing == null ? 'Contact ajouté à l’annuaire.' : 'Contact modifié.')),",
+   "    if (!context.mounted) return;\n    ScaffoldMessenger.of(context).showSnackBar(SnackBar(\n      content: Text(error ?? (existing == null ? 'Contact ajouté à l’annuaire.' : 'Contact modifié.')),",
+   'directory save context guard'),
+  ("final error = await appState.deleteDirectoryContact(contact.id);\n    if (!mounted) return;",
+   "final error = await appState.deleteDirectoryContact(contact.id);\n    if (!context.mounted) return;",
+   'directory delete context guard'),
+]:
+    replace_once('lib/screens/directory_screen.dart',old,new,label)
+
+replace_once(
+  'lib/screens/exchange_request_sheet.dart',
+  """                        if (!mounted) return;
+                        if (err != null) {""",
+  """                        if (!context.mounted) return;
+                        if (err != null) {""",
+  'exchange sheet context guard',
+)
+
+replace_once(
+  'lib/screens/official_planning_screen.dart',
+  """    setState(() => _busySlot = slot.id);
+    try {
+      final summary =""",
+  """    final appState = context.read<AppState>();
+    setState(() => _busySlot = slot.id);
+    try {
+      final summary =""",
+  'capture official planning app state before await',
+)
+replace_once(
+  'lib/screens/official_planning_screen.dart',
+  """      final appState = context.read<AppState>();
+      await appState.forceSyncMyOfficialRoster();""",
+  """      await appState.forceSyncMyOfficialRoster();""",
+  'remove post-await context provider lookup',
+)
+
+# Low-risk analyzer hygiene.
+replace_once(
+  'lib/data/seed_data.dart',
+  "import 'package:flutter/material.dart';\n",
+  "",
+  'remove unused seed material import',
+)
+replace_once(
+  'lib/screens/home_screen.dart',
+  "import '../widgets/month_navigation.dart';\n",
+  "",
+  'remove unused month navigation import',
+)
+replace_once(
+  'lib/screens/home_screen.dart',
+  "import '../data/hospitals.dart';\n",
+  "",
+  'remove unused hospitals import',
+)
+replace_once(
+  'lib/screens/splash_screen.dart',
+  "import '../widgets/brand_identity.dart';\n",
+  "",
+  'remove unused splash brand import',
+)
+replace_once(
+  'lib/services/notification_service.dart',
+  "  bool get _isIos => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;\n",
+  "",
+  'remove unused iOS helper',
+)
+replace_once(
+  'lib/services/official_roster_import_service.dart',
+  "                            rendered!,",
+  "                            rendered,",
+  'remove unnecessary PDF non-null assertion',
+)
+replace_once(
+  'lib/state/app_state.dart',
+  "  bool _darkDefaultAppliedV58 = true;\n",
+  "",
+  'remove obsolete dark default flag',
+)
+replace_once(
+  'lib/state/app_state.dart',
+  "_notificationsOn=j['notificationsOn'] as bool? ?? true;_darkDefaultAppliedV58=true;final storedAppearanceTheme=",
+  "_notificationsOn=j['notificationsOn'] as bool? ?? true;final storedAppearanceTheme=",
+  'remove obsolete dark default restore assignment',
+)
+
 checks={
  'pubspec.yaml':['version: 11.6.69+229'],
  'lib/models/password_reset_request.dart':['class PasswordResetRequest'],
