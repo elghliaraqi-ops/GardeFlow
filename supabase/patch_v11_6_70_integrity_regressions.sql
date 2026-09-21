@@ -938,4 +938,104 @@ grant execute on function public.register_official_disciplinary_marks(
   uuid,timestamp with time zone,jsonb
 ) to authenticated, service_role;
 
+
+create or replace function public.delete_my_planning_entry(
+  p_entry_id text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  me public.profiles%rowtype;
+  e public.planning_entries%rowtype;
+  month_state text;
+  y int;
+  m int;
+begin
+  select * into me
+  from public.profiles
+  where id=auth.uid() and account_status='active';
+
+  if not found then raise exception 'Compte actif requis'; end if;
+
+  select * into e
+  from public.planning_entries
+  where id=p_entry_id
+    and owner_id=me.id
+    and deleted_at is null
+  for update;
+
+  if not found then raise exception 'Affectation introuvable'; end if;
+
+  if e.date_str < current_date then
+    raise exception 'Une date passée ne peut plus être modifiée';
+  end if;
+
+  if e.shift_id <> 'conge'
+     and public.guard_has_started(e.date_str,e.shift_id) then
+    raise exception
+      'Cette garde a déjà commencé et ne peut plus être supprimée';
+  end if;
+
+  y:=extract(year from e.date_str)::int;
+  m:=extract(month from e.date_str)::int;
+
+  select status into month_state
+  from public.planning_months
+  where owner_id=me.id and year=y and month=m
+  for update;
+
+  if month_state='approved' then
+    raise exception
+      'Calendrier validé définitivement : seul un administrateur peut supprimer une garde validée';
+  end if;
+
+  if e.shift_id='conge'
+     and e.leave_request_id is not null
+     and exists(
+       select 1 from public.leave_requests l
+       where l.id=e.leave_request_id
+         and l.status='approved'
+     ) then
+    raise exception
+      'Ce congé a déjà été approuvé : seul un administrateur peut le supprimer';
+  end if;
+
+  if exists(
+    select 1 from public.exchange_requests r
+    where r.status in ('pendingB','pendingAdmin')
+      and (
+        r.planning_entry_id=e.id
+        or r.target_planning_entry_id=e.id
+      )
+  ) then
+    raise exception 'Cette garde est verrouillée par une demande active';
+  end if;
+
+  update public.planning_entries
+  set deleted_at=now()
+  where id=e.id;
+
+  insert into public.planning_months(
+    owner_id,year,month,status,updated_at
+  )
+  values(me.id,y,m,'draft',now())
+  on conflict(owner_id,year,month) do update
+    set status='draft',
+        submitted_at=null,
+        reviewed_at=null,
+        reviewed_by=null,
+        rejection_reason=null,
+        updated_at=now()
+    where public.planning_months.status<>'approved';
+end;
+$;
+
+revoke execute on function public.delete_my_planning_entry(text)
+  from public, anon;
+grant execute on function public.delete_my_planning_entry(text)
+  to authenticated, service_role;
+
 commit;
