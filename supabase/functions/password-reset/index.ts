@@ -41,52 +41,52 @@ async function sendFcm(
   profile: Record<string, string>,
   recipientId: string,
 ) {
-  const displayName = `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || 'Un médecin';
+  const displayName =
+    `${profile.prenom ?? ''} ${profile.nom ?? ''}`.trim() || 'Un médecin';
   const title = 'Mot de passe oublié';
-  const body = `${displayName} (${profile.phone ?? ''}) demande un nouveau mot de passe. Ouvrez Réglages > Administration des comptes.`;
-  const message: Record<string, unknown> = {
-    token,
-    data: {
-      title,
-      body,
-      kind: 'password_reset_request',
-      resourceId: profile.id,
-      requesterName: displayName,
-      requesterPhone: profile.phone ?? '',
-      requesterHospital: profile.hospital ?? '',
-      recipientId,
-    },
-    notification: { title, body },
+  const body =
+    `${displayName} (${profile.phone ?? ''}) demande un nouveau mot de passe. Ouvrez Notifications > Comptes.`;
+
+  const data: Record<string, string> = {
+    title,
+    body,
+    kind: 'password_reset_request',
+    resourceId: profile.id,
+    requesterName: displayName,
+    requesterPhone: profile.phone ?? '',
+    requesterHospital: profile.hospital ?? '',
+    recipientId,
   };
+  const message: Record<string, unknown> = { token, data };
 
   if (platform === 'android') {
-    message.android = {
-      priority: 'HIGH',
-      notification: {
-        channel_id: 'huim6_push',
-        icon: 'ic_stat_huim6',
-        sound: 'default',
-        tag: `password-reset:${profile.id}`,
-        visibility: 'PRIVATE',
-      },
-    };
+    message.android = { priority: 'HIGH' };
   } else if (platform === 'ios') {
     message.apns = {
-      headers: { 'apns-priority': '10' },
-      payload: { aps: { sound: 'default' } },
+      headers: {
+        'apns-priority': '5',
+        'apns-push-type': 'background',
+      },
+      payload: { aps: { 'content-available': 1 } },
     };
   } else {
-    message.webpush = { headers: { Urgency: 'high' } };
+    message.webpush = {
+      headers: { Urgency: 'high' },
+      notification: { title, body, tag: `password-reset:${profile.id}` },
+    };
   }
 
-  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
     },
-    body: JSON.stringify({ message }),
-  });
+  );
   return { ok: res.ok, status: res.status, text: await res.text() };
 }
 
