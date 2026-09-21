@@ -77,9 +77,12 @@ class AppState extends ChangeNotifier {
         if(profile.accountStatus!=AccountStatus.active){
           await backend.signOut();
           state.currentUser=null;
+          await LocalStorageService.savePushActiveUserId(null);
+          await LocalStorageService.savePushEnabled(false);
         }else{
           state._sessionEpoch++;
           state.currentUser=profile;
+          await LocalStorageService.savePushActiveUserId(profile.id);
           state._applyReminderPrefsForCurrentUser();
           await state._reloadFromBackend();
           await state._syncMyOfficialRosterIfNeeded();
@@ -87,6 +90,8 @@ class AppState extends ChangeNotifier {
         }
       } catch (_) {
         state.currentUser = null;
+        await LocalStorageService.savePushActiveUserId(null);
+        await LocalStorageService.savePushEnabled(false);
       }
     } else {
       final sessionPhone = await LocalStorageService.loadSessionPhone();
@@ -774,6 +779,8 @@ class AppState extends ChangeNotifier {
         if(user.accountStatus!=AccountStatus.active){
           await backend.signOut();
           currentUser=null;
+          await LocalStorageService.savePushActiveUserId(null);
+          await LocalStorageService.savePushEnabled(false);
           if(user.accountStatus==AccountStatus.pending){
             return 'Votre compte est en attente de validation par un administrateur.';
           }
@@ -781,6 +788,7 @@ class AppState extends ChangeNotifier {
         }
         _sessionEpoch++;
         currentUser=user;
+        await LocalStorageService.savePushActiveUserId(user.id);
         _applyReminderPrefsForCurrentUser();
         final locallyDismissedNotifications = Set<String>.from(_dismissedNotificationKeys);
         await _reloadFromBackend();
@@ -819,6 +827,8 @@ class AppState extends ChangeNotifier {
         try{await backend.triggerPush('account_created',pending.id);}catch(_){}
         await backend.signOut();
         currentUser=null;
+        await LocalStorageService.savePushActiveUserId(null);
+        await LocalStorageService.savePushEnabled(false);
         notifyListeners();
         return null;
       } catch(e) {
@@ -836,6 +846,8 @@ class AppState extends ChangeNotifier {
     // Invalidate every reload already in flight before touching the session.
     _sessionEpoch++;
     _stopRealtime();
+    await LocalStorageService.savePushActiveUserId(null);
+    await LocalStorageService.savePushEnabled(false);
     await NotificationService.instance.cancelAll();
     if(backendEnabled){
       // Must happen while the Supabase JWT still identifies the old account.
