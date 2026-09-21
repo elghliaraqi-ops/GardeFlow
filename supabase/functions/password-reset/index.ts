@@ -124,6 +124,15 @@ Deno.serve(async (req) => {
     // Keep the same response whether an account exists or not.
     if (!profile || profile.account_status !== 'active') return genericResponse();
 
+    // Public endpoint: suppress repeated notifications for the same account.
+    // The response stays generic so callers cannot learn whether the phone exists.
+    const { data: rateAllowed, error: rateError } = await admin.rpc(
+      'claim_password_reset_notification',
+      { p_profile_id: profile.id },
+    );
+    if (rateError) throw rateError;
+    if (rateAllowed !== true) return genericResponse();
+
     let { data: adminRows, error: adminsError } = await admin
       .from('profiles')
       .select('id')
