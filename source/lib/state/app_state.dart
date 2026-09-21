@@ -396,8 +396,31 @@ class AppState extends ChangeNotifier {
 
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime get visibleMonth => _visibleMonth;
-  void nextMonth(){_visibleMonth=DateTime(_visibleMonth.year,_visibleMonth.month+1,1);notifyListeners();}
-  void previousMonth(){_visibleMonth=DateTime(_visibleMonth.year,_visibleMonth.month-1,1);notifyListeners();}
+
+  DateTime get maxPlanningMonth {
+    final now = DateTime.now();
+    return DateTime(now.year + 2, 12, 1);
+  }
+
+  DateTime get maxPlanningDate {
+    final now = DateTime.now();
+    return DateTime(now.year + 2, 12, 31);
+  }
+
+  bool get canGoToNextMonth => _visibleMonth.isBefore(maxPlanningMonth);
+
+  void nextMonth(){
+    final next=DateTime(_visibleMonth.year,_visibleMonth.month+1,1);
+    if(next.isAfter(maxPlanningMonth))return;
+    _visibleMonth=next;
+    notifyListeners();
+  }
+
+  void previousMonth(){
+    _visibleMonth=DateTime(_visibleMonth.year,_visibleMonth.month-1,1);
+    notifyListeners();
+  }
+
   static String dateKey(DateTime d)=>DateFormat('yyyy-MM-dd').format(d);
 
   final List<PlanningEntry> _planning=[];
@@ -426,6 +449,12 @@ class AppState extends ChangeNotifier {
       planningMonthForUser(ownerId,year,month)?.status ?? PlanningMonthStatus.draft;
 
   bool canEditMyPlanningMonth(DateTime month){
+    final now=DateTime.now();
+    final monthStart=DateTime(month.year,month.month,1);
+    final currentMonthStart=DateTime(now.year,now.month,1);
+    if(monthStart.isBefore(currentMonthStart) || monthStart.isAfter(maxPlanningMonth)){
+      return false;
+    }
     final status=myPlanningMonth(month)?.status ?? PlanningMonthStatus.draft;
     // V10.2 : le médecin verrouille lui-même son mois. Les anciens états
     // submitted/rejected de V10.1 sont donc traités comme des brouillons.
@@ -885,9 +914,20 @@ class AppState extends ChangeNotifier {
     final me=currentUser;if(me==null)return 'Session expirée.';
     if(_isDateInPast(dateStr))return 'Une date passée ne peut plus être modifiée.';
     final date=DateTime.parse(dateStr);
+    if(date.isAfter(maxPlanningDate)){
+      return 'Cette date dépasse l’horizon de planification autorisé.';
+    }
+    final shift=ShiftCatalog.all.where((s)=>s.id==shiftId).firstOrNull;
+    if(shift==null)return 'Type de tuile invalide.';
+    if(shift.hasSchedule){
+      final parts=shift.start!.split(':').map(int.parse).toList();
+      final start=DateTime(date.year,date.month,date.day,parts[0],parts[1]);
+      if(!DateTime.now().isBefore(start)){
+        return 'Cette garde a déjà commencé et ne peut plus être ajoutée ou modifiée.';
+      }
+    }
     final status=myPlanningMonth(date)?.status ?? PlanningMonthStatus.draft;
     if(status==PlanningMonthStatus.approved)return 'Ce calendrier est validé définitivement. Utilisez ensuite transfert/échange ou contactez un administrateur.';
-    if(!ShiftCatalog.all.any((s)=>s.id==shiftId))return 'Type de tuile invalide.';
     final existing=myEntryForDate(dateStr);
     if(existing?.isDisciplinary==true)return 'Cette garde disciplinaire est verrouillée. Seul un administrateur peut la supprimer.';
     if(existing!=null&&isApprovedLeaveEntry(existing))return 'Ce congé a déjà été approuvé. Seul un administrateur peut le supprimer.';
@@ -930,6 +970,9 @@ class AppState extends ChangeNotifier {
     final entry=_planning.where((e)=>e.id==entryId).firstOrNull;
     if(entry==null||(entry.ownerId!=me.id&&entry.ownerPhone!=me.phone))return 'Affectation introuvable.';
     if(entry.isDisciplinary)return 'Cette garde disciplinaire ne peut pas être annulée. Seul un administrateur peut la supprimer.';
+    if(entry.shiftId!='conge'&&_guardHasStarted(entry)){
+      return 'Cette garde a déjà commencé et ne peut plus être supprimée.';
+    }
     final date=DateTime.parse(entry.dateStr);
     final status=myPlanningMonth(date)?.status ?? PlanningMonthStatus.draft;
     if(status==PlanningMonthStatus.approved)return 'Un calendrier validé ne peut plus être modifié directement. Seul un administrateur peut supprimer une garde validée.';
