@@ -9,6 +9,8 @@ class LocalStorageService {
   static const _stateKey = 'huim6_state_v5';
   static const _sessionKey = 'huim6_session_phone_v5';
   static const _pushDeviceKey = 'gardeflow_push_device_id_v1';
+  static const _pushActiveUserKey = 'gardeflow_push_active_user_v1';
+  static const _pushEnabledKey = 'gardeflow_push_enabled_v1';
 
   static Future<Map<String, dynamic>?> loadState() async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,6 +40,30 @@ class LocalStorageService {
     } else {
       await prefs.setString(_sessionKey, phone);
     }
+  }
+
+  static Future<String?> loadPushActiveUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_pushActiveUserKey);
+  }
+
+  static Future<void> savePushActiveUserId(String? userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (userId == null || userId.trim().isEmpty) {
+      await prefs.remove(_pushActiveUserKey);
+    } else {
+      await prefs.setString(_pushActiveUserKey, userId.trim());
+    }
+  }
+
+  static Future<bool> loadPushEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_pushEnabledKey) ?? false;
+  }
+
+  static Future<void> savePushEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_pushEnabledKey, enabled);
   }
 
   static Future<String> loadOrCreatePushDeviceId() async {
