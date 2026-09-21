@@ -4,6 +4,64 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- 0) Legacy astreinte objects required by the hardening below.
+-- Keep this patch replayable on a fresh database.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.astreinte_photos (
+  id text primary key,
+  owner_id uuid not null references public.profiles(id) on delete cascade,
+  owner_phone text not null default '',
+  owner_name text not null default '',
+  storage_path text not null unique,
+  original_name text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table public.astreinte_photos enable row level security;
+
+create or replace function public.fill_astreinte_photo_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  p public.profiles%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'Session requise';
+  end if;
+
+  select * into p
+  from public.profiles
+  where id=auth.uid() and account_status='active';
+
+  if not found then
+    raise exception 'Profil actif introuvable';
+  end if;
+
+  new.owner_id := auth.uid();
+  new.owner_phone := coalesce(p.phone,'');
+  new.owner_name := trim(coalesce(p.prenom,'') || ' ' || coalesce(p.nom,''));
+  return new;
+end;
+$;
+
+revoke all on function public.fill_astreinte_photo_owner()
+  from public, anon, authenticated;
+
+drop trigger if exists astreinte_photos_fill_owner on public.astreinte_photos;
+create trigger astreinte_photos_fill_owner
+before insert on public.astreinte_photos
+for each row execute function public.fill_astreinte_photo_owner();
+
+insert into storage.buckets(id,name,public)
+values('astreinte-photos','astreinte-photos',false)
+on conflict(id) do update set public=false;
+
+
+-- ---------------------------------------------------------------------------
 -- 1) Absolute server-side read-only rule for past months.
 -- ---------------------------------------------------------------------------
 
@@ -36,6 +94,13 @@ begin
   end if;
   if tg_op <> 'DELETE' then
     v_new_past := public.guardeflow_is_past_month(new.date_str);
+  end if;
+
+  -- Trusted maintenance may remove historical data as part of a full
+  -- account deletion. Human/admin sessions remain read-only.
+  if coalesce(current_setting('request.jwt.claim.role', true),'') = 'service_role' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
   end if;
 
   if v_old_past or v_new_past then
@@ -82,6 +147,11 @@ begin
   end if;
 
   v_first_day := make_date(v_year, v_month, 1);
+
+  if coalesce(current_setting('request.jwt.claim.role', true),'') = 'service_role' then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
 
   if v_first_day < date_trunc('month', current_date)::date then
     return null;
