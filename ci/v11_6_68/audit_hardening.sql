@@ -207,7 +207,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   uid uuid := auth.uid();
   p public.profiles%rowtype;
@@ -314,7 +314,7 @@ begin
     'updated',updated_count
   );
 end;
-$;
+$$;
 
 revoke execute on function public.apply_current_disciplinary_rules_for_me()
   from public, anon;
