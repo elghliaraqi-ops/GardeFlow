@@ -15,8 +15,27 @@ import 'supabase_backend_service.dart';
 @pragma('vm:entry-point')
 Future<void> huimBackgroundMessage(RemoteMessage message) async {
   await Firebase.initializeApp();
-  // Android affiche lui-même les messages notification + data du serveur.
-  // Ne pas les afficher une deuxième fois depuis cet isolate.
+
+  final recipientId = message.data['recipientId']?.toString().trim() ?? '';
+  if (recipientId.isEmpty) return;
+
+  final enabled = await LocalStorageService.loadPushEnabled();
+  if (!enabled) return;
+
+  final activeUserId = await LocalStorageService.loadPushActiveUserId();
+  if (activeUserId == null || activeUserId != recipientId) return;
+
+  final title = message.data['title']?.toString() ?? 'GardeFlow';
+  final body =
+      message.data['body']?.toString() ?? 'Nouvelle notification';
+  final kind = message.data['kind']?.toString() ?? '';
+
+  await NotificationService.instance.init();
+  await NotificationService.instance.showPush(
+    title: title,
+    body: body,
+    kind: kind,
+  );
 }
 
 class PushNotificationService {
@@ -41,7 +60,7 @@ class PushNotificationService {
 
   bool _belongsToCurrentUser(RemoteMessage message) {
     final recipientId = message.data['recipientId']?.toString();
-    if (recipientId == null || recipientId.isEmpty) return true;
+    if (recipientId == null || recipientId.isEmpty) return false;
     return SupabaseBackendService.instance.client.auth.currentUser?.id == recipientId;
   }
 
@@ -162,9 +181,11 @@ class PushNotificationService {
       final userId = backend.client.auth.currentUser?.id;
       if (userId == null) return;
       final deviceId = await LocalStorageService.loadOrCreatePushDeviceId();
+      await LocalStorageService.savePushActiveUserId(userId);
       final settings = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
+        await LocalStorageService.savePushEnabled(false);
         status.value = 'Autorisation refusée : activer les notifications dans les réglages du téléphone';
         return;
       }
@@ -177,6 +198,7 @@ class PushNotificationService {
         return;
       }
       await backend.registerPushDevice(token, platform: _platform, deviceId: deviceId);
+      await LocalStorageService.savePushEnabled(true);
       _registeredToken = token;
       status.value = 'Notifications push activées sur cet appareil';
       await _tokenRefreshSub?.cancel();
@@ -203,6 +225,7 @@ class PushNotificationService {
 
   Future<void> unregisterCurrentDevice() {
     _enabled = false;
+    unawaited(LocalStorageService.savePushEnabled(false));
     _navigationReady = false;
     _pendingKind = null;
     return _enqueue(() async {
