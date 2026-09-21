@@ -504,6 +504,10 @@ jobs:
           flutter clean
           flutter pub get
 
+      - name: Run audit smoke tests
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: flutter test test/audit_smoke_test.dart
+
       - name: Analyze Flutter code
         working-directory: ${{ steps.project.outputs.dir }}
         run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
