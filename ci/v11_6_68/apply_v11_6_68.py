@@ -243,6 +243,73 @@ replace_once(
     "remove restricted USE_EXACT_ALARM permission",
 )
 
+
+# Push isolation: bind every server push to the currently authenticated account,
+# and delete the previous registration when FCM rotates a token.
+replace_once(
+    "lib/services/push_notification_service.dart",
+    """  String get _platform => kIsWeb ? 'web' : _ios ? 'ios' : 'android';
+
+  Future<void> initializeFirebase() async {""",
+    """  String get _platform => kIsWeb ? 'web' : _ios ? 'ios' : 'android';
+
+  bool _belongsToCurrentUser(RemoteMessage message) {
+    final recipientId = message.data['recipientId']?.toString();
+    if (recipientId == null || recipientId.isEmpty) return true;
+    return SupabaseBackendService.instance.client.auth.currentUser?.id == recipientId;
+  }
+
+  Future<void> initializeFirebase() async {""",
+    "push recipient guard helper",
+)
+
+replace_once(
+    "lib/services/push_notification_service.dart",
+    """      FirebaseMessaging.onMessage.listen((message) async {
+        if (!_enabled) return;""",
+    """      FirebaseMessaging.onMessage.listen((message) async {
+        if (!_enabled || !_belongsToCurrentUser(message)) return;""",
+    "foreground push account guard",
+)
+
+replace_once(
+    "lib/services/push_notification_service.dart",
+    """      FirebaseMessaging.onMessageOpenedApp.listen((message) => _open(message.data['kind']?.toString() ?? ''));
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) _pendingKind = initial.data['kind']?.toString() ?? '';""",
+    """      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        if (_belongsToCurrentUser(message)) {
+          _open(message.data['kind']?.toString() ?? '');
+        }
+      });
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null && _belongsToCurrentUser(initial)) {
+        _pendingKind = initial.data['kind']?.toString() ?? '';
+      }""",
+    "opened push account guard",
+)
+
+replace_once(
+    "lib/services/push_notification_service.dart",
+    """          if (!_enabled || backend.client.auth.currentUser?.id != userId) return;
+          await backend.registerPushToken(token, platform: _platform);
+          _registeredToken = token;
+          status.value = 'Notifications push activées sur cet appareil';""",
+    """          if (!_enabled || backend.client.auth.currentUser?.id != userId) return;
+          final previousToken = _registeredToken;
+          await backend.registerPushToken(token, platform: _platform);
+          if (previousToken != null && previousToken.isNotEmpty && previousToken != token) {
+            try {
+              await backend.unregisterPushToken(previousToken);
+            } catch (e) {
+              debugPrint('Ancien token push non supprimé immédiatement: $e');
+            }
+          }
+          _registeredToken = token;
+          status.value = 'Notifications push activées sur cet appareil';""",
+    "FCM token rotation cleanup",
+)
+
 checks = {
     "pubspec.yaml": ["version: 11.6.68+228"],
     "lib/state/app_state.dart": [
@@ -264,6 +331,11 @@ checks = {
     "tool/configure_android.dart": [
         "'SCHEDULE_EXACT_ALARM'",
         "'USE_FULL_SCREEN_INTENT'",
+    ],
+    "lib/services/push_notification_service.dart": [
+        "_belongsToCurrentUser",
+        "recipientId",
+        "previousToken",
     ],
 }
 for file_name, needles in checks.items():
