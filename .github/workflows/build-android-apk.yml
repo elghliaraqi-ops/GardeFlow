@@ -78,7 +78,7 @@ on:
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -530,3 +530,30 @@ jobs:
           path: ${{ steps.project.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Persist consolidated V11.6.69 source
+        if: github.ref_name == 'audit-fixes-v11.6.69'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_DIR="${{ steps.project.outputs.dir }}"
+          rm -rf source
+          mkdir -p source
+          cp -a "$PROJECT_DIR/lib" source/
+          cp -a "$PROJECT_DIR/assets" source/
+          cp -a "$PROJECT_DIR/tool" source/
+          cp -a "$PROJECT_DIR/supabase" source/
+          cp -a "$PROJECT_DIR/test" source/
+          cp "$PROJECT_DIR/pubspec.yaml" source/pubspec.yaml
+          if [ -f "$PROJECT_DIR/analysis_options.yaml" ]; then cp "$PROJECT_DIR/analysis_options.yaml" source/analysis_options.yaml; fi
+          if [ -f "$PROJECT_DIR/pubspec.lock" ]; then cp "$PROJECT_DIR/pubspec.lock" source/pubspec.lock; fi
+
+          git config user.name "GardeFlow CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add source
+          if git diff --cached --quiet; then
+            echo "Consolidated source already current."
+          else
+            git commit -m "Consolidate GardeFlow V11.6.69 source [skip ci]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
