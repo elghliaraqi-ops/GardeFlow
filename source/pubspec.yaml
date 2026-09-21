@@ -1,7 +1,7 @@
 name: huim6_planning
 description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
 publish_to: "none"
-version: 11.6.69+229
+version: 11.6.70+230
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
