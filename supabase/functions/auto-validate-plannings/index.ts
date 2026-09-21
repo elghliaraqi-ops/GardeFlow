@@ -52,36 +52,47 @@ async function getAccessToken(sa: any): Promise<string> {
   return (await res.json()).access_token;
 }
 
-async function sendFcm(sa: any, access: string, token: string, platform: string, data: Record<string,string>) {
-  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${access}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: {
-        token,
-        data,
-        ...(platform === 'android'
-          ? {
-              notification: { title: data.title, body: data.body },
-              android: {
-                priority: 'HIGH',
-                notification: {
-                  channel_id: 'huim6_push',
-                  icon: 'ic_stat_huim6',
-                  sound: 'default',
-                  tag: `planning_auto_validated:${data.resourceId}`,
-                },
-              },
-            }
-          : {
-              webpush: {
-                headers: { Urgency: 'high' },
-                notification: { title: data.title, body: data.body },
-              },
-            }),
+async function sendFcm(
+  sa: any,
+  access: string,
+  token: string,
+  platform: string,
+  data: Record<string, string>,
+) {
+  const message: Record<string, unknown> = { token, data };
+
+  if (platform === 'android') {
+    message.android = { priority: 'HIGH' };
+  } else if (platform === 'ios') {
+    message.apns = {
+      headers: {
+        'apns-priority': '5',
+        'apns-push-type': 'background',
       },
-    }),
-  });
+      payload: { aps: { 'content-available': 1 } },
+    };
+  } else {
+    message.webpush = {
+      headers: { Urgency: 'high' },
+      notification: {
+        title: data.title,
+        body: data.body,
+        tag: `planning_auto_validated:${data.resourceId}`,
+      },
+    };
+  }
+
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${access}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
+    },
+  );
   const text = await res.text();
   return { ok: res.ok, status: res.status, text };
 }
