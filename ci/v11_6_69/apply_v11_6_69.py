@@ -816,6 +816,163 @@ replace_once(
   'paginate leave requests',
 )
 
+
+# Accessibility: reserve the bright brand color for accents. Controls carrying
+# white text use brandDark, which has strong contrast in green/red themes.
+replace_once(
+  'lib/theme/app_theme.dart',
+  """          backgroundColor: AppColors.brand,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: AppColors.brand.withOpacity(0.28),""",
+  """          backgroundColor: AppColors.brandDark,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: AppColors.brandDark.withOpacity(0.34),""",
+  'elevated button action contrast',
+)
+replace_once(
+  'lib/theme/app_theme.dart',
+  """          backgroundColor: AppColors.brand,
+          foregroundColor: Colors.white,
+          minimumSize: Size(0, 50),""",
+  """          backgroundColor: AppColors.brandDark,
+          foregroundColor: Colors.white,
+          minimumSize: Size(0, 50),""",
+  'filled button action contrast',
+)
+replace_once(
+  'lib/theme/app_theme.dart',
+  """        selectedColor: AppColors.brand,
+        labelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 11.5, color: isDark ? AppColors.ink : AppColors.brandDark),
+        secondaryLabelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 11.5, color: Colors.white),""",
+  """        selectedColor: AppColors.brandDark,
+        labelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 11.5, color: isDark ? AppColors.ink : AppColors.brandDark),
+        secondaryLabelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 11.5, color: Colors.white),""",
+  'selected chip contrast',
+)
+replace_once(
+  'lib/theme/app_theme.dart',
+  """          if (states.contains(WidgetState.selected)) return Colors.white;
+          if (states.contains(WidgetState.disabled)) return AppColors.inkFaint;
+          return AppColors.ink;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.brand;""",
+  """          if (states.contains(WidgetState.selected)) return Colors.white;
+          if (states.contains(WidgetState.disabled)) return AppColors.inkFaint;
+          return AppColors.ink;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.brandDark;""",
+  'date picker selected day contrast',
+)
+replace_once(
+  'lib/theme/app_theme.dart',
+  """          if (states.contains(WidgetState.selected)) return Colors.white;
+          return AppColors.ink;
+        }),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.brand;""",
+  """          if (states.contains(WidgetState.selected)) return Colors.white;
+          return AppColors.ink;
+        }),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.brandDark;""",
+  'date picker selected year contrast',
+)
+
+replace_once(
+  'lib/screens/directory_screen.dart',
+  """                    backgroundColor: AppColors.brand,
+                    foregroundColor: Colors.white,""",
+  """                    backgroundColor: AppColors.brandDark,
+                    foregroundColor: Colors.white,""",
+  'embedded directory FAB contrast',
+)
+replace_once(
+  'lib/screens/directory_screen.dart',
+  """              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.white,""",
+  """              backgroundColor: AppColors.brandDark,
+              foregroundColor: Colors.white,""",
+  'directory FAB contrast',
+)
+replace_once(
+  'lib/screens/directory_screen.dart',
+  """                          color: AppColors.brand,
+                          textColor: Colors.white,""",
+  """                          color: AppColors.brandDark,
+                          textColor: Colors.white,""",
+  'directory all-category contrast',
+)
+replace_once(
+  'lib/screens/home_screen.dart',
+  """                      color: isToday
+                          ? AppColors.brand
+                          : shift != null""",
+  """                      color: isToday
+                          ? AppColors.brandDark
+                          : shift != null""",
+  'calendar today date contrast',
+)
+replace_once(
+  'lib/screens/notifications_screen.dart',
+  """              backgroundColor: approve ? AppColors.brand : AppColors.danger,
+              foregroundColor: Colors.white,""",
+  """              backgroundColor: approve ? AppColors.brandDark : const Color(0xFFB42318),
+              foregroundColor: Colors.white,""",
+  'account decision contrast',
+)
+
+# Extend smoke tests with objective WCAG-style contrast checks for the four themes.
+replace_once(
+  'test/audit_smoke_test.dart',
+  """import 'package:huim6_planning/services/supabase_backend_service.dart';
+
+void main() {""",
+  """import 'package:huim6_planning/services/supabase_backend_service.dart';
+import 'package:huim6_planning/theme/app_theme.dart';
+
+double contrastRatio(Color a, Color b) {
+  final l1 = a.computeLuminance();
+  final l2 = b.computeLuminance();
+  final bright = l1 > l2 ? l1 : l2;
+  final dark = l1 > l2 ? l2 : l1;
+  return (bright + 0.05) / (dark + 0.05);
+}
+
+void main() {""",
+  'contrast test imports',
+)
+replace_once(
+  'test/audit_smoke_test.dart',
+  """  test('cross-hospital exchanges remain forbidden globally', () {
+    expect(BusinessRules.sameHospitalRequired, isTrue);
+  });
+}""",
+  """  test('cross-hospital exchanges remain forbidden globally', () {
+    expect(BusinessRules.sameHospitalRequired, isTrue);
+  });
+
+  test('all application themes keep readable core text and actions', () {
+    for (final theme in ['green', 'red', 'white', 'black']) {
+      AppColors.setAppearanceTheme(theme);
+      expect(
+        contrastRatio(AppColors.ink, AppColors.paper),
+        greaterThanOrEqualTo(4.5),
+        reason: 'Core text contrast failed for $theme',
+      );
+      expect(
+        contrastRatio(Colors.white, AppColors.brandDark),
+        greaterThanOrEqualTo(4.5),
+        reason: 'Action contrast failed for $theme',
+      );
+    }
+    AppColors.setAppearanceTheme('green');
+  });
+}""",
+  'theme contrast smoke test',
+)
+
 checks={
  'pubspec.yaml':['version: 11.6.69+229'],
  'lib/models/password_reset_request.dart':['class PasswordResetRequest'],
@@ -825,7 +982,7 @@ checks={
  'lib/screens/admin_password_reset_screen.dart':['initialUserId','_openedInitialUser'],
  'lib/services/push_notification_service.dart':['password_reset_request','initialIndex','registerPushDevice'],
  'lib/services/local_storage_service.dart':['loadOrCreatePushDeviceId','gardeflow_push_device_id_v1'],
- 'test/audit_smoke_test.dart':['Moroccan phone normalization','password reset request payload'],
+ 'test/audit_smoke_test.dart':['Moroccan phone normalization','password reset request payload','Action contrast failed'],
 }
 for file_name,needles in checks.items():
     text=Path(file_name).read_text()
