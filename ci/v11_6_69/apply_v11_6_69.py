@@ -537,6 +537,117 @@ replace_once(
   'render password reset cards',
 )
 
+
+# Stable device identity prevents FCM token accumulation across rotations.
+replace_once(
+  'lib/services/local_storage_service.dart',
+  "import 'dart:convert';",
+  "import 'dart:convert';\nimport 'dart:math';",
+  'local storage random import',
+)
+replace_once(
+  'lib/services/local_storage_service.dart',
+  "  static const _sessionKey = 'huim6_session_phone_v5';",
+  "  static const _sessionKey = 'huim6_session_phone_v5';\n  static const _pushDeviceKey = 'gardeflow_push_device_id_v1';",
+  'push device storage key',
+)
+replace_once(
+  'lib/services/local_storage_service.dart',
+  """  static Future<void> saveSessionPhone(String? phone) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (phone == null) {
+      await prefs.remove(_sessionKey);
+    } else {
+      await prefs.setString(_sessionKey, phone);
+    }
+  }
+}""",
+  """  static Future<void> saveSessionPhone(String? phone) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (phone == null) {
+      await prefs.remove(_sessionKey);
+    } else {
+      await prefs.setString(_sessionKey, phone);
+    }
+  }
+
+  static Future<String> loadOrCreatePushDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(_pushDeviceKey)?.trim();
+    if (existing != null && existing.isNotEmpty) return existing;
+    final random = Random.secure();
+    final id = 'gf-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-'
+        '${random.nextInt(0x7fffffff).toRadixString(36)}';
+    await prefs.setString(_pushDeviceKey, id);
+    return id;
+  }
+}""",
+  'persistent push device id',
+)
+
+replace_once(
+  'lib/services/supabase_backend_service.dart',
+  """  Future<void> registerPushToken(String token, {required String platform}) async {
+    await client.rpc('register_push_token', params: {
+      'p_token': token,
+      'p_platform': platform,
+    });
+  }
+
+  Future<void> unregisterPushToken(String token) async {""",
+  """  Future<void> registerPushToken(String token, {required String platform}) async {
+    await client.rpc('register_push_token', params: {
+      'p_token': token,
+      'p_platform': platform,
+    });
+  }
+
+  Future<void> registerPushDevice(
+    String token, {
+    required String platform,
+    required String deviceId,
+  }) async {
+    await client.rpc('register_push_device', params: {
+      'p_token': token,
+      'p_platform': platform,
+      'p_device_id': deviceId,
+    });
+  }
+
+  Future<void> unregisterPushToken(String token) async {""",
+  'backend register push device',
+)
+
+replace_once(
+  'lib/services/push_notification_service.dart',
+  "import 'notification_service.dart';\nimport 'supabase_backend_service.dart';",
+  "import 'local_storage_service.dart';\nimport 'notification_service.dart';\nimport 'supabase_backend_service.dart';",
+  'push local storage import',
+)
+replace_once(
+  'lib/services/push_notification_service.dart',
+  """      final userId = backend.client.auth.currentUser?.id;
+      if (userId == null) return;
+      final settings = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);""",
+  """      final userId = backend.client.auth.currentUser?.id;
+      if (userId == null) return;
+      final deviceId = await LocalStorageService.loadOrCreatePushDeviceId();
+      final settings = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);""",
+  'load stable push device id',
+)
+replace_once(
+  'lib/services/push_notification_service.dart',
+  "await backend.registerPushToken(token, platform: _platform);\n      _registeredToken = token;",
+  "await backend.registerPushDevice(token, platform: _platform, deviceId: deviceId);\n      _registeredToken = token;",
+  'register current push device',
+)
+replace_once(
+  'lib/services/push_notification_service.dart',
+  "await backend.registerPushToken(token, platform: _platform);\n          if (previousToken != null && previousToken.isNotEmpty && previousToken != token) {",
+  "await backend.registerPushDevice(token, platform: _platform, deviceId: deviceId);\n          if (previousToken != null && previousToken.isNotEmpty && previousToken != token) {",
+  'rotate current push device token',
+)
+
 checks={
  'pubspec.yaml':['version: 11.6.69+229'],
  'lib/models/password_reset_request.dart':['class PasswordResetRequest'],
@@ -544,7 +655,8 @@ checks={
  'lib/services/supabase_backend_service.dart':['fetchPasswordResetRequests','admin_password_reset_requests'],
  'lib/screens/notifications_screen.dart':['Mot de passe oublié','Réinitialiser le mot de passe','AdminPasswordResetScreen'],
  'lib/screens/admin_password_reset_screen.dart':['initialUserId','_openedInitialUser'],
- 'lib/services/push_notification_service.dart':['password_reset_request','initialIndex'],
+ 'lib/services/push_notification_service.dart':['password_reset_request','initialIndex','registerPushDevice'],
+ 'lib/services/local_storage_service.dart':['loadOrCreatePushDeviceId','gardeflow_push_device_id_v1'],
 }
 for file_name,needles in checks.items():
     text=Path(file_name).read_text()
