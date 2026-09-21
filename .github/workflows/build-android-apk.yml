@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - audit-fixes-v11.6.68
     paths:
       - '.github/workflows/build-android-apk.yml'
       - 'source/**'
@@ -71,6 +72,7 @@ on:
       - 'ci/v11_6_65/**'
       - 'ci/v11_6_66/**'
       - 'ci/v11_6_67/**'
+      - 'ci/v11_6_68/**'
       - 'GardeFlow_android_v11_6_0_official_pdf_auto_import.zip'
 
 permissions:
@@ -111,7 +113,7 @@ jobs:
           test -f "$PROJECT_DIR/lib/main.dart"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Apply patches V11.6.1 to V11.6.67
+      - name: Apply patches V11.6.1 to V11.6.68
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
@@ -235,6 +237,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/ci/v11_6_65/apply_v11_6_65.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_66/apply_v11_6_66.py"
           python3 "$GITHUB_WORKSPACE/ci/v11_6_67/apply_v11_6_67.py"
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_68/apply_v11_6_68.py"
 
 
 
