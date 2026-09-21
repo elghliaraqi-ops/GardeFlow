@@ -707,6 +707,7 @@ replace_once(
           .select('id,nom,prenom,phone,role,service,medical_grade,hospital,account_status')
           .order('prenom')
           .order('nom')
+          .order('id')
           .range(offset, offset + pageSize - 1);
       allRows.addAll(rows);
       if (rows.length < pageSize) break;
@@ -736,6 +737,7 @@ replace_once(
           .select('id,date_str,shift_id,owner_id,owner_phone,owner_name,leave_request_id,is_disciplinary,created_at')
           .isFilter('deleted_at', null)
           .order('date_str')
+          .order('id')
           .range(offset, offset + pageSize - 1);
       allRows.addAll(rows);
       if (rows.length < pageSize) break;
@@ -762,6 +764,7 @@ replace_once(
           .select('owner_id,year,month,status,submitted_at,reviewed_at,reviewed_by,rejection_reason')
           .order('year')
           .order('month')
+          .order('owner_id')
           .range(offset, offset + pageSize - 1);
       allRows.addAll(rows);
       if (rows.length < pageSize) break;
@@ -783,6 +786,7 @@ replace_once(
           .from('exchange_requests')
           .select('id,type,planning_entry_id,date_str,shift_id,target_planning_entry_id,target_date_str,target_shift_id,from_id,from_phone,from_name,to_id,to_phone,to_name,status,created_at')
           .order('created_at')
+          .order('id')
           .range(offset, offset + pageSize - 1);
       allRows.addAll(rows);
       if (rows.length < pageSize) break;
