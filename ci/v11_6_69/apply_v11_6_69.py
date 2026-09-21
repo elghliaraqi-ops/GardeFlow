@@ -686,11 +686,137 @@ void main() {
 ''')
 print('V11.6.69: audit smoke tests created')
 
+
+# Explicit paging prevents silent PostgREST row-limit truncation at scale.
+replace_once(
+  'lib/services/supabase_backend_service.dart',
+  """  Future<List<AppUser>> fetchVisibleProfiles() async {
+    final rows = await client
+        .from('profiles')
+        .select('id,nom,prenom,phone,role,service,medical_grade,hospital,account_status')
+        .order('prenom')
+        .order('nom');
+    return (rows as List).map((e) => _profileToUser(Map<String, dynamic>.from(e))).toList();
+  }""",
+  """  Future<List<AppUser>> fetchVisibleProfiles() async {
+    const pageSize = 500;
+    final allRows = <dynamic>[];
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await client
+          .from('profiles')
+          .select('id,nom,prenom,phone,role,service,medical_grade,hospital,account_status')
+          .order('prenom')
+          .order('nom')
+          .range(offset, offset + pageSize - 1);
+      allRows.addAll(rows);
+      if (rows.length < pageSize) break;
+    }
+    return allRows
+        .map((e) => _profileToUser(Map<String, dynamic>.from(e)))
+        .toList();
+  }""",
+  'paginate visible profiles',
+)
+
+replace_once(
+  'lib/services/supabase_backend_service.dart',
+  """  Future<List<PlanningEntry>> fetchPlanning() async {
+    final rows = await client
+        .from('planning_entries')
+        .select('id,date_str,shift_id,owner_id,owner_phone,owner_name,leave_request_id,is_disciplinary,created_at')
+        .isFilter('deleted_at', null)
+        .order('date_str');
+    return (rows as List).map((raw) {""",
+  """  Future<List<PlanningEntry>> fetchPlanning() async {
+    const pageSize = 500;
+    final allRows = <dynamic>[];
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await client
+          .from('planning_entries')
+          .select('id,date_str,shift_id,owner_id,owner_phone,owner_name,leave_request_id,is_disciplinary,created_at')
+          .isFilter('deleted_at', null)
+          .order('date_str')
+          .range(offset, offset + pageSize - 1);
+      allRows.addAll(rows);
+      if (rows.length < pageSize) break;
+    }
+    return allRows.map((raw) {""",
+  'paginate planning entries',
+)
+
+replace_once(
+  'lib/services/supabase_backend_service.dart',
+  """  Future<List<PlanningMonth>> fetchPlanningMonths() async {
+    final rows = await client
+        .from('planning_months')
+        .select('owner_id,year,month,status,submitted_at,reviewed_at,reviewed_by,rejection_reason')
+        .order('year')
+        .order('month');
+    return (rows as List).map((raw) {""",
+  """  Future<List<PlanningMonth>> fetchPlanningMonths() async {
+    const pageSize = 500;
+    final allRows = <dynamic>[];
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await client
+          .from('planning_months')
+          .select('owner_id,year,month,status,submitted_at,reviewed_at,reviewed_by,rejection_reason')
+          .order('year')
+          .order('month')
+          .range(offset, offset + pageSize - 1);
+      allRows.addAll(rows);
+      if (rows.length < pageSize) break;
+    }
+    return allRows.map((raw) {""",
+  'paginate planning months',
+)
+
+replace_once(
+  'lib/services/supabase_backend_service.dart',
+  """  Future<List<ExchangeRequest>> fetchExchanges() async {
+    final rows = await client.from('exchange_requests').select('id,type,planning_entry_id,date_str,shift_id,target_planning_entry_id,target_date_str,target_shift_id,from_id,from_phone,from_name,to_id,to_phone,to_name,status,created_at').order('created_at');
+    return (rows as List).map((raw) {""",
+  """  Future<List<ExchangeRequest>> fetchExchanges() async {
+    const pageSize = 500;
+    final allRows = <dynamic>[];
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await client
+          .from('exchange_requests')
+          .select('id,type,planning_entry_id,date_str,shift_id,target_planning_entry_id,target_date_str,target_shift_id,from_id,from_phone,from_name,to_id,to_phone,to_name,status,created_at')
+          .order('created_at')
+          .range(offset, offset + pageSize - 1);
+      allRows.addAll(rows);
+      if (rows.length < pageSize) break;
+    }
+    return allRows.map((raw) {""",
+  'paginate exchanges',
+)
+
+replace_once(
+  'lib/services/supabase_backend_service.dart',
+  """  Future<List<LeaveRequest>> fetchLeaveRequests() async {
+    final rows = await client.from('leave_requests').select('id,start_date,end_date,date_str,owner_id,owner_phone,owner_name,status,created_at,reviewed_at').order('created_at');
+    return (rows as List).map((raw) {""",
+  """  Future<List<LeaveRequest>> fetchLeaveRequests() async {
+    const pageSize = 500;
+    final allRows = <dynamic>[];
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await client
+          .from('leave_requests')
+          .select('id,start_date,end_date,date_str,owner_id,owner_phone,owner_name,status,created_at,reviewed_at')
+          .order('created_at')
+          .range(offset, offset + pageSize - 1);
+      allRows.addAll(rows);
+      if (rows.length < pageSize) break;
+    }
+    return allRows.map((raw) {""",
+  'paginate leave requests',
+)
+
 checks={
  'pubspec.yaml':['version: 11.6.69+229'],
  'lib/models/password_reset_request.dart':['class PasswordResetRequest'],
  'lib/state/app_state.dart':['passwordResetRequests','_scheduleRealtimeReload','_passwordResetRealtime'],
- 'lib/services/supabase_backend_service.dart':['fetchPasswordResetRequests','admin_password_reset_requests'],
+ 'lib/services/supabase_backend_service.dart':['fetchPasswordResetRequests','admin_password_reset_requests','range(offset, offset + pageSize - 1)'],
  'lib/screens/notifications_screen.dart':['Mot de passe oublié','Réinitialiser le mot de passe','AdminPasswordResetScreen'],
  'lib/screens/admin_password_reset_screen.dart':['initialUserId','_openedInitialUser'],
  'lib/services/push_notification_service.dart':['password_reset_request','initialIndex','registerPushDevice'],
