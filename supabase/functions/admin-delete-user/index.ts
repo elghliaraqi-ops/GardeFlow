@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
 
     for (let index = 0; index < storagePaths.length; index += 1000) {
       const chunk = storagePaths.slice(index, index + 1000);
-      const { error: storageError } = await adminClient.storage.from('gardeflow-shared').remove(chunk);
+      const { error: storageError } = await adminClient.storage.from('astreinte-photos').remove(chunk);
       if (storageError) {
         console.error('admin-delete-user storage cleanup failed', storageError);
         return json({ ok: false, error: 'storage_cleanup_failed' }, 500);
@@ -111,23 +111,43 @@ Deno.serve(async (req: Request) => {
     }
 
     const phone = targetProfile.phone;
-    const cleanupOperations = [
-      adminClient.from('audit_log').delete().or(`actor_id.eq.${targetUserId},subject_id.eq.${targetUserId}`),
-      adminClient
-        .from('exchange_requests')
-        .delete()
-        .or(`from_id.eq.${targetUserId},to_id.eq.${targetUserId},from_phone.eq.${phone},to_phone.eq.${phone}`),
-      adminClient.from('leave_requests').delete().or(`owner_id.eq.${targetUserId},owner_phone.eq.${phone}`),
-      adminClient.from('planning_entries').delete().or(`owner_id.eq.${targetUserId},owner_phone.eq.${phone}`),
-      adminClient.from('astreinte_photos').delete().or(`owner_id.eq.${targetUserId},owner_phone.eq.${phone}`),
-      adminClient.from('planning_months').update({ reviewed_by: null }).eq('reviewed_by', targetUserId),
+
+    // Delete in FK-safe order. planning_entries and leave_requests reference
+    // each other, so a parallel Promise.all can fail nondeterministically.
+    const cleanupSteps = [
+      () => adminClient.from('audit_log').delete().or(
+        `actor_id.eq.${targetUserId},subject_id.eq.${targetUserId}`,
+      ),
+      () => adminClient.from('exchange_requests').delete().or(
+        `from_id.eq.${targetUserId},to_id.eq.${targetUserId},from_phone.eq.${phone},to_phone.eq.${phone}`,
+      ),
+      () => adminClient.from('planning_entries').update({ leave_request_id: null }).or(
+        `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
+      ),
+      () => adminClient.from('leave_requests').update({ planning_entry_id: null }).or(
+        `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
+      ),
+      () => adminClient.from('leave_requests').delete().or(
+        `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
+      ),
+      () => adminClient.from('planning_entries').delete().or(
+        `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
+      ),
+      () => adminClient.from('astreinte_photos').delete().or(
+        `owner_id.eq.${targetUserId},owner_phone.eq.${phone}`,
+      ),
+      () => adminClient.from('planning_months').update({ reviewed_by: null }).eq(
+        'reviewed_by',
+        targetUserId,
+      ),
     ];
 
-    const cleanupResults = await Promise.all(cleanupOperations);
-    const cleanupFailure = cleanupResults.find((result) => result.error != null)?.error;
-    if (cleanupFailure) {
-      console.error('admin-delete-user data cleanup failed', cleanupFailure);
-      return json({ ok: false, error: 'data_cleanup_failed' }, 500);
+    for (const step of cleanupSteps) {
+      const result = await step();
+      if (result.error) {
+        console.error('admin-delete-user data cleanup failed', result.error);
+        return json({ ok: false, error: 'data_cleanup_failed' }, 500);
+      }
     }
 
     // Hard-delete the Auth user. profiles.id references auth.users(id) ON DELETE CASCADE,
