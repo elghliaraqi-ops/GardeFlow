@@ -946,7 +946,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   me public.profiles%rowtype;
   e public.planning_entries%rowtype;
@@ -1031,7 +1031,7 @@ begin
         updated_at=now()
     where public.planning_months.status<>'approved';
 end;
-$;
+$$;
 
 revoke execute on function public.delete_my_planning_entry(text)
   from public, anon;
