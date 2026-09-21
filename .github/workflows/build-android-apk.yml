@@ -444,6 +444,19 @@ jobs:
           print('V11.6.17 validation completed')
           PY
 
+      - name: Upload reconstructed source snapshot
+        if: github.ref_name == 'audit-fixes-v11.6.68'
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.68-source-snapshot
+          path: |
+            ${{ steps.project.outputs.dir }}/lib
+            ${{ steps.project.outputs.dir }}/pubspec.yaml
+            ${{ steps.project.outputs.dir }}/tool
+            ${{ steps.project.outputs.dir }}/supabase
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
