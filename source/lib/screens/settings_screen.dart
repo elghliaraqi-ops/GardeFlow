@@ -1131,7 +1131,7 @@ class ApplicationSettingsScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 7),
                 Text(
-                  'Version 11.6.66',
+                  'Version 11.6.70',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.inkFaint,
