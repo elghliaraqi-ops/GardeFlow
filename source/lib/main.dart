@@ -35,15 +35,15 @@ class HuimApp extends StatelessWidget {
     final appearanceTheme =
         context.select<AppState, String>((state) => state.appearanceTheme);
     AppColors.setAppearanceTheme(appearanceTheme);
-    final darkMode = AppColors.isDarkMode;
 
     return MaterialApp(
       navigatorKey: huimNavigatorKey,
       scaffoldMessengerKey: huimMessengerKey,
       title: 'GardeFlow',
       debugShowCheckedModeBanner: false,
-      theme: darkMode ? AppTheme.dark() : AppTheme.light(),
-      themeAnimationDuration: const Duration(milliseconds: 220),
+      theme: AppTheme.forAppearance(appearanceTheme),
+      themeAnimationDuration: WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations
+          ? Duration.zero : AppMotion.short,
       themeAnimationCurve: Curves.easeOutCubic,
       locale: const Locale('fr', 'FR'),
       supportedLocales: const [Locale('fr', 'FR'), Locale('en', 'US')],

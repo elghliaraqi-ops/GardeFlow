@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../ui/components.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -108,20 +110,18 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       ...kHospitals.where((h) => h != myHospital),
     ];
 
-    final content = Column(
+    final content = NestedScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      headerSliverBuilder: (context, scrolled) => [SliverToBoxAdapter(child: Column(
       children: [
 
-        _CategoryBar(
-          sections: sections,
-          activeId: _activeCategory,
-          onSelect: (id) => setState(() => _activeCategory = id),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Nom, numéro, service…',
+              labelText: 'Rechercher dans l’annuaire',
+              hintText: 'Service, médecin ou extension',
               prefixIcon: const Icon(Icons.search_rounded, size: 20),
               suffixIcon: _query.isEmpty
                   ? null
@@ -136,6 +136,11 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
             ),
             onChanged: (v) => setState(() => _query = v),
           ),
+        ),
+        _CategoryBar(
+          sections: sections,
+          activeId: _activeCategory,
+          onSelect: (id) => setState(() => _activeCategory = id),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
@@ -162,10 +167,12 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, 10, AppSpace.lg, 8),
-          child: Row(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text('${items.length} contact${items.length > 1 ? 's' : ''}', style: Theme.of(context).textTheme.labelMedium),
-              const Spacer(),
               if (_activeCategory != _kAllCategories || _query.isNotEmpty || _activeHospital != _kAllHospitals)
                 TextButton.icon(
                   onPressed: () {
@@ -182,9 +189,10 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
             ],
           ),
         ),
-        Expanded(
-          child: items.isEmpty
-              ? Center(
+      ],
+      ))],
+      body: items.isEmpty
+              ? SingleChildScrollView(
                   child: Padding(
                     padding: EdgeInsets.all(24),
                     child: AppCard(
@@ -223,8 +231,6 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                     );
                   },
                 ),
-        ),
-      ],
     );
 
     if (widget.embedded) {
@@ -317,6 +323,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: const Text('Supprimer ce contact ?'),
         content: Text('${contact.name}\n${contact.phone}'),
         actions: [
@@ -345,298 +352,57 @@ class _ContactRow extends StatelessWidget {
   final DirectoryContact contact;
   final DirectorySection section;
   final bool canManage;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _ContactRow({
-    required this.contact,
-    required this.section,
-    required this.canManage,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
+  final VoidCallback onEdit, onDelete;
+  const _ContactRow({required this.contact, required this.section, required this.canManage, required this.onEdit, required this.onDelete});
   @override
   Widget build(BuildContext context) {
-    final details = <String>[
-      section.label,
-      if ((contact.service ?? '').trim().isNotEmpty) contact.service!.trim(),
-      hospitalDisplayName(contact.hospital),
-    ];
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: AppRadius.mdR,
-        onTap: () => launchUrl(Uri.parse('tel:${contact.phone}')),
-        child: AppCard(
-          padding: EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
-          child: Row(children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: section.color,
-              child: Text(
-                contact.initials,
-                style: TextStyle(color: section.textColor, fontWeight: FontWeight.w800, fontSize: 12.5),
-              ),
-            ),
-            SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(contact.name, style: Theme.of(context).textTheme.titleSmall),
-                  SizedBox(height: 2),
-                  Text(contact.phone, style: Theme.of(context).textTheme.bodySmall),
-                  SizedBox(height: 2),
-                  Text(
-                    details.join(' · '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft, fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: AppColors.conge, shape: BoxShape.circle),
-              child: Icon(Icons.call_rounded, size: 16, color: AppColors.congeText),
-            ),
-            if (canManage) ...[
-              SizedBox(width: 2),
-              PopupMenuButton<String>(
-                tooltip: 'Gérer le contact',
-                onSelected: (value) {
-                  if (value == 'edit') onEdit();
-                  if (value == 'delete') onDelete();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Modifier'))),
-                  PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Supprimer'))),
-                ],
-              ),
-            ],
-          ]),
-        ),
-      ),
-    );
+    final extension = contact.categoryId == kDirectoryCategoryExtensions || RegExp(r'^\d{2,6}$').hasMatch(contact.phone.trim());
+    Future<void> action() async {
+      if (extension) {
+        await Clipboard.setData(ClipboardData(text: contact.phone));
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Extension ${contact.phone} copiée · à composer sur le réseau de ${hospitalDisplayName(contact.hospital)}.')));
+      } else {
+        final ok = await launchUrl(Uri(scheme: 'tel', path: contact.phone));
+        if (!ok && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d’ouvrir le téléphone.')));
+      }
+    }
+    return Column(children: [
+      DoctorTile(name: contact.name,
+        subtitle: '${contact.service ?? section.label} · ${hospitalDisplayName(contact.hospital)}',
+        onTap: action,
+        trailing: PopupMenuButton<String>(
+          tooltip: 'Actions pour ${contact.name}',
+          onSelected: (value) { if (value == 'contact') action(); if (value == 'edit') onEdit(); if (value == 'delete') onDelete(); },
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'contact', child: Text(extension ? 'Copier l’extension' : 'Appeler')),
+            if (canManage) const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+            if (canManage) const PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+          ],
+        )),
+      Padding(padding: const EdgeInsets.only(left: 68, bottom: 8), child: Align(alignment: Alignment.centerLeft,
+        child: TextButton.icon(onPressed: action,
+          icon: Icon(extension ? Icons.content_copy_rounded : Icons.phone_outlined),
+          label: Text(extension ? 'Extension ${contact.phone}' : contact.phone)))),
+      const Divider(indent: 68),
+    ]);
   }
 }
 
-class _CategoryBar extends StatefulWidget {
+class _CategoryBar extends StatelessWidget {
   final List<DirectorySection> sections;
   final String activeId;
   final ValueChanged<String> onSelect;
   const _CategoryBar({required this.sections, required this.activeId, required this.onSelect});
-
   @override
-  State<_CategoryBar> createState() => _CategoryBarState();
-}
-
-class _CategoryBarState extends State<_CategoryBar> {
-  final ScrollController _controller = ScrollController();
-  bool _canScrollLeft = false;
-  bool _canScrollRight = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_syncScrollState);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncScrollState());
-  }
-
-  @override
-  void didUpdateWidget(covariant _CategoryBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncScrollState());
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_syncScrollState);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _syncScrollState() {
-    if (!mounted || !_controller.hasClients) return;
-    final position = _controller.position;
-    final left = position.pixels > 4;
-    final right = position.pixels < position.maxScrollExtent - 4;
-    if (left != _canScrollLeft || right != _canScrollRight) {
-      setState(() {
-        _canScrollLeft = left;
-        _canScrollRight = right;
-      });
-    }
-  }
-
-  Future<void> _scrollBy(double delta) async {
-    if (!_controller.hasClients) return;
-    final target = (_controller.offset + delta).clamp(
-      _controller.position.minScrollExtent,
-      _controller.position.maxScrollExtent,
-    );
-    await _controller.animateTo(
-      target.toDouble(),
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.sm),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(bottom: BorderSide(color: AppColors.line)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Catégories',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              Spacer(),
-              Icon(Icons.swipe_rounded, size: 15, color: AppColors.inkSoft),
-              SizedBox(width: 4),
-              Text(
-                'Faites défiler',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.inkSoft),
-              ),
-            ],
-          ),
-          SizedBox(height: 6),
-          SizedBox(
-            height: 42,
-            child: Row(
-              children: [
-                _CategoryScrollButton(
-                  icon: Icons.chevron_left_rounded,
-                  enabled: _canScrollLeft,
-                  onTap: () => _scrollBy(-210),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    controller: _controller,
-                    scrollDirection: Axis.horizontal,
-                    physics: BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    itemCount: widget.sections.length + 1,
-                    separatorBuilder: (_, __) => SizedBox(width: AppSpace.sm),
-                    itemBuilder: (context, i) {
-                      if (i == 0) {
-                        final active = widget.activeId == _kAllCategories;
-                        return _CategoryChip(
-                          label: 'Tous',
-                          active: active,
-                          color: AppColors.brandDark,
-                          textColor: Colors.white,
-                          onTap: () => widget.onSelect(_kAllCategories),
-                        );
-                      }
-                      final section = widget.sections[i - 1];
-                      return _CategoryChip(
-                        label: section.label,
-                        active: section.id == widget.activeId,
-                        color: section.color,
-                        textColor: section.textColor,
-                        onTap: () => widget.onSelect(section.id),
-                      );
-                    },
-                  ),
-                ),
-                _CategoryScrollButton(
-                  icon: Icons.chevron_right_rounded,
-                  enabled: _canScrollRight,
-                  onTap: () => _scrollBy(210),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryScrollButton extends StatelessWidget {
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _CategoryScrollButton({required this.icon, required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      duration: Duration(milliseconds: 160),
-      opacity: enabled ? 1 : 0.18,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: AppRadius.pillR,
-        child: SizedBox(
-          width: 32,
-          height: 42,
-          child: Icon(icon, size: 22, color: enabled ? AppColors.ink : AppColors.inkFaint),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final Color color;
-  final Color textColor;
-  final VoidCallback onTap;
-  const _CategoryChip({
-    required this.label,
-    required this.active,
-    required this.color,
-    required this.textColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.pillR,
-        child: AnimatedContainer(
-          duration: Duration(milliseconds: 150),
-          padding: EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active ? color : AppColors.paperAlt,
-            borderRadius: AppRadius.pillR,
-            border: Border.all(color: active ? color : AppColors.line),
-            boxShadow: active
-                ? [BoxShadow(color: Color(0x10000000), blurRadius: 5, offset: Offset(0, 2))]
-                : null,
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              color: active ? textColor : AppColors.inkSoft,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    child: Row(children: [
+      Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: const Text('Tous'), selected: activeId == _kAllCategories, onSelected: (_) => onSelect(_kAllCategories))),
+      for (final section in sections) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(
+        label: Text(section.label), selected: activeId == section.id, onSelected: (_) => onSelect(section.id))),
+    ]),
+  );
 }
 
 class _DirectoryContactDraft {
@@ -695,6 +461,7 @@ class _DirectoryContactDialogState extends State<_DirectoryContactDialog> {
   Widget build(BuildContext context) {
     final editing = widget.existing != null;
     return AlertDialog(
+      scrollable: true,
       title: Text(editing ? 'Modifier le contact' : 'Ajouter un numéro'),
       content: SingleChildScrollView(
         child: SizedBox(

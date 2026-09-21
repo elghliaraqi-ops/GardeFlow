@@ -96,7 +96,7 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(profile.fullName, style: TextStyle(fontWeight: FontWeight.w800)),
+          Text(profile.fullName, style: TextStyle(fontWeight: FontWeight.w600)),
           SizedBox(height: 3),
           Text(profile.phone, style: Theme.of(context).textTheme.bodySmall),
           SizedBox(height: 2),
@@ -160,6 +160,7 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
           }
 
           return AlertDialog(
+            scrollable: true,
             title: Text('Réinitialiser le mot de passe'),
             content: SingleChildScrollView(
               child: Column(
@@ -278,8 +279,9 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
           }
 
           return AlertDialog(
+            scrollable: true,
             title: Row(
-              children: const [
+              children: [
                 Icon(Icons.warning_amber_rounded, color: AppColors.danger),
                 SizedBox(width: 10),
                 Expanded(child: Text('Supprimer définitivement le compte')),
@@ -302,7 +304,7 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
                     ),
                     child: Text(
                       'Cette action est irréversible. Le compte, ses gardes, congés, demandes d’échange, notifications et autres données personnelles seront supprimés.',
-                      style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600, height: 1.4),
+                      style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600, height: 1.4),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -323,7 +325,7 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
                   ),
                   if (dialogError != null) ...[
                     const SizedBox(height: 12),
-                    Text(dialogError!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
+                    Text(dialogError!, style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
                   ],
                 ],
               ),
@@ -335,7 +337,7 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
               ),
               FilledButton.icon(
                 onPressed: deleting || !confirmationOk ? null : submit,
-                style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+                style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error, foregroundColor: Theme.of(context).colorScheme.onError),
                 icon: deleting
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.delete_forever_rounded),
@@ -443,10 +445,10 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
                                       backgroundColor: AppColors.paperAlt,
                                       child: Text(
                                         profile.fullName.isEmpty ? '?' : profile.fullName.trim()[0].toUpperCase(),
-                                        style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink),
+                                        style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink),
                                       ),
                                     ),
-                                    title: Text(profile.fullName, style: TextStyle(fontWeight: FontWeight.w800)),
+                                    title: Text(profile.fullName, style: TextStyle(fontWeight: FontWeight.w600)),
                                     subtitle: Text('${profile.phone}\n${profile.service}'),
                                     isThreeLine: true,
                                     trailing: Row(

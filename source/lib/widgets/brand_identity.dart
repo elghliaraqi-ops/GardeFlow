@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 
 Color get _brandGreen => AppColors.brand;
-const _brandRed = AppColors.cyan;
+Color get _brandRed => AppColors.isDarkMode ? AppColors.scheme.error : AppColors.cyan;
 
 class GardeFlowBrandBlock extends StatelessWidget {
   final bool compact;
@@ -91,10 +91,10 @@ class GardeFlowBrandBlock extends StatelessWidget {
           'LE PLANNING DE GARDE POUR GARDER LE FLOW',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: compact ? 8.8 : 10.2,
-            letterSpacing: compact ? 2.0 : 2.8,
+            fontSize: compact ? 12 : 14,
+            letterSpacing: 0.3,
             fontWeight: FontWeight.w600,
-            color: secondary.withOpacity(light ? 0.88 : 0.78),
+            color: secondary,
           ),
         ),
       ],

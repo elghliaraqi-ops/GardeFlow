@@ -33,6 +33,7 @@ class _AuditScreenState extends State<AuditScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: const Text('Nettoyer l’historique ?'),
         content: const Text(
           'Cette action supprime définitivement les anciennes entrées du journal administratif. Elle ne modifie ni les gardes, ni les comptes, ni les plannings.',
@@ -147,128 +148,20 @@ class _AuditOverview extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 13),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border(
-          bottom: BorderSide(color: AppColors.line.withOpacity(0.85)),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.brandSoft,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.admin_panel_settings_outlined,
-                  color: AppColors.brand,
-                  size: 22,
-                ),
-              ),
-              SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Historique administratif',
-                      style: TextStyle(
-                        fontFamily: 'SpaceGrotesk',
-                        color: AppColors.ink,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.25,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      '$total action${total > 1 ? 's' : ''} enregistrée${total > 1 ? 's' : ''}',
-                      style: TextStyle(
-                        color: AppColors.inkSoft,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: BouncingScrollPhysics(),
-              itemCount: _filters.length,
-              separatorBuilder: (_, __) => SizedBox(width: 7),
-              itemBuilder: (context, index) {
-                final filter = _filters[index];
-                final selected = selectedFilter == filter.id;
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => onFilterChanged(filter.id),
-                    borderRadius: BorderRadius.circular(12),
-                    child: AnimatedContainer(
-                      duration: Duration(milliseconds: 160),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.brand
-                            : AppColors.paperAlt,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected
-                              ? AppColors.brand
-                              : AppColors.line,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            filter.icon,
-                            size: 15,
-                            color: selected
-                                ? Colors.white
-                                : AppColors.inkSoft,
-                          ),
-                          SizedBox(width: 5),
-                          Text(
-                            filter.label,
-                            style: TextStyle(
-                              color: selected
-                                  ? Colors.white
-                                  : AppColors.inkSoft,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('$total actions enregistrées', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 12),
+      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+        for (final filter in _filters) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(
+          avatar: Icon(filter.icon, size: 18), label: Text(filter.label),
+          selected: selectedFilter == filter.id,
+          onSelected: (_) => onFilterChanged(filter.id),
+        )),
+      ])),
+    ]),
+  );
 }
 
 class _AuditTimeline extends StatelessWidget {
@@ -310,7 +203,7 @@ class _AuditTimeline extends StatelessWidget {
               style: TextStyle(
                 color: AppColors.inkSoft,
                 fontSize: 11,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0.35,
               ),
             ),
@@ -347,165 +240,34 @@ class _AuditEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final look = _actionLook(event.action);
-    final category = _categoryLabel(_actionCategory(event.action));
     final subject = (event.subjectName ?? '').trim();
-    final actor = event.actorName.trim().isEmpty
-        ? 'Système'
-        : event.actorName.trim();
+    final actor = event.actorName.trim().isEmpty ? 'Système' : event.actorName.trim();
     final reason = (event.reason ?? '').trim();
-    final samePerson = subject.isNotEmpty &&
-        subject.toLowerCase() == actor.toLowerCase();
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(14, 14, 14, 13),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.line),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.navy.withOpacity(0.045),
-            blurRadius: 13,
-            offset: Offset(0, 6),
-          ),
+    return AppCard(padding: const EdgeInsets.all(16), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(look.icon, color: Theme.of(context).colorScheme.primary, size: 22),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_actionLabel(event.action), style: Theme.of(context).textTheme.titleMedium)),
+        ]),
+        const SizedBox(height: 8),
+        Text(_categoryLabel(_actionCategory(event.action)), style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 16),
+        if (subject.isNotEmpty) ...[
+          _AuditDetailRow(icon: Icons.person_outline_rounded, label: 'Concerné', value: subject),
+          const SizedBox(height: 12),
         ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 43,
-            height: 43,
-            decoration: BoxDecoration(
-              color: look.background,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              look.icon,
-              size: 21,
-              color: look.foreground,
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _actionLabel(event.action),
-                        style: TextStyle(
-                          fontFamily: 'SpaceGrotesk',
-                          color: AppColors.ink,
-                          fontSize: 14.5,
-                          height: 1.18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.15,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: look.background,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        category,
-                        style: TextStyle(
-                          color: look.foreground,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                if (subject.isNotEmpty)
-                  _AuditDetailRow(
-                    icon: Icons.person_outline_rounded,
-                    label: 'Concerné',
-                    value: subject,
-                  ),
-                if (subject.isNotEmpty) SizedBox(height: 6),
-                _AuditDetailRow(
-                  icon: Icons.shield_outlined,
-                  label: samePerson ? 'Effectué par' : 'Auteur',
-                  value: actor,
-                ),
-                if (reason.isNotEmpty) ...[
-                  SizedBox(height: 7),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.paperAlt,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.notes_rounded,
-                          size: 15,
-                          color: AppColors.inkFaint,
-                        ),
-                        SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            'Motif : $reason',
-                            style: TextStyle(
-                              color: AppColors.inkSoft,
-                              fontSize: 11,
-                              height: 1.35,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                SizedBox(height: 9),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.schedule_rounded,
-                      size: 14,
-                      color: AppColors.inkFaint,
-                    ),
-                    SizedBox(width: 5),
-                    Text(
-                      DateFormat(
-                        'dd MMM yyyy · HH:mm',
-                        'fr_FR',
-                      ).format(event.createdAt.toLocal()),
-                      style: TextStyle(
-                        color: AppColors.inkFaint,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+        _AuditDetailRow(icon: Icons.shield_outlined, label: 'Effectué par', value: actor),
+        if (reason.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _AuditDetailRow(icon: Icons.notes_rounded, label: 'Motif', value: reason),
         ],
-      ),
-    );
+        const SizedBox(height: 16),
+        Text(DateFormat('dd MMM yyyy · HH:mm', 'fr_FR').format(event.createdAt.toLocal()),
+          style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ));
   }
 }
 
@@ -521,41 +283,15 @@ class _AuditDetailRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 15,
-          color: AppColors.inkFaint,
-        ),
-        SizedBox(width: 7),
-        SizedBox(
-          width: 67,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: AppColors.inkFaint,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              color: AppColors.ink,
-              fontSize: 11.5,
-              height: 1.25,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+    const SizedBox(width: 10),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: Theme.of(context).textTheme.labelMedium),
+      const SizedBox(height: 3),
+      Text(value, style: Theme.of(context).textTheme.bodyMedium),
+    ])),
+  ]);
 }
 
 class _AuditErrorState extends StatelessWidget {

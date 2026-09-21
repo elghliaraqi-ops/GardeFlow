@@ -130,7 +130,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         Expanded(
                           child: Text(
                             'Aucun code n’est envoyé. L’administrateur reçoit seulement votre demande et pourra définir un nouveau mot de passe depuis les réglages GardeFlow.',
-                            style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.brandDark),
+                            style: TextStyle(fontSize: 12.5, height: 1.4, color: Theme.of(context).colorScheme.onPrimaryContainer),
                           ),
                         ),
                       ],
@@ -153,7 +153,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           Text(
             'Demander un nouveau mot de passe',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _recoveryGreenDark),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: _recoveryGreenDark),
           ),
           SizedBox(height: 8),
           Text(
@@ -199,7 +199,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           Text(
             'Demande envoyée',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _recoveryGreenDark),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: _recoveryGreenDark),
           ),
           SizedBox(height: 10),
           Text(
@@ -225,8 +225,8 @@ class _MessageBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = error ? Color(0xFFF9E1DD) : AppColors.brandSoft;
-    final fg = error ? Color(0xFF812E23) : AppColors.brandDark;
+    final bg = error ? Theme.of(context).colorScheme.errorContainer : AppColors.brandSoft;
+    final fg = error ? Theme.of(context).colorScheme.onErrorContainer : Theme.of(context).colorScheme.onPrimaryContainer;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),

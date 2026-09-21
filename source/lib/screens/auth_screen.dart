@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,12 +7,13 @@ import '../data/services.dart';
 import '../models/app_user.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../ui/components.dart';
 import '../widgets/brand_identity.dart';
 import 'forgot_password_screen.dart';
 import 'home_screen.dart';
 
 Color get _loginGreen => AppColors.brand;
-Color get _loginGreenDark => AppColors.brandDark;
+Color get _loginGreenDark => AppColors.scheme.onPrimaryContainer;
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -51,7 +51,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     super.initState();
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1250),
+      duration: AppMotion.short,
     );
     _contentOpacity = CurvedAnimation(
       parent: _entranceController,
@@ -135,110 +135,19 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      resizeToAvoidBottomInset: true,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            'assets/branding/login_urgences.jpg',
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            filterQuality: FilterQuality.high,
-          ),
-          AnimatedBuilder(
-            animation: _entranceController,
-            builder: (context, child) {
-              final t =
-                  Curves.easeInOutCubic.transform(_entranceController.value);
-              final sigma = 8.5 * t;
-              return BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                child: Container(
-                  color: AppColors.isDarkMode
-                      ? AppColors.paper.withOpacity(0.42 + (0.16 * t))
-                      : Colors.white.withOpacity(0.05 + (0.10 * t)),
-                ),
-              );
-            },
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: AppColors.isDarkMode
-                    ? [
-                        AppColors.paper.withOpacity(0.96),
-                        AppColors.paperAlt.withOpacity(0.88),
-                        AppColors.card.withOpacity(0.92),
-                        AppColors.paper.withOpacity(0.98),
-                      ]
-                    : [
-                        Colors.white.withOpacity(0.68),
-                        Colors.white.withOpacity(0.34),
-                        Colors.white.withOpacity(0.54),
-                        Color(0xFFEAF7EF).withOpacity(0.78),
-                      ],
-                stops: [0, 0.28, 0.70, 1],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: FadeTransition(
-              opacity: _contentOpacity,
-              child: SlideTransition(
-                position: _contentSlide,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (_showRegister) {
-                      return Center(
-                        child: SingleChildScrollView(
-                          physics: BouncingScrollPhysics(),
-                          padding:
-                              EdgeInsets.fromLTRB(18, 16, 18, 20),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: 460),
-                            child: _buildAuthContent(
-                              register: true,
-                              compactLogin: false,
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    final availableWidth = constraints.maxWidth - 28;
-                    final contentWidth =
-                        availableWidth > 440 ? 440.0 : availableWidth;
-
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                      child: Center(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.center,
-                          child: SizedBox(
-                            width: contentWidth,
-                            child: _buildAuthContent(
-                              register: false,
-                              compactLogin: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
+  Widget build(BuildContext context) => Scaffold(
+    resizeToAvoidBottomInset: true,
+    body: SafeArea(child: LayoutBuilder(builder: (context, box) => SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      child: ConstrainedBox(constraints: BoxConstraints(minHeight: (box.maxHeight - 40).clamp(0.0, double.infinity).toDouble()),
+        child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460),
+          child: FadeTransition(opacity: _contentOpacity,
+            child: _buildAuthContent(register: _showRegister, compactLogin: box.maxHeight < 700)),
+        )),
       ),
-    );
-  }
+    ))),
+  );
 
   Widget _buildAuthContent({
     required bool register,
@@ -255,7 +164,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         if (_info != null) ...[
           _Banner(
             text: _info!,
-            background: Color(0xFFE7F6ED),
+            background: Theme.of(context).colorScheme.primaryContainer,
             foreground: _loginGreenDark,
             icon: Icons.check_circle_rounded,
           ),
@@ -264,15 +173,15 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         if (_error != null) ...[
           _Banner(
             text: _error!,
-            background: Color(0xFFFFE7E3),
-            foreground: AppColors.danger,
+            background: Theme.of(context).colorScheme.errorContainer,
+            foreground: Theme.of(context).colorScheme.onErrorContainer,
             icon: Icons.error_rounded,
           ),
           SizedBox(height: 7),
         ],
         _GlassCard(
           child: AnimatedSwitcher(
-            duration: Duration(milliseconds: 260),
+            duration: AppMotion.duration(context),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             child: register ? _buildRegisterForm() : _buildLoginForm(),
@@ -291,7 +200,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           'Bienvenue',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'SpaceGrotesk',
+            fontFamily: 'Inter',
             fontSize: 27,
             fontWeight: FontWeight.w700,
             color: _loginGreenDark,
@@ -350,7 +259,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         _OrDivider(),
         SizedBox(height: 11),
         SizedBox(
-          height: 48,
+          width: double.infinity,
           child: OutlinedButton(
             onPressed: () => setState(() {
               _showRegister = true;
@@ -358,17 +267,15 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               _info = null;
             }),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.isDarkMode ? Colors.white : _loginGreenDark,
-              backgroundColor: AppColors.isDarkMode
-                  ? AppColors.brand.withOpacity(0.18)
-                  : Colors.white.withOpacity(0.28),
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               side: BorderSide(
-                color: AppColors.isDarkMode ? AppColors.brand : _loginGreen,
+                color: Theme.of(context).colorScheme.outline,
                 width: 1.4,
               ),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             ),
-            child: Text('Créer un compte', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: Text('Créer un compte', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -419,7 +326,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           'Créer un compte',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'SpaceGrotesk',
+            fontFamily: 'Inter',
             fontSize: 27,
             fontWeight: FontWeight.w700,
             color: AppColors.isDarkMode ? AppColors.brand : _loginGreenDark,
@@ -498,7 +405,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           onChanged: (v) => setState(() => _regService = v ?? _regService),
         ),
         SizedBox(height: 16),
-        Text('Grade médical', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.inkSoft)),
+        Text('Grade médical', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.inkSoft)),
         SizedBox(height: 8),
         Row(children: [
           Expanded(child: _gradeOption(MedicalGrade.junior, 'Junior')),
@@ -530,7 +437,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   }) {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(17),
-      borderSide: BorderSide(color: Colors.white.withOpacity(0.82), width: 1.2),
+      borderSide: BorderSide.none,
     );
     return InputDecoration(
       hintText: hint,
@@ -559,16 +466,16 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         alignment: Alignment.center,
         padding: EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? _loginGreen : Colors.white.withOpacity(0.62),
-          border: Border.all(color: selected ? _loginGreen : Colors.white.withOpacity(0.92), width: 1.4),
+          color: selected ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surfaceContainerHigh,
+          border: Border.all(color: selected ? _loginGreen : Theme.of(context).colorScheme.outlineVariant, width: 1.4),
           borderRadius: BorderRadius.circular(15),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            color: selected ? Colors.white : AppColors.inkSoft,
+            fontWeight: FontWeight.w600,
+            color: selected ? Theme.of(context).colorScheme.onPrimaryContainer : AppColors.inkSoft,
           ),
         ),
       ),
@@ -579,73 +486,16 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
 class _GlassCard extends StatelessWidget {
   final Widget child;
   const _GlassCard({required this.child});
-
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(30),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, 22),
-          decoration: BoxDecoration(
-            color: (AppColors.isDarkMode ? AppColors.card : Colors.white).withOpacity(0.72),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: (AppColors.isDarkMode ? AppColors.card : Colors.white).withOpacity(0.90), width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.11),
-                blurRadius: 30,
-                offset: Offset(0, 14),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: child);
 }
-
 class _GradientPrimaryButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onPressed;
-
   const _GradientPrimaryButton({required this.label, required this.icon, required this.onPressed});
-
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          height: 54,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.brandBright, _loginGreenDark],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(color: _loginGreen.withOpacity(0.25), blurRadius: 14, offset: Offset(0, 7)),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(label, style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
-              SizedBox(width: 10),
-              Icon(icon, color: Colors.white, size: 21),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => PrimaryButton(label: label, icon: icon, onPressed: onPressed);
 }
 
 class _OrDivider extends StatelessWidget {

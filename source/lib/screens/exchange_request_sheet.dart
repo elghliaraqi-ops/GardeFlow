@@ -6,13 +6,17 @@ import '../models/planning_entry.dart';
 import '../models/shift_type.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../ui/components.dart';
+import '../ui/planning_access.dart';
+import '../data/hospitals.dart';
 
 enum _Mode { transfer, exchange }
 
 class ExchangeRequestSheet extends StatefulWidget {
   final String dateStr;
   final PlanningEntry entry;
-  const ExchangeRequestSheet({super.key, required this.dateStr, required this.entry});
+  final bool initialExchange;
+  const ExchangeRequestSheet({super.key, required this.dateStr, required this.entry, this.initialExchange = false});
   @override
   State<ExchangeRequestSheet> createState() => _ExchangeRequestSheetState();
 }
@@ -24,6 +28,13 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
   String _doctorSearch = '';
   final TextEditingController _doctorSearchController = TextEditingController();
   String? _error;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.initialExchange ? _Mode.exchange : _Mode.transfer;
+  }
 
   @override
   void dispose() {
@@ -79,7 +90,12 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
           }).toList();
     final selectedTargetEntryId =
         _targetEntryId != null && targetEntries.any((e) => e.id == _targetEntryId) ? _targetEntryId : null;
+    final selectedTarget = targetEntries.where((e) => e.id == selectedTargetEntryId).firstOrNull;
+    final targetReason = selectedDoctor == null ? null : exchangeMode
+        ? selectedTarget == null ? null : swapTargetDisabledReason(state, widget.entry, selectedDoctor, selectedTarget)
+        : transferTargetDisabledReason(state, widget.entry, selectedDoctor);
 
+    final sourceReason = exchangeDisabledReason(state, widget.entry);
     return SafeArea(
       child: SingleChildScrollView(
         padding: EdgeInsets.only(left: AppSpace.xl, right: AppSpace.xl, top: AppSpace.sm, bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.xxl),
@@ -87,7 +103,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Transfert / échange de garde', style: Theme.of(context).textTheme.displaySmall),
+            Text('À qui souhaitez-vous proposer cette garde ?', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppSpace.sm),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
@@ -95,7 +111,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(shift.icon, size: 15, color: shift.textColor),
                 const SizedBox(width: AppSpace.xs),
-                Text('$dateLabel · ${shift.label}', style: TextStyle(fontSize: 12.5, color: shift.textColor, fontWeight: FontWeight.w700)),
+                Flexible(child: Text('$dateLabel · ${shift.label}', style: TextStyle(fontSize: 12.5, color: shift.textColor, fontWeight: FontWeight.w700))),
               ]),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -105,8 +121,9 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                 ButtonSegment(value: _Mode.exchange, icon: Icon(Icons.swap_horiz_rounded, size: 16), label: Text('Échange')),
               ],
               selected: {_mode},
-              onSelectionChanged: (v) => setState(() {
+              onSelectionChanged: _sending ? null : (v) => setState(() {
                 _mode = v.first;
+                _doctorId = null;
                 _targetEntryId = null;
                 _error = null;
               }),
@@ -163,34 +180,28 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                   style: Theme.of(context).textTheme.bodySmall,
                 )
               else
-                DropdownButtonFormField<String>(
-                  value: selectedDoctor != null &&
-                          filteredTargets.any((c) => c.id == selectedDoctor.id)
-                      ? selectedDoctor.id
-                      : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: 'Médecin destinataire',
-                    helperText: search.isEmpty
-                        ? '${targets.length} médecin${targets.length > 1 ? 's' : ''} disponible${targets.length > 1 ? 's' : ''}'
-                        : '${filteredTargets.length} résultat${filteredTargets.length > 1 ? 's' : ''}',
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: filteredTargets.length,
+                    separatorBuilder: (_, __) => const Divider(),
+                    itemBuilder: (context, index) {
+                      final doctor = filteredTargets[index];
+                      final reason = exchangeMode ? null : transferTargetDisabledReason(state, widget.entry, doctor);
+                      final unavailable = reason != null;
+                      return DoctorTile(
+                        name: doctor.name,
+                        subtitle: '${doctor.service ?? ''} · ${hospitalDisplayName(doctor.hospital)}${reason == null ? '' : '\n$reason'}',
+                        selected: selectedDoctor?.id == doctor.id,
+                        trailing: unavailable ? const Icon(Icons.lock_outline_rounded) : null,
+                        onTap: unavailable || _sending ? null : () {
+                          FocusScope.of(context).unfocus();
+                          setState(() { _doctorId = doctor.id; _targetEntryId = null; _error = null; });
+                        },
+                      );
+                    },
                   ),
-                  items: filteredTargets
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: c.id,
-                          child: Text(
-                            '${c.name} · ${c.service}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() {
-                    _doctorId = v;
-                    _targetEntryId = null;
-                    _error = null;
-                  }),
                 ),
               if (_mode == _Mode.exchange && selectedDoctor != null) ...[
                 const SizedBox(height: AppSpace.md),
@@ -204,7 +215,9 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                     items: targetEntries.map((e) {
                       final sh = ShiftCatalog.byId(e.shiftId);
                       final d = DateFormat('EEE d MMM yyyy', 'fr_FR').format(DateTime.parse(e.dateStr));
-                      return DropdownMenuItem(value: e.id, child: Text('$d · ${sh.label}', overflow: TextOverflow.ellipsis));
+                      final reason = swapTargetDisabledReason(state, widget.entry, selectedDoctor, e);
+                      return DropdownMenuItem(value: e.id, enabled: reason == null,
+                        child: Text('$d · ${sh.label}${reason == null ? '' : ' · indisponible'}', overflow: TextOverflow.ellipsis));
                     }).toList(),
                     onChanged: (v) => setState(() {
                       _targetEntryId = v;
@@ -213,19 +226,21 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                   ),
               ],
             ],
+            if (sourceReason != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(sourceReason)),
+            if (targetReason != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(targetReason)),
             if (_error != null) ...[
               const SizedBox(height: AppSpace.sm),
               Row(children: [
-                const Icon(Icons.error_rounded, size: 15, color: AppColors.danger),
+                Icon(Icons.error_rounded, size: 15, color: AppColors.danger),
                 const SizedBox(width: 6),
-                Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(_error!, style: TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600))),
               ]),
             ],
             const SizedBox(height: AppSpace.lg),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: targets.isEmpty
+                onPressed: targets.isEmpty || selectedDoctor == null || sourceReason != null || targetReason != null || _sending || (exchangeMode && selectedTargetEntryId == null)
                     ? null
                     : () async {
                         final doctor = _doctorId == null ? null : targets.where((c) => c.id == _doctorId).firstOrNull;
@@ -233,6 +248,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                           setState(() => _error = 'Sélectionnez un médecin destinataire.');
                           return;
                         }
+                        setState(() => _sending = true);
                         String? err;
                         if (_mode == _Mode.transfer) {
                           err = await state.createTransferRequest(widget.dateStr, widget.entry, doctor);
@@ -243,24 +259,24 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                             return true;
                           }).toList();
                           if (available.isEmpty) {
-                            setState(() => _error = '${doctor.name} n’a aucune garde compatible avec les règles d’échange.');
+                            setState(() { _sending = false; _error = '${doctor.name} n’a aucune garde compatible avec les règles d’échange.'; });
                             return;
                           }
                           final targetEntry = _targetEntryId == null ? null : available.where((e) => e.id == _targetEntryId).firstOrNull;
                           if (targetEntry == null) {
-                            setState(() => _error = 'Sélectionnez la garde à recevoir en échange.');
+                            setState(() { _sending = false; _error = 'Sélectionnez la garde à recevoir en échange.'; });
                             return;
                           }
                           err = await state.createSwapRequest(widget.dateStr, widget.entry, doctor, targetEntry);
                         }
                         if (!context.mounted) return;
                         if (err != null) {
-                          setState(() => _error = err);
+                          setState(() { _sending = false; _error = err; });
                           return;
                         }
                         Navigator.of(context).pop();
                       },
-                child: Text(_mode == _Mode.transfer ? 'Envoyer la demande de transfert' : 'Envoyer la demande d’échange'),
+                child: Text(_sending ? 'Envoi…' : _mode == _Mode.transfer ? 'Envoyer la demande de transfert' : 'Envoyer la demande d’échange', textAlign: TextAlign.center),
               ),
             ),
           ],

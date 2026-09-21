@@ -378,6 +378,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         title: Text('Retirer ${slot.title} ?'),
         content: const Text('Le PDF ne sera plus visible par les utilisateurs.'),
         actions: [
@@ -407,7 +408,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     return Scaffold(
       backgroundColor: AppColors.paper,
       appBar: AppBar(
-        title: GardeFlowTitle('Planning de Garde Officiel'),
+        title: const Text('Planning officiel'),
         actions: [
           IconButton(onPressed: _loading ? null : _load, tooltip: 'Actualiser', icon: Icon(Icons.refresh_rounded)),
         ],
@@ -550,8 +551,8 @@ class _OfficialPdfCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: AppRadius.lgR,
-        border: Border.all(color: r == null ? AppColors.line : AppColors.catService.withOpacity(0.35)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.035), blurRadius: 14, offset: Offset(0, 5))],
+
+
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,7 +580,7 @@ class _OfficialPdfCard extends StatelessWidget {
                 ),
               ),
               if (r != null)
-                Pill(text: 'PDF', icon: Icons.picture_as_pdf_rounded, background: Color(0xFFF7E4E4), foreground: Color(0xFF9E1B1B), fontSize: 9.5),
+                Pill(text: 'PDF', icon: Icons.picture_as_pdf_rounded, background: Theme.of(context).colorScheme.primaryContainer, foreground: Theme.of(context).colorScheme.onPrimaryContainer),
             ],
           ),
           SizedBox(height: AppSpace.md),
@@ -601,12 +602,12 @@ class _OfficialPdfCard extends StatelessWidget {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFFFFF59D).withOpacity(0.42),
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
                   borderRadius: AppRadius.smR,
-                  border: Border.all(color: Color(0xFFF9A825).withOpacity(0.35)),
+                  border: Border.all(color: Colors.transparent),
                 ),
                 child: Row(children: [
-                  Icon(Icons.manage_search_rounded, size: 17, color: Color(0xFF8D6E00)),
+                  Icon(Icons.manage_search_rounded, size: 17, color: Theme.of(context).colorScheme.onTertiaryContainer),
                   SizedBox(width: 7),
                   Expanded(
                     child: Text(
@@ -620,7 +621,7 @@ class _OfficialPdfCard extends StatelessWidget {
                               if (disciplinary <= 0) return base;
                               return '${base} dont ${disciplinary} garde${disciplinary > 1 ? 's' : ''} disciplinaire${disciplinary > 1 ? 's' : ''}';
                             }(),
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF6D5700)),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onTertiaryContainer),
                     ),
                   ),
                 ]),
@@ -897,12 +898,12 @@ class _OfficialPdfViewerScreenState extends State<_OfficialPdfViewerScreen> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Planning officiel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  const Text('Planning officiel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   Text(
                     widget.resource.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -940,7 +941,7 @@ class _OfficialPdfViewerScreenState extends State<_OfficialPdfViewerScreen> {
                         const Text(
                           'Impossible d’afficher ce PDF.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -1052,7 +1053,7 @@ class _OfficialPdfViewerScreenState extends State<_OfficialPdfViewerScreen> {
                                   : widget.currentUser == null
                                       ? 'Pincez pour zoomer • loupe pour rechercher'
                                       : '${widget.currentUser!.fullName} est surligné en fluo • loupe pour rechercher',
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ),

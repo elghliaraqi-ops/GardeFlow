@@ -1,459 +1,253 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// GardeFlow V11.6.24 — identité visuelle vert / rouge.
-///
-/// La logique fonctionnelle et les couleurs métier des gardes sont conservées.
-/// Le chrome de l'application utilise une identité vert / blanc, avec accent rouge,
-/// proche d'une application médicale native moderne.
+/// All application surfaces and foregrounds are derived from one ColorScheme.
+/// AppColors is a compatibility facade for the pre-existing screens only.
 class AppColors {
   AppColors._();
-
-  // Palette complète choisie par l'utilisateur.
   static String _appearanceTheme = 'green';
-
   static void setAppearanceTheme(String value) {
-    const allowed = <String>{'green', 'red', 'white', 'black'};
-    _appearanceTheme = allowed.contains(value) ? value : 'green';
+    _appearanceTheme = const {'green', 'red', 'white', 'black'}.contains(value)
+        ? value : 'green';
   }
-
   static String get appearanceTheme => _appearanceTheme;
-  static bool get _isGreen => _appearanceTheme == 'green';
-  static bool get _isRed => _appearanceTheme == 'red';
-  static bool get _isWhite => _appearanceTheme == 'white';
-  static bool get _isBlack => _appearanceTheme == 'black';
-  static bool get isDarkMode => !_isWhite;
+  static bool get isDarkMode => _appearanceTheme != 'white';
+  static ColorScheme get scheme => AppTheme.schemeFor(_appearanceTheme);
+  static Color get paper => scheme.surface;
+  static Color get paperAlt => scheme.surfaceContainerLow;
+  static Color get card => scheme.surfaceContainer;
+  static Color get ink => scheme.onSurface;
+  static Color get inkSoft => scheme.onSurfaceVariant;
+  static Color get inkFaint => scheme.onSurfaceVariant;
+  static Color get line => scheme.outlineVariant;
+  static Color get brand => scheme.primary;
+  static Color get brandBright => scheme.primary;
+  static Color get brandSoft => scheme.primaryContainer;
+  static Color get brandDark => _appearanceTheme == 'red'
+      ? const Color(0xFF922F3C) : const Color(0xFF17624B);
+  static Color get navy => const Color(0xFF142622);
+  static const cyan = Color(0xFFB8424F);
+  // Catalogue colors are presentation tokens; shift IDs and schedules stay intact.
+  static const serviceJour = Color(0xFFE2EDF6);
+  static const serviceJourText = Color(0xFF254C6A);
+  static const service24h = Color(0xFF356588);
+  static const service24hText = Colors.white;
+  static const serviceNuit = Color(0xFF263D58);
+  static const serviceNuitText = Color(0xFFF4F7FC);
+  static const urgJour = Color(0xFFFFEBDC);
+  static const urgJourText = Color(0xFF774621);
+  static const urg24h = Color(0xFFA54831);
+  static const urg24hText = Colors.white;
+  static const urgNuit = Color(0xFF703941);
+  static const urgNuitText = Colors.white;
+  static const conge = Color(0xFFDFEFE4);
+  static const congeText = Color(0xFF27543C);
+  static const catService = Color(0xFF507FA3);
+  static const catUrgence = Color(0xFFB85A40);
+  static Color get danger => scheme.error;
+  static Color get success => isDarkMode ? const Color(0xFF9AD8BD) : const Color(0xFF256C4F);
+  static Color get warning => isDarkMode ? const Color(0xFFEFC686) : const Color(0xFF7B501C);
+}
 
-  // Surfaces / texte.
-  static Color get paper {
-    if (_isRed) return const Color(0xFF2D0F10);
-    if (_isWhite) return const Color(0xFFF5F8F6);
-    if (_isBlack) return const Color(0xFF080A09);
-    return const Color(0xFF0E2B1E);
+typedef ShiftTone = ({Color background, Color foreground});
+
+/// Shift meaning is expressed by labels/icons as well as these shared colors.
+/// Keeping the palette in the theme also makes theme transitions consistent.
+class AppShiftTheme extends ThemeExtension<AppShiftTheme> {
+  final Map<String, ShiftTone> tones;
+  const AppShiftTheme(this.tones);
+
+  factory AppShiftTheme.forBrightness(Brightness brightness) => AppShiftTheme(
+    brightness == Brightness.dark ? const {
+      'service-jour': (background: Color(0xFF273D36), foreground: Color(0xFFC7EBD9)),
+      'service-nuit': (background: Color(0xFF223041), foreground: Color(0xFFD0E7FF)),
+      'service-24h': (background: Color(0xFF35313F), foreground: Color(0xFFE5DCF2)),
+      'urg-jour': (background: Color(0xFF473728), foreground: Color(0xFFF9DFC3)),
+      'urg-nuit': (background: Color(0xFF3F2C39), foreground: Color(0xFFF1CCE0)),
+      'urg-24h': (background: Color(0xFF44302B), foreground: Color(0xFFFFD6C5)),
+      'conge': (background: Color(0xFF263E32), foreground: Color(0xFFC5E9D0)),
+    } : const {
+      'service-jour': (background: AppColors.serviceJour, foreground: AppColors.serviceJourText),
+      'service-nuit': (background: AppColors.serviceNuit, foreground: AppColors.serviceNuitText),
+      'service-24h': (background: AppColors.service24h, foreground: AppColors.service24hText),
+      'urg-jour': (background: AppColors.urgJour, foreground: AppColors.urgJourText),
+      'urg-nuit': (background: AppColors.urgNuit, foreground: AppColors.urgNuitText),
+      'urg-24h': (background: AppColors.urg24h, foreground: AppColors.urg24hText),
+      'conge': (background: AppColors.conge, foreground: AppColors.congeText),
+    },
+  );
+
+  @override
+  AppShiftTheme copyWith({Map<String, ShiftTone>? tones}) => AppShiftTheme(tones ?? this.tones);
+
+  @override
+  AppShiftTheme lerp(covariant AppShiftTheme? other, double t) {
+    if (other == null) return this;
+    return AppShiftTheme({for (final key in tones.keys) key: (
+      background: Color.lerp(tones[key]!.background, other.tones[key]!.background, t)!,
+      foreground: Color.lerp(tones[key]!.foreground, other.tones[key]!.foreground, t)!,
+    )});
   }
-
-  static Color get paperAlt {
-    if (_isRed) return const Color(0xFF3A1516);
-    if (_isWhite) return const Color(0xFFEDF3EF);
-    if (_isBlack) return const Color(0xFF101311);
-    return const Color(0xFF143725);
-  }
-
-  static Color get card {
-    if (_isRed) return const Color(0xFF481B1D);
-    if (_isWhite) return const Color(0xFFFFFFFF);
-    if (_isBlack) return const Color(0xFF171A18);
-    return const Color(0xFF19452F);
-  }
-
-  static Color get ink =>
-      _isWhite ? const Color(0xFF173127) : const Color(0xFFF6FAF8);
-  static Color get inkSoft {
-    if (_isRed) return const Color(0xFFE2C2C2);
-    if (_isWhite) return const Color(0xFF66776D);
-    if (_isBlack) return const Color(0xFFBDC5C0);
-    return const Color(0xFFC3D8CD);
-  }
-
-  static Color get inkFaint {
-    if (_isRed) return const Color(0xFFB98E90);
-    if (_isWhite) return const Color(0xFF97A59D);
-    if (_isBlack) return const Color(0xFF838D87);
-    return const Color(0xFF8EAD9C);
-  }
-
-  static Color get line {
-    if (_isRed) return const Color(0xFF733236);
-    if (_isWhite) return const Color(0xFFE0E9E3);
-    if (_isBlack) return const Color(0xFF303632);
-    return const Color(0xFF2B6247);
-  }
-
-  // Marque / accents adaptatifs.
-  static Color get brand {
-    if (_isRed) return const Color(0xFFE2534D);
-    if (_isGreen) return const Color(0xFF2CBF75);
-    return const Color(0xFF138A55);
-  }
-
-  static Color get brandDark {
-    if (_isRed) return const Color(0xFF9E312E);
-    if (_isGreen) return const Color(0xFF0B633D);
-    return const Color(0xFF0B633D);
-  }
-
-  static Color get brandBright {
-    if (_isRed) return const Color(0xFFF36C66);
-    if (_isGreen) return const Color(0xFF49D590);
-    return const Color(0xFF25A968);
-  }
-
-  static Color get brandSoft {
-    if (_isRed) return const Color(0xFF68282A);
-    if (_isWhite) return const Color(0xFFE8F6EE);
-    if (_isBlack) return const Color(0xFF173126);
-    return const Color(0xFF205B3E);
-  }
-
-  static const cyan = Color(0xFFD94A43);
-
-  static Color get navy {
-    if (_isRed) return const Color(0xFF3A1012);
-    if (_isWhite) return const Color(0xFF173D2E);
-    if (_isBlack) return const Color(0xFF080A09);
-    return const Color(0xFF0A3524);
-  }
-
-  // Sémantique métier — Service (bleu).
-  static const serviceJour = Color(0xFFDCEEFF);
-  static const serviceJourText = Color(0xFF0A4F91);
-  static const service24h = Color(0xFF4C91DF);
-  static const service24hText = Color(0xFFFFFFFF);
-  static const serviceNuit = Color(0xFF153A70);
-  static const serviceNuitText = Color(0xFFF3F8FF);
-
-  // Sémantique métier — Urgences (orange / rouge).
-  static const urgJour = Color(0xFFFFE3C4);
-  static const urgJourText = Color(0xFF9A4B00);
-  static const urg24h = Color(0xFFF56B52);
-  static const urg24hText = Color(0xFFFFFFFF);
-  static const urgNuit = Color(0xFF922F36);
-  static const urgNuitText = Color(0xFFFFFFFF);
-
-  // Congé / états.
-  static const conge = Color(0xFFD7F2E1);
-  static const congeText = Color(0xFF22623B);
-  static const catService = Color(0xFF287CD7);
-  static const catUrgence = Color(0xFFF06449);
-  static const danger = Color(0xFFD64545);
-  static const success = Color(0xFF27A164);
-  static const warning = Color(0xFFF3A72F);
 }
 
 class AppSpace {
   AppSpace._();
-  static const xs = 4.0;
-  static const sm = 8.0;
-  static const md = 12.0;
-  static const lg = 16.0;
-  static const xl = 20.0;
-  static const xxl = 28.0;
-  static const xxxl = 40.0;
+  static const xs = 4.0, sm = 8.0, md = 12.0, lg = 16.0;
+  static const xl = 24.0, xxl = 32.0, xxxl = 48.0;
 }
-
 class AppRadius {
   AppRadius._();
-  static const sm = 12.0;
-  static const md = 18.0;
-  static const lg = 22.0;
-  static const xl = 28.0;
-  static const pill = 999.0;
-
+  static const sm = 10.0, md = 16.0, lg = 20.0, xl = 24.0, pill = 999.0;
   static BorderRadius get smR => BorderRadius.circular(sm);
   static BorderRadius get mdR => BorderRadius.circular(md);
   static BorderRadius get lgR => BorderRadius.circular(lg);
   static BorderRadius get xlR => BorderRadius.circular(xl);
   static BorderRadius get pillR => BorderRadius.circular(pill);
 }
-
+class AppMotion {
+  AppMotion._();
+  static const short = Duration(milliseconds: 180);
+  static Duration duration(BuildContext context) =>
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : short;
+}
 class AppShadow {
   AppShadow._();
-  static List<BoxShadow> get low => [
-        BoxShadow(
-          color: AppColors.brandDark.withOpacity(0.08),
-          blurRadius: 14,
-          offset: Offset(0, 5),
-        ),
-      ];
-  static List<BoxShadow> get mid => [
-        BoxShadow(
-          color: AppColors.brandDark.withOpacity(0.12),
-          blurRadius: 28,
-          offset: Offset(0, 12),
-        ),
-      ];
-  static List<BoxShadow> get high => [
-        BoxShadow(
-          color: AppColors.brandDark.withOpacity(0.22),
-          blurRadius: 38,
-          offset: Offset(0, 18),
-        ),
-      ];
+  static List<BoxShadow> get low => const [];
+  static List<BoxShadow> get mid => const [
+    BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 5)),
+  ];
+  static List<BoxShadow> get high => mid;
 }
-
+class AppTypography {
+  AppTypography._();
+  static TextTheme build(ColorScheme c) => TextTheme(
+    displayLarge: TextStyle(fontSize: 40, height: 1.12, fontWeight: FontWeight.w600, letterSpacing: -1.2, color: c.onSurface),
+    displayMedium: TextStyle(fontSize: 32, height: 1.16, fontWeight: FontWeight.w600, letterSpacing: -0.8, color: c.onSurface),
+    displaySmall: TextStyle(fontSize: 28, height: 1.2, fontWeight: FontWeight.w600, letterSpacing: -0.6, color: c.onSurface),
+    headlineSmall: TextStyle(fontSize: 24, height: 1.25, fontWeight: FontWeight.w600, letterSpacing: -0.4, color: c.onSurface),
+    titleLarge: TextStyle(fontSize: 21, height: 1.25, fontWeight: FontWeight.w600, letterSpacing: -0.3, color: c.onSurface),
+    titleMedium: TextStyle(fontSize: 16, height: 1.35, fontWeight: FontWeight.w600, color: c.onSurface),
+    titleSmall: TextStyle(fontSize: 14, height: 1.35, fontWeight: FontWeight.w600, color: c.onSurface),
+    bodyLarge: TextStyle(fontSize: 16, height: 1.5, color: c.onSurface),
+    bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: c.onSurface),
+    bodySmall: TextStyle(fontSize: 12, height: 1.4, color: c.onSurfaceVariant),
+    labelLarge: TextStyle(fontSize: 14, height: 1.25, fontWeight: FontWeight.w600, color: c.onSurface),
+    labelMedium: TextStyle(fontSize: 12, height: 1.3, fontWeight: FontWeight.w600, color: c.onSurfaceVariant),
+    labelSmall: TextStyle(fontSize: 11, height: 1.3, fontWeight: FontWeight.w600, color: c.onSurfaceVariant),
+  ).apply(fontFamily: 'Inter');
+}
 class AppTheme {
   AppTheme._();
-
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
-
-  static ThemeData _build(Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.brand,
-      brightness: brightness,
-      primary: AppColors.brand,
-      secondary: AppColors.cyan,
-      surface: AppColors.card,
-      error: AppColors.danger,
+  static final _schemes = <String, ColorScheme>{};
+  static ColorScheme schemeFor(String name) => _schemes.putIfAbsent(name, () => _createScheme(name));
+  static ColorScheme _createScheme(String name) {
+    final light = name == 'white';
+    final red = name == 'red';
+    final black = name == 'black';
+    return ColorScheme.fromSeed(
+      seedColor: red ? const Color(0xFF922F3C) : const Color(0xFF17624B),
+      brightness: light ? Brightness.light : Brightness.dark,
+    ).copyWith(
+      primary: light ? const Color(0xFF17624B) : red ? const Color(0xFFFFAFB6) : const Color(0xFF9AD8BD),
+      onPrimary: light ? Colors.white : red ? const Color(0xFF451722) : const Color(0xFF103B2C),
+      primaryContainer: light ? const Color(0xFFE3EFE8) : red ? const Color(0xFF41272F) : const Color(0xFF243D33),
+      onPrimaryContainer: light ? const Color(0xFF174D39) : red ? const Color(0xFFFFD8DC) : const Color(0xFFC7EBD9),
+      surface: light ? const Color(0xFFF7F8F5) : black ? const Color(0xFF0D0F10) : red ? const Color(0xFF1B1719) : const Color(0xFF14211D),
+      surfaceContainerLow: light ? const Color(0xFFF0F2ED) : black ? const Color(0xFF16191B) : red ? const Color(0xFF242022) : const Color(0xFF1B2A24),
+      surfaceContainer: light ? Colors.white : black ? const Color(0xFF1D2022) : red ? const Color(0xFF2C2528) : const Color(0xFF22322B),
+      surfaceContainerHigh: light ? const Color(0xFFE8ECE5) : black ? const Color(0xFF292C2E) : red ? const Color(0xFF392D33) : const Color(0xFF2D4036),
+      onSurface: light ? const Color(0xFF1D2D25) : const Color(0xFFF1F4F0),
+      onSurfaceVariant: light ? const Color(0xFF58655D) : const Color(0xFFBFCAC2),
+      outline: light ? const Color(0xFF79867D) : const Color(0xFF7C8C81),
+      outlineVariant: light ? const Color(0xFFDAE0D8) : black ? const Color(0xFF3A4042) : red ? const Color(0xFF51434B) : const Color(0xFF3E5146),
+      error: light ? const Color(0xFFAC2637) : const Color(0xFFFFAFB6),
+      onError: light ? Colors.white : const Color(0xFF551823),
+      errorContainer: light ? const Color(0xFFFFE3E6) : const Color(0xFF4C2832),
+      onErrorContainer: light ? const Color(0xFF7E2030) : const Color(0xFFFFD8DC),
     );
-
-    final base = ThemeData(
-      useMaterial3: true,
-      colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.paper,
-      canvasColor: AppColors.card,
-      dividerColor: AppColors.line,
-      splashFactory: InkSparkle.splashFactory,
-      fontFamily: 'Inter',
+  }
+  static ThemeData light() => forAppearance('white');
+  static ThemeData dark() => forAppearance(AppColors.appearanceTheme == 'white' ? 'black' : AppColors.appearanceTheme);
+  static ThemeData forAppearance(String name) {
+    final c = schemeFor(name);
+    final t = AppTypography.build(c);
+    final shape = RoundedRectangleBorder(borderRadius: AppRadius.mdR);
+    final input = OutlineInputBorder(borderRadius: AppRadius.mdR, borderSide: BorderSide.none);
+    final button = FilledButton.styleFrom(
+      minimumSize: const Size(48, 52), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      shape: shape, backgroundColor: c.primary, foregroundColor: c.onPrimary,
+      disabledBackgroundColor: c.surfaceContainerHigh, disabledForegroundColor: c.onSurfaceVariant,
+      textStyle: t.labelLarge, elevation: 0,
     );
-
-    final displayBase = TextStyle(
-      fontFamily: 'SpaceGrotesk',
-      color: AppColors.ink,
-      height: 1.08,
-    );
-
-    final textTheme = base.textTheme.copyWith(
-      displayLarge: displayBase.copyWith(fontSize: 35, fontWeight: FontWeight.w700, letterSpacing: -0.8),
-      displayMedium: displayBase.copyWith(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.6),
-      displaySmall: displayBase.copyWith(fontSize: 23, fontWeight: FontWeight.w700, letterSpacing: -0.35),
-      headlineSmall: displayBase.copyWith(fontSize: 21, fontWeight: FontWeight.w700),
-      titleLarge: displayBase.copyWith(fontSize: 19, fontWeight: FontWeight.w700),
-      titleMedium: TextStyle(fontFamily: 'Inter', fontSize: 15.5, fontWeight: FontWeight.w800, color: AppColors.ink),
-      titleSmall: TextStyle(fontFamily: 'Inter', fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink),
-      bodyLarge: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.ink, height: 1.45),
-      bodyMedium: TextStyle(fontFamily: 'Inter', fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.ink, height: 1.42),
-      bodySmall: TextStyle(fontFamily: 'Inter', fontSize: 11.8, fontWeight: FontWeight.w500, color: AppColors.inkSoft, height: 1.4),
-      labelLarge: TextStyle(fontFamily: 'Inter', fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.ink),
-      labelMedium: TextStyle(fontFamily: 'Inter', fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.inkSoft),
-      labelSmall: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.inkSoft, letterSpacing: 0.2),
-    );
-
-    final roundedInput = OutlineInputBorder(
-      borderRadius: AppRadius.mdR,
-      borderSide: BorderSide(color: AppColors.line, width: 1.2),
-    );
-
-    return base.copyWith(
-      textTheme: textTheme,
-      primaryTextTheme: textTheme,
+    return ThemeData(
+      useMaterial3: true, colorScheme: c, textTheme: t, fontFamily: 'Inter',
+      extensions: [AppShiftTheme.forBrightness(c.brightness)],
+      scaffoldBackgroundColor: c.surface, canvasColor: c.surfaceContainer,
+      dividerColor: c.outlineVariant, visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.card,
-        foregroundColor: AppColors.ink,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleTextStyle: textTheme.titleLarge,
-        systemOverlayStyle:
-            (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
-                .copyWith(
-          statusBarColor: Colors.transparent,
-          systemNavigationBarColor: AppColors.card,
-          systemNavigationBarIconBrightness:
-              isDark ? Brightness.light : Brightness.dark,
-        ),
+        backgroundColor: c.surface, foregroundColor: c.onSurface, elevation: 0,
+        surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0,
+        centerTitle: false, titleTextStyle: t.titleLarge,
+        systemOverlayStyle: (c.brightness == Brightness.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+            .copyWith(statusBarColor: Colors.transparent, systemNavigationBarColor: c.surface),
       ),
-      cardTheme: CardThemeData(
-        color: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.lgR,
-          side: BorderSide(color: AppColors.line),
-        ),
-      ),
-      dividerTheme: DividerThemeData(color: AppColors.line, thickness: 1, space: 1),
+      cardTheme: CardThemeData(color: c.surfaceContainer, elevation: 0, margin: EdgeInsets.zero, shape: shape, surfaceTintColor: Colors.transparent),
       inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.card,
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        hintStyle: TextStyle(color: AppColors.inkFaint, fontWeight: FontWeight.w500),
-        labelStyle: TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w700),
-        floatingLabelStyle: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w800),
-        border: roundedInput,
-        enabledBorder: roundedInput,
-        focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdR,
-          borderSide: BorderSide(color: AppColors.brand, width: 1.8),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdR,
-          borderSide: BorderSide(color: AppColors.danger),
-        ),
+        filled: true, fillColor: c.surfaceContainerHigh, border: input, enabledBorder: input,
+        focusedBorder: input.copyWith(borderSide: BorderSide(color: c.primary, width: 1.5)),
+        errorBorder: input.copyWith(borderSide: BorderSide(color: c.error)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: t.bodyMedium?.copyWith(color: c.onSurfaceVariant), labelStyle: t.bodyMedium?.copyWith(color: c.onSurfaceVariant),
+        floatingLabelStyle: t.bodyMedium?.copyWith(color: c.primary), errorMaxLines: 3,
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.brandDark,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.brandDark.withOpacity(0.34),
-          elevation: 0,
-          minimumSize: Size(0, 52),
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
-          textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 14),
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.brandDark,
-          foregroundColor: Colors.white,
-          minimumSize: Size(0, 50),
-          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
-          textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13.5),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.brand,
-          side: BorderSide(color: AppColors.line, width: 1.2),
-          minimumSize: Size(0, 50),
-          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
-          textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13.5),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.brand,
-          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.smR),
-          textStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13.5),
-        ),
-      ),
-      iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          backgroundColor: AppColors.brandSoft,
-          foregroundColor: AppColors.brand,
-          side: BorderSide(color: AppColors.line),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-      ),
+      filledButtonTheme: FilledButtonThemeData(style: button),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: button),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: OutlinedButton.styleFrom(
+        minimumSize: const Size(48, 52), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: shape, foregroundColor: c.primary, side: BorderSide(color: c.outline), textStyle: t.labelLarge,
+      )),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48), foregroundColor: c.primary, textStyle: t.labelLarge,
+      )),
+      iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(
+        minimumSize: const Size(48, 48), foregroundColor: c.onSurface, disabledForegroundColor: c.onSurfaceVariant.withValues(alpha: .5),
+      )),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.brandSoft,
-        selectedColor: AppColors.brandDark,
-        labelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 11.5, color: isDark ? AppColors.ink : AppColors.brandDark),
-        secondaryLabelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 11.5, color: Colors.white),
-        side: BorderSide(color: AppColors.line),
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.pillR),
-        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        backgroundColor: c.surfaceContainer, selectedColor: c.primaryContainer,
+        labelStyle: t.labelLarge, side: BorderSide.none, shape: shape,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.xlR),
-        titleTextStyle: textTheme.titleLarge,
-        contentTextStyle: textTheme.bodyMedium,
-      ),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        showDragHandle: true,
-        dragHandleColor: AppColors.line,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl))),
-      ),
-      snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.navy,
-        contentTextStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
-        insetPadding: EdgeInsets.all(14),
-      ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStatePropertyAll(Colors.white),
-        trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.brand;
-          return isDark ? const Color(0xFF46554D) : const Color(0xFFCBD6E2);
-        }),
-        trackOutlineColor: WidgetStatePropertyAll(Colors.transparent),
-      ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(color: AppColors.brand),
-      tabBarTheme: TabBarThemeData(
-        labelColor: AppColors.brand,
-        unselectedLabelColor: AppColors.inkFaint,
-        indicatorColor: AppColors.brand,
-        dividerColor: Colors.transparent,
-        labelStyle: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13),
-      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(style: ButtonStyle(
+        minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+        textStyle: WidgetStatePropertyAll(t.labelLarge),
+        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.onPrimaryContainer : c.onSurfaceVariant),
+        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.primaryContainer : c.surfaceContainer),
+        side: const WidgetStatePropertyAll(BorderSide.none),
+      )),
+      dialogTheme: DialogThemeData(backgroundColor: c.surfaceContainer, surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.xlR), titleTextStyle: t.titleLarge, contentTextStyle: t.bodyLarge),
+      bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.surfaceContainer, surfaceTintColor: Colors.transparent,
+        showDragHandle: true, dragHandleColor: c.outline, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24)))),
+      snackBarTheme: SnackBarThemeData(backgroundColor: c.inverseSurface, contentTextStyle: t.bodyMedium?.copyWith(color: c.onInverseSurface),
+        behavior: SnackBarBehavior.floating, shape: shape),
       navigationBarTheme: NavigationBarThemeData(
-        height: 68,
-        elevation: 0,
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.brandSoft,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w800,
-              fontSize: 10.5,
-              color: states.contains(WidgetState.selected) ? AppColors.brand : AppColors.inkSoft,
-            )),
-        iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
-              size: 22,
-              color: states.contains(WidgetState.selected) ? AppColors.brand : AppColors.inkSoft,
-            )),
+        backgroundColor: c.surface, surfaceTintColor: Colors.transparent, elevation: 0, height: 76,
+        indicatorColor: c.primaryContainer,
+        labelTextStyle: WidgetStatePropertyAll(t.labelMedium?.copyWith(color: c.onSurface)),
+        iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(color: s.contains(WidgetState.selected) ? c.onPrimaryContainer : c.onSurfaceVariant)),
       ),
-      listTileTheme: ListTileThemeData(
-        tileColor: AppColors.card,
-        iconColor: AppColors.brand,
-        textColor: AppColors.ink,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      ),
-      popupMenuTheme: PopupMenuThemeData(
-        color: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
-      ),
-      datePickerTheme: DatePickerThemeData(
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        headerBackgroundColor: AppColors.brandDark,
-        headerForegroundColor: Colors.white,
-        weekdayStyle: TextStyle(
-          color: AppColors.inkSoft,
-          fontWeight: FontWeight.w800,
-        ),
-        dayStyle: TextStyle(
-          color: AppColors.ink,
-          fontWeight: FontWeight.w700,
-        ),
-        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return Colors.white;
-          if (states.contains(WidgetState.disabled)) return AppColors.inkFaint;
-          return AppColors.ink;
-        }),
-        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.brandDark;
-          return Colors.transparent;
-        }),
-        todayForegroundColor: WidgetStatePropertyAll(AppColors.brand),
-        todayBorder: BorderSide(color: AppColors.brand),
-        yearForegroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return Colors.white;
-          return AppColors.ink;
-        }),
-        yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.brandDark;
-          return Colors.transparent;
-        }),
-      ),
-      dropdownMenuTheme: DropdownMenuThemeData(
-        textStyle: TextStyle(
-          color: AppColors.ink,
-          fontWeight: FontWeight.w600,
-        ),
-        menuStyle: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(AppColors.card),
-          surfaceTintColor:
-              WidgetStatePropertyAll(Colors.transparent),
-        ),
-      ),
+      listTileTheme: ListTileThemeData(iconColor: c.primary, textColor: c.onSurface,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), minVerticalPadding: 12,
+        titleTextStyle: t.titleMedium, subtitleTextStyle: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
+      tabBarTheme: TabBarThemeData(labelColor: c.primary, unselectedLabelColor: c.onSurfaceVariant,
+        labelStyle: t.labelLarge, unselectedLabelStyle: t.labelLarge, indicatorColor: c.primary, dividerColor: Colors.transparent),
+      popupMenuTheme: PopupMenuThemeData(color: c.surfaceContainer, shape: shape, textStyle: t.bodyMedium),
+      dropdownMenuTheme: DropdownMenuThemeData(textStyle: t.bodyMedium, menuStyle: MenuStyle(backgroundColor: WidgetStatePropertyAll(c.surfaceContainer))),
+      datePickerTheme: DatePickerThemeData(backgroundColor: c.surfaceContainer, headerBackgroundColor: c.primaryContainer,
+        headerForegroundColor: c.onPrimaryContainer, surfaceTintColor: Colors.transparent),
+      dividerTheme: DividerThemeData(color: c.outlineVariant, thickness: .7, space: 1),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: c.primary),
     );
   }
 }

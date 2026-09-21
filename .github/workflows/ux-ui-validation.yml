@@ -1,0 +1,72 @@
+name: GardeFlow UX UI validation
+on:
+  push:
+    branches: [ux-ui-refonte-v11.7.0]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ux-ui-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify business boundary
+        run: python3 tool/check_ui_business_boundary.py
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Prepare Android and existing Firebase configuration
+        shell: bash
+        run: |
+          flutter create --no-pub --platforms=android --org com.huim6 --project-name huim6_planning .
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          with zipfile.ZipFile('../GardeFlow_android_v11_6_0_official_pdf_auto_import.zip') as z:
+              name = next(n for n in z.namelist() if n.endswith('/google-services.json') or n == 'google-services.json')
+              Path('google-services.json').write_bytes(z.read(name))
+              Path('android/app/google-services.json').write_bytes(z.read(name))
+          PY
+          dart tool/configure_android.dart
+          python3 ../ci/v11_6_42/install_alarm_activity_v42.py
+          python3 tool/style_alarm_activity.py
+      - run: flutter pub get
+      - name: Analyze
+        run: flutter analyze lib tool test --no-fatal-infos --no-fatal-warnings > analysis.log 2>&1
+      - name: Widget and regression tests
+        run: flutter test
+      - name: Push recipient regression tests
+        run: node --test test/push_payload_test.mjs test/push_recipient_test.mjs
+      - name: Compile release APK
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: GardeFlow-11.7-validation
+          path: |
+            source/analysis.log
+            source/test/previews/*.png
+            source/test/failures/**
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.7.0-apk
+          path: source/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30

@@ -24,9 +24,9 @@ class AppCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color ?? AppColors.card,
+        color: color ?? Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(radius),
-        border: border ?? Border.all(color: AppColors.line),
+        border: border,
         boxShadow: shadow ?? AppShadow.low,
       ),
       child: child,
@@ -46,7 +46,7 @@ class SoftIconButton extends StatelessWidget {
     super.key,
     required this.icon,
     required this.onTap,
-    this.size = 42,
+    this.size = 48,
     this.background,
     this.foreground,
     this.tooltip,
@@ -60,13 +60,13 @@ class SoftIconButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          width: size,
-          height: size,
+          width: size < 48 ? 48 : size,
+          height: size < 48 ? 48 : size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: background ?? AppColors.brandSoft,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Color(0xFFD7E7F8)),
+
           ),
           child: Icon(icon, size: size * 0.48, color: foreground ?? AppColors.brand),
         ),
@@ -89,7 +89,7 @@ class Pill extends StatelessWidget {
     this.icon,
     this.background,
     this.foreground,
-    this.fontSize = 11,
+    this.fontSize = 12,
   });
 
   @override
@@ -107,7 +107,7 @@ class Pill extends StatelessWidget {
             Icon(icon, size: fontSize + 3, color: foreground),
             SizedBox(width: 5),
           ],
-          Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w800, color: foreground)),
+          Flexible(child: Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, color: foreground ?? Theme.of(context).colorScheme.onPrimaryContainer))),
         ],
       ),
     );
@@ -178,8 +178,8 @@ class GardeFlowLogo extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.24),
         child: Image.asset(
           'assets/branding/gardeflow_logo.png',
-          width: size,
-          height: size,
+          width: size < 48 ? 48 : size,
+          height: size < 48 ? 48 : size,
           fit: BoxFit.contain,
           semanticLabel: 'Logo GardeFlow',
         ),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
-/// Réserve une ligne au mois complet ; les actions restent sur une autre ligne.
+/// A full, wrapping month label between accessible previous/next controls.
 class MonthNavigation extends StatelessWidget {
   final String label;
   final VoidCallback onPrevious;
-  final VoidCallback onNext;
+  final VoidCallback? onNext;
   final VoidCallback? onLabelTap;
   const MonthNavigation({super.key, required this.label, required this.onPrevious,
     required this.onNext, this.onLabelTap});
@@ -18,8 +19,9 @@ class MonthNavigation extends StatelessWidget {
         onTap: onLabelTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Text(label, textAlign: TextAlign.center, softWrap: true,
-            style: Theme.of(context).textTheme.titleLarge),
+          child: AnimatedSwitcher(duration: AppMotion.duration(context),
+            child: Text(label, key: ValueKey(label), textAlign: TextAlign.center, softWrap: true,
+              style: Theme.of(context).textTheme.titleLarge)),
         ),
       )),
       IconButton(tooltip: 'Mois suivant', onPressed: onNext,

@@ -131,10 +131,10 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                       Text(
                         'Actualités du jour',
                         style: TextStyle(
-                          fontFamily: 'SpaceGrotesk',
+                          fontFamily: 'Inter',
                           color: AppColors.ink,
                           fontSize: 20,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           letterSpacing: -0.35,
                         ),
                       ),
@@ -166,7 +166,7 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
               _NewsLoading()
             else if (items.isNotEmpty)
               SizedBox(
-                height: 430,
+                height: 300 + 170 * (MediaQuery.textScalerOf(context).scale(14) / 14),
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   physics: BouncingScrollPhysics(),
@@ -189,17 +189,17 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
               Text(
                 'Fil d’actualités',
                 style: TextStyle(
-                  fontFamily: 'SpaceGrotesk',
+                  fontFamily: 'Inter',
                   color: AppColors.ink,
                   fontSize: 20,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: -0.3,
                 ),
               ),
               SizedBox(height: 4),
               Text(
                 'Dernières publications des comptes officiels',
-                style: TextStyle(color: AppColors.inkSoft, fontSize: 11.5, fontWeight: FontWeight.w600),
+                style: TextStyle(color: AppColors.inkSoft, fontSize: 13, fontWeight: FontWeight.w600),
               ),
               SizedBox(height: 12),
               for (final item in items) ...[
@@ -229,7 +229,7 @@ class _NewsCard extends StatelessWidget {
     final time = _relativeDate(item.postedAt.toLocal());
 
     return SizedBox(
-      width: 286,
+      width: MediaQuery.sizeOf(context).width < 340 ? 260 : 286,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -305,8 +305,8 @@ class _NewsCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: AppColors.ink,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -314,7 +314,7 @@ class _NewsCard extends StatelessWidget {
                                 time,
                                 style: TextStyle(
                                   color: AppColors.inkFaint,
-                                  fontSize: 9.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -328,7 +328,7 @@ class _NewsCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: AppColors.inkSoft,
-                                fontSize: 11.5,
+                                fontSize: 13,
                                 height: 1.35,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -341,8 +341,8 @@ class _NewsCard extends StatelessWidget {
                                 'Voir sur Instagram',
                                 style: TextStyle(
                                   color: AppColors.brand,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               SizedBox(width: 3),
@@ -485,7 +485,7 @@ class _NewsDetailCard extends StatelessWidget {
                               style: TextStyle(
                                 color: AppColors.ink,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -503,8 +503,8 @@ class _NewsDetailCard extends StatelessWidget {
                               time,
                               style: TextStyle(
                                 color: AppColors.inkFaint,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -542,8 +542,8 @@ class _NewsDetailCard extends StatelessWidget {
                               'Lire la suite sur Instagram',
                               style: TextStyle(
                                 color: AppColors.brand,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             SizedBox(width: 5),
@@ -675,7 +675,7 @@ class _NewsEmptyState extends StatelessWidget {
             style: TextStyle(
               color: AppColors.ink,
               fontSize: 12.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           SizedBox(height: 5),
@@ -683,7 +683,7 @@ class _NewsEmptyState extends StatelessWidget {
             'Accès direct aux comptes Instagram officiels :',
             style: TextStyle(
               color: AppColors.inkSoft,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),

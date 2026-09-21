@@ -10,6 +10,7 @@ import '../models/shift_type.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../ui/components.dart';
 import '../theme/widgets.dart';
 
 /// Astreintes Juniors : lecture par jour, hôpital et service.
@@ -271,8 +272,8 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final body = Column(
-      children: [
+    final body = NestedScrollView(
+      headerSliverBuilder: (context, innerScrolled) => [SliverToBoxAdapter(child: Column(children: [
         if (widget.embedded)
           Padding(
             padding: EdgeInsets.fromLTRB(16, 2, 10, 2),
@@ -283,9 +284,9 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
                     'Astreinte Junior',
                     style: TextStyle(
                       color: AppColors.ink,
-                      fontFamily: 'SpaceGrotesk',
+                      fontFamily: 'Inter',
                       fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -331,8 +332,8 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
           },
         ),
         const SizedBox(height: 4),
-        Expanded(child: _buildBody()),
-      ],
+      ]))],
+      body: _buildBody(),
     );
 
     if (widget.embedded) {
@@ -458,7 +459,7 @@ class _WeekSelector extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.ink,
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -489,7 +490,7 @@ class _DaySelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 50,
+      height: 56 * (MediaQuery.textScalerOf(context).scale(14) / 14),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -525,7 +526,7 @@ class _DayChip extends StatelessWidget {
         : day[0].toUpperCase() + day.substring(1);
 
     return SizedBox(
-      width: 47,
+      width: 52 * (MediaQuery.textScalerOf(context).scale(14) / 14),
       child: Material(
         color: selected ? AppColors.brand : AppColors.card,
         borderRadius: BorderRadius.circular(11),
@@ -547,9 +548,9 @@ class _DayChip extends StatelessWidget {
                   label,
                   maxLines: 1,
                   style: TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w800,
-                    color: selected ? Colors.white : AppColors.inkSoft,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Theme.of(context).colorScheme.onPrimary : AppColors.inkSoft,
                   ),
                 ),
                 Text(
@@ -557,8 +558,8 @@ class _DayChip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.05,
-                    fontWeight: FontWeight.w900,
-                    color: selected ? Colors.white : AppColors.ink,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Theme.of(context).colorScheme.onPrimary : AppColors.ink,
                   ),
                 ),
               ],
@@ -598,9 +599,9 @@ class _HospitalFilter extends StatelessWidget {
             label: Text(
               _juniorHospitalLabel(hospital),
               style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-                color: selected ? AppColors.brandDark : AppColors.inkSoft,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected ? Theme.of(context).colorScheme.onPrimaryContainer : AppColors.inkSoft,
               ),
             ),
             selected: selected,
@@ -630,7 +631,7 @@ class _ServiceFilter extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 5, 16, 2),
       child: SizedBox(
-        height: 48,
+        height: 60 * (MediaQuery.textScalerOf(context).scale(14) / 14),
         child: DropdownButtonFormField<String>(
           value: value,
           isExpanded: true,
@@ -642,8 +643,8 @@ class _ServiceFilter extends StatelessWidget {
             ),
             labelText: 'Service',
             labelStyle: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
             contentPadding: EdgeInsets.symmetric(
               horizontal: 12,
@@ -712,8 +713,8 @@ class _ServiceDayCard extends StatelessWidget {
                   child: Text(
                     group.service,
                     style: TextStyle(
-                      color: isUrgences ? AppColors.urgJourText : AppColors.brandDark,
-                      fontWeight: FontWeight.w900,
+                      color: isUrgences ? AppColors.urgJourText : Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
                   ),
@@ -723,7 +724,7 @@ class _ServiceDayCard extends StatelessWidget {
                   style: TextStyle(
                     color: isUrgences ? AppColors.urgJourText : AppColors.brand,
                     fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -775,78 +776,11 @@ class _JuniorDutyLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shift = ShiftCatalog.byId(row.shiftId);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: shift.color, shape: BoxShape.circle),
-            child: Icon(shift.icon, color: shift.textColor, size: 23),
-          ),
-          SizedBox(width: 10),
-          SizedBox(
-            width: 76,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(shift.label, style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink)),
-                SizedBox(height: 2),
-                Text(_timeLabel(shift), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft)),
-              ],
-            ),
-          ),
-          Container(width: 1, height: 42, color: AppColors.line),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.ownerName,
-                  style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: 2),
-                Text(
-                  row.shiftId.startsWith('urg-') ? 'Junior · Urgences' : 'Junior',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: 8),
-          Tooltip(
-            message: row.ownerPhone.trim().isEmpty
-                ? 'Numéro indisponible'
-                : 'Appeler \${row.ownerName}',
-            child: Material(
-              color: AppColors.brandSoft,
-              shape: CircleBorder(),
-              child: InkWell(
-                customBorder: CircleBorder(),
-                onTap: row.ownerPhone.trim().isEmpty
-                    ? null
-                    : () => _callDoctor(context),
-                child: SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: Icon(
-                    Icons.phone_rounded,
-                    color: row.ownerPhone.trim().isEmpty
-                        ? AppColors.inkFaint
-                        : AppColors.brand,
-                    size: 21,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return DoctorTile(
+      name: row.ownerName,
+      subtitle: '${shift.label} · ${_timeLabel(shift)}${row.shiftId.startsWith('urg-') ? ' · Urgences' : ''}\n${row.ownerPhone.trim().isEmpty ? 'Téléphone indisponible' : row.ownerPhone}',
+      trailing: IconButton(tooltip: row.ownerPhone.trim().isEmpty ? 'Numéro indisponible' : 'Appeler ${row.ownerName}',
+        onPressed: row.ownerPhone.trim().isEmpty ? null : () => _callDoctor(context), icon: const Icon(Icons.phone_outlined)),
     );
   }
 }
@@ -864,7 +798,7 @@ class _JuniorErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, size: 44, color: AppColors.danger),
+            Icon(Icons.error_outline_rounded, size: 44, color: AppColors.danger),
             const SizedBox(height: AppSpace.md),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: AppSpace.md),

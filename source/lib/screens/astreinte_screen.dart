@@ -119,7 +119,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                   Expanded(
                     child: Text(
                       'Publication pour ${hospitalDisplayName(hospital)}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -210,6 +210,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         title: const Text('Supprimer cette photo ?'),
         content: Text(
           'Elle disparaîtra de la galerie des Séniors d’astreinte de ${hospitalDisplayName(hospital)}.',
@@ -270,11 +271,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         onRefresh: _load,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 900
-                ? 4
-                : constraints.maxWidth >= 600
-                    ? 3
-                    : 2;
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final columns = ((constraints.maxWidth - 32) / (172 * scale.clamp(1.0, 2.0))).floor().clamp(1, 4).toInt();
             return GridView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(
@@ -287,7 +285,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                 crossAxisCount: columns,
                 mainAxisSpacing: AppSpace.md,
                 crossAxisSpacing: AppSpace.md,
-                childAspectRatio: 0.78,
+                mainAxisExtent: (constraints.maxWidth - 32 - 12 * (columns - 1)) / columns + 94 * scale,
               ),
               itemCount: _photos.length + (isAdmin ? 1 : 0),
               itemBuilder: (context, i) {
@@ -313,7 +311,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       );
     }
 
-    final body = Column(
+    final body = NestedScrollView(
+      headerSliverBuilder: (context, scrolled) => [SliverToBoxAdapter(child: Column(
       children: [
         if (widget.embedded)
           Padding(
@@ -326,7 +325,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                     style: TextStyle(
                       color: AppColors.ink,
                       fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -358,8 +357,9 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           isAdmin: isAdmin,
           onSelectHospital: _selectHospital,
         ),
-        Expanded(child: content),
       ],
+      ))],
+      body: content,
     );
 
     if (widget.embedded) {
@@ -450,12 +450,8 @@ class _HospitalAstreinteHeader extends StatelessWidget {
               Expanded(
                 child: Text(
                   hospitalDisplayName(hospital),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
-              ),
-              Text(
-                isAdmin ? 'Galerie à gérer' : 'Toutes les galeries',
-                style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
               ),
             ],
           ),
@@ -631,7 +627,7 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                         ),
                         child: const Text(
                           'Glissez à gauche ou à droite • pincez pour zoomer',
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -713,7 +709,7 @@ class _AstreintePhotoCard extends StatelessWidget {
                   resource.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -765,10 +761,10 @@ class _AdminAddTile extends StatelessWidget {
                 Icon(Icons.cloud_upload_outlined, size: 34, color: AppColors.catService),
               SizedBox(height: 8),
               Text(uploading ? 'Envoi…' : 'Publier des photos', textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
+                style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.ink)),
               SizedBox(height: 4),
               Text('Pour ${hospitalDisplayName(hospital)}', textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft)),
+                style: TextStyle(fontSize: 12, color: AppColors.inkSoft)),
             ],
           ),
         ),
@@ -784,7 +780,7 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.all(AppSpace.xl),
         child: Column(

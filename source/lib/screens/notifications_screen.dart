@@ -12,15 +12,18 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'admin_password_reset_screen.dart';
 import '../theme/widgets.dart';
+import '../ui/components.dart';
 
 class NotificationsScreen extends StatelessWidget {
   final int initialIndex;
-  const NotificationsScreen({super.key, this.initialIndex = 0});
+  final bool embedded;
+  const NotificationsScreen({super.key, this.initialIndex = 0, this.embedded = false});
 
   Future<void> _clean(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: const Text('Nettoyer les notifications ?'),
         content: const Text(
           'Les rappels passés et les demandes déjà terminées seront masqués. '
@@ -68,145 +71,36 @@ class NotificationsScreen extends StatelessWidget {
       resolvedIndex = 3;
     }
 
-    return DefaultTabController(
-      length: tabCount,
-      initialIndex: resolvedIndex,
-      child: Scaffold(
-        backgroundColor: AppColors.paper,
-        appBar: AppBar(
-          toolbarHeight: 64,
-          backgroundColor: AppColors.paper,
-          surfaceTintColor: Colors.transparent,
-          titleSpacing: 0,
-          title: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                padding: EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.line),
-                  boxShadow: AppShadow.low,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
-                  child: Image.asset(
-                    'assets/branding/gardeflow_logo.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-              SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                  'Notifications',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'SpaceGrotesk',
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink,
-                    letterSpacing: -0.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: Tooltip(
-                message: 'Nettoyer les notifications',
-                child: Material(
-                  color: AppColors.brandSoft,
-                  borderRadius: BorderRadius.circular(13),
-                  child: InkWell(
-                    onTap: () => _clean(context),
-                    borderRadius: BorderRadius.circular(13),
-                    child: SizedBox(
-                      width: 43,
-                      height: 43,
-                      child: Icon(
-                        Icons.cleaning_services_rounded,
-                        color: AppColors.brand,
-                        size: 21,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: Size.fromHeight(54),
-            child: Container(
-              margin: EdgeInsets.fromLTRB(14, 0, 14, 8),
-              padding: EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.paperAlt,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.line),
-              ),
-              child: TabBar(
-                isScrollable: isAdmin,
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicator: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.navy.withOpacity(0.07),
-                      blurRadius: 9,
-                      offset: Offset(0, 3),
-                    ),
-                  ],
-                ),
-                labelColor: AppColors.brand,
-                unselectedLabelColor: AppColors.inkSoft,
-                labelStyle: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                ),
-                unselectedLabelStyle: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-                tabs: [
-                  Tab(text: 'Rappels'),
-                  Tab(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('Transferts / Échanges'),
-                    ),
-                  ),
-                  Tab(text: 'Congés'),
-                  if (isAdmin)
-                    Tab(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          accountCount > 0 ? 'Comptes ($accountCount)' : 'Comptes',
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _RemindersTab(),
-            _ExchangesTab(),
-            _LeavesTab(),
-            if (isAdmin) _AccountsTab(),
-          ],
-        ),
+    final tabs = TabBar(
+      isScrollable: true,
+      tabAlignment: TabAlignment.start,
+      tabs: [
+        const Tab(text: 'Rappels'),
+        Tab(text: 'Échanges / transferts (${appState.exchangeActionableCount()})'),
+        Tab(text: 'Congés (${appState.leaveActionableCount()})'),
+        if (isAdmin) Tab(text: 'Comptes ($accountCount)'),
+      ],
+    );
+    final body = Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+        child: Row(children: [
+          Expanded(child: Text(appState.totalBadgeCount == 0
+              ? 'Vous êtes à jour'
+              : '${appState.totalBadgeCount} demande${appState.totalBadgeCount > 1 ? 's' : ''} à traiter',
+            style: Theme.of(context).textTheme.titleMedium)),
+          IconButton(tooltip: 'Nettoyer les notifications terminées', onPressed: () => _clean(context),
+            icon: const Icon(Icons.cleaning_services_outlined)),
+        ]),
       ),
+      tabs,
+      Expanded(child: TabBarView(children: [
+        _RemindersTab(), _ExchangesTab(), _LeavesTab(), if (isAdmin) _AccountsTab(),
+      ])),
+    ]);
+    return DefaultTabController(
+      length: tabCount, initialIndex: resolvedIndex,
+      child: embedded ? body : Scaffold(appBar: AppBar(title: const Text('Notifications')), body: SafeArea(top: false, child: body)),
     );
   }
 }
@@ -224,6 +118,7 @@ class _AccountsTab extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: Text(approve ? 'Valider ce compte ?' : 'Refuser ce compte ?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -231,7 +126,7 @@ class _AccountsTab extends StatelessWidget {
           children: [
             Text(
               user.fullName,
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
             ),
             SizedBox(height: 6),
             Text(
@@ -385,7 +280,7 @@ class _AccountsTab extends StatelessWidget {
                               'Mot de passe oublié',
                               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                     color: AppColors.warning,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w600,
                                   ),
                             ),
                             SizedBox(height: 3),
@@ -581,7 +476,7 @@ class _RemindersTab extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: appState.clearSentReminders,
               icon: Icon(Icons.delete_sweep_outlined, size: 19),
-              label: Text('Effacer les rappels déjà envoyés'),
+              label: const Text('Effacer les rappels envoyés', textAlign: TextAlign.center),
             ),
           ),
         ),
@@ -592,160 +487,14 @@ class _RemindersTab extends StatelessWidget {
 
 class _ReminderCard extends StatelessWidget {
   final ReminderNotification reminder;
-
   const _ReminderCard({required this.reminder});
-
   @override
-  Widget build(BuildContext context) {
-    final sent = reminder.status == ReminderStatus.sent;
-    final parts = reminder.label
-        .split('·')
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    final guardLabel = parts.length >= 2
-        ? '${parts[0]} · ${parts[1]}'
-        : reminder.label;
-    final reminderLabel = parts.length >= 3
-        ? parts.sublist(2).join(' · ')
-        : 'Rappel de garde';
-
-    final isUrgence = guardLabel.toLowerCase().contains('urgence');
-    final accent = sent
-        ? AppColors.inkSoft
-        : (isUrgence ? AppColors.catUrgence : AppColors.catService);
-    final rawDate =
-        DateFormat('EEEE d MMMM · HH:mm', 'fr_FR').format(reminder.fireAt);
-    final dateLabel = rawDate.isEmpty
-        ? rawDate
-        : rawDate[0].toUpperCase() + rawDate.substring(1);
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(15, 15, 15, 14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: sent ? AppColors.line : accent.withOpacity(0.28),
-          width: sent ? 1 : 1.3,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.navy.withOpacity(0.055),
-            blurRadius: 16,
-            offset: Offset(0, 7),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 43,
-            height: 43,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(sent ? 0.08 : 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              sent
-                  ? Icons.notifications_none_rounded
-                  : Icons.alarm_rounded,
-              color: accent,
-              size: 22,
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        guardLabel,
-                        style: TextStyle(
-                          fontFamily: 'SpaceGrotesk',
-                          fontSize: 15,
-                          height: 1.15,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: sent
-                            ? AppColors.paperAlt
-                            : accent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        sent ? 'Envoyée' : 'À venir',
-                        style: TextStyle(
-                          color: sent ? AppColors.inkSoft : accent,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 7),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.paperAlt,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    reminderLabel,
-                    style: TextStyle(
-                      color: AppColors.inkSoft,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.schedule_rounded,
-                      size: 15,
-                      color: AppColors.inkFaint,
-                    ),
-                    SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        dateLabel,
-                        style: TextStyle(
-                          color: AppColors.inkSoft,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => NotificationTile(
+    title: reminder.label,
+    subtitle: DateFormat('EEEE d MMMM · HH:mm', 'fr_FR').format(reminder.fireAt),
+    active: reminder.status != ReminderStatus.sent,
+    status: reminder.status == ReminderStatus.sent ? 'Envoyé' : 'À venir',
+  );
 }
 
 /// État vide partagé par les trois onglets.
@@ -820,7 +569,7 @@ class _ExchangesTab extends StatelessWidget {
                 Pill(
                   text: requestLabel,
                   icon: ex.isTransfer ? Icons.arrow_forward_rounded : Icons.swap_horiz_rounded,
-                  fontSize: 10,
+                  fontSize: 12,
                 ),
                 SizedBox(width: AppSpace.sm),
                 Expanded(child: Text('${ex.fromName} → ${ex.toName}', style: Theme.of(context).textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
@@ -839,18 +588,17 @@ class _ExchangesTab extends StatelessWidget {
                   width: double.infinity,
                   padding: EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.sm),
                   decoration: BoxDecoration(
-                    color: AppColors.serviceJour.withOpacity(0.22),
+                    color: Theme.of(context).colorScheme.primaryContainer,
                     borderRadius: AppRadius.smR,
-                    border: Border.all(color: AppColors.catService.withOpacity(0.20)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.flash_on_rounded, size: 16, color: AppColors.catService),
+                      Icon(Icons.flash_on_rounded, size: 16, color: Theme.of(context).colorScheme.onPrimaryContainer),
                       SizedBox(width: AppSpace.xs),
                       Expanded(
                         child: Text(
                           'Échange de gardes Service : l’acceptation applique immédiatement l’échange, sans validation administrateur.',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.inkSoft),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onPrimaryContainer),
                         ),
                       ),
                     ],
@@ -866,9 +614,9 @@ class _ExchangesTab extends StatelessWidget {
                 ])
               else if (canRespondAsAdmin)
                 Row(children: [
-                  Expanded(child: _ActionButton(label: 'Approuver', color: AppColors.conge, textColor: AppColors.congeText, onTap: () async { final err = await appState.approveExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
+                  Expanded(child: _ActionButton(label: 'Approuver', color: AppColors.conge, textColor: AppColors.congeText, onTap: () async { if (!await confirmAction(context, title: 'Approuver cet échange ou transfert ?', message: '${ex.fromName} → ${ex.toName}\nLes affectations seront mises à jour.', actionLabel: 'Approuver') || !context.mounted) return; final err = await appState.approveExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
                   const SizedBox(width: AppSpace.sm),
-                  Expanded(child: _ActionButton(label: 'Rejeter', color: AppColors.urg24h, textColor: AppColors.urg24hText, onTap: () async { final err = await appState.rejectExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
+                  Expanded(child: _ActionButton(label: 'Rejeter', color: AppColors.urg24h, textColor: AppColors.urg24hText, onTap: () async { if (!await confirmAction(context, title: 'Rejeter cette demande ?', message: '${ex.fromName} → ${ex.toName}\nLes gardes resteront affectées à leurs médecins actuels.', actionLabel: 'Rejeter', destructive: true) || !context.mounted) return; final err = await appState.rejectExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
                 ])
               else if (ex.status == ExchangeStatus.pendingB && (ex.fromId == me.id || ex.fromPhone == me.phone))
                 Row(
@@ -991,7 +739,7 @@ class _AdminLeavesGroupedList extends StatelessWidget {
                     text: '$pendingCount en attente',
                     background: AppColors.serviceJour,
                     foreground: AppColors.serviceJourText,
-                    fontSize: 10.5,
+                    fontSize: 12,
                   )
                 : Icon(Icons.expand_more_rounded, color: AppColors.inkFaint),
             children: [
@@ -1036,7 +784,7 @@ class _LeaveRequestRow extends StatelessWidget {
             icon: Icons.beach_access_rounded,
             background: AppColors.conge,
             foreground: AppColors.congeText,
-            fontSize: 10,
+            fontSize: 12,
           ),
           if (showOwnerName) ...[
             const SizedBox(width: AppSpace.sm),
@@ -1057,7 +805,7 @@ class _LeaveRequestRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   '${conflicts.length} garde${conflicts.length > 1 ? 's' : ''} à couvrir avant approbation : ${conflicts.map((e) => DateFormat('dd/MM', 'fr_FR').format(DateTime.parse(e.dateStr))).join(', ')}',
-                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.urgJourText),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.urgJourText),
                 ),
               ),
             ]),
@@ -1072,7 +820,8 @@ class _LeaveRequestRow extends StatelessWidget {
           Row(children: [
             Expanded(child: _ActionButton(
               label: 'Approuver', color: AppColors.conge, textColor: AppColors.congeText,
-              onTap: () async {
+              onTap: conflicts.isNotEmpty ? null : () async {
+                if (!await confirmAction(context, title: 'Approuver ce congé ?', message: '${r.ownerName}\n$dateLabel', actionLabel: 'Approuver') || !context.mounted) return;
                 final err = await appState.reviewLeave(r.id, true);
                 if (err != null && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
@@ -1083,6 +832,7 @@ class _LeaveRequestRow extends StatelessWidget {
             Expanded(child: _ActionButton(
               label: 'Refuser', color: AppColors.urg24h, textColor: AppColors.urg24hText,
               onTap: () async {
+                if (!await confirmAction(context, title: 'Refuser ce congé ?', message: '${r.ownerName}\n$dateLabel\nLes tuiles de ce congé seront retirées selon les règles actuelles.', actionLabel: 'Refuser', destructive: true) || !context.mounted) return;
                 final err = await appState.reviewLeave(r.id, false);
                 if (err != null && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
@@ -1130,7 +880,7 @@ class _LeaveStatusPill extends StatelessWidget {
       case LeaveRequestStatus.cancelled:
         text = 'Annulé'; bg = AppColors.paperAlt; fg = AppColors.inkSoft; break;
     }
-    return Pill(text: text, background: bg, foreground: fg, fontSize: 10.5);
+    return Pill(text: text, background: bg, foreground: fg, fontSize: 12);
   }
 }
 
@@ -1138,7 +888,7 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final Color color;
   final Color textColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _ActionButton({required this.label, required this.color, required this.textColor, required this.onTap});
 
   @override
@@ -1152,7 +902,7 @@ class _ActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.smR),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+      child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -1192,6 +942,6 @@ class _StatusPill extends StatelessWidget {
         bg = AppColors.paperAlt; fg = AppColors.inkSoft;
         break;
     }
-    return Pill(text: text, background: bg, foreground: fg, fontSize: 10.5);
+    return Pill(text: text, background: bg, foreground: fg, fontSize: 12);
   }
 }
