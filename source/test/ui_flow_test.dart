@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -80,7 +82,35 @@ Widget host(AppState state, Widget child, {String theme = 'green', double scale 
 }
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() => initializeDateFormatting('fr_FR'));
+  setUpAll(() {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    AndroidFlutterLocalNotificationsPlugin.registerWith();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('dexterous.com/flutter/local_notifications'),
+      (call) async {
+        switch (call.method) {
+          case 'initialize':
+            return true;
+          case 'canScheduleExactNotifications':
+            return false;
+          case 'getNotificationAppLaunchDetails':
+            return <String, dynamic>{'notificationLaunchedApp': false};
+          default:
+            return null;
+        }
+      },
+    );
+    return initializeDateFormatting('fr_FR');
+  });
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('dexterous.com/flutter/local_notifications'),
+      null,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
   for (final scale in [1.0, 1.4, 2.0]) {
     testWidgets('entire month at 320 px / text $scale with discipline mark', (tester) async {
       tester.view.physicalSize = const Size(320, 1000); tester.view.devicePixelRatio = 1;
