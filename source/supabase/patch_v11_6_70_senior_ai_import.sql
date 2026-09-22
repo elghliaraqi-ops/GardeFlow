@@ -50,7 +50,7 @@ on public.senior_oncall_imports
 for update
 to authenticated
 using ((select public.is_admin()))
-with check ((select public.is_admin()) and created_by = (select auth.uid()));
+with check ((select public.is_admin()));
 
 drop policy if exists senior_oncall_imports_admin_delete on public.senior_oncall_imports;
 create policy senior_oncall_imports_admin_delete
@@ -101,10 +101,6 @@ begin
 
   if not found then
     raise exception 'import_not_found';
-  end if;
-
-  if v_import.created_by <> auth.uid() then
-    raise exception 'import_owner_mismatch';
   end if;
 
   v_source := 'photo:' || v_import.resource_id::text;
