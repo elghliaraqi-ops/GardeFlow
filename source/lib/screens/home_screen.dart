@@ -112,7 +112,7 @@ class _DashboardViewState extends State<DashboardView> {
           onTap: () => AppBottomSheet.show<void>(context, builder: (_) => ShiftDetailsSheet(date: today == null ? now : DateTime.parse(today.dateStr)))),
         const SizedBox(height: 20),
         if (next != null && next.id != today?.id)
-          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_upcoming_outlined),
+          ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_available_outlined),
             title: Text('Prochaine garde · ${DateFormat('EEE d MMM', 'fr_FR').format(DateTime.parse(next.dateStr))}'),
             subtitle: Text('${ShiftCatalog.byId(next.shiftId).label} · ${next.shiftId.startsWith('urg-') ? 'Urgences' : me.service}${state.isPlanningEntryApproved(next) ? '' : ' · provisoire'}'),
             trailing: const Icon(Icons.chevron_right_rounded),
