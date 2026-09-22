@@ -34,7 +34,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(MaterialApp(theme: AppTheme.forAppearance(name), home: MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-        child: const Scaffold(body: ListView(padding: EdgeInsets.all(16), children: [
+        child: Scaffold(body: ListView(padding: const EdgeInsets.all(16), children: const [
           StatusBadge(status: PlanningMonthStatus.draft, reopened: true),
           DoctorTile(name: 'Dr ARAQI HOUSSAINI Elghali', subtitle: 'Imagerie Médicale · HUIM6 Bouskoura'),
           PrimaryButton(label: 'Envoyer la demande de transfert', onPressed: null),
