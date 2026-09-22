@@ -8,6 +8,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
 import '../data/hospitals.dart';
+import '../data/services.dart';
 import '../models/app_user.dart';
 import '../models/shared_resource.dart';
 import '../services/supabase_backend_service.dart';
@@ -30,7 +31,9 @@ class AstreinteScreen extends StatefulWidget {
 class _AstreinteScreenState extends State<AstreinteScreen> {
   final _backend = SupabaseBackendService.instance;
   final Map<String, Uint8List> _imageCache = <String, Uint8List>{};
+  final TextEditingController _serviceSearchController = TextEditingController();
   List<SharedResource> _photos = const [];
+  String _serviceQuery = '';
   bool _loading = true;
   bool _uploading = false;
   bool _hospitalInitialized = false;
@@ -50,6 +53,48 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load();
     });
+  }
+
+  @override
+  void dispose() {
+    _serviceSearchController.dispose();
+    super.dispose();
+  }
+
+  String _serviceFor(SharedResource resource) {
+    final value = resource.service?.trim();
+    return value == null || value.isEmpty ? 'À classer' : value;
+  }
+
+  List<SharedResource> _visiblePhotos() {
+    final query = _searchKey(_serviceQuery);
+    if (query.isEmpty) return List<SharedResource>.unmodifiable(_photos);
+    return _photos
+        .where((photo) => _searchKey(_serviceFor(photo)).contains(query))
+        .toList(growable: false);
+  }
+
+  Map<String, List<SharedResource>> _groupedPhotos(List<SharedResource> photos) {
+    final result = <String, List<SharedResource>>{};
+    for (final photo in photos) {
+      result.putIfAbsent(_serviceFor(photo), () => <SharedResource>[]).add(photo);
+    }
+    final keys = result.keys.toList()
+      ..sort((a, b) {
+        if (a == 'À classer') return -1;
+        if (b == 'À classer') return 1;
+        return _searchKey(a).compareTo(_searchKey(b));
+      });
+    return {for (final key in keys) key: result[key]!};
+  }
+
+  Future<String?> _selectService({String? currentService}) {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _ServicePickerSheet(currentService: currentService),
+    );
   }
 
   String _activeHospital() {
@@ -103,6 +148,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   Future<void> _pickImage() async {
     if (_uploading) return;
     final hospital = _activeHospital();
+    final service = await _selectService();
+    if (service == null || !mounted) return;
     final picker = ImagePicker();
     final action = await showModalBottomSheet<_AstreintePickAction>(
       context: context,
@@ -117,9 +164,23 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                   const Icon(Icons.local_hospital_outlined, size: 19),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'Publication pour ${hospitalDisplayName(hospital)}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Publication pour ${hospitalDisplayName(hospital)}',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          service,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.inkSoft,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -174,6 +235,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
             fileName: file.name,
             mimeType: mime,
             hospital: hospital,
+            service: service,
           );
           uploaded++;
         } catch (_) {
@@ -187,9 +249,9 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         final target = hospitalDisplayName(hospital);
         final message = failed == 0
             ? (uploaded == 1
-                ? 'Photo d’astreinte publiée pour $target.'
-                : '$uploaded photos d’astreinte publiées pour $target.')
-            : '$uploaded photo${uploaded > 1 ? 's' : ''} publiée${uploaded > 1 ? 's' : ''} pour $target, $failed échec${failed > 1 ? 's' : ''}.';
+                ? 'Photo d’astreinte publiée dans $service • $target.'
+                : '$uploaded photos d’astreinte publiées dans $service • $target.')
+            : '$uploaded photo${uploaded > 1 ? 's' : ''} publiée${uploaded > 1 ? 's' : ''} dans $service • $target, $failed échec${failed > 1 ? 's' : ''}.';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
@@ -203,6 +265,32 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     final bytes = await _backend.downloadSharedResource(resource.storagePath);
     _imageCache[resource.id] = bytes;
     return bytes;
+  }
+
+  Future<void> _editService(SharedResource resource) async {
+    final current = _serviceFor(resource);
+    final service = await _selectService(
+      currentService: current == 'À classer' ? null : current,
+    );
+    if (service == null || service == current || !mounted) return;
+    try {
+      await _backend.updateAstreintePhotoService(
+        resource: resource,
+        service: service,
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Photo classée dans $service.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Classement impossible : $e')),
+        );
+      }
+    }
   }
 
   Future<void> _delete(SharedResource resource) async {
@@ -233,14 +321,19 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   }
 
   void _openPhoto(SharedResource resource) {
-    final initialIndex = _photos.indexWhere((p) => p.id == resource.id);
+    final service = _serviceFor(resource);
+    final servicePhotos = _photos
+        .where((photo) => _serviceFor(photo) == service)
+        .toList(growable: false);
+    final initialIndex = servicePhotos.indexWhere((p) => p.id == resource.id);
     showDialog<void>(
       context: context,
       barrierColor: Colors.black,
       builder: (ctx) => Dialog.fullscreen(
         backgroundColor: Colors.black,
         child: _AstreinteGalleryViewer(
-          photos: List<SharedResource>.unmodifiable(_photos),
+          photos: List<SharedResource>.unmodifiable(servicePhotos),
+          service: service,
           initialIndex: initialIndex < 0 ? 0 : initialIndex,
           backend: _backend,
           onClose: () => Navigator.pop(ctx),
