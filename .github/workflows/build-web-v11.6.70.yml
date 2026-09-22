@@ -1,5 +1,4 @@
 name: Build & Deploy GardeFlow Web v11.6.70
-# redeploy: senior-photo-ocr-20260922
 
 on:
   workflow_dispatch:
