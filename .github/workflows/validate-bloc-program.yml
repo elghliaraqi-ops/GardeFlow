@@ -1,0 +1,82 @@
+name: Validate Programme Bloc
+
+on:
+  push:
+    branches:
+      - feature-programme-bloc-20260922
+    paths:
+      - '.github/workflows/validate-bloc-program.yml'
+      - 'source/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+
+      - name: Verify protected base version
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "version: 11.6.70+230" source/pubspec.yaml
+          test -f source/lib/screens/operating_room_program_screen.dart
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Restore Android Firebase config
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .v1170-base
+          mkdir -p .v1170-base
+          unzip -q GardeFlow_android_v11_6_0_official_pdf_auto_import.zip -d .v1170-base
+          GOOGLE_SERVICES="$(find .v1170-base -type f -name google-services.json -print -quit)"
+          test -n "$GOOGLE_SERVICES"
+          cp "$GOOGLE_SERVICES" source/google-services.json
+
+      - name: Prepare Android project
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f android/gradlew ] || [ ! -f android/app/src/main/AndroidManifest.xml ]; then
+            rm -rf android
+            flutter create --no-pub --platforms=android --org com.huim6 --project-name huim6_planning .
+          fi
+          cp -f google-services.json android/app/google-services.json
+          dart tool/configure_android.dart
+          python3 "$GITHUB_WORKSPACE/ci/v11_6_42/install_alarm_activity_v42.py"
+
+      - name: Install dependencies
+        working-directory: source
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Analyze
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build release APK
+        working-directory: source
+        run: flutter build apk --release
+
+      - name: Upload validation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.70-bloc-program-validation
+          path: source/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
