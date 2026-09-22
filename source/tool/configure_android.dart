@@ -75,6 +75,60 @@ void configure(Directory root) {
   // Firebase Android exige au moins API 23 ; garder une valeur supérieure du SDK.
   appText = appText.replaceAll('minSdk = flutter.minSdkVersion', 'minSdk = maxOf(23, flutter.minSdkVersion)');
   appText = appText.replaceAll('minSdkVersion flutter.minSdkVersion', 'minSdkVersion Math.max(23, flutter.minSdkVersion)');
+  // ML Kit Text Recognition utilise uniquement le script latin dans GardeFlow.
+  // Le plugin référence aussi ses modules linguistiques optionnels ; R8 exige
+  // qu'ils soient explicitement ignorés lorsqu'ils ne sont pas embarqués.
+  final proguardRules = file('android/app/proguard-rules.pro');
+  const mlKitOptionalLanguageRules = '''
+-dontwarn com.google.mlkit.vision.text.chinese.**
+-dontwarn com.google.mlkit.vision.text.devanagari.**
+-dontwarn com.google.mlkit.vision.text.japanese.**
+-dontwarn com.google.mlkit.vision.text.korean.**
+''';
+  var proguardText = proguardRules.existsSync()
+      ? proguardRules.readAsStringSync()
+      : '';
+  if (!proguardText.contains('com.google.mlkit.vision.text.chinese')) {
+    if (proguardText.isNotEmpty && !proguardText.endsWith('\n')) {
+      proguardText += '\n';
+    }
+    proguardText += mlKitOptionalLanguageRules;
+    proguardRules.writeAsStringSync(proguardText);
+  }
+
+  if (!appText.contains('proguard-rules.pro')) {
+    if (kts) {
+      const releaseAnchor = 'release {';
+      const releaseByNameAnchor = 'getByName("release") {';
+      const ruleLine =
+          '            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")';
+      if (appText.contains(releaseAnchor)) {
+        appText = appText.replaceFirst(
+          releaseAnchor,
+          '$releaseAnchor\n$ruleLine',
+        );
+      } else if (appText.contains(releaseByNameAnchor)) {
+        appText = appText.replaceFirst(
+          releaseByNameAnchor,
+          '$releaseByNameAnchor\n$ruleLine',
+        );
+      } else {
+        throw StateError('Bloc release Android Kotlin introuvable.');
+      }
+    } else {
+      const releaseAnchor = 'release {';
+      const ruleLine =
+          "            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'";
+      if (!appText.contains(releaseAnchor)) {
+        throw StateError('Bloc release Android Groovy introuvable.');
+      }
+      appText = appText.replaceFirst(
+        releaseAnchor,
+        '$releaseAnchor\n$ruleLine',
+      );
+    }
+  }
+
 
   final manifest = file('android/app/src/main/AndroidManifest.xml');
   var xml = manifest.readAsStringSync();
