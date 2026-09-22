@@ -606,6 +606,263 @@ class _HospitalAstreinteHeader extends StatelessWidget {
   }
 }
 
+class _AstreinteServiceSearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final String query;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  const _AstreinteServiceSearchBar({
+    required this.controller,
+    required this.query,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.card,
+      padding: EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.sm,
+        AppSpace.lg,
+        AppSpace.md,
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Rechercher un service…',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: query.trim().isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Effacer la recherche',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServicePickerSheet extends StatefulWidget {
+  final String? currentService;
+
+  const _ServicePickerSheet({this.currentService});
+
+  @override
+  State<_ServicePickerSheet> createState() => _ServicePickerSheetState();
+}
+
+class _ServicePickerSheetState extends State<_ServicePickerSheet> {
+  final TextEditingController _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchKey(_query);
+    final services = kServices
+        .where((service) => query.isEmpty || _searchKey(service).contains(query))
+        .toList(growable: false);
+
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.72,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.md,
+              AppSpace.lg,
+              AppSpace.sm,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.medical_services_outlined, color: AppColors.brand),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Choisir le service',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Fermer',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+            child: TextField(
+              controller: _controller,
+              autofocus: false,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un service…',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _query.trim().isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          _controller.clear();
+                          setState(() => _query = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+              ),
+            ),
+          ),
+          SizedBox(height: AppSpace.sm),
+          Expanded(
+            child: services.isEmpty
+                ? Center(
+                    child: Text(
+                      'Aucun service trouvé.',
+                      style: TextStyle(color: AppColors.inkSoft),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpace.lg,
+                      0,
+                      AppSpace.lg,
+                      AppSpace.lg,
+                    ),
+                    itemCount: services.length,
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      color: AppColors.line,
+                    ),
+                    itemBuilder: (context, index) {
+                      final service = services[index];
+                      final selected = widget.currentService == service;
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        leading: Icon(
+                          selected
+                              ? Icons.check_circle_rounded
+                              : Icons.local_hospital_outlined,
+                          color: selected ? AppColors.brand : AppColors.inkSoft,
+                        ),
+                        title: Text(
+                          service,
+                          style: TextStyle(
+                            fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () => Navigator.pop(context, service),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceSectionHeader extends StatelessWidget {
+  final String service;
+  final int photoCount;
+
+  const _ServiceSectionHeader({
+    required this.service,
+    required this.photoCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final needsClassification = service == 'À classer';
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpace.md,
+        vertical: AppSpace.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: AppRadius.mdR,
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            needsClassification
+                ? Icons.pending_actions_rounded
+                : Icons.medical_services_rounded,
+            size: 19,
+            color: needsClassification ? Colors.orange : AppColors.brand,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              service,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.paperAlt,
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Text(
+              '$photoCount photo${photoCount > 1 ? 's' : ''}',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.inkSoft,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyServiceSearch extends StatelessWidget {
+  final String query;
+
+  const _EmptyServiceSearch({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.all(AppSpace.xl),
+      children: [
+        const SizedBox(height: 60),
+        Icon(Icons.search_off_rounded, size: 46, color: AppColors.inkSoft),
+        const SizedBox(height: 12),
+        Text(
+          'Aucun service ne correspond à « ${query.trim()} ».',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.inkSoft,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
 class _EmptyHospitalGallery extends StatelessWidget {
   final String hospital;
   const _EmptyHospitalGallery({required this.hospital});
@@ -631,12 +888,14 @@ class _EmptyHospitalGallery extends StatelessWidget {
 
 class _AstreinteGalleryViewer extends StatefulWidget {
   final List<SharedResource> photos;
+  final String service;
   final int initialIndex;
   final SupabaseBackendService backend;
   final VoidCallback onClose;
 
   const _AstreinteGalleryViewer({
     required this.photos,
+    required this.service,
     required this.initialIndex,
     required this.backend,
     required this.onClose,
@@ -735,7 +994,7 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
-                    '${_currentIndex + 1} / ${widget.photos.length}',
+                    '${widget.service} • ${_currentIndex + 1} / ${widget.photos.length}',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -786,16 +1045,20 @@ class _GalleryCloseButton extends StatelessWidget {
 
 class _AstreintePhotoCard extends StatelessWidget {
   final SharedResource resource;
+  final String service;
   final Future<Uint8List> imageFuture;
-  final bool canDelete;
+  final bool canManage;
   final VoidCallback onTap;
+  final VoidCallback onEditService;
   final VoidCallback onDelete;
 
   const _AstreintePhotoCard({
     required this.resource,
+    required this.service,
     required this.imageFuture,
-    required this.canDelete,
+    required this.canManage,
     required this.onTap,
+    required this.onEditService,
     required this.onDelete,
   });
 
@@ -834,15 +1097,46 @@ class _AstreintePhotoCard extends StatelessWidget {
                     colors: [Colors.transparent, Color(0xC8000000)],
                   ),
                 ),
-                child: Text(
-                  resource.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      service,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      resource.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            if (canDelete)
+            if (canManage) ...[
+              Positioned(
+                top: 7,
+                left: 7,
+                child: IconButton.filled(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Changer le service',
+                  onPressed: onEditService,
+                  icon: const Icon(Icons.edit_rounded, size: 17),
+                ),
+              ),
               Positioned(
                 top: 7,
                 right: 7,
@@ -853,6 +1147,7 @@ class _AstreintePhotoCard extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline_rounded, size: 18),
                 ),
               ),
+            ],
           ],
         ),
       ),
@@ -889,10 +1184,10 @@ class _AdminAddTile extends StatelessWidget {
               else
                 Icon(Icons.cloud_upload_outlined, size: 34, color: AppColors.catService),
               SizedBox(height: 8),
-              Text(uploading ? 'Envoi…' : 'Publier des photos', textAlign: TextAlign.center,
+              Text(uploading ? 'Envoi…' : 'Ajouter des photos', textAlign: TextAlign.center,
                 style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
               SizedBox(height: 4),
-              Text('Pour ${hospitalDisplayName(hospital)}', textAlign: TextAlign.center,
+              Text('Choisissez d’abord le service • ${hospitalDisplayName(hospital)}', textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft)),
             ],
           ),
@@ -925,6 +1220,20 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+String _searchKey(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[àáâãäå]'), 'a')
+      .replaceAll(RegExp(r'[ç]'), 'c')
+      .replaceAll(RegExp(r'[èéêë]'), 'e')
+      .replaceAll(RegExp(r'[ìíîï]'), 'i')
+      .replaceAll(RegExp(r'[ñ]'), 'n')
+      .replaceAll(RegExp(r'[òóôõö]'), 'o')
+      .replaceAll(RegExp(r'[ùúûü]'), 'u')
+      .replaceAll(RegExp(r'[ýÿ]'), 'y')
+      .trim();
 }
 
 String _mimeForName(String name) {
