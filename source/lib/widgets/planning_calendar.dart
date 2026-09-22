@@ -32,7 +32,7 @@ class PlanningCalendar extends StatelessWidget {
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), padding: EdgeInsets.zero,
         itemCount: ((first + days) / 7).ceil() * 7,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7,
-          crossAxisSpacing: 2, mainAxisSpacing: 4, mainAxisExtent: math.max(66.0, 58 * scale)),
+          crossAxisSpacing: 2, mainAxisSpacing: 4, mainAxisExtent: math.max(72.0, 72 * scale)),
         itemBuilder: (context, index) {
           final day = index - first + 1;
           if (day < 1 || day > days) return const SizedBox.shrink();
