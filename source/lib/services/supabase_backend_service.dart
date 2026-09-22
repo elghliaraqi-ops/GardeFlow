@@ -13,6 +13,7 @@ import '../models/planning_entry.dart';
 import '../models/planning_month.dart';
 import '../models/password_reset_request.dart';
 import '../models/shared_resource.dart';
+import '../models/senior_oncall_import.dart';
 
 class SupabaseBackendService {
   SupabaseBackendService._();
@@ -393,6 +394,62 @@ class SupabaseBackendService {
         .toList();
   }
 
+  Future<SeniorOnCallImport?> fetchSeniorOnCallImportForResource(
+    String resourceId,
+  ) async {
+    final row = await client
+        .from('senior_oncall_imports')
+        .select()
+        .eq('resource_id', resourceId)
+        .maybeSingle();
+    if (row == null) return null;
+    return SeniorOnCallImport.fromJson(Map<String, dynamic>.from(row));
+  }
+
+  Future<SeniorOnCallImport> analyzeSeniorRosterPhoto(String resourceId) async {
+    final response = await client.functions.invoke(
+      'analyze-senior-roster-photo',
+      body: {'resourceId': resourceId},
+    );
+    final raw = response.data;
+    if (raw is! Map || raw['ok'] != true || raw['import'] is! Map) {
+      final error = raw is Map ? raw['error']?.toString() : null;
+      switch (error) {
+        case 'forbidden':
+          throw StateError('Analyse réservée aux administrateurs.');
+        case 'resource_not_found':
+          throw StateError('Photo d’astreinte introuvable.');
+        case 'image_download_failed':
+          throw StateError('Impossible de charger la photo pour l’analyse.');
+        case 'invalid_image_size':
+          throw StateError('La photo est vide ou trop volumineuse pour l’analyse.');
+        case 'analysis_save_failed':
+          throw StateError('L’analyse a réussi mais son brouillon n’a pas pu être enregistré.');
+        default:
+          throw StateError(
+            'Analyse automatique indisponible. Réessayez ou saisissez le tableau manuellement.',
+          );
+      }
+    }
+    return SeniorOnCallImport.fromJson(
+      Map<String, dynamic>.from(raw['import'] as Map),
+    );
+  }
+
+  Future<Map<String, dynamic>> publishSeniorOnCallImport({
+    required String importId,
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    final result = await client.rpc(
+      'publish_senior_oncall_import',
+      params: {
+        'p_import_id': importId,
+        'p_rows': rows,
+      },
+    );
+    return Map<String, dynamic>.from(result as Map);
+  }
+
   Future<List<PlanningMonth>> fetchPlanningMonths() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
@@ -657,7 +714,7 @@ class SupabaseBackendService {
     return client.storage.from(sharedBucket).createSignedUrl(storagePath, expiresIn);
   }
 
-  Future<void> uploadAstreintePhoto({
+  Future<SharedResource> uploadAstreintePhoto({
     required Uint8List bytes,
     required String fileName,
     required String mimeType,
@@ -679,14 +736,19 @@ class SupabaseBackendService {
       fileOptions: FileOptions(contentType: mimeType, upsert: false),
     );
     try {
-      await client.from('shared_resources').insert({
-        'kind': 'astreinte_photo',
-        'hospital': hospital,
-        'storage_path': path,
-        'display_name': fileName,
-        'mime_type': mimeType,
-        'uploaded_by': uid,
-      });
+      final row = await client
+          .from('shared_resources')
+          .insert({
+            'kind': 'astreinte_photo',
+            'hospital': hospital,
+            'storage_path': path,
+            'display_name': fileName,
+            'mime_type': mimeType,
+            'uploaded_by': uid,
+          })
+          .select()
+          .single();
+      return SharedResource.fromJson(Map<String, dynamic>.from(row));
     } catch (_) {
       await client.storage.from(sharedBucket).remove([path]);
       rethrow;
