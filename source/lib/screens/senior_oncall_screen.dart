@@ -364,12 +364,16 @@ class _SeniorServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = _seniorServiceAccent(service);
+    final headerBackground = _seniorServiceBackground(accent);
+    final headerForeground = _seniorServiceForeground(accent);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: accent.withOpacity(0.48), width: 1.2),
         boxShadow: AppShadow.low,
       ),
       child: Column(
@@ -377,29 +381,49 @@ class _SeniorServiceCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(15, 12, 13, 11),
             decoration: BoxDecoration(
-              color: AppColors.brandSoft,
+              color: headerBackground,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
             ),
             child: Row(
               children: [
-                Icon(Icons.medical_services_rounded, size: 19, color: AppColors.brand),
-                const SizedBox(width: 8),
+                Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(
+                    Icons.medical_services_rounded,
+                    size: 17,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     service,
                     style: TextStyle(
-                      color: AppColors.brandDark,
+                      color: headerForeground,
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
                     ),
                   ),
                 ),
-                Text(
-                  '${rows.length}',
-                  style: TextStyle(
-                    color: AppColors.brand,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    '${rows.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ],
@@ -684,7 +708,25 @@ class _SeniorServiceFilter extends StatelessWidget {
             for (final service in services)
               DropdownMenuItem(
                 value: service,
-                child: Text(service, overflow: TextOverflow.ellipsis),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _seniorServiceAccent(service),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        service,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
           ],
           onChanged: onChanged,
@@ -692,6 +734,82 @@ class _SeniorServiceFilter extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _seniorServiceAccent(String service) {
+  final value = service.toLowerCase();
+
+  if (value.contains('urgences')) return const Color(0xFFE05252);
+  if (value.contains('cardiologie') || value.contains('usic')) {
+    return const Color(0xFFD94A67);
+  }
+  if (value.contains('cathlab')) return const Color(0xFFE07A3F);
+  if (value.contains('usip')) return const Color(0xFFF0A43A);
+  if (value.contains('réanimation') || value.contains('reanimation')) {
+    return const Color(0xFFE16A3D);
+  }
+  if (value.contains('neurochirurgie')) return const Color(0xFF6D5BD0);
+  if (value.contains('neurologie')) return const Color(0xFF7668D8);
+  if (value.contains('radiologie')) return const Color(0xFF3E7CC8);
+  if (value.contains('pneumologie')) return const Color(0xFF2A9DB0);
+  if (value.contains('néphrologie') || value.contains('nephrologie')) {
+    return const Color(0xFF2A9A83);
+  }
+  if (value.contains('endocrinologie')) return const Color(0xFF8A63C7);
+  if (value.contains('gastro')) return const Color(0xFFC98724);
+  if (value.contains('dermatologie')) return const Color(0xFF9A5BA8);
+  if (value.contains('gynécologie') || value.contains('gynecologie')) {
+    return const Color(0xFFD35E91);
+  }
+  if (value.contains('ophtalmologie')) return const Color(0xFF388FB7);
+  if (value.contains('hématologie') ||
+      value.contains('hematologie') ||
+      value.contains('oncologie')) {
+    return const Color(0xFFB5548C);
+  }
+  if (value.contains('urologie')) return const Color(0xFF338E78);
+  if (value.contains('traumatologie') || value.contains('orthopédie')) {
+    return const Color(0xFF4F6FB8);
+  }
+  if (value.contains('orl') || value.contains('maxillo')) {
+    return const Color(0xFF607DB2);
+  }
+  if (value.contains('thoracique')) return const Color(0xFF347F91);
+  if (value.contains('plastique')) return const Color(0xFF9A66B4);
+  if (value.contains('viscérale') || value.contains('viscerale')) {
+    return const Color(0xFF4B7F56);
+  }
+  if (value.contains('blood')) return const Color(0xFFB84444);
+  if (value.contains('médecine physique') ||
+      value.contains('medecine physique')) {
+    return const Color(0xFF588A5C);
+  }
+
+  const palette = <Color>[
+    Color(0xFF4D7DB7),
+    Color(0xFF6D67B5),
+    Color(0xFF3F8A76),
+    Color(0xFFB2733A),
+    Color(0xFFA45775),
+    Color(0xFF547F9E),
+    Color(0xFF7C6AAB),
+    Color(0xFF5E8E53),
+  ];
+  var hash = 0;
+  for (final unit in service.codeUnits) {
+    hash = (hash * 31 + unit) & 0x7fffffff;
+  }
+  return palette[hash % palette.length];
+}
+
+Color _seniorServiceBackground(Color accent) {
+  final opacity = AppColors.isDarkMode ? 0.30 : 0.14;
+  return Color.alphaBlend(accent.withOpacity(opacity), AppColors.card);
+}
+
+Color _seniorServiceForeground(Color accent) {
+  if (AppColors.isDarkMode) return Colors.white;
+  return Color.lerp(accent, Colors.black, 0.35) ?? accent;
 }
 
 class _SeniorOnCallRow {
