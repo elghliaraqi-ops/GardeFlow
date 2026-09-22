@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:alarm/alarm.dart';
+import 'package:alarm/service/alarm_storage.dart';
 import 'package:alarm/src/generated/platform_bindings.g.dart' as alarm_pigeon;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -31,6 +33,8 @@ AppUser doctor({bool admin = false}) => AppUser(id: 'ui-doctor', nom: 'Exemple',
   hospital: kHospitalBouskoura, role: admin ? UserRole.admin : UserRole.medecin);
 
 Future<AppState> fixture({bool admin = false, bool locked = false, bool disciplinary = false}) async {
+  Alarm.resetForTesting();
+  AlarmStorage.resetForTesting();
   final user = doctor(admin: admin), now = DateTime.now();
   final date = DateTime(now.year, now.month + 1, 15);
   SharedPreferences.setMockInitialValues({'huim6_state_v5': jsonEncode({
@@ -47,6 +51,8 @@ Future<AppState> fixture({bool admin = false, bool locked = false, bool discipli
 }
 
 Future<AppState> workflowFixture({required String sourceShift, String? targetShift}) async {
+  Alarm.resetForTesting();
+  AlarmStorage.resetForTesting();
   final sender = doctor();
   final recipient = AppUser(id: 'recipient', nom: 'Test', prenom: 'Sara', phone: '+212600000002',
     passwordHash: '', passwordSalt: '', service: sender.service, grade: MedicalGrade.senior,
