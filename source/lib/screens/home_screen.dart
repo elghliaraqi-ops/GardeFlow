@@ -20,6 +20,7 @@ import 'exchange_request_sheet.dart';
 import 'junior_oncall_screen.dart';
 import 'notifications_screen.dart';
 import 'official_planning_screen.dart';
+import 'operating_room_program_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'daily_news_section.dart';
@@ -2011,6 +2012,8 @@ class _NavRailState extends State<_NavRail> {
     final items = <_NavItem>[
       _NavItem(Icons.picture_as_pdf_rounded, 'Planning de Garde Officiel', AppColors.urg24h,
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => OfficialPlanningScreen()))),
+      _NavItem(Icons.medical_services_rounded, 'Programme du bloc', AppColors.brand,
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => OperatingRoomProgramScreen()))),
       _NavItem(Icons.badge_rounded, 'Annuaire', AppColors.catService,
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => DirectoryScreen()))),
       _NavItem(Icons.medical_services_rounded, 'Séniors d’astreinte', AppColors.conge,
