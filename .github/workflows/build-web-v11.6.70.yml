@@ -1,0 +1,111 @@
+name: Build & Deploy GardeFlow Web v11.6.70
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-web-v11.6.70.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: gardeflow-web-pages
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      PROJECT_DIR: source
+      APP_VERSION: 11.6.70
+      BUILD_NUMBER: "230"
+
+    steps:
+      - name: Checkout exact GardeFlow v11.6.70
+        uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+
+      - name: Verify exact source version
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^version: 11.6.70+230$' pubspec.yaml
+          test -f lib/main.dart
+          echo "Building GardeFlow Web 11.6.70+230"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Web platform
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter --version
+          flutter config --enable-web
+          if [ ! -f web/index.html ]; then
+            flutter create --no-pub --platforms=web --project-name huim6_planning .
+          fi
+
+      - name: Install dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Build Flutter Web release
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \
+            --base-href "/GardeFlow/" \
+            --build-name "$APP_VERSION" \
+            --build-number "$BUILD_NUMBER"
+          test -f build/web/index.html
+          test -f build/web/main.dart.js
+          touch build/web/.nojekyll
+          echo "Web build produced:"
+          du -sh build/web
+          find build/web -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Upload Web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.70-web
+          path: source/build/web
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: source/build/web
+
+  deploy-pages:
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
