@@ -83,6 +83,7 @@ Widget host(AppState state, Widget child, {String theme = 'green', double scale 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{});
     await initializeDateFormatting('fr_FR');
     await Supabase.initialize(
       url: BackendConfig.supabaseUrl,
