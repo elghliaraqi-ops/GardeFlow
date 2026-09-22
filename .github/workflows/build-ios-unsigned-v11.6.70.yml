@@ -1,0 +1,103 @@
+name: Build iOS Unsigned v11.6.70
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-ios-unsigned-v11.6.70.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios-unsigned:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    env:
+      PROJECT_DIR: source
+      BUNDLE_ID: com.huim6.gardeflow
+      APP_VERSION: 11.6.70
+      BUILD_NUMBER: "230"
+
+    steps:
+      - name: Checkout GardeFlow v11.6.70
+        uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+
+      - name: Verify exact version
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^version: 11.6.70+230$' pubspec.yaml
+          echo "Building GardeFlow 11.6.70+230 unsigned"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Prepare iOS project
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter --version
+          if [ ! -f ios/Runner.xcodeproj/project.pbxproj ]; then
+            rm -rf ios
+            flutter create --no-pub --platforms=ios --org com.huim6 --project-name huim6_planning .
+          fi
+          dart tool/configure_ios.dart
+          grep -q 'com.huim6.gardeflow' ios/Runner.xcodeproj/project.pbxproj
+          flutter clean
+          flutter pub get
+          if [ -f ios/Podfile ]; then
+            (cd ios && pod install --repo-update)
+          fi
+
+      - name: Build unsigned Flutter iOS release
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign \
+            --build-name "$APP_VERSION" \
+            --build-number "$BUILD_NUMBER"
+          test -d build/ios/iphoneos/Runner.app
+
+      - name: Package unsigned iOS artifacts
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/ios/unsigned-output
+          mkdir -p build/ios/unsigned-output/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/unsigned-output/Payload/GardeFlow.app
+
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/ios/iphoneos/Runner.app/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/ios/iphoneos/Runner.app/Info.plist
+
+          ditto -c -k --keepParent             build/ios/iphoneos/Runner.app             build/ios/unsigned-output/GardeFlow-v11.6.70-unsigned.app.zip
+
+          (
+            cd build/ios/unsigned-output
+            zip -qry GardeFlow-v11.6.70-unsigned.ipa Payload
+          )
+
+          ls -lh build/ios/unsigned-output/GardeFlow-v11.6.70-unsigned.*
+
+      - name: Upload unsigned iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v11.6.70-ios-unsigned
+          path: |
+            source/build/ios/unsigned-output/GardeFlow-v11.6.70-unsigned.app.zip
+            source/build/ios/unsigned-output/GardeFlow-v11.6.70-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
