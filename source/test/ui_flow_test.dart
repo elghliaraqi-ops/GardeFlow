@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:huim6_planning/config/backend_config.dart';
 import 'package:huim6_planning/data/hospitals.dart';
 import 'package:huim6_planning/models/app_user.dart';
 import 'package:huim6_planning/models/exchange_request.dart';
@@ -80,7 +82,14 @@ Widget host(AppState state, Widget child, {String theme = 'green', double scale 
 }
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() => initializeDateFormatting('fr_FR'));
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await initializeDateFormatting('fr_FR');
+    await Supabase.initialize(
+      url: BackendConfig.supabaseUrl,
+      anonKey: BackendConfig.supabasePublishableKey,
+    );
+  });
   for (final scale in [1.0, 1.4, 2.0]) {
     testWidgets('entire month at 320 px / text $scale with discipline mark', (tester) async {
       tester.view.physicalSize = const Size(320, 1000); tester.view.devicePixelRatio = 1;
