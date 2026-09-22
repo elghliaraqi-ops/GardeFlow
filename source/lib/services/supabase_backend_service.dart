@@ -646,10 +646,13 @@ class SupabaseBackendService {
     required String fileName,
     required String mimeType,
     required String hospital,
+    required String service,
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
     if (!kHospitals.contains(hospital)) throw ArgumentError('Établissement invalide.');
+    final normalizedService = service.trim();
+    if (normalizedService.isEmpty) throw ArgumentError('Service invalide.');
     final hospitalSlot = hospital == kHospitalBouskoura
         ? 'hm6_bouskoura'
         : hospital == kHospitalRabat
@@ -666,6 +669,7 @@ class SupabaseBackendService {
       await client.from('shared_resources').insert({
         'kind': 'astreinte_photo',
         'hospital': hospital,
+        'service': normalizedService,
         'storage_path': path,
         'display_name': fileName,
         'mime_type': mimeType,
@@ -675,6 +679,22 @@ class SupabaseBackendService {
       await client.storage.from(sharedBucket).remove([path]);
       rethrow;
     }
+  }
+
+  Future<void> updateAstreintePhotoService({
+    required SharedResource resource,
+    required String service,
+  }) async {
+    final normalizedService = service.trim();
+    if (normalizedService.isEmpty) throw ArgumentError('Service invalide.');
+    await client
+        .from('shared_resources')
+        .update({
+          'service': normalizedService,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', resource.id)
+        .eq('kind', 'astreinte_photo');
   }
 
   Future<SharedResource> uploadOfficialPlanningPdf({
