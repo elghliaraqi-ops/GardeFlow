@@ -649,6 +649,53 @@ class SupabaseBackendService {
   Future<List<SharedResource>> fetchOfficialPlanningPdfs() =>
       fetchSharedResources(kind: 'official_pdf');
 
+  Future<List<SharedResource>> fetchPendingAstreintePhotos() async {
+    final rows = await client
+        .from('shared_resources')
+        .select()
+        .eq('kind', 'astreinte_photo')
+        .eq('analysis_status', 'pending')
+        .order('created_at');
+    return (rows as List)
+        .map((e) => SharedResource.fromJson(Map<String, dynamic>.from(e)))
+        .toList(growable: false);
+  }
+
+  Future<void> markAstreintePhotoAnalysis({
+    required String resourceId,
+    required String status,
+    String? message,
+  }) async {
+    await client
+        .from('shared_resources')
+        .update({
+          'analysis_status': status,
+          'analysis_message': message,
+        })
+        .eq('id', resourceId)
+        .eq('kind', 'astreinte_photo');
+  }
+
+  Future<int> replaceSeniorOnCallPhotoAnalysis({
+    required SharedResource resource,
+    required List<Map<String, dynamic>> assignments,
+    String? inferredService,
+    required String status,
+    String? message,
+  }) async {
+    final result = await client.rpc(
+      'replace_senior_oncall_photo_analysis',
+      params: {
+        'p_resource_id': resource.id,
+        'p_assignments': assignments,
+        'p_inferred_service': inferredService,
+        'p_status': status,
+        'p_message': message,
+      },
+    );
+    return (result as num?)?.toInt() ?? 0;
+  }
+
   Future<Uint8List> downloadSharedResource(String storagePath) async {
     return client.storage.from(sharedBucket).download(storagePath);
   }
@@ -657,7 +704,7 @@ class SupabaseBackendService {
     return client.storage.from(sharedBucket).createSignedUrl(storagePath, expiresIn);
   }
 
-  Future<void> uploadAstreintePhoto({
+  Future<SharedResource> uploadAstreintePhoto({
     required Uint8List bytes,
     required String fileName,
     required String mimeType,
@@ -682,15 +729,21 @@ class SupabaseBackendService {
       fileOptions: FileOptions(contentType: mimeType, upsert: false),
     );
     try {
-      await client.from('shared_resources').insert({
-        'kind': 'astreinte_photo',
-        'hospital': hospital,
-        'service': normalizedService,
-        'storage_path': path,
-        'display_name': fileName,
-        'mime_type': mimeType,
-        'uploaded_by': uid,
-      });
+      final row = await client
+          .from('shared_resources')
+          .insert({
+            'kind': 'astreinte_photo',
+            'hospital': hospital,
+            'service': normalizedService,
+            'storage_path': path,
+            'display_name': fileName,
+            'mime_type': mimeType,
+            'uploaded_by': uid,
+            'analysis_status': 'pending',
+          })
+          .select()
+          .single();
+      return SharedResource.fromJson(Map<String, dynamic>.from(row));
     } catch (_) {
       await client.storage.from(sharedBucket).remove([path]);
       rethrow;
