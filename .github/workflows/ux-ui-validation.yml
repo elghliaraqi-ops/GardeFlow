@@ -50,7 +50,7 @@ jobs:
       - name: Analyze
         run: flutter analyze lib tool test --no-fatal-infos --no-fatal-warnings > analysis.log 2>&1
       - name: Widget and regression tests
-        run: flutter test --reporter expanded --timeout 60s --dart-define=SUPABASE_URL= --dart-define=SUPABASE_PUBLISHABLE_KEY=
+        run: timeout 180s flutter test --reporter expanded --timeout 60s --dart-define=SUPABASE_URL= --dart-define=SUPABASE_PUBLISHABLE_KEY=
       - name: Push recipient regression tests
         run: node --test test/push_payload_test.mjs test/push_recipient_test.mjs
       - name: Compile release APK
