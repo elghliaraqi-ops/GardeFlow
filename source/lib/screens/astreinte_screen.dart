@@ -11,6 +11,7 @@ import '../data/hospitals.dart';
 import '../data/services.dart';
 import '../models/app_user.dart';
 import '../models/shared_resource.dart';
+import '../services/senior_photo_analysis_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -36,6 +37,10 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   String _serviceQuery = '';
   bool _loading = true;
   bool _uploading = false;
+  bool _analysisRunning = false;
+  bool _analysisBootstrapDone = false;
+  int _analysisDone = 0;
+  int _analysisTotal = 0;
   bool _hospitalInitialized = false;
   String? _selectedHospital;
   String? _error;
@@ -136,6 +141,14 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         _loading = false;
         _error = null;
       });
+      if (!_analysisBootstrapDone &&
+          context.read<AppState>().currentUser?.role == UserRole.admin &&
+          SeniorPhotoAnalysisService.instance.supported) {
+        _analysisBootstrapDone = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _startPendingAnalysis();
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -245,6 +258,12 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
 
       _imageCache.clear();
       await _load();
+      if (mounted &&
+          uploaded > 0 &&
+          context.read<AppState>().currentUser?.role == UserRole.admin &&
+          SeniorPhotoAnalysisService.instance.supported) {
+        await _startPendingAnalysis();
+      }
       if (mounted) {
         final target = hospitalDisplayName(hospital);
         final message = failed == 0
@@ -445,6 +464,11 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
             setState(() => _serviceQuery = '');
           },
         ),
+        if (_analysisRunning)
+          _SeniorAnalysisProgress(
+            done: _analysisDone,
+            total: _analysisTotal,
+          ),
         Expanded(child: content),
       ],
     );
@@ -562,6 +586,60 @@ class _HospitalAstreinteHeader extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SeniorAnalysisProgress extends StatelessWidget {
+  final int done;
+  final int total;
+
+  const _SeniorAnalysisProgress({
+    required this.done,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = total <= 0
+        ? 'Recherche des anciennes photos à analyser…'
+        : 'Lecture automatique des photos : $done / $total';
+    final progress = total <= 0 ? null : done / total;
+    return Container(
+      color: AppColors.card,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        0,
+        AppSpace.lg,
+        AppSpace.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.document_scanner_outlined,
+                size: 16,
+                color: AppColors.brand,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.inkSoft,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(value: progress, minHeight: 3),
         ],
       ),
     );
