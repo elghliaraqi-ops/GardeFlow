@@ -633,6 +633,23 @@ class SupabaseBackendService {
   Future<List<SharedResource>> fetchOfficialPlanningPdfs() =>
       fetchSharedResources(kind: 'official_pdf');
 
+  Future<List<SharedResource>> fetchBlocPrograms({String? hospital}) async {
+    var query = client
+        .from('shared_resources')
+        .select()
+        .eq('kind', 'bloc_program');
+    if (hospital != null) {
+      if (!kHospitals.contains(hospital)) {
+        throw ArgumentError('Établissement invalide.');
+      }
+      query = query.eq('hospital', hospital);
+    }
+    final rows = await query.order('created_at', ascending: false);
+    return (rows as List)
+        .map((e) => SharedResource.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
   Future<Uint8List> downloadSharedResource(String storagePath) async {
     return client.storage.from(sharedBucket).download(storagePath);
   }
@@ -706,6 +723,59 @@ class SupabaseBackendService {
         .eq('slot', slot)
         .single();
     return SharedResource.fromJson(Map<String, dynamic>.from(row));
+  }
+
+  Future<SharedResource> uploadBlocProgram({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+    required String hospital,
+  }) async {
+    final uid = client.auth.currentUser?.id;
+    if (uid == null) throw StateError('Session Supabase absente.');
+    if (!kHospitals.contains(hospital)) {
+      throw ArgumentError('Établissement invalide.');
+    }
+
+    final hospitalSlot = hospital == kHospitalBouskoura
+        ? 'hm6_bouskoura'
+        : hospital == kHospitalRabat
+            ? 'hm6_rabat'
+            : 'hck_casa';
+    final ext = _safeExtension(
+      fileName,
+      fallback: _extensionForMime(mimeType, fallback: 'bin'),
+    );
+    final stamp = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final slot = 'bloc_${hospitalSlot}_$stamp';
+    final path = 'bloc-programs/$hospitalSlot/${stamp}_$uid.$ext';
+
+    await client.storage.from(sharedBucket).uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(contentType: mimeType, upsert: false),
+    );
+
+    try {
+      final row = await client
+          .from('shared_resources')
+          .insert({
+            'kind': 'bloc_program',
+            'slot': slot,
+            'hospital': hospital,
+            'storage_path': path,
+            'display_name': fileName,
+            'mime_type': mimeType,
+            'uploaded_by': uid,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .select()
+          .single();
+      return SharedResource.fromJson(Map<String, dynamic>.from(row));
+    } catch (_) {
+      await client.storage.from(sharedBucket).remove([path]);
+      rethrow;
+    }
   }
 
   Future<bool> officialRosterImportIsCurrent(SharedResource resource) async {
