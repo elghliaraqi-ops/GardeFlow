@@ -34,11 +34,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(MaterialApp(theme: AppTheme.forAppearance(name), home: MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-        child: const Scaffold(body: Padding(padding: EdgeInsets.all(16), child: Column(children: [
+        child: const Scaffold(body: ListView(padding: EdgeInsets.all(16), children: [
           StatusBadge(status: PlanningMonthStatus.draft, reopened: true),
           DoctorTile(name: 'Dr ARAQI HOUSSAINI Elghali', subtitle: 'Imagerie Médicale · HUIM6 Bouskoura'),
           PrimaryButton(label: 'Envoyer la demande de transfert', onPressed: null),
-        ]))),
+        ])),
       )));
       expect(find.text('Rouvert'), findsOneWidget);
       expect(tester.takeException(), isNull);
