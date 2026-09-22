@@ -25,6 +25,9 @@ create table if not exists public.senior_oncall_imports (
 create index if not exists senior_oncall_imports_hospital_status_idx
   on public.senior_oncall_imports(hospital, status, updated_at desc);
 
+create index if not exists senior_oncall_imports_created_by_idx
+  on public.senior_oncall_imports(created_by);
+
 alter table public.senior_oncall_imports enable row level security;
 
 drop policy if exists senior_oncall_imports_admin_read on public.senior_oncall_imports;
