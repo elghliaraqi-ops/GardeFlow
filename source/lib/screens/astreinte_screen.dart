@@ -14,6 +14,7 @@ import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import 'senior_roster_review_screen.dart';
 
 class AstreinteScreen extends StatefulWidget {
   final bool embedded;
@@ -205,6 +206,24 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     return bytes;
   }
 
+  Future<void> _analyze(SharedResource resource) async {
+    final published = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SeniorRosterReviewScreen(resource: resource),
+      ),
+    );
+    if (published == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Astreintes Séniors mises à jour. Le calendrier peut être actualisé.',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _delete(SharedResource resource) async {
     final hospital = _activeHospital();
     final confirm = await showDialog<bool>(
@@ -303,7 +322,9 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                   resource: photo,
                   imageFuture: _bytesFor(photo),
                   canDelete: isAdmin,
+                  canAnalyze: isAdmin,
                   onTap: () => _openPhoto(photo),
+                  onAnalyze: () => _analyze(photo),
                   onDelete: () => _delete(photo),
                 );
               },
@@ -663,14 +684,18 @@ class _AstreintePhotoCard extends StatelessWidget {
   final SharedResource resource;
   final Future<Uint8List> imageFuture;
   final bool canDelete;
+  final bool canAnalyze;
   final VoidCallback onTap;
+  final VoidCallback onAnalyze;
   final VoidCallback onDelete;
 
   const _AstreintePhotoCard({
     required this.resource,
     required this.imageFuture,
     required this.canDelete,
+    required this.canAnalyze,
     required this.onTap,
+    required this.onAnalyze,
     required this.onDelete,
   });
 
@@ -717,6 +742,17 @@ class _AstreintePhotoCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (canAnalyze)
+              Positioned(
+                top: 7,
+                left: 7,
+                child: IconButton.filled(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Analyser et intégrer',
+                  onPressed: onAnalyze,
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                ),
+              ),
             if (canDelete)
               Positioned(
                 top: 7,
