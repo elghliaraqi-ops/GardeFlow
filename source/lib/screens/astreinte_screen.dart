@@ -431,44 +431,6 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
 
     final body = Column(
       children: [
-        if (widget.embedded)
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 12, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Photos d’astreinte par service',
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Actualiser',
-                  onPressed: _loading ? null : _load,
-                  icon: Icon(Icons.refresh_rounded),
-                  color: AppColors.brand,
-                ),
-                if (isAdmin)
-                  IconButton(
-                    tooltip:
-                        'Ajouter des photos par service pour ${hospitalDisplayName(hospital)}',
-                    onPressed: _uploading ? null : _pickImage,
-                    icon: _uploading
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(Icons.add_photo_alternate_rounded),
-                    color: AppColors.brand,
-                  ),
-              ],
-            ),
-          ),
         _HospitalAstreinteHeader(
           hospital: hospital,
           isAdmin: isAdmin,
