@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/hospitals.dart';
+import '../models/app_user.dart';
 import '../services/senior_photo_analysis_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
