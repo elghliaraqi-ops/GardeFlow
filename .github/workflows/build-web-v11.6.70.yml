@@ -1,5 +1,5 @@
 name: Build & Deploy GardeFlow Web v11.6.70
-# redeploy: manual-senior-calendar-20260922
+# redeploy: colored-senior-services-20260922
 
 on:
   workflow_dispatch:
