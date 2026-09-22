@@ -304,7 +304,7 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
             ),
             const SizedBox(height: AppSpace.md),
             Text(
-              'Aucune astreinte sénior validée $day\nà ${hospitalDisplayName(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
+              'Aucune astreinte sénior $day\nà ${hospitalDisplayName(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.inkSoft,
