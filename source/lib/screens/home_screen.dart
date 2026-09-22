@@ -22,6 +22,7 @@ import 'notifications_screen.dart';
 import 'official_planning_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
+import 'senior_oncall_screen.dart';
 import 'daily_news_section.dart';
 
 /// Coque principale V11.6.18.
@@ -304,12 +305,129 @@ class _AstreintesHubViewState extends State<_AstreintesHubView> {
             child: IndexedStack(
               index: _showSenior ? 0 : 1,
               children: const [
-                AstreinteScreen(embedded: true),
+                _SeniorAstreinteHubView(),
                 JuniorOnCallScreen(embedded: true),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SeniorAstreinteHubView extends StatefulWidget {
+  const _SeniorAstreinteHubView();
+
+  @override
+  State<_SeniorAstreinteHubView> createState() => _SeniorAstreinteHubViewState();
+}
+
+class _SeniorAstreinteHubViewState extends State<_SeniorAstreinteHubView> {
+  bool _showDocuments = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: AppColors.paperAlt,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _SeniorModeButton(
+                    label: 'Calendrier',
+                    icon: Icons.calendar_month_rounded,
+                    selected: !_showDocuments,
+                    onTap: () => setState(() => _showDocuments = false),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: _SeniorModeButton(
+                    label: 'Photos / listes',
+                    icon: Icons.photo_library_rounded,
+                    selected: _showDocuments,
+                    onTap: () => setState(() => _showDocuments = true),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: IndexedStack(
+            index: _showDocuments ? 1 : 0,
+            children: const [
+              SeniorOnCallScreen(embedded: true),
+              AstreinteScreen(embedded: true),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SeniorModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SeniorModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(11),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.brandSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: selected ? AppColors.brand : AppColors.inkSoft,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? AppColors.brandDark : AppColors.inkSoft,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -348,7 +466,7 @@ class _AstreinteModeSwitch extends StatelessWidget {
           Expanded(
             child: _AstreinteModeButton(
               label: 'Séniors',
-              icon: Icons.photo_library_rounded,
+              icon: Icons.medical_services_rounded,
               selected: showSenior,
               onTap: () => onChanged(true),
             ),
@@ -2014,7 +2132,7 @@ class _NavRailState extends State<_NavRail> {
       _NavItem(Icons.badge_rounded, 'Annuaire', AppColors.catService,
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => DirectoryScreen()))),
       _NavItem(Icons.medical_services_rounded, 'Séniors d’astreinte', AppColors.conge,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => AstreinteScreen()))),
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => SeniorOnCallScreen()))),
       _NavItem(Icons.groups_2_rounded, 'Juniors d’astreinte', AppColors.service24h,
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => JuniorOnCallScreen()))),
       _NavItem(Icons.tune_rounded, 'Réglages', AppColors.inkSoft,
