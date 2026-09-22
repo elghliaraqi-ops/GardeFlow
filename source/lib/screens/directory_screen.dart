@@ -111,7 +111,6 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     ];
 
     final content = NestedScrollView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       headerSliverBuilder: (context, scrolled) => [SliverToBoxAdapter(child: Column(
       children: [
 
