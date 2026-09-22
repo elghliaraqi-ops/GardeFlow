@@ -377,6 +377,22 @@ class SupabaseBackendService {
         .toList();
   }
 
+  /// Vue réseau des astreintes Séniors validées.
+  Future<List<Map<String, dynamic>>> fetchSeniorOnCallRoster({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    String date(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final rows = await client.rpc('senior_oncall_roster', params: {
+      'p_from': date(from),
+      'p_to': date(to),
+    });
+    return (rows as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   Future<List<PlanningMonth>> fetchPlanningMonths() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
