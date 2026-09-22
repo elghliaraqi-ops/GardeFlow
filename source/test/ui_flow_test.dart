@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:alarm/src/generated/platform_bindings.g.dart' as alarm_pigeon;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -85,7 +84,6 @@ Widget host(AppState state, Widget child, {String theme = 'green', double scale 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
     AndroidFlutterLocalNotificationsPlugin.registerWith();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -127,7 +125,6 @@ void main() {
       ),
       null,
     );
-    debugDefaultTargetPlatformOverride = null;
   });
   for (final scale in [1.0, 1.4, 2.0]) {
     testWidgets('entire month at 320 px / text $scale with discipline mark', (tester) async {
