@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:alarm/src/generated/platform_bindings.g.dart' as alarm_pigeon;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -102,12 +103,28 @@ void main() {
         }
       },
     );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockDecodedMessageHandler<Object?>(
+      BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.alarm.AlarmApi.getPendingAlarmEvents',
+        alarm_pigeon.AlarmApi.pigeonChannelCodec,
+      ),
+      (message) async => <Object?>[<alarm_pigeon.AlarmEventWire>[]],
+    );
     return initializeDateFormatting('fr_FR');
   });
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('dexterous.com/flutter/local_notifications'),
+      null,
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockDecodedMessageHandler<Object?>(
+      BasicMessageChannel<Object?>(
+        'dev.flutter.pigeon.alarm.AlarmApi.getPendingAlarmEvents',
+        alarm_pigeon.AlarmApi.pigeonChannelCodec,
+      ),
       null,
     );
     debugDefaultTargetPlatformOverride = null;
