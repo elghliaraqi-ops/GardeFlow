@@ -174,32 +174,6 @@ async function analyzeWithTesseract(bytes: Uint8Array) {
   }
 }
 
-async function structureOcrWithSupabaseAi(ocrText: string) {
-  if (!ocrText.trim()) return null;
-  try {
-    const session = new Supabase.ai.Session('mistral');
-    const prompt = systemPrompt + `
-Tu ne vois pas l'image directement. Voici le texte OCR brut de la feuille.
-Reconstruis le tableau prudemment. Réponds UNIQUEMENT en JSON avec:
-{"service":"","month":null,"year":null,"confidence":0.0,"warnings":[],"rows":[{"name":"","service":"","phone":"","dates":["YYYY-MM-DD"],"confidence":0.0}]}
-Si les colonnes ne peuvent pas être distinguées avec certitude, laisse rows vide et explique dans warnings.
-
-OCR:
-${ocrText.slice(0, 24000)}
-`;
-    const output: any = await session.run(prompt);
-    const raw = typeof output === 'string'
-      ? output
-      : typeof output?.response === 'string'
-        ? output.response
-        : JSON.stringify(output);
-    return parseJsonLoose(raw);
-  } catch (error) {
-    console.error('Supabase AI structuring failed', error);
-    return null;
-  }
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
@@ -278,24 +252,29 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!extracted) {
-      engine = 'tesseract_supabase_ai';
+      engine = 'ocr_manual_review';
       try {
         rawText = await analyzeWithTesseract(bytes);
-        extracted = await structureOcrWithSupabaseAi(rawText);
+        if (rawText.trim()) {
+          warnings.push(
+            'Le texte OCR a été récupéré, mais aucune interprétation automatique non fiable n’est publiée. Vérification manuelle requise.',
+          );
+        } else {
+          warnings.push('Aucun texte exploitable n’a été reconnu automatiquement.');
+        }
       } catch (error) {
         console.error('OCR path failed', error);
         warnings.push('OCR automatique indisponible sur ce document.');
       }
-    }
 
-    if (!extracted) {
-      engine = 'manual_review_required';
       extracted = {
         service: '',
         month: null,
         year: null,
         confidence: 0,
-        warnings: ['Analyse automatique incomplète: saisie/correction manuelle requise.'],
+        warnings: [
+          'La vision structurée nécessite la clé serveur OPENAI_API_KEY. Aucun résultat OCR n’est publié automatiquement.',
+        ],
         rows: [],
       };
     }
