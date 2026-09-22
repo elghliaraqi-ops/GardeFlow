@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/hospitals.dart';
+import '../services/senior_photo_analysis_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -29,6 +30,7 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   late int _selectedDayIndex;
   bool _loading = true;
   bool _hospitalInitialized = false;
+  bool _analysisKickoffDone = false;
   String? _error;
   String? _selectedHospital;
   String _selectedService = _allServices;
@@ -91,6 +93,14 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
         _rows = rows;
         _normalizeServiceFilter();
       });
+      if (!_analysisKickoffDone &&
+          context.read<AppState>().currentUser?.role == UserRole.admin &&
+          SeniorPhotoAnalysisService.instance.supported) {
+        _analysisKickoffDone = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _backfillExistingSeniorPhotos();
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -99,6 +109,25 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
       });
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _backfillExistingSeniorPhotos() async {
+    try {
+      final summary =
+          await SeniorPhotoAnalysisService.instance.processPendingPhotos();
+      if (!mounted || summary.total == 0) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Anciennes listes analysées : ${summary.assignments} astreinte(s) extraite(s).',
+          ),
+        ),
+      );
+    } catch (_) {
+      // L'écran reste utilisable même si une photo ancienne ne peut pas être lue.
     }
   }
 
