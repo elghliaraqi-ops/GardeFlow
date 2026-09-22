@@ -15,6 +15,7 @@ dependencies:
   provider: ^6.1.2
   intl: ^0.20.3
   image_picker: ^1.1.2
+  google_mlkit_text_recognition: ^0.16.0
   file_picker: 10.3.8
   url_launcher: ^6.3.0
   pdfrx: 2.4.8
