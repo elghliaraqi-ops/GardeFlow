@@ -85,11 +85,38 @@ void main() {
     testWidgets('entire month at 320 px / text $scale with discipline mark', (tester) async {
       tester.view.physicalSize = const Size(320, 1000); tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
-      final state = await fixture(disciplinary: true);
-      final entry = state.planning.first, date = DateTime.parse(state.planning.first.dateStr);
+      final now = DateTime.now();
+      final date = DateTime(now.year, now.month + 1, 15);
+      final entry = PlanningEntry(
+        id: 'ui-layout-shift',
+        dateStr: AppState.dateKey(date),
+        shiftId: 'urg-nuit',
+        ownerId: 'ui-doctor',
+        ownerPhone: '+212600000001',
+        ownerName: 'Dr Exemple Amine',
+        isDisciplinary: true,
+      );
       DateTime? selected;
-      await tester.pumpWidget(host(state, Scaffold(body: SingleChildScrollView(child: PlanningCalendar(
-        month: date, entries: {entry.dateStr: entry}, onDayTap: (d) => selected = d))), scale: scale));
+      AppColors.setAppearanceTheme('green');
+      await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.forAppearance('green'),
+        locale: const Locale('fr', 'FR'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('fr', 'FR')],
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        home: Scaffold(body: SingleChildScrollView(child: PlanningCalendar(
+          month: date,
+          entries: {entry.dateStr: entry},
+          onDayTap: (d) => selected = d,
+        ))),
+      ));
       await tester.pump();
       expect(find.text('15'), findsOneWidget);
       await tester.tap(find.byKey(ValueKey('calendar-day-${entry.dateStr}')));
