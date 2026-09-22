@@ -359,51 +359,74 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     } else if (_photos.isEmpty && !isAdmin) {
       content = _EmptyHospitalGallery(hospital: hospital);
     } else {
-      content = RefreshIndicator(
-        onRefresh: _load,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 900
-                ? 4
-                : constraints.maxWidth >= 600
-                    ? 3
-                    : 2;
-            return GridView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                AppSpace.lg,
-                AppSpace.md,
-                AppSpace.lg,
-                widget.embedded ? 28 : 100,
-              ),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                mainAxisSpacing: AppSpace.md,
-                crossAxisSpacing: AppSpace.md,
-                childAspectRatio: 0.78,
-              ),
-              itemCount: _photos.length + (isAdmin ? 1 : 0),
-              itemBuilder: (context, i) {
-                if (isAdmin && i == 0) {
-                  return _AdminAddTile(
-                    uploading: _uploading,
-                    hospital: hospital,
-                    onTap: _pickImage,
-                  );
-                }
-                final photo = _photos[i - (isAdmin ? 1 : 0)];
-                return _AstreintePhotoCard(
-                  resource: photo,
-                  imageFuture: _bytesFor(photo),
-                  canDelete: isAdmin,
-                  onTap: () => _openPhoto(photo),
-                  onDelete: () => _delete(photo),
-                );
-              },
-            );
-          },
-        ),
-      );
+      final visiblePhotos = _visiblePhotos();
+      final groups = _groupedPhotos(visiblePhotos);
+      if (visiblePhotos.isEmpty && _serviceQuery.trim().isNotEmpty) {
+        content = _EmptyServiceSearch(query: _serviceQuery);
+      } else {
+        content = RefreshIndicator(
+          onRefresh: _load,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 900
+                  ? 4
+                  : constraints.maxWidth >= 600
+                      ? 3
+                      : 2;
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  AppSpace.md,
+                  AppSpace.lg,
+                  widget.embedded ? 28 : 100,
+                ),
+                children: [
+                  if (isAdmin) ...[
+                    _AdminAddTile(
+                      uploading: _uploading,
+                      hospital: hospital,
+                      onTap: _pickImage,
+                    ),
+                    SizedBox(height: AppSpace.lg),
+                  ],
+                  for (final entry in groups.entries) ...[
+                    _ServiceSectionHeader(
+                      service: entry.key,
+                      photoCount: entry.value.length,
+                    ),
+                    SizedBox(height: AppSpace.sm),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        mainAxisSpacing: AppSpace.md,
+                        crossAxisSpacing: AppSpace.md,
+                        childAspectRatio: 0.78,
+                      ),
+                      itemCount: entry.value.length,
+                      itemBuilder: (context, i) {
+                        final photo = entry.value[i];
+                        return _AstreintePhotoCard(
+                          resource: photo,
+                          service: entry.key,
+                          imageFuture: _bytesFor(photo),
+                          canManage: isAdmin,
+                          onTap: () => _openPhoto(photo),
+                          onEditService: () => _editService(photo),
+                          onDelete: () => _delete(photo),
+                        );
+                      },
+                    ),
+                    SizedBox(height: AppSpace.lg),
+                  ],
+                ],
+              );
+            },
+          ),
+        );
+      }
     }
 
     final body = Column(
@@ -415,7 +438,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Photos par établissement',
+                    'Photos d’astreinte par service',
                     style: TextStyle(
                       color: AppColors.ink,
                       fontSize: 13,
@@ -432,7 +455,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                 if (isAdmin)
                   IconButton(
                     tooltip:
-                        'Ajouter une photo pour ${hospitalDisplayName(hospital)}',
+                        'Ajouter des photos par service pour ${hospitalDisplayName(hospital)}',
                     onPressed: _uploading ? null : _pickImage,
                     icon: _uploading
                         ? SizedBox(
@@ -450,6 +473,15 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           hospital: hospital,
           isAdmin: isAdmin,
           onSelectHospital: _selectHospital,
+        ),
+        _AstreinteServiceSearchBar(
+          controller: _serviceSearchController,
+          query: _serviceQuery,
+          onChanged: (value) => setState(() => _serviceQuery = value),
+          onClear: () {
+            _serviceSearchController.clear();
+            setState(() => _serviceQuery = '');
+          },
         ),
         Expanded(child: content),
       ],
@@ -475,7 +507,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           if (isAdmin)
             IconButton(
               tooltip:
-                  'Ajouter une photo pour ${hospitalDisplayName(hospital)}',
+                  'Ajouter des photos par service pour ${hospitalDisplayName(hospital)}',
               onPressed: _uploading ? null : _pickImage,
               icon: _uploading
                   ? SizedBox(
@@ -499,8 +531,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           ),
           child: Text(
             isAdmin
-                ? 'Vous gérez actuellement les photos de ${hospitalDisplayName(hospital)}. Changez d’établissement en haut pour publier dans une autre galerie.'
-                : 'Tous les médecins peuvent consulter les photos des trois hôpitaux. Sélectionnez l’établissement en haut.',
+                ? 'Les photos de ${hospitalDisplayName(hospital)} sont classées par service. Utilisez le crayon sur une photo pour changer son service.'
+                : 'Les photos d’astreinte senior sont classées par service. Utilisez la recherche pour retrouver rapidement un service.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.inkSoft,
                   height: 1.4,
