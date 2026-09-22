@@ -278,6 +278,66 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     }
   }
 
+  Future<void> _startPendingAnalysis() async {
+    if (_analysisRunning || !mounted) return;
+    final user = context.read<AppState>().currentUser;
+    if (user?.role != UserRole.admin ||
+        !SeniorPhotoAnalysisService.instance.supported) {
+      return;
+    }
+
+    setState(() {
+      _analysisRunning = true;
+      _analysisDone = 0;
+      _analysisTotal = 0;
+    });
+
+    try {
+      final summary =
+          await SeniorPhotoAnalysisService.instance.processPendingPhotos(
+        onProgress: (done, total) {
+          if (!mounted) return;
+          setState(() {
+            _analysisDone = done;
+            _analysisTotal = total;
+          });
+        },
+      );
+
+      if (!mounted) return;
+      _imageCache.clear();
+      await _load();
+
+      if (!mounted || summary.total == 0) return;
+      final details = <String>[
+        '${summary.assignments} astreinte(s) extraite(s)',
+        if (summary.partial > 0) '${summary.partial} à vérifier',
+        if (summary.failed > 0) '${summary.failed} échec(s)',
+      ];
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Analyse automatique terminée : ${details.join(' · ')}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Analyse automatique impossible : $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _analysisRunning = false;
+          _analysisDone = 0;
+          _analysisTotal = 0;
+        });
+      }
+    }
+  }
+
   Future<Uint8List> _bytesFor(SharedResource resource) async {
     final cached = _imageCache[resource.id];
     if (cached != null) return cached;
