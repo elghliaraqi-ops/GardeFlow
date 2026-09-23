@@ -1,0 +1,2 @@
+Trigger Android release rebuild after final UI fixes.
+Source UI commit: a3695fc552a74d9cbe71e42ac57d962d78be42a2
