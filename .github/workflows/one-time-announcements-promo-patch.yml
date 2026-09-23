@@ -1,0 +1,198 @@
+name: One-time announcements and promotion integration
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - '.github/workflows/one-time-announcements-promo-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - name: Apply safe source patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Fix the exchange sheet syntax and keep promotion filtering active.
+          p = Path('source/lib/screens/exchange_request_sheet.dart')
+          s = p.read_text()
+          broken = "setState(() => _error = err;\n                          );"
+          if broken in s:
+              s = s.replace(broken, "setState(() => _error = err);")
+          p.write_text(s)
+
+          # Keep the exact OAuth grant type from the proven push implementation.
+          p = Path('supabase/functions/send-push/index.ts')
+          s = p.read_text()
+          s = s.replace(
+              "grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'ietf:params:oauth:grant-type'),",
+              "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',",
+          )
+          p.write_text(s)
+
+          # Integrate promotion identity + public announcement feed above calendar.
+          p = Path('source/lib/screens/home_screen.dart')
+          s = p.read_text()
+          if "import '../data/intern_promotions.dart';" not in s:
+              s = s.replace(
+                  "import '../models/app_user.dart';",
+                  "import '../data/intern_promotions.dart';\nimport '../models/app_user.dart';",
+                  1,
+              )
+          if "import 'announcements_screen.dart';" not in s:
+              s = s.replace(
+                  "import 'admin_screen.dart';",
+                  "import 'admin_screen.dart';\nimport 'announcements_screen.dart';",
+                  1,
+              )
+
+          build_marker = "  Widget build(BuildContext context) {\n    final now = DateTime.now();\n    final visibleMonth = appState.visibleMonth;"
+          replacement_marker = "  Widget build(BuildContext context) {\n    final promotionLabel = InternPromotions.labelFor(appState.currentUser);\n    final now = DateTime.now();\n    final visibleMonth = appState.visibleMonth;"
+          if build_marker in s:
+              s = s.replace(build_marker, replacement_marker, 1)
+
+          class_pos = s.index('class _PlanningView extends StatelessWidget')
+          start = s.index("        Padding(\n          padding: EdgeInsets.fromLTRB(12, 8, 12, 2),", class_pos)
+          end = s.index("        _MonthBar(appState: appState),", start)
+          new_header = '''        Padding(
+          padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 7,
+            children: [
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Ink(
+                    height: 40,
+                    padding: EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.line),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.navy.withOpacity(0.08),
+                          blurRadius: 14,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: AppColors.urg24h),
+                        SizedBox(width: 8),
+                        Text(
+                          'Planning officiel',
+                          style: TextStyle(color: AppColors.ink, fontSize: 12.5, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (promotionLabel != null)
+                Container(
+                  height: 40,
+                  padding: EdgeInsets.symmetric(horizontal: 13),
+                  decoration: BoxDecoration(
+                    color: AppColors.brandSoft,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.brand.withOpacity(0.18)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.school_rounded, size: 17, color: AppColors.brandDark),
+                      SizedBox(width: 7),
+                      Text(
+                        promotionLabel,
+                        style: TextStyle(color: AppColors.brandDark, fontSize: 11.5, fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Ink(
+                    height: 40,
+                    padding: EdgeInsets.symmetric(horizontal: 13),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.forum_rounded, size: 17, color: AppColors.brand),
+                        SizedBox(width: 7),
+                        Text(
+                          'Annonces',
+                          style: TextStyle(color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+'''
+          s = s[:start] + new_header + s[end:]
+          p.write_text(s)
+          PY
+
+          # Mirror the production-safe push function into the source tree.
+          cp supabase/functions/send-push/index.ts source/supabase/functions/send-push/index.ts
+
+          # Hard assertions: do not commit a partial patch.
+          grep -Fq "final promotionLabel = InternPromotions.labelFor(appState.currentUser);" source/lib/screens/home_screen.dart
+          grep -Fq "const AnnouncementsScreen()" source/lib/screens/home_screen.dart
+          grep -Fq "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer'" supabase/functions/send-push/index.ts
+          ! grep -Fq "setState(() => _error = err;" source/lib/screens/exchange_request_sheet.dart
+          grep -Fq "announcement_created" source/supabase/functions/send-push/index.ts
+          git diff --check
+
+      - name: Commit integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "GardeFlow CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add source/lib/screens/home_screen.dart source/lib/screens/exchange_request_sheet.dart supabase/functions/send-push/index.ts source/supabase/functions/send-push/index.ts
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git commit -m "feat: integrate announcement feed and promotion rules"
+          git push origin HEAD:audit-fixes-v11.6.70
