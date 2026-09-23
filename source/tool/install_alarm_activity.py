@@ -72,7 +72,7 @@ class AlarmActivity : Activity() {{
         val title = intent.getStringExtra("alarmTitle")?.trim()?.takeIf {{ it.isNotEmpty() }} ?: "GARDE"
         val body = intent.getStringExtra("alarmBody")?.trim().orEmpty()
         val snoozeAvailable = !intent.getStringExtra("alarmSnoozeLabel").isNullOrBlank()
-        val semantic = "$title $body".lowercase().replace("\n", " ").replace(Regex("\\s+"), " ")
+        val semantic = "$title $body".lowercase().replace("\\n", " ").replace(Regex("\\\\s+"), " ")
 
         val is24h = semantic.contains("24h") || semantic.contains("24 h") || Regex("0?8[:h]?00.*0?8[:h]?00").containsMatchIn(semantic)
         val isNight = !is24h && (semantic.contains("nuit") || Regex("20[:h]?00.*0?8[:h]?00").containsMatchIn(semantic))
