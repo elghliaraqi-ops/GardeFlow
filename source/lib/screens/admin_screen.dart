@@ -141,10 +141,6 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ),
             ),
-            _PromotionManagementCard(
-              currentPromotion: appState.currentFirstYearPromotion,
-              onAdd: () => _confirmAddPromotion(context, appState),
-            ),
             Padding(
               padding: EdgeInsets.fromLTRB(16, 6, 16, 10),
               child: LayoutBuilder(
@@ -313,6 +309,12 @@ class _AdminScreenState extends State<AdminScreen> {
               const _CalendarLegend(),
             ] else
               const _EmptyAdminView(),
+            const SizedBox(height: 18),
+            _PromotionManagementCard(
+              currentPromotion: appState.currentFirstYearPromotion,
+              onAdd: () => _confirmAddPromotion(context, appState),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -378,34 +380,99 @@ class _AdminScreenState extends State<AdminScreen> {
     if (_adminActionOpen) return;
     final current = appState.currentFirstYearPromotion;
     final next = current + 1;
-    final confirmed = await showDialog<bool>(
+    final passwordController = TextEditingController();
+    var obscurePassword = true;
+    String? passwordError;
+
+    final password = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Ajouter la Promo $next ?'),
-        content: Text(
-          'La Promo $next deviendra immédiatement la nouvelle 1re année. '
-          'La Promo $current passera en 2e année et pourra échanger/transférer '
-          'avec les promotions plus anciennes. Cette action ne modifie pas les '
-          'promotions déjà attribuées aux comptes existants.',
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Ajouter la Promo $next ?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'La Promo $next deviendra immédiatement la nouvelle 1re année. '
+                  'La Promo $current passera en 2e année et pourra échanger/transférer '
+                  'avec les promotions plus anciennes. Cette action ne modifie pas les '
+                  'promotions déjà attribuées aux comptes existants.',
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Confirmez votre mot de passe administrateur pour continuer.',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passwordController,
+                  autofocus: true,
+                  obscureText: obscurePassword,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    labelText: 'Mot de passe administrateur',
+                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                    errorText: passwordError,
+                    suffixIcon: IconButton(
+                      tooltip: obscurePassword
+                          ? 'Afficher le mot de passe'
+                          : 'Masquer le mot de passe',
+                      onPressed: () => setDialogState(
+                        () => obscurePassword = !obscurePassword,
+                      ),
+                      icon: Icon(
+                        obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (_) {
+                    final value = passwordController.text;
+                    if (value.isEmpty) {
+                      setDialogState(
+                        () => passwordError = 'Saisissez votre mot de passe.',
+                      );
+                      return;
+                    }
+                    Navigator.pop(dialogContext, value);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Annuler'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                final value = passwordController.text;
+                if (value.isEmpty) {
+                  setDialogState(
+                    () => passwordError = 'Saisissez votre mot de passe.',
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              icon: const Icon(Icons.verified_user_outlined, size: 18),
+              label: Text('Confirmer et ajouter Promo $next'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: Text('Ajouter Promo $next'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true || !context.mounted) return;
+    passwordController.dispose();
+    if (password == null || !context.mounted) return;
 
     _adminActionOpen = true;
     try {
-      final error = await appState.adminAddPromotion();
+      final error = await appState.adminAddPromotion(password: password);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

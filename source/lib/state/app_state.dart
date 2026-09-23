@@ -818,24 +818,34 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<String?> adminAddPromotion() async {
+  Future<String?> adminAddPromotion({required String password}) async {
     final me = currentUser;
     if (me == null || me.role != UserRole.admin) {
       return 'Cette action est réservée aux administrateurs.';
     }
+    if (password.isEmpty) {
+      return 'Saisissez votre mot de passe administrateur.';
+    }
+    if (!backendEnabled) {
+      return 'La confirmation du mot de passe nécessite une connexion au serveur.';
+    }
     try {
-      if (backendEnabled) {
-        _currentFirstYearPromotion = await SupabaseBackendService.instance
-            .adminAddInternshipPromotion();
-      } else {
-        _currentFirstYearPromotion = currentFirstYearPromotion + 1;
-      }
+      final backend = SupabaseBackendService.instance;
+      await backend.verifyCurrentPassword(
+        rawPhone: me.phone,
+        password: password,
+      );
+      _currentFirstYearPromotion = await backend.adminAddInternshipPromotion();
       await _persistNow();
       notifyListeners();
       return null;
     } catch (e) {
       final text = e.toString();
-      return text.startsWith('StateError: ') ? text.substring(12) : text;
+      return text.startsWith('Bad state: ')
+          ? text.substring('Bad state: '.length)
+          : text.startsWith('StateError: ')
+          ? text.substring('StateError: '.length)
+          : text;
     }
   }
 

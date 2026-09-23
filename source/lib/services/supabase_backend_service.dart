@@ -285,6 +285,40 @@ class SupabaseBackendService {
     return value != null && value > 0 ? value : 7;
   }
 
+  Future<void> verifyCurrentPassword({
+    required String rawPhone,
+    required String password,
+  }) async {
+    if (!enabled) {
+      throw StateError('La confirmation du mot de passe nécessite le serveur.');
+    }
+    final current = client.auth.currentUser;
+    if (current == null) {
+      throw StateError(
+        'Votre session administrateur a expiré. Reconnectez-vous.',
+      );
+    }
+    if (password.isEmpty) {
+      throw StateError('Saisissez votre mot de passe administrateur.');
+    }
+
+    try {
+      final result = await client.auth.signInWithPassword(
+        email: technicalEmail(rawPhone),
+        password: password,
+      );
+      final verified = result.user;
+      if (verified == null || verified.id != current.id) {
+        if (verified != null && verified.id != current.id) {
+          await client.auth.signOut();
+        }
+        throw StateError('La confirmation du compte administrateur a échoué.');
+      }
+    } on AuthException {
+      throw StateError('Mot de passe administrateur incorrect.');
+    }
+  }
+
   Future<int> adminAddInternshipPromotion() async {
     final result = await client.rpc('admin_add_internship_promotion');
     final value = result is num
