@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/hospitals.dart';
+import '../models/app_user.dart';
+import '../services/senior_contact_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -33,6 +35,7 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   String? _selectedHospital;
   String _selectedService = _allServices;
   List<_SeniorOnCallRow> _rows = const [];
+  final Set<String> _savingContacts = <String>{};
 
   @override
   void initState() {
@@ -182,6 +185,89 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
     );
   }
 
+  Future<void> _addContact(_SeniorOnCallRow row) async {
+    final key = row.contactKey;
+    if (_savingContacts.contains(key)) return;
+
+    final controller = TextEditingController();
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ajouter le contact'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              row.ownerName,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              row.service,
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Numéro de téléphone',
+                hintText: '06 12 34 56 78',
+                prefixIcon: Icon(Icons.phone_outlined),
+              ),
+              onSubmitted: (value) {
+                if (value.trim().isNotEmpty) Navigator.pop(ctx, value.trim());
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.pop(ctx, value);
+            },
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Ajouter'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (phone == null || phone.trim().isEmpty || !mounted) return;
+
+    setState(() => _savingContacts.add(key));
+    try {
+      final result = await SupabaseBackendService.instance.addSeniorOnCallContact(
+        name: row.ownerName,
+        phone: phone,
+        hospital: row.hospital,
+        service: row.service,
+      );
+      final normalized = result['phone']?.toString() ?? phone;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$normalized ajouté pour ${row.ownerName}.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ajout du contact impossible : $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _savingContacts.remove(key));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final body = Column(
@@ -241,11 +327,8 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
         _SeniorServiceFilter(
           services: _availableServices,
           value: _selectedService,
-          allValue: _allServices,
           onChanged: (value) {
-            if (value != null) {
-              setState(() => _selectedService = value);
-            }
+            if (value != null) setState(() => _selectedService = value);
           },
         ),
         const SizedBox(height: 4),
@@ -292,7 +375,11 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, size: 44, color: AppColors.danger),
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 44,
+                color: AppColors.danger,
+              ),
               const SizedBox(height: AppSpace.md),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: AppSpace.md),
@@ -316,7 +403,11 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
           padding: const EdgeInsets.all(AppSpace.xl),
           children: [
             const SizedBox(height: 70),
-            Icon(Icons.event_available_outlined, size: 50, color: AppColors.inkFaint),
+            Icon(
+              Icons.event_available_outlined,
+              size: 50,
+              color: AppColors.inkFaint,
+            ),
             const SizedBox(height: AppSpace.md),
             Text(
               'Aucune astreinte sénior le ${DateFormat('d MMMM yyyy', 'fr_FR').format(_selectedDay)}.',
@@ -334,18 +425,27 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
     }
     final services = grouped.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final isAdmin = context.watch<AppState>().currentUser?.role == UserRole.admin;
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 36),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.md,
+          AppSpace.lg,
+          36,
+        ),
         itemCount: services.length,
         itemBuilder: (context, index) {
           final service = services[index];
           return _SeniorServiceCard(
             service: service,
             rows: grouped[service]!,
+            canAddContact: isAdmin,
+            savingContacts: _savingContacts,
+            onAddContact: _addContact,
           );
         },
       ),
@@ -356,10 +456,16 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
 class _SeniorServiceCard extends StatelessWidget {
   final String service;
   final List<_SeniorOnCallRow> rows;
+  final bool canAddContact;
+  final Set<String> savingContacts;
+  final ValueChanged<_SeniorOnCallRow> onAddContact;
 
   const _SeniorServiceCard({
     required this.service,
     required this.rows,
+    required this.canAddContact,
+    required this.savingContacts,
+    required this.onAddContact,
   });
 
   @override
@@ -382,7 +488,9 @@ class _SeniorServiceCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(15, 12, 13, 11),
             decoration: BoxDecoration(
               color: headerBackground,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(17),
+              ),
             ),
             child: Row(
               children: [
@@ -412,7 +520,10 @@ class _SeniorServiceCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: accent,
                     borderRadius: BorderRadius.circular(99),
@@ -430,7 +541,12 @@ class _SeniorServiceCard extends StatelessWidget {
             ),
           ),
           for (var i = 0; i < rows.length; i++) ...[
-            _SeniorDutyLine(row: rows[i]),
+            _SeniorDutyLine(
+              row: rows[i],
+              canAddContact: canAddContact,
+              savingContact: savingContacts.contains(rows[i].contactKey),
+              onAddContact: () => onAddContact(rows[i]),
+            ),
             if (i != rows.length - 1)
               const Divider(height: 1, indent: 15, endIndent: 15),
           ],
@@ -442,8 +558,16 @@ class _SeniorServiceCard extends StatelessWidget {
 
 class _SeniorDutyLine extends StatelessWidget {
   final _SeniorOnCallRow row;
+  final bool canAddContact;
+  final bool savingContact;
+  final VoidCallback onAddContact;
 
-  const _SeniorDutyLine({required this.row});
+  const _SeniorDutyLine({
+    required this.row,
+    required this.canAddContact,
+    required this.savingContact,
+    required this.onAddContact,
+  });
 
   Future<void> _call(BuildContext context) async {
     final phone = row.ownerPhone.trim();
@@ -460,7 +584,10 @@ class _SeniorDutyLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPhone = row.ownerPhone.trim().isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: 11),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.md,
+        vertical: 11,
+      ),
       child: Row(
         children: [
           Container(
@@ -471,7 +598,11 @@ class _SeniorDutyLine extends StatelessWidget {
               color: AppColors.brandSoft,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.person_rounded, color: AppColors.brand, size: 22),
+            child: Icon(
+              Icons.person_rounded,
+              color: AppColors.brand,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -496,11 +627,33 @@ class _SeniorDutyLine extends StatelessWidget {
               ],
             ),
           ),
-          IconButton.filledTonal(
-            tooltip: hasPhone ? 'Appeler' : 'Numéro indisponible',
-            onPressed: hasPhone ? () => _call(context) : null,
-            icon: const Icon(Icons.phone_rounded, size: 20),
-          ),
+          if (hasPhone)
+            IconButton.filledTonal(
+              tooltip: 'Appeler',
+              onPressed: () => _call(context),
+              icon: const Icon(Icons.phone_rounded, size: 20),
+            )
+          else if (canAddContact)
+            FilledButton.tonalIcon(
+              onPressed: savingContact ? null : onAddContact,
+              icon: savingContact
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.person_add_alt_1_rounded, size: 18),
+              label: const Text(
+                'Ajouter contact',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+            )
+          else
+            IconButton.filledTonal(
+              tooltip: 'Numéro indisponible',
+              onPressed: null,
+              icon: const Icon(Icons.phone_disabled_rounded, size: 20),
+            ),
         ],
       ),
     );
@@ -586,7 +739,9 @@ class _SeniorDaySelector extends StatelessWidget {
           final date = weekStart.add(Duration(days: index));
           final selected = index == selectedIndex;
           final raw = DateFormat('EEE', 'fr_FR').format(date).replaceAll('.', '');
-          final label = raw.isEmpty ? '' : raw[0].toUpperCase() + raw.substring(1);
+          final label = raw.isEmpty
+              ? ''
+              : raw[0].toUpperCase() + raw.substring(1);
           return SizedBox(
             width: 47,
             child: Material(
@@ -675,13 +830,11 @@ class _SeniorHospitalFilter extends StatelessWidget {
 class _SeniorServiceFilter extends StatelessWidget {
   final List<String> services;
   final String value;
-  final String allValue;
   final ValueChanged<String?> onChanged;
 
   const _SeniorServiceFilter({
     required this.services,
     required this.value,
-    required this.allValue,
     required this.onChanged,
   });
 
@@ -695,7 +848,11 @@ class _SeniorServiceFilter extends StatelessWidget {
           value: value,
           isExpanded: true,
           decoration: InputDecoration(
-            prefixIcon: Icon(Icons.filter_alt_outlined, color: AppColors.brand, size: 19),
+            prefixIcon: Icon(
+              Icons.filter_alt_outlined,
+              color: AppColors.brand,
+              size: 19,
+            ),
             labelText: 'Service',
             filled: true,
             fillColor: AppColors.card,
@@ -826,6 +983,8 @@ class _SeniorOnCallRow {
     required this.service,
     required this.hospital,
   });
+
+  String get contactKey => '$hospital|$ownerName';
 
   factory _SeniorOnCallRow.fromRpc(Map<String, dynamic> json) {
     return _SeniorOnCallRow(
