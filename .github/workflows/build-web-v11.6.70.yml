@@ -1,5 +1,5 @@
 name: Build & Deploy GardeFlow Web v11.6.70
-# redeploy: dynamic-first-year-promotion-policy-final-20260923
+# redeploy: admin-managed-promotions-20260923
 
 on:
   workflow_dispatch:
