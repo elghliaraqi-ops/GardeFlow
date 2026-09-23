@@ -19,10 +19,7 @@ import '../theme/widgets.dart';
 class JuniorOnCallScreen extends StatefulWidget {
   final bool embedded;
 
-  const JuniorOnCallScreen({
-    super.key,
-    this.embedded = false,
-  });
+  const JuniorOnCallScreen({super.key, this.embedded = false});
 
   @override
   State<JuniorOnCallScreen> createState() => _JuniorOnCallScreenState();
@@ -61,13 +58,16 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   }
 
   DateTime get _weekEnd => _weekStart.add(const Duration(days: 6));
-  DateTime get _selectedDay => _weekStart.add(Duration(days: _selectedDayIndex));
+  DateTime get _selectedDay =>
+      _weekStart.add(Duration(days: _selectedDayIndex));
   String get _selectedDateStr => DateFormat('yyyy-MM-dd').format(_selectedDay);
   String get _activeHospital => _selectedHospital ?? kHospitals.first;
 
   static DateTime _startOfWeek(DateTime date) {
     final normalized = DateTime(date.year, date.month, date.day);
-    return normalized.subtract(Duration(days: normalized.weekday - DateTime.monday));
+    return normalized.subtract(
+      Duration(days: normalized.weekday - DateTime.monday),
+    );
   }
 
   static bool _sameDay(DateTime a, DateTime b) =>
@@ -84,10 +84,8 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
       final appState = context.read<AppState>();
       final List<_JuniorOnCallRow> rows;
       if (appState.backendEnabled) {
-        final data = await SupabaseBackendService.instance.fetchJuniorOnCallRoster(
-          from: _weekStart,
-          to: _weekEnd,
-        );
+        final data = await SupabaseBackendService.instance
+            .fetchJuniorOnCallRoster(from: _weekStart, to: _weekEnd);
         rows = data.map(_JuniorOnCallRow.fromRpc).toList()..sort(_compareRows);
       } else {
         rows = _buildLocalRows(appState)..sort(_compareRows);
@@ -109,8 +107,12 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   }
 
   List<_JuniorOnCallRow> _buildLocalRows(AppState appState) {
-    final usersById = <String, AppUser>{for (final user in appState.users) user.id: user};
-    final usersByPhone = <String, AppUser>{for (final user in appState.users) user.phone: user};
+    final usersById = <String, AppUser>{
+      for (final user in appState.users) user.id: user,
+    };
+    final usersByPhone = <String, AppUser>{
+      for (final user in appState.users) user.phone: user,
+    };
     final result = <_JuniorOnCallRow>[];
     final start = DateTime(_weekStart.year, _weekStart.month, _weekStart.day);
     final endExclusive = _weekEnd.add(const Duration(days: 1));
@@ -120,7 +122,8 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
       final isUrgences = entry.shiftId.startsWith('urg-');
       if (!isService && !isUrgences) continue;
       final date = DateTime.tryParse(entry.dateStr);
-      if (date == null || date.isBefore(start) || !date.isBefore(endExclusive)) continue;
+      if (date == null || date.isBefore(start) || !date.isBefore(endExclusive))
+        continue;
 
       // Les gardes de service restent limitées aux calendriers validés.
       // Les gardes aux urgences proviennent du planning officiel PDF :
@@ -129,16 +132,21 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
       if (isService && !appState.isPlanningEntryApproved(entry)) continue;
 
       final user = usersById[entry.ownerId] ?? usersByPhone[entry.ownerPhone];
-      if (user == null || user.grade != MedicalGrade.junior || user.accountStatus != AccountStatus.active) continue;
+      if (user == null ||
+          user.grade != MedicalGrade.junior ||
+          user.accountStatus != AccountStatus.active)
+        continue;
 
-      result.add(_JuniorOnCallRow(
-        dateStr: entry.dateStr,
-        shiftId: entry.shiftId,
-        ownerName: entry.ownerName,
-        ownerPhone: user.phone,
-        service: isUrgences ? 'Urgences' : user.service,
-        hospital: user.hospital,
-      ));
+      result.add(
+        _JuniorOnCallRow(
+          dateStr: entry.dateStr,
+          shiftId: entry.shiftId,
+          ownerName: entry.ownerName,
+          ownerPhone: user.phone,
+          service: isUrgences ? 'Urgences' : user.service,
+          hospital: user.hospital,
+        ),
+      );
     }
     return result;
   }
@@ -187,7 +195,9 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   void _goToCurrentWeek() {
     final now = DateTime.now();
     final current = _startOfWeek(now);
-    if (_sameDay(current, _weekStart) && _selectedDayIndex == now.weekday - DateTime.monday) return;
+    if (_sameDay(current, _weekStart) &&
+        _selectedDayIndex == now.weekday - DateTime.monday)
+      return;
     setState(() {
       _weekStart = current;
       _selectedDayIndex = now.weekday - DateTime.monday;
@@ -209,13 +219,14 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   }
 
   List<String> get _availableServices {
-    final values = _rows
-        .where((row) => row.hospital == _activeHospital)
-        .map((row) => row.service.trim())
-        .where((service) => service.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final values =
+        _rows
+            .where((row) => row.hospital == _activeHospital)
+            .map((row) => row.service.trim())
+            .where((service) => service.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return values;
   }
 
@@ -229,18 +240,20 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   }
 
   List<_JuniorOnCallRow> get _visibleRows {
-    return _rows.where((row) {
-      if (row.hospital != _activeHospital) return false;
-      if (row.dateStr != _selectedDateStr) return false;
-      if (_selectedService != _allServices && row.service != _selectedService) return false;
-      return true;
-    }).toList(growable: false);
+    return _rows
+        .where((row) {
+          if (row.hospital != _activeHospital) return false;
+          if (row.dateStr != _selectedDateStr) return false;
+          if (_selectedService != _allServices &&
+              row.service != _selectedService)
+            return false;
+          return true;
+        })
+        .toList(growable: false);
   }
 
   Future<void> _openMonthCalendar() async {
-    final currentDate = _weekStart.add(
-      Duration(days: _selectedDayIndex),
-    );
+    final currentDate = _weekStart.add(Duration(days: _selectedDayIndex));
 
     final picked = await showDatePicker(
       context: context,
@@ -336,10 +349,7 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
     );
 
     if (widget.embedded) {
-      return ColoredBox(
-        color: theme.scaffoldBackgroundColor,
-        child: body,
-      );
+      return ColoredBox(color: theme.scaffoldBackgroundColor, child: body);
     }
 
     return Scaffold(
@@ -365,7 +375,8 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
 
   Widget _buildBody() {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) return _JuniorErrorState(message: _error!, onRetry: _load);
+    if (_error != null)
+      return _JuniorErrorState(message: _error!, onRetry: _load);
 
     final rows = _visibleRows;
     if (rows.isEmpty) {
@@ -377,12 +388,17 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
           padding: EdgeInsets.symmetric(horizontal: AppSpace.xl),
           children: [
             SizedBox(height: 78),
-            Icon(Icons.event_available_outlined, size: 50, color: AppColors.inkFaint),
+            Icon(
+              Icons.event_available_outlined,
+              size: 50,
+              color: AppColors.inkFaint,
+            ),
             SizedBox(height: AppSpace.md),
             Text(
               'Aucune garde ou astreinte Junior $day\nà ${_juniorHospitalLabel(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft, height: 1.45),
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.inkSoft, height: 1.45),
             ),
           ],
         ),
@@ -394,7 +410,12 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
       onRefresh: _load,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 36),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.md,
+          AppSpace.lg,
+          36,
+        ),
         itemCount: groups.length,
         itemBuilder: (context, index) => _ServiceDayCard(group: groups[index]),
       ),
@@ -520,9 +541,7 @@ class _DayChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final day = DateFormat('EEE', 'fr_FR').format(date).replaceAll('.', '');
-    final label = day.isEmpty
-        ? ''
-        : day[0].toUpperCase() + day.substring(1);
+    final label = day.isEmpty ? '' : day[0].toUpperCase() + day.substring(1);
 
     return SizedBox(
       width: 47,
@@ -595,12 +614,17 @@ class _HospitalFilter extends StatelessWidget {
           return ChoiceChip(
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.symmetric(horizontal: 7),
+            selectedColor: AppColors.brand,
+            backgroundColor: AppColors.card,
+            side: BorderSide(
+              color: selected ? AppColors.brandBright : AppColors.line,
+            ),
             label: Text(
               _juniorHospitalLabel(hospital),
               style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w800,
-                color: selected ? AppColors.brandDark : AppColors.inkSoft,
+                color: selected ? Colors.white : AppColors.inkSoft,
               ),
             ),
             selected: selected,
@@ -641,14 +665,8 @@ class _ServiceFilter extends StatelessWidget {
               size: 19,
             ),
             labelText: 'Service',
-            labelStyle: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 7,
-            ),
+            labelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             filled: true,
             fillColor: AppColors.card,
           ),
@@ -656,10 +674,7 @@ class _ServiceFilter extends StatelessWidget {
           items: [
             DropdownMenuItem(
               value: allValue,
-              child: Text(
-                'Tous les services',
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text('Tous les services', overflow: TextOverflow.ellipsis),
             ),
             for (final service in services)
               DropdownMenuItem(
@@ -703,7 +718,9 @@ class _ServiceDayCard extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  isUrgences ? Icons.emergency_rounded : Icons.medical_services_rounded,
+                  isUrgences
+                      ? Icons.emergency_rounded
+                      : Icons.medical_services_rounded,
                   size: 19,
                   color: isUrgences ? AppColors.urgJourText : AppColors.brand,
                 ),
@@ -712,7 +729,9 @@ class _ServiceDayCard extends StatelessWidget {
                   child: Text(
                     group.service,
                     style: TextStyle(
-                      color: isUrgences ? AppColors.urgJourText : AppColors.brandDark,
+                      color: isUrgences
+                          ? AppColors.urgJourText
+                          : AppColors.brandDark,
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
                     ),
@@ -759,9 +778,7 @@ class _JuniorDutyLine extends StatelessWidget {
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Impossible d’ouvrir l’appel vers $phone.'),
-        ),
+        SnackBar(content: Text('Impossible d’ouvrir l’appel vers $phone.')),
       );
     }
   }
@@ -783,7 +800,10 @@ class _JuniorDutyLine extends StatelessWidget {
             width: 48,
             height: 48,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: shift.color, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: shift.color,
+              shape: BoxShape.circle,
+            ),
             child: Icon(shift.icon, color: shift.textColor, size: 23),
           ),
           SizedBox(width: 10),
@@ -792,9 +812,19 @@ class _JuniorDutyLine extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(shift.label, style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink)),
+                Text(
+                  shift.label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink,
+                  ),
+                ),
                 SizedBox(height: 2),
-                Text(_timeLabel(shift), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft)),
+                Text(
+                  _timeLabel(shift),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.inkSoft),
+                ),
               ],
             ),
           ),
@@ -806,14 +836,20 @@ class _JuniorDutyLine extends StatelessWidget {
               children: [
                 Text(
                   row.ownerName,
-                  style: TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 2),
                 Text(
-                  row.shiftId.startsWith('urg-') ? 'Junior · Urgences' : 'Junior',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                  row.shiftId.startsWith('urg-')
+                      ? 'Junior · Urgences'
+                      : 'Junior',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.inkSoft),
                 ),
               ],
             ),
@@ -864,11 +900,19 @@ class _JuniorErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded, size: 44, color: AppColors.danger),
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 44,
+              color: AppColors.danger,
+            ),
             const SizedBox(height: AppSpace.md),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: AppSpace.md),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded), label: const Text('Réessayer')),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réessayer'),
+            ),
           ],
         ),
       ),
@@ -893,7 +937,8 @@ class _JuniorOnCallRow {
     required this.hospital,
   });
 
-  factory _JuniorOnCallRow.fromRpc(Map<String, dynamic> json) => _JuniorOnCallRow(
+  factory _JuniorOnCallRow.fromRpc(Map<String, dynamic> json) =>
+      _JuniorOnCallRow(
         dateStr: json['date_str'].toString(),
         shiftId: json['shift_id'] as String,
         ownerName: json['owner_name'] as String,
@@ -920,12 +965,19 @@ List<_ServiceDayGroup> _groupRowsByServiceForDay(List<_JuniorOnCallRow> rows) {
       if (b == 'Urgences' && a != 'Urgences') return 1;
       return a.toLowerCase().compareTo(b.toLowerCase());
     });
-  return services.map((service) {
-    final members = map[service]!
-      ..sort((a, b) {
-        final c = _JuniorOnCallScreenState._shiftRank(a.shiftId).compareTo(_JuniorOnCallScreenState._shiftRank(b.shiftId));
-        return c != 0 ? c : a.ownerName.toLowerCase().compareTo(b.ownerName.toLowerCase());
-      });
-    return _ServiceDayGroup(service, members);
-  }).toList(growable: false);
+  return services
+      .map((service) {
+        final members = map[service]!
+          ..sort((a, b) {
+            final c = _JuniorOnCallScreenState._shiftRank(a.shiftId)
+                .compareTo(_JuniorOnCallScreenState._shiftRank(b.shiftId));
+            return c != 0
+                ? c
+                : a.ownerName.toLowerCase().compareTo(
+                    b.ownerName.toLowerCase(),
+                  );
+          });
+        return _ServiceDayGroup(service, members);
+      })
+      .toList(growable: false);
 }

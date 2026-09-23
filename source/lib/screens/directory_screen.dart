@@ -51,7 +51,8 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     final sections = appState.directory;
     final isAdmin = appState.currentUser?.role == UserRole.admin;
 
-    if (_activeCategory != _kAllCategories && !sections.any((s) => s.id == _activeCategory)) {
+    if (_activeCategory != _kAllCategories &&
+        !sections.any((s) => s.id == _activeCategory)) {
       _activeCategory = _kAllCategories;
     }
     if (_activeHospital == null) {
@@ -63,17 +64,22 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     final myHospital = appState.currentUser?.hospital;
     final items = <_DirectoryItem>[];
     for (final section in sections) {
-      if (_activeCategory != _kAllCategories && section.id != _activeCategory) continue;
+      if (_activeCategory != _kAllCategories && section.id != _activeCategory)
+        continue;
       for (final contact in section.contacts) {
-        if (_activeHospital != _kAllHospitals && contact.hospital != _activeHospital) continue;
-        final searchable = _normalized([
-          contact.name,
-          contact.phone,
-          contact.service ?? '',
-          contact.gradeLabel ?? '',
-          section.label,
-          hospitalDisplayName(contact.hospital),
-        ].join(' '));
+        if (_activeHospital != _kAllHospitals &&
+            contact.hospital != _activeHospital)
+          continue;
+        final searchable = _normalized(
+          [
+            contact.name,
+            contact.phone,
+            contact.service ?? '',
+            contact.gradeLabel ?? '',
+            section.label,
+            hospitalDisplayName(contact.hospital),
+          ].join(' '),
+        );
         if (query.isNotEmpty && !searchable.contains(query)) continue;
         items.add(_DirectoryItem(section: section, contact: contact));
       }
@@ -86,21 +92,19 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
 
       final byHospital = hospitalDisplayName(a.contact.hospital)
           .toLowerCase()
-          .compareTo(
-            hospitalDisplayName(b.contact.hospital).toLowerCase(),
-          );
+          .compareTo(hospitalDisplayName(b.contact.hospital).toLowerCase());
       if (byHospital != 0 && !aMine) return byHospital;
 
-      final byCategory = a.section.label
-          .toLowerCase()
-          .compareTo(b.section.label.toLowerCase());
+      final byCategory = a.section.label.toLowerCase().compareTo(
+        b.section.label.toLowerCase(),
+      );
       if (byCategory != 0 && _activeCategory == _kAllCategories) {
         return byCategory;
       }
 
-      return a.contact.name
-          .toLowerCase()
-          .compareTo(b.contact.name.toLowerCase());
+      return a.contact.name.toLowerCase().compareTo(
+        b.contact.name.toLowerCase(),
+      );
     });
 
     final hospitalItems = <String>[
@@ -110,14 +114,18 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
 
     final content = Column(
       children: [
-
         _CategoryBar(
           sections: sections,
           activeId: _activeCategory,
           onSelect: (id) => setState(() => _activeCategory = id),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.md,
+            AppSpace.lg,
+            AppSpace.sm,
+          ),
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
@@ -147,15 +155,20 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
               prefixIcon: Icon(Icons.local_hospital_outlined, size: 19),
             ),
             items: [
-              const DropdownMenuItem(value: _kAllHospitals, child: Text('Tous les établissements')),
-              ...hospitalItems.map((h) => DropdownMenuItem(
-                    value: h,
-                    child: Text(
-                      hospitalDisplayName(h),
-                      style: const TextStyle(fontSize: 12.5),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  )),
+              const DropdownMenuItem(
+                value: _kAllHospitals,
+                child: Text('Tous les établissements'),
+              ),
+              ...hospitalItems.map(
+                (h) => DropdownMenuItem(
+                  value: h,
+                  child: Text(
+                    hospitalDisplayName(h),
+                    style: const TextStyle(fontSize: 12.5),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
             ],
             onChanged: (v) => setState(() => _activeHospital = v),
           ),
@@ -164,9 +177,14 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, 10, AppSpace.lg, 8),
           child: Row(
             children: [
-              Text('${items.length} contact${items.length > 1 ? 's' : ''}', style: Theme.of(context).textTheme.labelMedium),
+              Text(
+                '${items.length} contact${items.length > 1 ? 's' : ''}',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
               const Spacer(),
-              if (_activeCategory != _kAllCategories || _query.isNotEmpty || _activeHospital != _kAllHospitals)
+              if (_activeCategory != _kAllCategories ||
+                  _query.isNotEmpty ||
+                  _activeHospital != _kAllHospitals)
                 TextButton.icon(
                   onPressed: () {
                     _searchController.clear();
@@ -189,17 +207,27 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                     padding: EdgeInsets.all(24),
                     child: AppCard(
                       shadow: [],
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.person_search_rounded, size: 36, color: AppColors.inkFaint),
-                        SizedBox(height: AppSpace.sm),
-                        Text('Aucun contact', style: Theme.of(context).textTheme.titleMedium),
-                        SizedBox(height: 3),
-                        Text(
-                          'Aucun contact ne correspond aux filtres sélectionnés.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ]),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_search_rounded,
+                            size: 36,
+                            color: AppColors.inkFaint,
+                          ),
+                          SizedBox(height: AppSpace.sm),
+                          Text(
+                            'Aucun contact',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Aucun contact ne correspond aux filtres sélectionnés.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
@@ -218,8 +246,13 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
                       contact: item.contact,
                       section: item.section,
                       canManage: isAdmin && item.contact.isManual,
-                      onEdit: () => _openContactEditor(context, appState, existing: item.contact),
-                      onDelete: () => _confirmDelete(context, appState, item.contact),
+                      onEdit: () => _openContactEditor(
+                        context,
+                        appState,
+                        existing: item.contact,
+                      ),
+                      onDelete: () =>
+                          _confirmDelete(context, appState, item.contact),
                     );
                   },
                 ),
@@ -232,26 +265,25 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
         color: AppColors.paper,
         child: Stack(
           children: [
-            Positioned.fill(
-              child: SafeArea(
-                bottom: false,
-                child: content,
-              ),
-            ),
+            Positioned.fill(child: SafeArea(bottom: false, child: content)),
             if (isAdmin)
               Positioned(
                 right: 18,
                 bottom: 18,
                 child: SafeArea(
                   top: false,
-                  child: FloatingActionButton(
+                  child: FloatingActionButton.extended(
                     heroTag: 'directory-add-contact-embedded',
                     tooltip: 'Ajouter un contact',
                     onPressed: () => _openContactEditor(context, appState),
-                    backgroundColor: AppColors.brandDark,
+                    backgroundColor: AppColors.brandBright,
                     foregroundColor: Colors.white,
-                    elevation: 5,
-                    child: Icon(Icons.person_add_alt_1_rounded),
+                    elevation: 7,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                    label: const Text(
+                      'Ajouter',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ),
               ),
@@ -264,13 +296,18 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       backgroundColor: AppColors.paper,
       appBar: AppBar(title: GardeFlowTitle('Annuaire')),
       floatingActionButton: isAdmin
-          ? FloatingActionButton(
+          ? FloatingActionButton.extended(
               heroTag: 'directory-add-contact-standalone',
               tooltip: 'Ajouter un contact',
               onPressed: () => _openContactEditor(context, appState),
-              backgroundColor: AppColors.brandDark,
+              backgroundColor: AppColors.brandBright,
               foregroundColor: Colors.white,
-              child: Icon(Icons.person_add_alt_1_rounded),
+              elevation: 7,
+              icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+              label: const Text(
+                'Ajouter',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
             )
           : null,
       body: content,
@@ -283,11 +320,17 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     DirectoryContact? existing,
   }) async {
     final currentHospital = appState.currentUser?.hospital;
-    final initialHospital = existing?.hospital ??
-        (currentHospital != null && kHospitals.contains(currentHospital) ? currentHospital : kHospitals.first);
+    final initialHospital =
+        existing?.hospital ??
+        (currentHospital != null && kHospitals.contains(currentHospital)
+            ? currentHospital
+            : kHospitals.first);
     final draft = await showDialog<_DirectoryContactDraft>(
       context: context,
-      builder: (_) => _DirectoryContactDialog(existing: existing, initialHospital: initialHospital),
+      builder: (_) => _DirectoryContactDialog(
+        existing: existing,
+        initialHospital: initialHospital,
+      ),
     );
     if (draft == null || !context.mounted) return;
 
@@ -308,19 +351,33 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
             service: draft.service,
           );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(error ?? (existing == null ? 'Contact ajouté à l’annuaire.' : 'Contact modifié.')),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          error ??
+              (existing == null
+                  ? 'Contact ajouté à l’annuaire.'
+                  : 'Contact modifié.'),
+        ),
+      ),
+    );
   }
 
-  Future<void> _confirmDelete(BuildContext context, AppState appState, DirectoryContact contact) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    AppState appState,
+    DirectoryContact contact,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Supprimer ce contact ?'),
         content: Text('${contact.name}\n${contact.phone}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Supprimer'),
@@ -331,7 +388,8 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
     if (confirmed != true) return;
     final error = await appState.deleteDirectoryContact(contact.id);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Contact supprimé.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(error ?? 'Contact supprimé.')));
   }
 }
 
@@ -369,57 +427,92 @@ class _ContactRow extends StatelessWidget {
         borderRadius: AppRadius.mdR,
         onTap: () => launchUrl(Uri.parse('tel:${contact.phone}')),
         child: AppCard(
-          padding: EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
-          child: Row(children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: section.color,
-              child: Text(
-                contact.initials,
-                style: TextStyle(color: section.textColor, fontWeight: FontWeight.w800, fontSize: 12.5),
-              ),
-            ),
-            SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(contact.name, style: Theme.of(context).textTheme.titleSmall),
-                  SizedBox(height: 2),
-                  Text(contact.phone, style: Theme.of(context).textTheme.bodySmall),
-                  SizedBox(height: 2),
-                  Text(
-                    details.join(' · '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.inkSoft, fontSize: 11),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpace.md,
+            vertical: AppSpace.sm,
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: section.color,
+                child: Text(
+                  contact.initials,
+                  style: TextStyle(
+                    color: section.textColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
                   ),
-                ],
+                ),
               ),
-            ),
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: AppColors.conge, shape: BoxShape.circle),
-              child: Icon(Icons.call_rounded, size: 16, color: AppColors.congeText),
-            ),
-            if (canManage) ...[
-              SizedBox(width: 2),
-              PopupMenuButton<String>(
-                tooltip: 'Gérer le contact',
-                onSelected: (value) {
-                  if (value == 'edit') onEdit();
-                  if (value == 'delete') onDelete();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Modifier'))),
-                  PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline), title: Text('Supprimer'))),
-                ],
+              SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      contact.name,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      contact.phone,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      details.join(' · '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AppColors.inkSoft, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.conge,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.call_rounded,
+                  size: 16,
+                  color: AppColors.congeText,
+                ),
+              ),
+              if (canManage) ...[
+                SizedBox(width: 2),
+                PopupMenuButton<String>(
+                  tooltip: 'Gérer le contact',
+                  onSelected: (value) {
+                    if (value == 'edit') onEdit();
+                    if (value == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit_outlined),
+                        title: Text('Modifier'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('Supprimer'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
-          ]),
+          ),
         ),
       ),
     );
@@ -430,7 +523,11 @@ class _CategoryBar extends StatefulWidget {
   final List<DirectorySection> sections;
   final String activeId;
   final ValueChanged<String> onSelect;
-  const _CategoryBar({required this.sections, required this.activeId, required this.onSelect});
+  const _CategoryBar({
+    required this.sections,
+    required this.activeId,
+    required this.onSelect,
+  });
 
   @override
   State<_CategoryBar> createState() => _CategoryBarState();
@@ -490,7 +587,12 @@ class _CategoryBarState extends State<_CategoryBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.sm),
+      padding: EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.sm,
+        AppSpace.lg,
+        AppSpace.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(bottom: BorderSide(color: AppColors.line)),
@@ -503,14 +605,16 @@ class _CategoryBarState extends State<_CategoryBar> {
             children: [
               Text(
                 'Catégories',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context).textTheme.labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
               Spacer(),
               Icon(Icons.swipe_rounded, size: 15, color: AppColors.inkSoft),
               SizedBox(width: 4),
               Text(
                 'Faites défiler',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.inkSoft),
+                style: Theme.of(context).textTheme.labelSmall
+                    ?.copyWith(color: AppColors.inkSoft),
               ),
             ],
           ),
@@ -528,7 +632,9 @@ class _CategoryBarState extends State<_CategoryBar> {
                   child: ListView.separated(
                     controller: _controller,
                     scrollDirection: Axis.horizontal,
-                    physics: BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    physics: BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
                     padding: EdgeInsets.symmetric(horizontal: 4),
                     itemCount: widget.sections.length + 1,
                     separatorBuilder: (_, __) => SizedBox(width: AppSpace.sm),
@@ -572,7 +678,11 @@ class _CategoryScrollButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
-  const _CategoryScrollButton({required this.icon, required this.enabled, required this.onTap});
+  const _CategoryScrollButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -585,7 +695,11 @@ class _CategoryScrollButton extends StatelessWidget {
         child: SizedBox(
           width: 32,
           height: 42,
-          child: Icon(icon, size: 22, color: enabled ? AppColors.ink : AppColors.inkFaint),
+          child: Icon(
+            icon,
+            size: 22,
+            color: enabled ? AppColors.ink : AppColors.inkFaint,
+          ),
         ),
       ),
     );
@@ -622,7 +736,13 @@ class _CategoryChip extends StatelessWidget {
             borderRadius: AppRadius.pillR,
             border: Border.all(color: active ? color : AppColors.line),
             boxShadow: active
-                ? [BoxShadow(color: Color(0x10000000), blurRadius: 5, offset: Offset(0, 2))]
+                ? [
+                    BoxShadow(
+                      color: Color(0x10000000),
+                      blurRadius: 5,
+                      offset: Offset(0, 2),
+                    ),
+                  ]
                 : null,
           ),
           child: Text(
@@ -661,7 +781,8 @@ class _DirectoryContactDialog extends StatefulWidget {
   const _DirectoryContactDialog({this.existing, required this.initialHospital});
 
   @override
-  State<_DirectoryContactDialog> createState() => _DirectoryContactDialogState();
+  State<_DirectoryContactDialog> createState() =>
+      _DirectoryContactDialogState();
 }
 
 class _DirectoryContactDialogState extends State<_DirectoryContactDialog> {
@@ -675,9 +796,14 @@ class _DirectoryContactDialogState extends State<_DirectoryContactDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.existing?.name ?? '');
-    _phoneController = TextEditingController(text: widget.existing?.phone ?? '');
-    _serviceController = TextEditingController(text: widget.existing?.service ?? '');
-    _categoryId = kManualDirectoryCategoryIds.contains(widget.existing?.categoryId)
+    _phoneController = TextEditingController(
+      text: widget.existing?.phone ?? '',
+    );
+    _serviceController = TextEditingController(
+      text: widget.existing?.service ?? '',
+    );
+    _categoryId =
+        kManualDirectoryCategoryIds.contains(widget.existing?.categoryId)
         ? widget.existing!.categoryId
         : kDirectoryCategorySeniors;
     _hospital = widget.initialHospital;
@@ -699,63 +825,84 @@ class _DirectoryContactDialogState extends State<_DirectoryContactDialog> {
       content: SingleChildScrollView(
         child: SizedBox(
           width: 480,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            DropdownButtonFormField<String>(
-              value: _categoryId,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Catégorie'),
-              items: kManualDirectoryCategoryIds
-                  .map((id) => DropdownMenuItem(value: id, child: Text(directoryCategoryLabel(id))))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) setState(() => _categoryId = value);
-              },
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: _categoryId == kDirectoryCategoryFleet ? 'Nom / libellé' : 'Nom et prénom',
-                prefixIcon: const Icon(Icons.badge_outlined),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: _categoryId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Catégorie'),
+                items: kManualDirectoryCategoryIds
+                    .map(
+                      (id) => DropdownMenuItem(
+                        value: id,
+                        child: Text(directoryCategoryLabel(id)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) setState(() => _categoryId = value);
+                },
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Numéro de téléphone',
-                hintText: 'Ex. 0612345678 ou +212…',
-                prefixIcon: Icon(Icons.phone_outlined),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: _categoryId == kDirectoryCategoryFleet
+                      ? 'Nom / libellé'
+                      : 'Nom et prénom',
+                  prefixIcon: const Icon(Icons.badge_outlined),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: _hospital,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Établissement'),
-              items: kHospitals
-                  .map((h) => DropdownMenuItem(value: h, child: Text(hospitalDisplayName(h), overflow: TextOverflow.ellipsis)))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) setState(() => _hospital = value);
-              },
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _serviceController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Service / précision (facultatif)',
-                prefixIcon: Icon(Icons.medical_services_outlined),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Numéro de téléphone',
+                  hintText: 'Ex. 0612345678 ou +212…',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
               ),
-            ),
-          ]),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: _hospital,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Établissement'),
+                items: kHospitals
+                    .map(
+                      (h) => DropdownMenuItem(
+                        value: h,
+                        child: Text(
+                          hospitalDisplayName(h),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) setState(() => _hospital = value);
+                },
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _serviceController,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Service / précision (facultatif)',
+                  prefixIcon: Icon(Icons.medical_services_outlined),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
         FilledButton.icon(
           onPressed: () {
             Navigator.pop(
@@ -765,7 +912,9 @@ class _DirectoryContactDialogState extends State<_DirectoryContactDialog> {
                 name: _nameController.text,
                 phone: _phoneController.text,
                 hospital: _hospital,
-                service: _serviceController.text.trim().isEmpty ? null : _serviceController.text.trim(),
+                service: _serviceController.text.trim().isEmpty
+                    ? null
+                    : _serviceController.text.trim(),
               ),
             );
           },

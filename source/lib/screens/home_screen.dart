@@ -42,6 +42,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
+  final GlobalKey _newsFeedKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _DashboardView(
                     appState: appState,
+                    newsFeedKey: _newsFeedKey,
                     onOpenPlanning: () => setState(() => _tab = 1),
                     onOpenDirectory: () => setState(() => _tab = 2),
                     onOpenProfile: () => Navigator.push(
@@ -559,12 +561,14 @@ class _AstreinteFeatureCard extends StatelessWidget {
 
 class _DashboardView extends StatelessWidget {
   final AppState appState;
+  final GlobalKey newsFeedKey;
   final VoidCallback onOpenPlanning;
   final VoidCallback onOpenDirectory;
   final VoidCallback onOpenProfile;
 
   const _DashboardView({
     required this.appState,
+    required this.newsFeedKey,
     required this.onOpenPlanning,
     required this.onOpenDirectory,
     required this.onOpenProfile,
@@ -815,36 +819,52 @@ class _DashboardView extends StatelessWidget {
         _NextGuardCard(entry: next, onTap: onOpenPlanning),
         SizedBox(height: 14),
         Center(
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.card,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppColors.brandBright, width: 1.2),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Actualités plus bas',
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                  ),
+              onTap: () {
+                final targetContext = newsFeedKey.currentContext;
+                if (targetContext == null) return;
+                Scrollable.ensureVisible(
+                  targetContext,
+                  duration: const Duration(milliseconds: 520),
+                  curve: Curves.easeOutCubic,
+                  alignment: 0.04,
+                );
+              },
+              child: Ink(
+                padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.brandBright, width: 1.2),
                 ),
-                SizedBox(width: 6),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.brandBright,
-                  size: 20,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Actualités plus bas',
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.brandBright,
+                      size: 20,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
         SizedBox(height: 14),
-        DailyNewsSection(),
+        DailyNewsSection(verticalFeedKey: newsFeedKey),
       ],
     );
   }
@@ -1392,62 +1412,7 @@ class _PlanningView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
           child: Row(
             children: [
-              Expanded(
-                flex: 10,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => OfficialPlanningScreen(),
-                      ),
-                    ),
-                    borderRadius: BorderRadius.circular(999),
-                    child: Ink(
-                      height: 38,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: AppColors.line),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.navy.withOpacity(0.06),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.picture_as_pdf_rounded,
-                            size: 17,
-                            color: AppColors.urg24h,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              'Planning officiel',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: AppColors.ink,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
               if (promotionLabel != null) ...[
-                const SizedBox(width: 6),
                 Expanded(
                   flex: 11,
                   child: Container(
@@ -1487,6 +1452,61 @@ class _PlanningView extends StatelessWidget {
                   ),
                 ),
               ],
+              if (promotionLabel != null) const SizedBox(width: 6),
+              Expanded(
+                flex: 10,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => OfficialPlanningScreen(),
+                      ),
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    child: Ink(
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: AppColors.line),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.navy.withOpacity(0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.picture_as_pdf_rounded,
+                            size: 17,
+                            color: AppColors.urg24h,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Planning PDF',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.ink,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(width: 6),
               const _AnnouncementsCompactButton(),
             ],

@@ -22,10 +22,7 @@ import 'senior_roster_review_screen.dart';
 class AstreinteScreen extends StatefulWidget {
   final bool embedded;
 
-  const AstreinteScreen({
-    super.key,
-    this.embedded = false,
-  });
+  const AstreinteScreen({super.key, this.embedded = false});
 
   @override
   State<AstreinteScreen> createState() => _AstreinteScreenState();
@@ -60,7 +57,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     final selected = _selectedHospital;
     if (selected != null && kHospitals.contains(selected)) return selected;
     final user = context.read<AppState>().currentUser;
-    if (user != null && kHospitals.contains(user.hospital)) return user.hospital;
+    if (user != null && kHospitals.contains(user.hospital))
+      return user.hospital;
     return kHospitals.first;
   }
 
@@ -81,8 +79,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error =
-              'Connexion Supabase requise pour afficher les astreintes partagées.';
+          _error = 'Connexion Supabase requise pour afficher les astreintes partagées.';
         });
       }
       return;
@@ -134,8 +131,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
                 title: const Text('Prendre une photo'),
-                onTap: () =>
-                    Navigator.pop(ctx, _AstreintePickAction.camera),
+                onTap: () => Navigator.pop(ctx, _AstreintePickAction.camera),
               ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
@@ -157,8 +153,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
               leading: const Icon(Icons.table_chart_outlined),
               title: const Text('Importer un fichier Excel'),
               subtitle: const Text('Formats XLS et XLSX'),
-              onTap: () =>
-                  Navigator.pop(ctx, _AstreintePickAction.spreadsheet),
+              onTap: () => Navigator.pop(ctx, _AstreintePickAction.spreadsheet),
             ),
             const SizedBox(height: 4),
           ],
@@ -255,8 +250,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         final target = hospitalDisplayName(hospital);
         final message = failed == 0
             ? (uploaded == 1
-                ? 'Document d’astreinte importé pour $target.'
-                : '$uploaded documents d’astreinte importés pour $target.')
+                  ? 'Document d’astreinte importé pour $target.'
+                  : '$uploaded documents d’astreinte importés pour $target.')
             : '$uploaded document${uploaded > 1 ? 's' : ''} importé${uploaded > 1 ? 's' : ''} pour $target, $failed échec${failed > 1 ? 's' : ''}.';
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(message)));
@@ -320,9 +315,9 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Suppression impossible : $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Suppression impossible : $e')));
       }
     }
   }
@@ -374,7 +369,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AppState>().currentUser;
     final isAdmin = user?.role == UserRole.admin;
-    final hospital = _selectedHospital ??
+    final hospital =
+        _selectedHospital ??
         (user != null && kHospitals.contains(user.hospital)
             ? user.hospital
             : kHospitals.first);
@@ -394,8 +390,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
             final columns = constraints.maxWidth >= 900
                 ? 4
                 : constraints.maxWidth >= 600
-                    ? 3
-                    : 2;
+                ? 3
+                : 2;
             return GridView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(
@@ -487,10 +483,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     );
 
     if (widget.embedded) {
-      return ColoredBox(
-        color: AppColors.paper,
-        child: body,
-      );
+      return ColoredBox(color: AppColors.paper, child: body);
     }
 
     return Scaffold(
@@ -532,10 +525,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
             isAdmin
                 ? 'Vous gérez actuellement les documents de ${hospitalDisplayName(hospital)}. Photos, PDF, XLS et XLSX peuvent être importés puis vérifiés avant publication.'
                 : 'Tous les médecins peuvent consulter les documents des trois hôpitaux. Sélectionnez l’établissement en haut.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.inkSoft,
-                  height: 1.4,
-                ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AppColors.inkSoft, height: 1.4),
             textAlign: TextAlign.center,
           ),
         ),
@@ -583,9 +574,7 @@ class _HospitalAstreinteHeader extends StatelessWidget {
               Expanded(
                 child: Text(
                   hospitalDisplayName(hospital),
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
+                  style: Theme.of(context).textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
@@ -602,7 +591,22 @@ class _HospitalAstreinteHeader extends StatelessWidget {
               children: [
                 for (final item in kHospitals) ...[
                   ChoiceChip(
-                    label: Text(hospitalDisplayName(item)),
+                    selectedColor: AppColors.brand,
+                    backgroundColor: AppColors.card,
+                    side: BorderSide(
+                      color: item == hospital
+                          ? AppColors.brandBright
+                          : AppColors.line,
+                    ),
+                    label: Text(
+                      hospitalDisplayName(item),
+                      style: TextStyle(
+                        color: item == hospital
+                            ? Colors.white
+                            : AppColors.inkSoft,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     selected: item == hospital,
                     onSelected: (_) => onSelectHospital(item),
                   ),
@@ -633,9 +637,7 @@ class _EmptyHospitalGallery extends StatelessWidget {
         Text(
           'Aucun document d’astreinte publié pour ${hospitalDisplayName(hospital)}.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
+          style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: AppColors.inkSoft),
         ),
       ],
@@ -673,8 +675,10 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
     _pageController = PageController(initialPage: widget.initialIndex);
     _urlsFuture = Future.wait(
       widget.photos.map(
-        (photo) => widget.backend
-            .signedSharedResourceUrl(photo.storagePath, expiresIn: 3600),
+        (photo) => widget.backend.signedSharedResourceUrl(
+          photo.storagePath,
+          expiresIn: 3600,
+        ),
       ),
     );
   }
@@ -734,8 +738,9 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                   pageController: _pageController,
                   itemCount: widget.photos.length,
                   scrollPhysics: const BouncingScrollPhysics(),
-                  backgroundDecoration:
-                      const BoxDecoration(color: Colors.black),
+                  backgroundDecoration: const BoxDecoration(
+                    color: Colors.black,
+                  ),
                   loadingBuilder: (context, event) =>
                       const Center(child: CircularProgressIndicator()),
                   onPageChanged: (index) =>
@@ -748,8 +753,7 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                     heroAttributes: PhotoViewHeroAttributes(
                       tag: 'astreinte-photo-${widget.photos[index].id}',
                     ),
-                    errorBuilder: (context, error, stackTrace) =>
-                        const Center(
+                    errorBuilder: (context, error, stackTrace) => const Center(
                       child: Text(
                         'Image indisponible',
                         style: TextStyle(color: Colors.white),
@@ -762,8 +766,10 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                 top: 10,
                 left: 16,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.58),
                     borderRadius: BorderRadius.circular(99),
@@ -952,11 +958,7 @@ class _AstreinteDocumentPreview extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            _resourceIcon(resource),
-            size: 58,
-            color: AppColors.brand,
-          ),
+          Icon(_resourceIcon(resource), size: 58, color: AppColors.brand),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

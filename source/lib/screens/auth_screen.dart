@@ -627,16 +627,6 @@ class _AuthScreenState extends State<AuthScreen>
             }).toList(),
             onChanged: (value) => setState(() => _regPromotion = value),
           ),
-          SizedBox(height: 7),
-          Text(
-            'La Promo $latestPromotion est actuellement la 1re année. Une nouvelle promotion n’apparaît ici qu’après son ajout par un administrateur.',
-            style: TextStyle(
-              fontSize: 10.8,
-              height: 1.35,
-              color: AppColors.inkFaint,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
         ],
         SizedBox(height: 20),
         _GradientPrimaryButton(

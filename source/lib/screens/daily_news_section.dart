@@ -6,7 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 
 class DailyNewsSection extends StatefulWidget {
-  const DailyNewsSection({super.key});
+  final Key? verticalFeedKey;
+
+  const DailyNewsSection({super.key, this.verticalFeedKey});
 
   @override
   State<DailyNewsSection> createState() => _DailyNewsSectionState();
@@ -167,7 +169,8 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                   ),
                 ),
                 IconButton(
-                  onPressed: snapshot.connectionState == ConnectionState.waiting ||
+                  onPressed:
+                      snapshot.connectionState == ConnectionState.waiting ||
                           _refreshing
                       ? null
                       : _reload,
@@ -212,6 +215,7 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
               SizedBox(height: 28),
               Text(
                 'Fil d’actualités',
+                key: widget.verticalFeedKey,
                 style: TextStyle(
                   fontFamily: 'SpaceGrotesk',
                   color: AppColors.ink,
@@ -233,13 +237,16 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
               Builder(
                 builder: (context) {
                   final availableCategories = _categoryOrder
-                      .where((category) =>
-                          items.any((item) => _categoryFor(item) == category))
+                      .where(
+                        (category) =>
+                            items.any((item) => _categoryFor(item) == category),
+                      )
                       .toList(growable: false);
                   if (availableCategories.isEmpty) {
                     return const SizedBox.shrink();
                   }
-                  final activeCategory = _selectedCategory != null &&
+                  final activeCategory =
+                      _selectedCategory != null &&
                           availableCategories.contains(_selectedCategory)
                       ? _selectedCategory!
                       : availableCategories.first;
@@ -257,8 +264,9 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                           children: [
                             for (final category in availableCategories) ...[
                               OutlinedButton(
-                                onPressed: () =>
-                                    setState(() => _selectedCategory = category),
+                                onPressed: () => setState(
+                                  () => _selectedCategory = category,
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   backgroundColor: activeCategory == category
                                       ? AppColors.brand
@@ -315,10 +323,7 @@ class _NewsCard extends StatelessWidget {
   final _DailyNewsItem item;
   final VoidCallback onTap;
 
-  const _NewsCard({
-    required this.item,
-    required this.onTap,
-  });
+  const _NewsCard({required this.item, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -492,10 +497,7 @@ class _NewsDetailCard extends StatelessWidget {
   final _DailyNewsItem item;
   final VoidCallback onTap;
 
-  const _NewsDetailCard({
-    required this.item,
-    required this.onTap,
-  });
+  const _NewsDetailCard({required this.item, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -622,8 +624,7 @@ class _NewsDetailCard extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (i != paragraphs.length - 1)
-                          SizedBox(height: 10),
+                        if (i != paragraphs.length - 1) SizedBox(height: 10),
                       ],
                       SizedBox(height: 14),
                       Container(
@@ -730,9 +731,7 @@ class _NewsLoading extends StatelessWidget {
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(color: AppColors.line),
               ),
-              child: Center(
-                child: CircularProgressIndicator(strokeWidth: 2.2),
-              ),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2.2)),
             ),
           ),
         ),
@@ -840,7 +839,8 @@ class _DailyNewsItem {
       cachedMediaUrl: map['cached_media_url']?.toString(),
       thumbnailUrl: map['thumbnail_url']?.toString(),
       permalink: map['permalink']?.toString() ?? '',
-      postedAt: DateTime.tryParse(map['posted_at']?.toString() ?? '') ??
+      postedAt:
+          DateTime.tryParse(map['posted_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }

@@ -15,10 +15,7 @@ import 'astreinte_screen.dart';
 class SeniorOnCallScreen extends StatefulWidget {
   final bool embedded;
 
-  const SeniorOnCallScreen({
-    super.key,
-    this.embedded = false,
-  });
+  const SeniorOnCallScreen({super.key, this.embedded = false});
 
   @override
   State<SeniorOnCallScreen> createState() => _SeniorOnCallScreenState();
@@ -58,7 +55,8 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   }
 
   DateTime get _weekEnd => _weekStart.add(const Duration(days: 6));
-  DateTime get _selectedDay => _weekStart.add(Duration(days: _selectedDayIndex));
+  DateTime get _selectedDay =>
+      _weekStart.add(Duration(days: _selectedDayIndex));
   String get _selectedDateStr => DateFormat('yyyy-MM-dd').format(_selectedDay);
   String get _activeHospital => _selectedHospital ?? kHospitals.first;
 
@@ -111,13 +109,14 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   }
 
   List<String> get _availableServices {
-    final values = _rows
-        .where((r) => r.hospital == _activeHospital)
-        .map((r) => r.service.trim())
-        .where((s) => s.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final values =
+        _rows
+            .where((r) => r.hospital == _activeHospital)
+            .map((r) => r.service.trim())
+            .where((s) => s.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return values;
   }
 
@@ -133,14 +132,17 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   }
 
   List<_SeniorOnCallRow> get _visibleRows {
-    return _rows.where((r) {
-      if (r.hospital != _activeHospital) return false;
-      if (r.dateStr != _selectedDateStr) return false;
-      if (_selectedService != _allServices && r.service != _selectedService) {
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
+    return _rows
+        .where((r) {
+          if (r.hospital != _activeHospital) return false;
+          if (r.dateStr != _selectedDateStr) return false;
+          if (_selectedService != _allServices &&
+              r.service != _selectedService) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
   }
 
   void _changeWeek(int delta) {
@@ -244,19 +246,18 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
 
     setState(() => _savingContacts.add(key));
     try {
-      final result = await SupabaseBackendService.instance.addSeniorOnCallContact(
-        name: row.ownerName,
-        phone: phone,
-        hospital: row.hospital,
-        service: row.service,
-      );
+      final result = await SupabaseBackendService.instance
+          .addSeniorOnCallContact(
+            name: row.ownerName,
+            phone: phone,
+            hospital: row.hospital,
+            service: row.service,
+          );
       final normalized = result['phone']?.toString() ?? phone;
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$normalized ajouté pour ${row.ownerName}.'),
-        ),
+        SnackBar(content: Text('$normalized ajouté pour ${row.ownerName}.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -425,7 +426,8 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
     }
     final services = grouped.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final isAdmin = context.watch<AppState>().currentUser?.role == UserRole.admin;
+    final isAdmin =
+        context.watch<AppState>().currentUser?.role == UserRole.admin;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -598,11 +600,7 @@ class _SeniorDutyLine extends StatelessWidget {
               color: AppColors.brandSoft,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.person_rounded,
-              color: AppColors.brand,
-              size: 22,
-            ),
+            child: Icon(Icons.person_rounded, color: AppColors.brand, size: 22),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -619,10 +617,7 @@ class _SeniorDutyLine extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   hasPhone ? row.ownerPhone : 'Numéro non renseigné',
-                  style: TextStyle(
-                    color: AppColors.inkSoft,
-                    fontSize: 11.5,
-                  ),
+                  style: TextStyle(color: AppColors.inkSoft, fontSize: 11.5),
                 ),
               ],
             ),
@@ -738,7 +733,10 @@ class _SeniorDaySelector extends StatelessWidget {
         itemBuilder: (context, index) {
           final date = weekStart.add(Duration(days: index));
           final selected = index == selectedIndex;
-          final raw = DateFormat('EEE', 'fr_FR').format(date).replaceAll('.', '');
+          final raw = DateFormat(
+            'EEE',
+            'fr_FR',
+          ).format(date).replaceAll('.', '');
           final label = raw.isEmpty
               ? ''
               : raw[0].toUpperCase() + raw.substring(1);
@@ -810,12 +808,17 @@ class _SeniorHospitalFilter extends StatelessWidget {
           final hospital = kHospitals[index];
           final selected = hospital == selectedHospital;
           return ChoiceChip(
+            selectedColor: AppColors.brand,
+            backgroundColor: AppColors.card,
+            side: BorderSide(
+              color: selected ? AppColors.brandBright : AppColors.line,
+            ),
             label: Text(
               hospitalDisplayName(hospital),
               style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w800,
-                color: selected ? AppColors.brandDark : AppColors.inkSoft,
+                color: selected ? Colors.white : AppColors.inkSoft,
               ),
             ),
             selected: selected,
@@ -877,10 +880,7 @@ class _SeniorServiceFilter extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        service,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: Text(service, overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),
