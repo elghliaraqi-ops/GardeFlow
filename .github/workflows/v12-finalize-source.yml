@@ -1,0 +1,65 @@
+name: Finalize GardeFlow V12 source
+
+on:
+  push:
+    branches:
+      - v12-optimisee
+    paths:
+      - '.github/workflows/v12-finalize-source.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout V12 branch
+        uses: actions/checkout@v5
+        with:
+          ref: v12-optimisee
+          fetch-depth: 0
+
+      - name: Finalize source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('source/lib/screens/settings_screen.dart')
+          s = p.read_text(encoding='utf-8')
+          old = "Version 11.6.70"
+          new = "Version 12.0.0"
+          if old in s:
+              s = s.replace(old, new)
+              p.write_text(s, encoding='utf-8')
+          elif new not in s:
+              raise SystemExit('V12 version label not found')
+          PY
+
+          rm -f source/.ci_dynamic_promo_validation_20260923
+          rm -f source/.ci_dynamic_promo_validation_final_20260923
+          rm -f source/BUILD_TRIGGER_20260923_1542.txt
+          rm -f source/.ci/rebuild-final-20260923-1641.txt
+          rmdir source/.ci 2>/dev/null || true
+
+          grep -q '^version: 12.0.0+300$' source/pubspec.yaml
+          grep -q "Version 12.0.0" source/lib/screens/settings_screen.dart
+          if grep -R -n "Version 11.6.70" source/lib; then
+            echo 'Old visible version remains in Flutter source'
+            exit 1
+          fi
+
+      - name: Commit finalized V12 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A source
+          if git diff --cached --quiet; then
+            echo 'V12 source already finalized.'
+            exit 0
+          fi
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'v12: finalize canonical source tree'
+          git push origin HEAD:v12-optimisee
