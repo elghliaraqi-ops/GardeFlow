@@ -1,15 +1,18 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/hospitals.dart';
 import '../models/app_user.dart';
 import '../models/shared_resource.dart';
+import '../services/astreinte_resource_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -78,7 +81,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Connexion Supabase requise pour afficher les astreintes partagées.';
+          _error =
+              'Connexion Supabase requise pour afficher les astreintes partagées.';
         });
       }
       return;
@@ -96,15 +100,15 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Impossible de charger les astreintes de ${hospitalDisplayName(hospital)} : $e';
+        _error =
+            'Impossible de charger les astreintes de ${hospitalDisplayName(hospital)} : $e';
       });
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickResource() async {
     if (_uploading) return;
     final hospital = _activeHospital();
-    final picker = ImagePicker();
     final action = await showModalBottomSheet<_AstreintePickAction>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -119,7 +123,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Publication pour ${hospitalDisplayName(hospital)}',
+                      'Importer pour ${hospitalDisplayName(hospital)}',
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
@@ -130,50 +134,113 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
                 title: const Text('Prendre une photo'),
-                onTap: () => Navigator.pop(ctx, _AstreintePickAction.camera),
+                onTap: () =>
+                    Navigator.pop(ctx, _AstreintePickAction.camera),
               ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: Text(kIsWeb ? 'Choisir plusieurs images' : 'Choisir plusieurs photos'),
-              subtitle: const Text('Sélection multiple, sans limite imposée par GardeFlow'),
+              title: Text(
+                kIsWeb
+                    ? 'Choisir plusieurs images'
+                    : 'Choisir plusieurs photos',
+              ),
+              subtitle: const Text('JPG, PNG ou WEBP'),
               onTap: () => Navigator.pop(ctx, _AstreintePickAction.gallery),
             ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('Importer un PDF'),
+              subtitle: const Text('Un ou plusieurs PDF, jusqu’à 12 Mo chacun'),
+              onTap: () => Navigator.pop(ctx, _AstreintePickAction.pdf),
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_chart_outlined),
+              title: const Text('Importer un fichier Excel'),
+              subtitle: const Text('Formats XLS et XLSX'),
+              onTap: () =>
+                  Navigator.pop(ctx, _AstreintePickAction.spreadsheet),
+            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
     );
     if (action == null || !mounted) return;
 
-    final files = <XFile>[];
-    if (action == _AstreintePickAction.camera) {
-      final file = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 70,
-        maxWidth: 1600,
-      );
-      if (file != null) files.add(file);
-    } else {
-      final selected = await picker.pickMultiImage(
-        imageQuality: 70,
-        maxWidth: 1600,
-      );
-      files.addAll(selected);
+    final uploads = <_PendingAstreinteUpload>[];
+    try {
+      if (action == _AstreintePickAction.camera) {
+        final picker = ImagePicker();
+        final file = await picker.pickImage(
+          source: ImageSource.camera,
+          imageQuality: 70,
+          maxWidth: 1600,
+        );
+        if (file != null) {
+          uploads.add(
+            _PendingAstreinteUpload(
+              bytes: await file.readAsBytes(),
+              fileName: file.name,
+              mimeType: file.mimeType ?? _mimeForName(file.name),
+            ),
+          );
+        }
+      } else if (action == _AstreintePickAction.gallery) {
+        final picker = ImagePicker();
+        final selected = await picker.pickMultiImage(
+          imageQuality: 70,
+          maxWidth: 1600,
+        );
+        for (final file in selected) {
+          uploads.add(
+            _PendingAstreinteUpload(
+              bytes: await file.readAsBytes(),
+              fileName: file.name,
+              mimeType: file.mimeType ?? _mimeForName(file.name),
+            ),
+          );
+        }
+      } else {
+        final isPdf = action == _AstreintePickAction.pdf;
+        final result = await FilePicker.platform.pickFiles(
+          allowMultiple: true,
+          type: FileType.custom,
+          allowedExtensions: isPdf ? const ['pdf'] : const ['xls', 'xlsx'],
+          withData: true,
+        );
+        for (final file in result?.files ?? const <PlatformFile>[]) {
+          final bytes = file.bytes;
+          if (bytes == null) continue;
+          uploads.add(
+            _PendingAstreinteUpload(
+              bytes: bytes,
+              fileName: file.name,
+              mimeType: _mimeForName(file.name),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sélection du fichier impossible : $e')),
+        );
+      }
+      return;
     }
 
-    if (files.isEmpty || !mounted) return;
+    if (uploads.isEmpty || !mounted) return;
 
     setState(() => _uploading = true);
     var uploaded = 0;
     var failed = 0;
     try {
-      for (final file in files) {
+      for (final file in uploads) {
         try {
-          final bytes = await file.readAsBytes();
-          final mime = file.mimeType ?? _mimeForName(file.name);
-          await _backend.uploadAstreintePhoto(
-            bytes: bytes,
-            fileName: file.name,
-            mimeType: mime,
+          await AstreinteResourceService.instance.upload(
+            bytes: file.bytes,
+            fileName: file.fileName,
+            mimeType: file.mimeType,
             hospital: hospital,
           );
           uploaded++;
@@ -188,10 +255,11 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         final target = hospitalDisplayName(hospital);
         final message = failed == 0
             ? (uploaded == 1
-                ? 'Photo d’astreinte publiée pour $target.'
-                : '$uploaded photos d’astreinte publiées pour $target.')
-            : '$uploaded photo${uploaded > 1 ? 's' : ''} publiée${uploaded > 1 ? 's' : ''} pour $target, $failed échec${failed > 1 ? 's' : ''}.';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+                ? 'Document d’astreinte importé pour $target.'
+                : '$uploaded documents d’astreinte importés pour $target.')
+            : '$uploaded document${uploaded > 1 ? 's' : ''} importé${uploaded > 1 ? 's' : ''} pour $target, $failed échec${failed > 1 ? 's' : ''}.';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -229,13 +297,19 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer cette photo ?'),
+        title: const Text('Supprimer ce document ?'),
         content: Text(
-          'Elle disparaîtra de la galerie des Séniors d’astreinte de ${hospitalDisplayName(hospital)}.',
+          'Il disparaîtra des documents des Séniors d’astreinte de ${hospitalDisplayName(hospital)}.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Supprimer')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer'),
+          ),
         ],
       ),
     );
@@ -246,21 +320,49 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Suppression impossible : $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Suppression impossible : $e')),
+        );
       }
     }
   }
 
+  Future<void> _openResource(SharedResource resource) async {
+    if (_isImageResource(resource)) {
+      _openPhoto(resource);
+      return;
+    }
+
+    try {
+      final url = await _backend.signedSharedResourceUrl(
+        resource.storagePath,
+        expiresIn: 3600,
+      );
+      final launched = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.platformDefault,
+      );
+      if (!launched) throw StateError('Ouverture refusée par l’appareil.');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible d’ouvrir ce document : $e')),
+      );
+    }
+  }
+
   void _openPhoto(SharedResource resource) {
-    final initialIndex = _photos.indexWhere((p) => p.id == resource.id);
+    final images = _photos.where(_isImageResource).toList(growable: false);
+    final initialIndex = images.indexWhere((p) => p.id == resource.id);
+    if (initialIndex < 0) return;
     showDialog<void>(
       context: context,
       barrierColor: Colors.black,
       builder: (ctx) => Dialog.fullscreen(
         backgroundColor: Colors.black,
         child: _AstreinteGalleryViewer(
-          photos: List<SharedResource>.unmodifiable(_photos),
-          initialIndex: initialIndex < 0 ? 0 : initialIndex,
+          photos: images,
+          initialIndex: initialIndex,
           backend: _backend,
           onClose: () => Navigator.pop(ctx),
         ),
@@ -314,18 +416,19 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                   return _AdminAddTile(
                     uploading: _uploading,
                     hospital: hospital,
-                    onTap: _pickImage,
+                    onTap: _pickResource,
                   );
                 }
-                final photo = _photos[i - (isAdmin ? 1 : 0)];
+                final resource = _photos[i - (isAdmin ? 1 : 0)];
+                final isImage = _isImageResource(resource);
                 return _AstreintePhotoCard(
-                  resource: photo,
-                  imageFuture: _bytesFor(photo),
+                  resource: resource,
+                  imageFuture: isImage ? _bytesFor(resource) : null,
                   canDelete: isAdmin,
                   canAnalyze: isAdmin,
-                  onTap: () => _openPhoto(photo),
-                  onAnalyze: () => _analyze(photo),
-                  onDelete: () => _delete(photo),
+                  onTap: () => _openResource(resource),
+                  onAnalyze: () => _analyze(resource),
+                  onDelete: () => _delete(resource),
                 );
               },
             );
@@ -338,12 +441,12 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       children: [
         if (widget.embedded)
           Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 12, 4),
+            padding: const EdgeInsets.fromLTRB(16, 0, 12, 4),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    'Photos par établissement',
+                    'Documents par établissement',
                     style: TextStyle(
                       color: AppColors.ink,
                       fontSize: 13,
@@ -354,21 +457,21 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                 IconButton(
                   tooltip: 'Actualiser',
                   onPressed: _loading ? null : _load,
-                  icon: Icon(Icons.refresh_rounded),
+                  icon: const Icon(Icons.refresh_rounded),
                   color: AppColors.brand,
                 ),
                 if (isAdmin)
                   IconButton(
                     tooltip:
-                        'Ajouter une photo pour ${hospitalDisplayName(hospital)}',
-                    onPressed: _uploading ? null : _pickImage,
+                        'Ajouter une photo, un PDF ou un Excel pour ${hospitalDisplayName(hospital)}',
+                    onPressed: _uploading ? null : _pickResource,
                     icon: _uploading
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Icon(Icons.add_photo_alternate_rounded),
+                        : const Icon(Icons.upload_file_rounded),
                     color: AppColors.brand,
                   ),
               ],
@@ -398,20 +501,20 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           IconButton(
             tooltip: 'Actualiser',
             onPressed: _loading ? null : _load,
-            icon: Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded),
           ),
           if (isAdmin)
             IconButton(
               tooltip:
-                  'Ajouter une photo pour ${hospitalDisplayName(hospital)}',
-              onPressed: _uploading ? null : _pickImage,
+                  'Ajouter une photo, un PDF ou un Excel pour ${hospitalDisplayName(hospital)}',
+              onPressed: _uploading ? null : _pickResource,
               icon: _uploading
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Icon(Icons.add_photo_alternate_rounded),
+                  : const Icon(Icons.upload_file_rounded),
             ),
         ],
       ),
@@ -427,8 +530,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           ),
           child: Text(
             isAdmin
-                ? 'Vous gérez actuellement les photos de ${hospitalDisplayName(hospital)}. Changez d’établissement en haut pour publier dans une autre galerie.'
-                : 'Tous les médecins peuvent consulter les photos des trois hôpitaux. Sélectionnez l’établissement en haut.',
+                ? 'Vous gérez actuellement les documents de ${hospitalDisplayName(hospital)}. Photos, PDF, XLS et XLSX peuvent être importés puis vérifiés avant publication.'
+                : 'Tous les médecins peuvent consulter les documents des trois hôpitaux. Sélectionnez l’établissement en haut.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.inkSoft,
                   height: 1.4,
@@ -456,7 +559,12 @@ class _HospitalAstreinteHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
+      padding: EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        AppSpace.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(bottom: BorderSide(color: AppColors.line)),
@@ -466,21 +574,28 @@ class _HospitalAstreinteHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.local_hospital_rounded, size: 18, color: AppColors.brand),
-              SizedBox(width: 8),
+              Icon(
+                Icons.local_hospital_rounded,
+                size: 18,
+                color: AppColors.brand,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   hospitalDisplayName(hospital),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               Text(
-                isAdmin ? 'Galerie à gérer' : 'Toutes les galeries',
+                isAdmin ? 'Documents à gérer' : 'Tous les documents',
                 style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
               ),
             ],
           ),
-          SizedBox(height: 9),
+          const SizedBox(height: 9),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -491,7 +606,7 @@ class _HospitalAstreinteHeader extends StatelessWidget {
                     selected: item == hospital,
                     onSelected: (_) => onSelectHospital(item),
                   ),
-                  if (item != kHospitals.last) SizedBox(width: 8),
+                  if (item != kHospitals.last) const SizedBox(width: 8),
                 ],
               ],
             ),
@@ -509,16 +624,19 @@ class _EmptyHospitalGallery extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      physics: AlwaysScrollableScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.all(AppSpace.xl),
       children: [
-        SizedBox(height: 60),
-        Icon(Icons.photo_library_outlined, size: 46, color: AppColors.inkSoft),
-        SizedBox(height: 12),
+        const SizedBox(height: 60),
+        Icon(Icons.folder_open_rounded, size: 46, color: AppColors.inkSoft),
+        const SizedBox(height: 12),
         Text(
-          'Aucune photo d’astreinte publiée pour ${hospitalDisplayName(hospital)}.',
+          'Aucun document d’astreinte publié pour ${hospitalDisplayName(hospital)}.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: AppColors.inkSoft),
         ),
       ],
     );
@@ -539,7 +657,8 @@ class _AstreinteGalleryViewer extends StatefulWidget {
   });
 
   @override
-  State<_AstreinteGalleryViewer> createState() => _AstreinteGalleryViewerState();
+  State<_AstreinteGalleryViewer> createState() =>
+      _AstreinteGalleryViewerState();
 }
 
 class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
@@ -554,7 +673,8 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
     _pageController = PageController(initialPage: widget.initialIndex);
     _urlsFuture = Future.wait(
       widget.photos.map(
-        (photo) => widget.backend.signedSharedResourceUrl(photo.storagePath, expiresIn: 3600),
+        (photo) => widget.backend
+            .signedSharedResourceUrl(photo.storagePath, expiresIn: 3600),
       ),
     );
   }
@@ -584,7 +704,11 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                     ),
                   ),
                 ),
-                Positioned(top: 10, right: 10, child: _GalleryCloseButton(onClose: widget.onClose)),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: _GalleryCloseButton(onClose: widget.onClose),
+                ),
               ],
             );
           }
@@ -594,7 +718,11 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
             return Stack(
               children: [
                 const Center(child: CircularProgressIndicator()),
-                Positioned(top: 10, right: 10, child: _GalleryCloseButton(onClose: widget.onClose)),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: _GalleryCloseButton(onClose: widget.onClose),
+                ),
               ],
             );
           }
@@ -606,17 +734,26 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                   pageController: _pageController,
                   itemCount: widget.photos.length,
                   scrollPhysics: const BouncingScrollPhysics(),
-                  backgroundDecoration: const BoxDecoration(color: Colors.black),
-                  loadingBuilder: (context, event) => const Center(child: CircularProgressIndicator()),
-                  onPageChanged: (index) => setState(() => _currentIndex = index),
+                  backgroundDecoration:
+                      const BoxDecoration(color: Colors.black),
+                  loadingBuilder: (context, event) =>
+                      const Center(child: CircularProgressIndicator()),
+                  onPageChanged: (index) =>
+                      setState(() => _currentIndex = index),
                   builder: (context, index) => PhotoViewGalleryPageOptions(
                     imageProvider: NetworkImage(urls[index]),
                     initialScale: PhotoViewComputedScale.contained,
                     minScale: PhotoViewComputedScale.contained,
                     maxScale: PhotoViewComputedScale.covered * 4.0,
-                    heroAttributes: PhotoViewHeroAttributes(tag: 'astreinte-photo-${widget.photos[index].id}'),
-                    errorBuilder: (context, error, stackTrace) => const Center(
-                      child: Text('Image indisponible', style: TextStyle(color: Colors.white)),
+                    heroAttributes: PhotoViewHeroAttributes(
+                      tag: 'astreinte-photo-${widget.photos[index].id}',
+                    ),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Center(
+                      child: Text(
+                        'Image indisponible',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
@@ -625,18 +762,26 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                 top: 10,
                 left: 16,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.58),
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
                     '${_currentIndex + 1} / ${widget.photos.length}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
-              Positioned(top: 10, right: 10, child: _GalleryCloseButton(onClose: widget.onClose)),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: _GalleryCloseButton(onClose: widget.onClose),
+              ),
               if (widget.photos.length > 1)
                 Positioned(
                   left: 16,
@@ -645,14 +790,21 @@ class _AstreinteGalleryViewerState extends State<_AstreinteGalleryViewer> {
                   child: IgnorePointer(
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.58),
                           borderRadius: BorderRadius.circular(99),
                         ),
                         child: const Text(
                           'Glissez à gauche ou à droite • pincez pour zoomer',
-                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -682,7 +834,7 @@ class _GalleryCloseButton extends StatelessWidget {
 
 class _AstreintePhotoCard extends StatelessWidget {
   final SharedResource resource;
-  final Future<Uint8List> imageFuture;
+  final Future<Uint8List>? imageFuture;
   final bool canDelete;
   final bool canAnalyze;
   final VoidCallback onTap;
@@ -701,6 +853,7 @@ class _AstreintePhotoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isImage = imageFuture != null;
     return Material(
       color: AppColors.card,
       borderRadius: AppRadius.lgR,
@@ -710,16 +863,27 @@ class _AstreintePhotoCard extends StatelessWidget {
         child: Stack(
           children: [
             Positioned.fill(
-              child: FutureBuilder<Uint8List>(
-                future: imageFuture,
-                builder: (context, snap) {
-                  if (snap.hasData) return Image.memory(snap.data!, fit: BoxFit.cover);
-                  if (snap.hasError) {
-                    return Center(child: Icon(Icons.broken_image_outlined, color: AppColors.inkSoft));
-                  }
-                  return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                },
-              ),
+              child: isImage
+                  ? FutureBuilder<Uint8List>(
+                      future: imageFuture,
+                      builder: (context, snap) {
+                        if (snap.hasData) {
+                          return Image.memory(snap.data!, fit: BoxFit.cover);
+                        }
+                        if (snap.hasError) {
+                          return Center(
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: AppColors.inkSoft,
+                            ),
+                          );
+                        }
+                        return const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      },
+                    )
+                  : _AstreinteDocumentPreview(resource: resource),
             ),
             Positioned(
               left: 0,
@@ -738,7 +902,11 @@ class _AstreintePhotoCard extends StatelessWidget {
                   resource.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -771,11 +939,62 @@ class _AstreintePhotoCard extends StatelessWidget {
   }
 }
 
+class _AstreinteDocumentPreview extends StatelessWidget {
+  final SharedResource resource;
+
+  const _AstreinteDocumentPreview({required this.resource});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.paperAlt,
+      padding: const EdgeInsets.fromLTRB(16, 48, 16, 48),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _resourceIcon(resource),
+            size: 58,
+            color: AppColors.brand,
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Text(
+              _resourceTypeLabel(resource),
+              style: TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w900,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Touchez pour ouvrir',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.inkSoft, fontSize: 10.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdminAddTile extends StatelessWidget {
   final bool uploading;
   final String hospital;
   final VoidCallback onTap;
-  const _AdminAddTile({required this.uploading, required this.hospital, required this.onTap});
+  const _AdminAddTile({
+    required this.uploading,
+    required this.hospital,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -796,15 +1015,34 @@ class _AdminAddTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (uploading)
-                CircularProgressIndicator(strokeWidth: 2)
+                const CircularProgressIndicator(strokeWidth: 2)
               else
-                Icon(Icons.cloud_upload_outlined, size: 34, color: AppColors.catService),
-              SizedBox(height: 8),
-              Text(uploading ? 'Envoi…' : 'Publier des photos', textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
-              SizedBox(height: 4),
-              Text('Pour ${hospitalDisplayName(hospital)}', textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft)),
+                Icon(
+                  Icons.upload_file_rounded,
+                  size: 34,
+                  color: AppColors.catService,
+                ),
+              const SizedBox(height: 8),
+              Text(
+                uploading ? 'Envoi…' : 'Ajouter un document',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Photo · PDF · XLS · XLSX',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                'Pour ${hospitalDisplayName(hospital)}',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft),
+              ),
             ],
           ),
         ),
@@ -827,10 +1065,14 @@ class _ErrorState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.inkSoft),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Text(message, textAlign: TextAlign.center),
-            SizedBox(height: 12),
-            FilledButton.icon(onPressed: onRetry, icon: Icon(Icons.refresh_rounded), label: Text('Réessayer')),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réessayer'),
+            ),
           ],
         ),
       ),
@@ -838,11 +1080,58 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
+class _PendingAstreinteUpload {
+  final Uint8List bytes;
+  final String fileName;
+  final String mimeType;
+
+  const _PendingAstreinteUpload({
+    required this.bytes,
+    required this.fileName,
+    required this.mimeType,
+  });
+}
+
+bool _isImageResource(SharedResource resource) {
+  if (resource.mimeType.toLowerCase().startsWith('image/')) return true;
+  final lower = resource.displayName.toLowerCase();
+  return lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') ||
+      lower.endsWith('.png') ||
+      lower.endsWith('.webp');
+}
+
+IconData _resourceIcon(SharedResource resource) {
+  final lower = resource.displayName.toLowerCase();
+  if (resource.mimeType == 'application/pdf' || lower.endsWith('.pdf')) {
+    return Icons.picture_as_pdf_rounded;
+  }
+  if (lower.endsWith('.xls') || lower.endsWith('.xlsx')) {
+    return Icons.table_chart_rounded;
+  }
+  return Icons.description_rounded;
+}
+
+String _resourceTypeLabel(SharedResource resource) {
+  final lower = resource.displayName.toLowerCase();
+  if (resource.mimeType == 'application/pdf' || lower.endsWith('.pdf')) {
+    return 'PDF';
+  }
+  if (lower.endsWith('.xlsx')) return 'EXCEL · XLSX';
+  if (lower.endsWith('.xls')) return 'EXCEL · XLS';
+  return 'DOCUMENT';
+}
+
 String _mimeForName(String name) {
   final lower = name.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
   if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.xlsx')) {
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  }
+  if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
   return 'image/jpeg';
 }
 
-enum _AstreintePickAction { camera, gallery }
+enum _AstreintePickAction { camera, gallery, pdf, spreadsheet }
