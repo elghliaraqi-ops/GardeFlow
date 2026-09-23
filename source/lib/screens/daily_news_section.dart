@@ -30,6 +30,41 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
     ),
   ];
 
+  static const _categoryOrder = <String>[
+    'AMIUM6',
+    'HUIM6 de Bouskoura',
+    'HUICK de Casablanca',
+    'HUIM6 de Rabat',
+    'UM6SS',
+    'Autres',
+  ];
+
+  static String _categoryFor(_DailyNewsItem item) {
+    final source = '${item.sourceKey} ${item.displayName}'.toLowerCase();
+
+    if (source.contains('ami_um6') ||
+        source.contains('ami um6') ||
+        source.contains('amium6')) {
+      return 'AMIUM6';
+    }
+    if (source.contains('bouskoura')) {
+      return 'HUIM6 de Bouskoura';
+    }
+    if (source.contains('huick') ||
+        source.contains('cheikh khalifa') ||
+        source.contains('cheikh_khalifa') ||
+        source.contains('hopital.cheikh.khalifa')) {
+      return 'HUICK de Casablanca';
+    }
+    if (source.contains('rabat')) {
+      return 'HUIM6 de Rabat';
+    }
+    if (source.contains('um6ss')) {
+      return 'UM6SS';
+    }
+    return 'Autres';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -52,20 +87,9 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
       return mediaType != 'WEB' && !externalId.startsWith('web-');
     }).toList();
 
-    // AMI UM6 est prioritaire : ses publications apparaissent toujours
-    // en premier, même si d'autres comptes ont publié plus récemment.
-    final ami = instagramRows
-        .where((row) => row['source_key']?.toString() == 'ami_um6')
-        .take(4);
-    final others = instagramRows
-        .where((row) => row['source_key']?.toString() != 'ami_um6');
-
-    final ordered = <Map<String, dynamic>>[
-      ...ami,
-      ...others,
-    ];
-
-    return ordered.take(12).map(_DailyNewsItem.fromMap).toList();
+    // L'ordre du flux horizontal suit désormais strictement la date de
+    // publication : aucune source n'est prioritaire.
+    return instagramRows.take(12).map(_DailyNewsItem.fromMap).toList();
   }
 
   Future<void> _reload() async {
@@ -138,7 +162,6 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                           letterSpacing: -0.35,
                         ),
                       ),
-
                     ],
                   ),
                 ),
@@ -198,14 +221,46 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
               ),
               SizedBox(height: 4),
               Text(
-                'Dernières publications des comptes officiels',
-                style: TextStyle(color: AppColors.inkSoft, fontSize: 11.5, fontWeight: FontWeight.w600),
+                'Dernières publications classées par source',
+                style: TextStyle(
+                  color: AppColors.inkSoft,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              SizedBox(height: 12),
-              for (final item in items) ...[
-                _NewsDetailCard(item: item, onTap: () => _open(item.permalink)),
-                SizedBox(height: 12),
-              ],
+              SizedBox(height: 16),
+              for (final category in _categoryOrder)
+                if (items.any((item) => _categoryFor(item) == category)) ...[
+                  Container(
+                    width: double.infinity,
+                    margin: EdgeInsets.only(top: 4, bottom: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandSoft,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Text(
+                      category,
+                      style: TextStyle(
+                        fontFamily: 'SpaceGrotesk',
+                        color: AppColors.ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  for (final item in items.where(
+                    (item) => _categoryFor(item) == category,
+                  )) ...[
+                    _NewsDetailCard(
+                      item: item,
+                      onTap: () => _open(item.permalink),
+                    ),
+                    SizedBox(height: 12),
+                  ],
+                  SizedBox(height: 8),
+                ],
             ],
           ],
         );
@@ -712,6 +767,7 @@ class _NewsEmptyState extends StatelessWidget {
 
 class _DailyNewsItem {
   final String id;
+  final String sourceKey;
   final String displayName;
   final String? caption;
   final String? mediaUrl;
@@ -722,6 +778,7 @@ class _DailyNewsItem {
 
   const _DailyNewsItem({
     required this.id,
+    required this.sourceKey,
     required this.displayName,
     required this.caption,
     required this.mediaUrl,
@@ -734,6 +791,7 @@ class _DailyNewsItem {
   factory _DailyNewsItem.fromMap(Map<String, dynamic> map) {
     return _DailyNewsItem(
       id: map['external_id']?.toString() ?? '',
+      sourceKey: map['source_key']?.toString() ?? '',
       displayName: map['display_name']?.toString() ?? 'Actualité',
       caption: map['caption']?.toString(),
       mediaUrl: map['media_url']?.toString(),
