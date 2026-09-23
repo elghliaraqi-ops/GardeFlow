@@ -1,7 +1,11 @@
 import '../models/app_user.dart';
 
-/// Référentiel des internes fourni par l'AMI UM6.
-/// Promo 7 = première année ; Promo 6 = deuxième année.
+/// Référentiel historique des promotions actuellement connues.
+///
+/// Ces listes servent uniquement à compléter la promotion des comptes existants
+/// issus du PDF/référentiel transmis. Elles ne définissent pas la règle métier
+/// des échanges : la première année est toujours la promotion active la plus
+/// récente, quelle que soit sa valeur (Promo 7 aujourd'hui, Promo 8 demain, etc.).
 class InternPromotions {
   InternPromotions._();
 
@@ -74,7 +78,6 @@ class InternPromotions {
     if (_promo6.contains(key)) return 6;
     if (_promo5.contains(key)) return 5;
 
-    // Tolère les comptes saisis avec Nom/Prénom inversés.
     final reverse = _key(prenom, nom);
     if (_promo7.contains(reverse)) return 7;
     if (_promo6.contains(reverse)) return 6;
@@ -86,37 +89,75 @@ class InternPromotions {
       ? null
       : user.promotionNumber ?? numberForNames(user.nom, user.prenom);
 
-  /// Promo 7 = 1re année, Promo 6 = 2e année, Promo 5 = 3e année, etc.
-  static int? trainingYearForPromotion(int? promo) {
-    if (promo == null || promo < 1 || promo > 7) return null;
-    return 8 - promo;
+  static int? highestPromotion(Iterable<AppUser> users) {
+    int? result;
+    for (final user in users) {
+      if (user.grade != MedicalGrade.junior || user.accountStatus != AccountStatus.active) continue;
+      final promotion = numberFor(user);
+      if (promotion == null) continue;
+      if (result == null || promotion > result) result = promotion;
+    }
+    return result;
   }
 
-  static String? yearLabelForPromotion(int? promo) {
-    final year = trainingYearForPromotion(promo);
+  /// Calcule l'année d'internat relativement à la promotion actuellement en
+  /// première année. Exemple : si la Promo 8 est la plus récente, Promo 8 =
+  /// 1re année, Promo 7 = 2e année, Promo 6 = 3e année, etc.
+  static int? trainingYearForPromotion(
+    int? promo, {
+    required int firstYearPromotion,
+  }) {
+    if (promo == null || promo < 1 || firstYearPromotion < 1 || promo > firstYearPromotion) {
+      return null;
+    }
+    return firstYearPromotion - promo + 1;
+  }
+
+  static String? yearLabelForPromotion(
+    int? promo, {
+    required int firstYearPromotion,
+  }) {
+    final year = trainingYearForPromotion(
+      promo,
+      firstYearPromotion: firstYearPromotion,
+    );
     if (year == null) return null;
     return year == 1 ? '1re année' : '${year}e année';
   }
 
-  static String? labelFor(AppUser? user) {
+  static String? labelFor(
+    AppUser? user, {
+    required int firstYearPromotion,
+  }) {
     final promo = numberFor(user);
-    final year = yearLabelForPromotion(promo);
+    final year = yearLabelForPromotion(
+      promo,
+      firstYearPromotion: firstYearPromotion,
+    );
     if (promo == null || year == null) return null;
     return '$year · Promo $promo';
   }
 
-  /// Pour les gardes d'Urgences, la première année (Promo 7) reste
-  /// séparée des internes plus avancés. Les Promo 6, 5, 4... peuvent
-  /// en revanche transférer/échanger entre elles.
-  static bool crossYearBlocked(AppUser? a, AppUser? b) {
+  /// La promotion la plus récente (= première année) ne peut transférer ou
+  /// échanger qu'avec elle-même. Toutes les promotions antérieures peuvent
+  /// échanger/transférer entre elles.
+  static bool crossYearBlocked(
+    AppUser? a,
+    AppUser? b, {
+    required int firstYearPromotion,
+  }) {
     final pa = numberFor(a);
     final pb = numberFor(b);
-    if (pa == null || pb == null) return false;
-    final aFirstYear = pa == 7;
-    final bFirstYear = pb == 7;
-    final aOlder = pa >= 1 && pa <= 6;
-    final bOlder = pb >= 1 && pb <= 6;
-    return (aFirstYear && bOlder) || (bFirstYear && aOlder);
+    if (pa == null || pb == null || pa == pb) return false;
+
+    // Défense contre un état local momentanément en retard par rapport au
+    // serveur : si un profil porte déjà une promo plus récente, elle devient
+    // immédiatement la référence pour cette comparaison.
+    var effectiveFirstYear = firstYearPromotion;
+    if (pa > effectiveFirstYear) effectiveFirstYear = pa;
+    if (pb > effectiveFirstYear) effectiveFirstYear = pb;
+
+    return pa == effectiveFirstYear || pb == effectiveFirstYear;
   }
 
   /// Alias du planning officiel quand le compte contient plusieurs prénoms.
