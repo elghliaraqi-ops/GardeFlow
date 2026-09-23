@@ -1,7 +1,7 @@
 name: huim6_planning
 description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
 publish_to: "none"
-version: 11.6.70+230
+version: 12.0.0+300
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -51,5 +51,3 @@ flutter:
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Variable.ttf
-
-# GardeFlow rebuild trigger: urgency-only interpromo + contrast + news buttons 2026-09-23
