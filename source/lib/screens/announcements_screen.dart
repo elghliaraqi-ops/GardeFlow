@@ -435,7 +435,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           color: AppColors.brandSoft,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(Icons.forum_rounded, color: AppColors.brand),
+                        child: Icon(Icons.forum_rounded, color: AppColors.brand),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -544,7 +544,7 @@ class _AnnouncementCard extends StatelessWidget {
                   announcement.authorName.trim().isEmpty
                       ? '?'
                       : announcement.authorName.trim()[0].toUpperCase(),
-                  style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),
+                  style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),
                 ),
               ),
               const SizedBox(width: 11),

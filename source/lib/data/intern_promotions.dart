@@ -25,7 +25,7 @@ class InternPromotions {
 
   static const Set<String> _promo6 = {
     'aamer anas', 'abderrahmane elferdaous', 'adil lina', 'ahlsidimouloud aicha',
-    'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'belhaj anas',
+    'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'araqui houssaini elghali', 'araqui houssaini el ghali', 'belhaj anas',
     'bennani simo', 'bennour ghita', 'benzekri ines', 'bouhmouch ines',
     'bourkia wail', 'bouziane zineb', 'drifi salma', 'driouech selma',
     'el baz daoud', 'ezzine khadija', 'fassy fehry reda', 'hamich omar',

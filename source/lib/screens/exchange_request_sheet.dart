@@ -125,7 +125,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                     ),
                     child: Text(
                       promotionLabel,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.brandDark,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w900,
