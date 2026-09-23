@@ -1,4 +1,4 @@
-name: One-time announcements and promotion integration
+name: One-time announcements and promotion compile fix
 
 on:
   push:
@@ -18,18 +18,60 @@ jobs:
         with:
           ref: audit-fixes-v11.6.70
           fetch-depth: 0
-      - name: Apply integration patch
+
+      - name: Patch compile issues safely
         shell: bash
         run: |
-          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwID0gUGF0aCgic291cmNlL2xpYi9zY3JlZW5zL2V4Y2hhbmdlX3JlcXVlc3Rfc2hlZXQuZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCmJyb2tlbiA9ICJzZXRTdGF0ZSgoKSA9PiBfZXJyb3IgPSBlcnI7XG4gICAgICAgICAgICAgICAgICAgICAgICAgICk7IgppZiBicm9rZW4gaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoYnJva2VuLCAic2V0U3RhdGUoKCkgPT4gX2Vycm9yID0gZXJyKTsiKQpwLndyaXRlX3RleHQocykKCnAgPSBQYXRoKCJzdXBhYmFzZS9mdW5jdGlvbnMvc2VuZC1wdXNoL2luZGV4LnRzIikKcyA9IHAucmVhZF90ZXh0KCkKcyA9IHMucmVwbGFjZSgKICAgICJncmFudF90eXBlOiAndXJuOmlldGY6cGFyYW1zOm9hdXRoLXR5cGU6and0LWJlYXJlcicucmVwbGFjZSgnb2F1dGgtdHlwZScsICdpZXRmOnBhcmFtczpvYXV0aDpncmFudC10eXBlJyksIiwKICAgICJncmFudF90eXBlOiAndXJuOmlldGY6cGFyYW1zOm9hdXRoOmdyYW50LXR5cGU6and0LWJlYXJlcicsIiwKKQpwLndyaXRlX3RleHQocykKCnAgPSBQYXRoKCJzb3VyY2UvbGliL3NjcmVlbnMvaG9tZV9zY3JlZW4uZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCmlmICJpbXBvcnQgJy4uL2RhdGEvaW50ZXJuX3Byb21vdGlvbnMuZGFydCc7IiBub3QgaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoCiAgICAgICAgImltcG9ydCAnLi4vbW9kZWxzL2FwcF91c2VyLmRhcnQnOyIsCiAgICAgICAgImltcG9ydCAnLi4vZGF0YS9pbnRlcm5fcHJvbW90aW9ucy5kYXJ0JztcbmltcG9ydCAnLi4vbW9kZWxzL2FwcF91c2VyLmRhcnQnOyIsCiAgICAgICAgMSwKICAgICkKaWYgImltcG9ydCAnYW5ub3VuY2VtZW50c19zY3JlZW4uZGFydCc7IiBub3QgaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoCiAgICAgICAgImltcG9ydCAnYWRtaW5fc2NyZWVuLmRhcnQnOyIsCiAgICAgICAgImltcG9ydCAnYWRtaW5fc2NyZWVuLmRhcnQnO1xuaW1wb3J0ICdhbm5vdW5jZW1lbnRzX3NjcmVlbi5kYXJ0JzsiLAogICAgICAgIDEsCiAgICApCgpidWlsZF9tYXJrZXIgPSAiICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHtcbiAgICBmaW5hbCBub3cgPSBEYXRlVGltZS5ub3coKTtcbiAgICBmaW5hbCB2aXNpYmxlTW9udGggPSBhcHBTdGF0ZS52aXNpYmxlTW9udGg7IgpyZXBsYWNlbWVudF9tYXJrZXIgPSAiICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHtcbiAgICBmaW5hbCBwcm9tb3Rpb25MYWJlbCA9IEludGVyblByb21vdGlvbnMubGFiZWxGb3IoYXBwU3RhdGUuY3VycmVudFVzZXIpO1xuICAgIGZpbmFsIG5vdyA9IERhdGVUaW1lLm5vdygpO1xuICAgIGZpbmFsIHZpc2libGVNb250aCA9IGFwcFN0YXRlLnZpc2libGVNb250aDsiCmlmIGJ1aWxkX21hcmtlciBpbiBzOgogICAgcyA9IHMucmVwbGFjZShidWlsZF9tYXJrZXIsIHJlcGxhY2VtZW50X21hcmtlciwgMSkKCmNsYXNzX3BvcyA9IHMuaW5kZXgoImNsYXNzIF9QbGFubmluZ1ZpZXcgZXh0ZW5kcyBTdGF0ZWxlc3NXaWRnZXQiKQpzdGFydCA9IHMuaW5kZXgoIiAgICAgICAgUGFkZGluZyhcbiAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLmZyb21MVFJCKDEyLCA4LCAxMiwgMiksIiwgY2xhc3NfcG9zKQplbmQgPSBzLmluZGV4KCIgICAgICAgIF9Nb250aEJhcihhcHBTdGF0ZTogYXBwU3RhdGUpLCIsIHN0YXJ0KQpuZXdfaGVhZGVyID0gIiIiICAgICAgICBQYWRkaW5nKAogICAgICAgICAgcGFkZGluZzogRWRnZUluc2V0cy5mcm9tTFRSQigxMiwgOCwgMTIsIDQpLAogICAgICAgICAgY2hpbGQ6IFdyYXAoCiAgICAgICAgICAgIGFsaWdubWVudDogV3JhcEFsaWdubWVudC5jZW50ZXIsCiAgICAgICAgICAgIGNyb3NzQXhpc0FsaWdubWVudDogV3JhcENyb3NzQWxpZ25tZW50LmNlbnRlciwKICAgICAgICAgICAgc3BhY2luZzogOCwKICAgICAgICAgICAgcnVuU3BhY2luZzogNywKICAgICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgICBNYXRlcmlhbCgKICAgICAgICAgICAgICAgIGNvbG9yOiBDb2xvcnMudHJhbnNwYXJlbnQsCiAgICAgICAgICAgICAgICBjaGlsZDogSW5rV2VsbCgKICAgICAgICAgICAgICAgICAgb25UYXA6ICgpID0+IE5hdmlnYXRvci5wdXNoKAogICAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgICAgTWF0ZXJpYWxQYWdlUm91dGUoYnVpbGRlcjogKF8pID0+IE9mZmljaWFsUGxhbm5pbmdTY3JlZW4oKSksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBJbmsoCiAgICAgICAgICAgICAgICAgICAgaGVpZ2h0OiA0MCwKICAgICAgICAgICAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiAxNCksCiAgICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogQm94RGVjb3JhdGlvbigKICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiBBcHBDb2xvcnMuY2FyZCwKICAgICAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IEFwcENvbG9ycy5saW5lKSwKICAgICAgICAgICAgICAgICAgICAgIGJveFNoYWRvdzogWwogICAgICAgICAgICAgICAgICAgICAgICBCb3hTaGFkb3coCiAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IEFwcENvbG9ycy5uYXZ5LndpdGhPcGFjaXR5KDAuMDgpLAogICAgICAgICAgICAgICAgICAgICAgICAgIGJsdXJSYWRpdXM6IDE0LAogICAgICAgICAgICAgICAgICAgICAgICAgIG9mZnNldDogT2Zmc2V0KDAsIDUpLAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgIGNoaWxkOiBSb3coCiAgICAgICAgICAgICAgICAgICAgICBtYWluQXhpc1NpemU6IE1haW5BeGlzU2l6ZS5taW4sCiAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgICBJY29uKEljb25zLnBpY3R1cmVfYXNfcGRmX3JvdW5kZWQsIHNpemU6IDE4LCBjb2xvcjogQXBwQ29sb3JzLnVyZzI0aCksCiAgICAgICAgICAgICAgICAgICAgICAgIFNpemVkQm94KHdpZHRoOiA4KSwKICAgICAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICAnUGxhbm5pbmcgb2ZmaWNpZWwnLAogICAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlOiBUZXh0U3R5bGUoY29sb3I6IEFwcENvbG9ycy5pbmssIGZvbnRTaXplOiAxMi41LCBmb250V2VpZ2h0OiBGb250V2VpZ2h0Lnc5MDApLAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICApLAogICAgICAgICAgICAgIGlmIChwcm9tb3Rpb25MYWJlbCAhPSBudWxsKQogICAgICAgICAgICAgICAgQ29udGFpbmVyKAogICAgICAgICAgICAgICAgICBoZWlnaHQ6IDQwLAogICAgICAgICAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiAxMyksCiAgICAgICAgICAgICAgICAgIGRlY29yYXRpb246IEJveERlY29yYXRpb24oCiAgICAgICAgICAgICAgICAgICAgY29sb3I6IEFwcENvbG9ycy5icmFuZFNvZnQsCiAgICAgICAgICAgICAgICAgICAgYm9yZGVyUmFkaXVzOiBCb3JkZXJSYWRpdXMuY2lyY3VsYXIoOTk5KSwKICAgICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IEFwcENvbG9ycy5icmFuZC53aXRoT3BhY2l0eSgwLjE4KSksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBSb3coCiAgICAgICAgICAgICAgICAgICAgbWFpbkF4aXNTaXplOiBNYWluQXhpc1NpemUubWluLAogICAgICAgICAgICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgICAgICAgICAgICBJY29uKEljb25zLnNjaG9vbF9yb3VuZGVkLCBzaXplOiAxNywgY29sb3I6IEFwcENvbG9ycy5icmFuZERhcmspLAogICAgICAgICAgICAgICAgICAgICAgU2l6ZWRCb3god2lkdGg6IDcpLAogICAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgcHJvbW90aW9uTGFiZWwsCiAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlOiBUZXh0U3R5bGUoY29sb3I6IEFwcENvbG9ycy5icmFuZERhcmssIGZvbnRTaXplOiAxMS41LCBmb250V2VpZ2h0OiBGb250V2VpZ2h0Lnc5MDApLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICBNYXRlcmlhbCgKICAgICAgICAgICAgICAgIGNvbG9yOiBDb2xvcnMudHJhbnNwYXJlbnQsCiAgICAgICAgICAgICAgICBjaGlsZDogSW5rV2VsbCgKICAgICAgICAgICAgICAgICAgb25UYXA6ICgpID0+IE5hdmlnYXRvci5wdXNoKAogICAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgICAgTWF0ZXJpYWxQYWdlUm91dGUoYnVpbGRlcjogKF8pID0+IGNvbnN0IEFubm91bmNlbWVudHNTY3JlZW4oKSksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBJbmsoCiAgICAgICAgICAgICAgICAgICAgaGVpZ2h0OiA0MCwKICAgICAgICAgICAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiAxMyksCiAgICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogQm94RGVjb3JhdGlvbigKICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiBBcHBDb2xvcnMuY2FyZCwKICAgICAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IEFwcENvbG9ycy5saW5lKSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgIGNoaWxkOiBSb3coCiAgICAgICAgICAgICAgICAgICAgICBtYWluQXhpc1NpemU6IE1haW5BeGlzU2l6ZS5taW4sCiAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgICBJY29uKEljb25zLmZvcnVtX3JvdW5kZWQsIHNpemU6IDE3LCBjb2xvcjogQXBwQ29sb3JzLmJyYW5kKSwKICAgICAgICAgICAgICAgICAgICAgICAgU2l6ZWRCb3god2lkdGg6IDcpLAogICAgICAgICAgICAgICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAgICdBbm5vbmNlcycsCiAgICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogQXBwQ29sb3JzLmluaywgZm9udFNpemU6IDExLjUsIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzkwMCksCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICksCiAgICAgICAgICAgIF0sCiAgICAgICAgICApLAogICAgICAgICksCiIiIgpzID0gc1s6c3RhcnRdICsgbmV3X2hlYWRlciArIHNbZW5kOl0KcC53cml0ZV90ZXh0KHMpCgojIE1pcnJvciBwcm9kdWN0aW9uLXNhZmUgcHVzaCBjb2RlClBhdGgoInNvdXJjZS9zdXBhYmFzZS9mdW5jdGlvbnMvc2VuZC1wdXNoL2luZGV4LnRzIikud3JpdGVfdGV4dCgKICAgIFBhdGgoInN1cGFiYXNlL2Z1bmN0aW9ucy9zZW5kLXB1c2gvaW5kZXgudHMiKS5yZWFkX3RleHQoKQopCgojIEFzc2VydGlvbnMKYXNzZXJ0ICJmaW5hbCBwcm9tb3Rpb25MYWJlbCA9IEludGVyblByb21vdGlvbnMubGFiZWxGb3IoYXBwU3RhdGUuY3VycmVudFVzZXIpOyIgaW4gUGF0aCgic291cmNlL2xpYi9zY3JlZW5zL2hvbWVfc2NyZWVuLmRhcnQiKS5yZWFkX3RleHQoKQphc3NlcnQgImNvbnN0IEFubm91bmNlbWVudHNTY3JlZW4oKSIgaW4gUGF0aCgic291cmNlL2xpYi9zY3JlZW5zL2hvbWVfc2NyZWVuLmRhcnQiKS5yZWFkX3RleHQoKQphc3NlcnQgImdyYW50X3R5cGU6ICd1cm46aWV0ZjpwYXJhbXM6b2F1dGg6Z3JhbnQtdHlwZTpqd3QtYmVhcmVyJyIgaW4gUGF0aCgic3VwYWJhc2UvZnVuY3Rpb25zL3NlbmQtcHVzaC9pbmRleC50cyIpLnJlYWRfdGV4dCgpCmFzc2VydCAic2V0U3RhdGUoKCkgPT4gX2Vycm9yID0gZXJyKTsiIGluIFBhdGgoInNvdXJjZS9saWIvc2NyZWVucy9leGNoYW5nZV9yZXF1ZXN0X3NoZWV0LmRhcnQiKS5yZWFkX3RleHQoKQphc3NlcnQgImFubm91bmNlbWVudF9jcmVhdGVkIiBpbiBQYXRoKCJzb3VyY2Uvc3VwYWJhc2UvZnVuY3Rpb25zL3NlbmQtcHVzaC9pbmRleC50cyIpLnJlYWRfdGV4dCgpCg==' | base64 -d > /tmp/gardeflow_patch.py
-          python3 /tmp/gardeflow_patch.py
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('source/lib/screens/announcements_screen.dart')
+          s = p.read_text()
+          s = s.replace(
+              "child: const Icon(Icons.forum_rounded, color: AppColors.brand),",
+              "child: Icon(Icons.forum_rounded, color: AppColors.brand),",
+          )
+          s = s.replace(
+              "style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),",
+              "style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),",
+          )
+          p.write_text(s)
+
+          p = Path('source/lib/screens/exchange_request_sheet.dart')
+          s = p.read_text()
+          s = s.replace(
+              "style: const TextStyle(\n                        color: AppColors.brandDark,",
+              "style: TextStyle(\n                        color: AppColors.brandDark,",
+          )
+          p.write_text(s)
+
+          p = Path('source/lib/data/intern_promotions.dart')
+          s = p.read_text()
+          anchor = "'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'belhaj anas',"
+          replacement = "'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'araqui houssaini elghali', 'araqui houssaini el ghali', 'belhaj anas',"
+          if 'araqui houssaini elghali' not in s:
+              if anchor not in s:
+                  raise SystemExit('Promotion 6 alias anchor not found')
+              s = s.replace(anchor, replacement, 1)
+          p.write_text(s)
+          PY
+
+          grep -Fq "child: Icon(Icons.forum_rounded, color: AppColors.brand)" source/lib/screens/announcements_screen.dart
+          grep -Fq "style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900)" source/lib/screens/announcements_screen.dart
+          grep -Fq "araqui houssaini elghali" source/lib/data/intern_promotions.dart
           git diff --check
-      - name: Commit integration
+
+      - name: Commit compile fix
         shell: bash
         run: |
+          set -euo pipefail
           git config user.name 'GardeFlow CI'
           git config user.email 'actions@users.noreply.github.com'
-          git add source/lib/screens/home_screen.dart source/lib/screens/exchange_request_sheet.dart supabase/functions/send-push/index.ts source/supabase/functions/send-push/index.ts
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'feat: integrate announcement feed and promotion rules'
+          git add source/lib/screens/announcements_screen.dart source/lib/screens/exchange_request_sheet.dart source/lib/data/intern_promotions.dart
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit'
+            exit 0
+          fi
+          git commit -m 'fix: compile announcements and map Promo 6 account alias'
           git push origin HEAD:audit-fixes-v11.6.70
