@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
 import '../models/leave_request.dart';
 import '../models/planning_entry.dart';
@@ -14,6 +15,7 @@ import '../services/push_notification_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'admin_screen.dart';
+import 'announcements_screen.dart';
 import 'astreinte_screen.dart';
 import 'directory_screen.dart';
 import 'exchange_request_sheet.dart';
@@ -1333,6 +1335,7 @@ class _PlanningView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final promotionLabel = InternPromotions.labelFor(appState.currentUser);
     final now = DateTime.now();
     final visibleMonth = appState.visibleMonth;
     final visibleMonthStart = DateTime(visibleMonth.year, visibleMonth.month, 1);
@@ -1342,56 +1345,102 @@ class _PlanningView extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(12, 8, 12, 2),
-          child: Align(
-            alignment: Alignment.center,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => OfficialPlanningScreen(),
+          padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 7,
+            children: [
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Ink(
+                    height: 40,
+                    padding: EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.line),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.navy.withOpacity(0.08),
+                          blurRadius: 14,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: AppColors.urg24h),
+                        SizedBox(width: 8),
+                        Text(
+                          'Planning officiel',
+                          style: TextStyle(color: AppColors.ink, fontSize: 12.5, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                borderRadius: BorderRadius.circular(999),
-                child: Ink(
+              ),
+              if (promotionLabel != null)
+                Container(
                   height: 40,
-                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 13),
                   decoration: BoxDecoration(
-                    color: AppColors.card,
+                    color: AppColors.brandSoft,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.line),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.navy.withOpacity(0.08),
-                        blurRadius: 14,
-                        offset: Offset(0, 5),
-                      ),
-                    ],
+                    border: Border.all(color: AppColors.brand.withOpacity(0.18)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.picture_as_pdf_rounded,
-                        size: 18,
-                        color: AppColors.urg24h,
-                      ),
-                      SizedBox(width: 8),
+                      Icon(Icons.school_rounded, size: 17, color: AppColors.brandDark),
+                      SizedBox(width: 7),
                       Text(
-                        'Planning officiel',
-                        style: TextStyle(
-                          color: AppColors.ink,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        promotionLabel,
+                        style: TextStyle(color: AppColors.brandDark, fontSize: 11.5, fontWeight: FontWeight.w900),
                       ),
                     ],
                   ),
                 ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Ink(
+                    height: 40,
+                    padding: EdgeInsets.symmetric(horizontal: 13),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.forum_rounded, size: 17, color: AppColors.brand),
+                        SizedBox(width: 7),
+                        Text(
+                          'Annonces',
+                          style: TextStyle(color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
         _MonthBar(appState: appState),

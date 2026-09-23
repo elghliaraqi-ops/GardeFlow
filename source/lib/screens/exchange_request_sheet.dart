@@ -331,8 +331,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                         }
                         if (!context.mounted) return;
                         if (err != null) {
-                          setState(() => _error = err;
-                          );
+                          setState(() => _error = err);
                           return;
                         }
                         Navigator.of(context).pop();

@@ -58,32 +58,49 @@ async function googleAccessToken(sa: any): Promise<string> {
   return json.access_token;
 }
 
-async function sendFcm(sa: any, access: string, token: string, platform: string, data: Record<string, string>) {
-  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${access}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message: {
-        token,
-        data,
-        ...(platform === 'android' ? {
-          notification: { title: data.title, body: data.body },
-          android: {
-            priority: 'HIGH',
-            notification: {
-              channel_id: 'huim6_push',
-              icon: 'ic_stat_huim6',
-              sound: 'default',
-              tag: `${data.kind}:${data.resourceId}`,
-            },
-          },
-        } : { webpush: { headers: { Urgency: 'high' } } }),
+async function sendFcm(
+  sa: any,
+  access: string,
+  token: string,
+  platform: string,
+  data: Record<string, string>,
+) {
+  const message: Record<string, unknown> = { token, data };
+
+  if (platform === 'android') {
+    // Data-only: Android must not display this before GardeFlow verifies
+    // recipientId in its background isolate.
+    message.android = { priority: 'HIGH' };
+  } else if (platform === 'ios') {
+    message.apns = {
+      headers: {
+        'apns-priority': '5',
+        'apns-push-type': 'background',
       },
-    }),
-  });
+      payload: { aps: { 'content-available': 1 } },
+    };
+  } else {
+    message.webpush = {
+      headers: { Urgency: 'high' },
+      notification: {
+        title: data.title,
+        body: data.body,
+        tag: `${data.kind}:${data.resourceId}`,
+      },
+    };
+  }
+
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${access}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
+    },
+  );
   const text = await res.text();
   return { ok: res.ok, status: res.status, text };
 }
@@ -112,7 +129,8 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: caller, error: callerError } = await admin.from('profiles')
-      .select('id,phone,nom,prenom,hospital,role,account_status').eq('id', authData.user.id).single();
+      .select('id,phone,nom,prenom,hospital,role,account_status,promotion_number')
+      .eq('id', authData.user.id).single();
     if (callerError || !caller) throw new Error('Profil appelant introuvable');
     if (kind !== 'account_created' && caller.account_status !== 'active') {
       return new Response('Compte inactif', { status: 403, headers: corsHeaders });
@@ -127,7 +145,6 @@ Deno.serve(async (req) => {
         .select('id').eq('role', 'admin').eq('account_status', 'active').eq('hospital', hospital);
       const ids = (data ?? []).map((x: any) => x.id as string);
       if (ids.length > 0) return ids;
-      // Secours pour un administrateur réseau dont le profil est rattaché à un autre établissement.
       const { data: allAdmins } = await admin.from('profiles')
         .select('id').eq('role', 'admin').eq('account_status', 'active');
       return (allAdmins ?? []).map((x: any) => x.id as string);
@@ -140,6 +157,27 @@ Deno.serve(async (req) => {
       recipients = await adminsForHospital(profile.hospital);
       title = 'Nouveau compte à vérifier';
       body = `${profile.prenom} ${profile.nom} demande l’accès à ${profile.hospital}.`;
+    } else if (kind === 'announcement_created') {
+      const { data: announcement, error } = await admin.from('public_announcements')
+        .select('*').eq('id', resourceId).single();
+      if (error || !announcement) throw new Error('Annonce introuvable');
+      if (caller.id !== announcement.author_id || announcement.closed_at) {
+        throw new Error('Action non autorisée');
+      }
+
+      let cohortQuery = admin.from('profiles')
+        .select('id')
+        .eq('account_status', 'active')
+        .eq('hospital', announcement.hospital);
+      const promo = Number(announcement.promotion_number);
+      if (promo === 6 || promo === 7) {
+        cohortQuery = cohortQuery.eq('promotion_number', promo);
+      }
+      const { data: cohort, error: cohortError } = await cohortQuery;
+      if (cohortError) throw cohortError;
+      recipients = (cohort ?? []).map((x: any) => x.id as string);
+      title = 'Nouvelle annonce d’échange';
+      body = `${announcement.author_name} cherche un échange pour sa garde du ${announcement.date_str}.`;
     } else if (kind.startsWith('exchange_')) {
       const { data: ex, error } = await admin.from('exchange_requests').select('*').eq('id', resourceId).single();
       if (error || !ex) throw new Error('Demande transfert/échange introuvable');
@@ -240,6 +278,7 @@ Deno.serve(async (req) => {
     for (const row of tokenRows ?? []) {
       const result = await sendFcm(serviceAccount, access, row.token, row.platform, {
         title, body, kind, resourceId,
+        recipientId: row.owner_id,
       });
       if (result.ok) {
         sent++;
