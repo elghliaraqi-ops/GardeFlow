@@ -32,7 +32,7 @@ class InternPromotions {
     'imakor younes', 'imane norri', 'ines khairi', 'iziraren yasmine',
     'khaled hajar', 'laghdaf alia', 'latif idrissi fairouz', 'maarouf aala',
     'maryam elbardi', 'mellak omar', 'mourad ismail', 'moussa yahya',
-    'nouhaila aar ab',
+    'nouhaila aarab',
     'nyar malak', 'qossaim safaa', 'sahel ibtihal', 'sekkat kenza',
     'serir ahmed', 'tary yasmine', 'tlem aya', 'trabelsi salma',
     'wiame khalifi', 'yazid marfoq', 'zaghrari dahmane', 'zahid mohamed amine',
