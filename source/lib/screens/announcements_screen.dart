@@ -82,8 +82,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       if (!ShiftCatalog.byId(entry.shiftId).hasSchedule) return false;
       if (!state.isPlanningEntryApproved(entry)) return false;
       return !state.guardHasStarted(entry);
-    }).toList()
-      ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
+    }).toList()..sort((a, b) => a.dateStr.compareTo(b.dateStr));
     return result;
   }
 
@@ -103,7 +102,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
 
-    var selectedId = widget.initialEntryId != null &&
+    var selectedId =
+        widget.initialEntryId != null &&
             entries.any((e) => e.id == widget.initialEntryId)
         ? widget.initialEntryId!
         : entries.first.id;
@@ -123,7 +123,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               18,
               2,
               18,
-              18 + MediaQuery.viewInsetsOf(context).bottom,
+              18 +
+                  MediaQuery.viewInsetsOf(context).bottom +
+                  MediaQuery.viewPaddingOf(context).bottom,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -131,9 +133,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               children: [
                 Text(
                   'Publier une annonce d’échange',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 5),
                 Text(
@@ -144,20 +145,28 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 DropdownButtonFormField<String>(
                   value: selectedId,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Garde à échanger'),
+                  decoration: const InputDecoration(
+                    labelText: 'Garde à échanger',
+                  ),
                   items: entries.map((entry) {
                     final shift = ShiftCatalog.byId(entry.shiftId);
-                    final date = DateFormat('EEE d MMM yyyy', 'fr_FR')
-                        .format(DateTime.parse(entry.dateStr));
+                    final date = DateFormat(
+                      'EEE d MMM yyyy',
+                      'fr_FR',
+                    ).format(DateTime.parse(entry.dateStr));
                     return DropdownMenuItem(
                       value: entry.id,
-                      child: Text('$date · ${shift.label}', overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        '$date · ${shift.label}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: sending
                       ? null
                       : (value) {
-                          if (value != null) setSheetState(() => selectedId = value);
+                          if (value != null)
+                            setSheetState(() => selectedId = value);
                         },
                 ),
                 const SizedBox(height: 12),
@@ -180,21 +189,23 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         ? null
                         : () async {
                             setSheetState(() => sending = true);
-                            final id = 'an${DateTime.now().microsecondsSinceEpoch}';
+                            final id =
+                                'an${DateTime.now().microsecondsSinceEpoch}';
                             try {
                               await SupabaseBackendService.instance.client
                                   .from('public_announcements')
                                   .insert({
-                                'id': id,
-                                'author_id': me.id,
-                                'author_name': me.fullName,
-                                'hospital': me.hospital,
-                                'promotion_number': InternPromotions.numberFor(me),
-                                'planning_entry_id': selected.id,
-                                'date_str': selected.dateStr,
-                                'shift_id': selected.shiftId,
-                                'message': controller.text.trim(),
-                              });
+                                    'id': id,
+                                    'author_id': me.id,
+                                    'author_name': me.fullName,
+                                    'hospital': me.hospital,
+                                    'promotion_number':
+                                        InternPromotions.numberFor(me),
+                                    'planning_entry_id': selected.id,
+                                    'date_str': selected.dateStr,
+                                    'shift_id': selected.shiftId,
+                                    'message': controller.text.trim(),
+                                  });
                               try {
                                 await SupabaseBackendService.instance
                                     .triggerPush('announcement_created', id);
@@ -208,7 +219,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               if (!sheetContext.mounted) return;
                               setSheetState(() => sending = false);
                               ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                SnackBar(content: Text('Publication impossible : $e')),
+                                SnackBar(
+                                  content: Text('Publication impossible : $e'),
+                                ),
                               );
                             }
                           },
@@ -222,7 +235,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             ),
                           )
                         : const Icon(Icons.campaign_rounded),
-                    label: Text(sending ? 'Publication…' : 'Publier dans le fil'),
+                    label: Text(
+                      sending ? 'Publication…' : 'Publier dans le fil',
+                    ),
                   ),
                 ),
               ],
@@ -272,7 +287,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
     if (me.hospital != author.hospital) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Les échanges restent limités au même hôpital.')),
+        const SnackBar(
+          content: Text('Les échanges restent limités au même hôpital.'),
+        ),
       );
       return;
     }
@@ -282,7 +299,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
         .toList();
     if (mine.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vous n’avez aucune garde validée disponible à proposer.')),
+        const SnackBar(
+          content: Text(
+            'Vous n’avez aucune garde validée disponible à proposer.',
+          ),
+        ),
       );
       return;
     }
@@ -305,7 +326,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               children: [
                 Text(
                   'Proposer un échange à ${announcement.authorName}',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -316,14 +338,21 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 DropdownButtonFormField<String>(
                   value: selectedId,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Votre garde proposée'),
+                  decoration: const InputDecoration(
+                    labelText: 'Votre garde proposée',
+                  ),
                   items: mine.map((entry) {
                     final shift = ShiftCatalog.byId(entry.shiftId);
-                    final date = DateFormat('EEE d MMM yyyy', 'fr_FR')
-                        .format(DateTime.parse(entry.dateStr));
+                    final date = DateFormat(
+                      'EEE d MMM yyyy',
+                      'fr_FR',
+                    ).format(DateTime.parse(entry.dateStr));
                     return DropdownMenuItem(
                       value: entry.id,
-                      child: Text('$date · ${shift.label}', overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        '$date · ${shift.label}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: sending
@@ -339,7 +368,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 10),
-                  Text(error!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
+                  Text(
+                    error!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 14),
                 SizedBox(
@@ -349,7 +384,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                         ? null
                         : () async {
                             setSheetState(() => sending = true);
-                            final source = mine.firstWhere((e) => e.id == selectedId);
+                            final source = mine.firstWhere(
+                              (e) => e.id == selectedId,
+                            );
                             final contact = DirectoryContact(
                               id: author.id,
                               name: author.fullName,
@@ -375,7 +412,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             }
                             Navigator.pop(sheetContext);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Demande d’échange envoyée.')),
+                              const SnackBar(
+                                content: Text('Demande d’échange envoyée.'),
+                              ),
                             );
                           },
                     icon: const Icon(Icons.swap_horiz_rounded),
@@ -440,7 +479,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           color: AppColors.brandSoft,
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(Icons.forum_rounded, color: AppColors.brand),
+                        child: Icon(
+                          Icons.forum_rounded,
+                          color: AppColors.brand,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -449,7 +491,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           children: [
                             const Text(
                               'Fil public des gardes',
-                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -465,7 +510,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                if (snapshot.connectionState == ConnectionState.waiting && items.isEmpty)
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    items.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(40),
                     child: Center(child: CircularProgressIndicator()),
@@ -529,13 +575,15 @@ class _AnnouncementCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final own = announcement.authorId == meId;
     final shift = ShiftCatalog.byId(announcement.shiftId);
-    final date = DateFormat('EEEE d MMMM yyyy', 'fr_FR')
-        .format(DateTime.parse(announcement.dateStr));
+    final date = DateFormat(
+      'EEEE d MMMM yyyy',
+      'fr_FR',
+    ).format(DateTime.parse(announcement.dateStr));
     final promo = announcement.promotionNumber == 7
         ? '1re année · Promo 7'
         : announcement.promotionNumber == 6
-            ? '2e année · Promo 6'
-            : null;
+        ? '2e année · Promo 6'
+        : null;
 
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -551,7 +599,10 @@ class _AnnouncementCard extends StatelessWidget {
                   announcement.authorName.trim().isEmpty
                       ? '?'
                       : announcement.authorName.trim()[0].toUpperCase(),
-                  style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: AppColors.brand,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               const SizedBox(width: 11),
@@ -561,7 +612,10 @@ class _AnnouncementCard extends StatelessWidget {
                   children: [
                     Text(
                       announcement.authorName,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
                     ),
                     Text(
                       [
@@ -577,7 +631,11 @@ class _AnnouncementCard extends StatelessWidget {
               ),
               Text(
                 _relative(announcement.createdAt),
-                style: TextStyle(color: AppColors.inkFaint, fontSize: 10, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: AppColors.inkFaint,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -599,12 +657,19 @@ class _AnnouncementCard extends StatelessWidget {
                     children: [
                       Text(
                         shift.label,
-                        style: TextStyle(color: shift.textColor, fontWeight: FontWeight.w900),
+                        style: TextStyle(
+                          color: shift.textColor,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         date,
-                        style: TextStyle(color: shift.textColor.withOpacity(0.85), fontSize: 12, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: shift.textColor.withOpacity(0.85),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -616,7 +681,11 @@ class _AnnouncementCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               announcement.message.trim(),
-              style: const TextStyle(fontSize: 13, height: 1.45, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
           const SizedBox(height: 14),
@@ -645,7 +714,10 @@ class _AnnouncementCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Échange non disponible : hôpital ou promotion différente.',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ],
@@ -681,15 +753,19 @@ class _InfoState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-        child: Column(
-          children: [
-            Icon(icon, size: 44, color: AppColors.inkFaint),
-            const SizedBox(height: 12),
-            Text(text, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+    child: Column(
+      children: [
+        Icon(icon, size: 44, color: AppColors.inkFaint),
+        const SizedBox(height: 12),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _Announcement {
@@ -718,17 +794,17 @@ class _Announcement {
   });
 
   factory _Announcement.fromMap(Map<String, dynamic> row) => _Announcement(
-        id: row['id'].toString(),
-        authorId: row['author_id'].toString(),
-        authorName: (row['author_name'] ?? '').toString(),
-        hospital: (row['hospital'] ?? '').toString(),
-        promotionNumber: (row['promotion_number'] as num?)?.toInt(),
-        planningEntryId: row['planning_entry_id'].toString(),
-        dateStr: row['date_str'].toString(),
-        shiftId: row['shift_id'].toString(),
-        message: (row['message'] ?? '').toString(),
-        createdAt: DateTime.parse(row['created_at'].toString()),
-      );
+    id: row['id'].toString(),
+    authorId: row['author_id'].toString(),
+    authorName: (row['author_name'] ?? '').toString(),
+    hospital: (row['hospital'] ?? '').toString(),
+    promotionNumber: (row['promotion_number'] as num?)?.toInt(),
+    planningEntryId: row['planning_entry_id'].toString(),
+    dateStr: row['date_str'].toString(),
+    shiftId: row['shift_id'].toString(),
+    message: (row['message'] ?? '').toString(),
+    createdAt: DateTime.parse(row['created_at'].toString()),
+  );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

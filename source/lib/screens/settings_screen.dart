@@ -10,10 +10,7 @@ import '../theme/widgets.dart';
 class SettingsScreen extends StatefulWidget {
   final bool reminderFocus;
 
-  const SettingsScreen({
-    super.key,
-    this.reminderFocus = false,
-  });
+  const SettingsScreen({super.key, this.reminderFocus = false});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -161,9 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SizedBox(height: 5),
               Text(
                 'Vous pouvez programmer jusqu’à 3 alarmes avant chaque garde validée.',
-                style: Theme.of(ctx)
-                    .textTheme
-                    .bodySmall
+                style: Theme.of(ctx).textTheme.bodySmall
                     ?.copyWith(color: AppColors.inkSoft),
               ),
               SizedBox(height: AppSpace.lg),
@@ -231,10 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Row(
                 children: [
-                  Icon(
-                    Icons.battery_saver_rounded,
-                    color: AppColors.brand,
-                  ),
+                  Icon(Icons.battery_saver_rounded, color: AppColors.brand),
                   SizedBox(width: 9),
                   Text(
                     'Batterie Android / Samsung',
@@ -281,490 +273,476 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final delays = [...appState.reminderDelays]
-      ..sort((a, b) => b.compareTo(a));
+    final delays = [...appState.reminderDelays]..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      appBar: AppBar(
-        title: GardeFlowTitle('Rappels de garde'),
-      ),
-      body: ListView(
-        physics: BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          AppSpace.md,
-          AppSpace.lg,
-          34,
-        ),
-        children: [
-          SectionLabel('Rappels et alarme'),
-          Container(
-            padding: EdgeInsets.all(AppSpace.lg),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.brandDark,
-                  AppColors.brand,
+      appBar: AppBar(title: GardeFlowTitle('Rappels de garde')),
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: ListView(
+          physics: BouncingScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.md,
+            AppSpace.lg,
+            34,
+          ),
+          children: [
+            SectionLabel('Rappels et alarme'),
+            Container(
+              padding: EdgeInsets.all(AppSpace.lg),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.brandDark, AppColors.brand],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.brand.withOpacity(0.18),
+                    blurRadius: 18,
+                    offset: Offset(0, 8),
+                  ),
                 ],
               ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brand.withOpacity(0.18),
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(
-                    Icons.alarm_on_rounded,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-                SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Alarme de garde',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'SpaceGrotesk',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        'Une vraie alarme locale : sonnerie longue, vibration et écran plein écran jusqu’à Arrêter.',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11.5,
-                          height: 1.4,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Text(
-                            appState.notificationsOn
-                                ? 'ACTIVÉE'
-                                : 'DÉSACTIVÉE',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          Spacer(),
-                          Switch(
-                            value: appState.notificationsOn,
-                            onChanged: _saving
-                                ? null
-                                : (value) => _toggleAlarm(appState, value),
-                            activeColor: Colors.white,
-                            activeTrackColor:
-                                Colors.white.withOpacity(0.34),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: AppSpace.xl),
-          SectionLabel('Affichage de l’alarme'),
-          AppCard(
-            padding: EdgeInsets.all(AppSpace.lg),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.brandSoft,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    Icons.fullscreen_rounded,
-                    color: AppColors.brand,
-                    size: 25,
-                  ),
-                ),
-                SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Alarme plein écran',
-                        style: TextStyle(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Afficher le visuel JOUR, NUIT ou 24H quand l’alarme sonne.',
-                        style: TextStyle(
-                          color: AppColors.inkSoft,
-                          fontSize: 11.5,
-                          height: 1.4,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 8),
-                Switch(
-                  value: _fullScreenAlarm,
-                  onChanged: !_fullScreenPreferenceLoaded || _saving
-                      ? null
-                      : _setFullScreenAlarm,
-                ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: AppSpace.xl),
-          SectionLabel('Quand sonner ?'),
-          AppCard(
-            padding: EdgeInsets.all(AppSpace.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Alarmes avant chaque garde',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Elles sont programmées uniquement pour les gardes d’un calendrier définitivement validé.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AppColors.inkSoft),
-                ),
-                SizedBox(height: 13),
-                for (final minutes in delays)
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Container(
-                    margin: EdgeInsets.only(bottom: 8),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 9,
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(18),
                     ),
+                    child: Icon(
+                      Icons.alarm_on_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                  SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Alarme de garde',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'SpaceGrotesk',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          'Une vraie alarme locale : sonnerie longue, vibration et écran plein écran jusqu’à Arrêter.',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Text(
+                              appState.notificationsOn
+                                  ? 'ACTIVÉE'
+                                  : 'DÉSACTIVÉE',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            Spacer(),
+                            Switch(
+                              value: appState.notificationsOn,
+                              onChanged: _saving
+                                  ? null
+                                  : (value) => _toggleAlarm(appState, value),
+                              activeColor: Colors.white,
+                              activeTrackColor: Colors.white.withOpacity(0.34),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: AppSpace.xl),
+            SectionLabel('Affichage de l’alarme'),
+            AppCard(
+              padding: EdgeInsets.all(AppSpace.lg),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: AppColors.brandSoft,
-                      borderRadius: BorderRadius.circular(13),
-                      border: Border.all(
-                        color: AppColors.brand.withOpacity(0.12),
-                      ),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Row(
+                    child: Icon(
+                      Icons.fullscreen_rounded,
+                      color: AppColors.brand,
+                      size: 25,
+                    ),
+                  ),
+                  SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.alarm_rounded,
-                          color: AppColors.brand,
-                          size: 20,
-                        ),
-                        SizedBox(width: 9),
-                        Expanded(
-                          child: Text(
-                            appState.reminderDelayLabel(minutes),
-                            style: TextStyle(
-                              color: AppColors.ink,
-                              fontWeight: FontWeight.w900,
-                            ),
+                        Text(
+                          'Alarme plein écran',
+                          style: TextStyle(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Supprimer',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _saving
-                              ? null
-                              : () => _removeDelay(appState, minutes),
-                          icon: Icon(
-                            Icons.close_rounded,
-                            size: 19,
+                        SizedBox(height: 4),
+                        Text(
+                          'Afficher le visuel JOUR, NUIT ou 24H quand l’alarme sonne.',
+                          style: TextStyle(
                             color: AppColors.inkSoft,
+                            fontSize: 11.5,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   ),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _saving || delays.length >= 3
+                  SizedBox(width: 8),
+                  Switch(
+                    value: _fullScreenAlarm,
+                    onChanged: !_fullScreenPreferenceLoaded || _saving
                         ? null
-                        : () => _addDelay(appState),
-                    icon: Icon(Icons.add_alarm_rounded),
-                    label: Text('Ajouter une alarme'),
+                        : _setFullScreenAlarm,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          SizedBox(height: AppSpace.xl),
-          SectionLabel('Fiabilité Android'),
-          AppCard(
-            padding: EdgeInsets.all(AppSpace.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            SizedBox(height: AppSpace.xl),
+            SectionLabel('Quand sonner ?'),
+            AppCard(
+              padding: EdgeInsets.all(AppSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Alarmes avant chaque garde',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Elles sont programmées uniquement pour les gardes d’un calendrier définitivement validé.',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: AppColors.inkSoft),
+                  ),
+                  SizedBox(height: 13),
+                  for (final minutes in delays)
                     Container(
-                      width: 42,
-                      height: 42,
+                      margin: EdgeInsets.only(bottom: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.brandSoft,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(
+                          color: AppColors.brand.withOpacity(0.12),
+                        ),
                       ),
-                      child: Icon(
-                        Icons.verified_user_outlined,
-                        color: AppColors.brand,
-                      ),
-                    ),
-                    SizedBox(width: 11),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            'Pour une fiabilité maximale',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          Icon(
+                            Icons.alarm_rounded,
+                            color: AppColors.brand,
+                            size: 20,
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            'GardeFlow programme l’alarme directement sur le téléphone. Une fois programmée, elle ne dépend plus d’Internet.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: AppColors.inkSoft,
-                                  height: 1.45,
-                                ),
+                          SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              appState.reminderDelayLabel(minutes),
+                              style: TextStyle(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Supprimer',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _saving
+                                ? null
+                                : () => _removeDelay(appState, minutes),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 19,
+                              color: AppColors.inkSoft,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-                SizedBox(height: 14),
-                _ReliabilityLine(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Notifications autorisées',
-                  text: 'Android doit laisser GardeFlow afficher l’alarme et son écran de réveil.',
-                ),
-                SizedBox(height: 10),
-                _ReliabilityLine(
-                  icon: Icons.alarm_on_outlined,
-                  title: 'Alarmes et rappels autorisés',
-                  text: 'Permet une programmation exacte, même téléphone verrouillé.',
-                ),
-                SizedBox(height: 10),
-                _ReliabilityLine(
-                  icon: Icons.battery_saver_outlined,
-                  title: 'Batterie non restreinte',
-                  text: 'Recommandé surtout sur Samsung pour éviter la mise en veille agressive.',
-                ),
-                SizedBox(height: 15),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _saving
-                        ? null
-                        : () => _configureAndroid(appState),
-                    icon: Icon(Icons.settings_rounded),
-                    label: Text(
-                      'Configurer les autorisations Android',
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _saving || delays.length >= 3
+                          ? null
+                          : () => _addDelay(appState),
+                      icon: Icon(Icons.add_alarm_rounded),
+                      label: Text('Ajouter une alarme'),
                     ),
                   ),
-                ),
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _saving ? null : _requestNotifications,
-                        icon: Icon(
-                          Icons.notifications_none_rounded,
-                          size: 18,
+                ],
+              ),
+            ),
+
+            SizedBox(height: AppSpace.xl),
+            SectionLabel('Fiabilité Android'),
+            AppCard(
+              padding: EdgeInsets.all(AppSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.brandSoft,
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        label: Text('Notifications'),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _showBatteryHelp,
-                        icon: Icon(
-                          Icons.battery_saver_rounded,
-                          size: 18,
+                        child: Icon(
+                          Icons.verified_user_outlined,
+                          color: AppColors.brand,
                         ),
-                        label: Text('Batterie'),
                       ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12),
-                ValueListenableBuilder<String>(
-                  valueListenable:
-                      NotificationService.instance.reminderStatus,
-                  builder: (context, status, _) => Container(
+                      SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pour une fiabilité maximale',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'GardeFlow programme l’alarme directement sur le téléphone. Une fois programmée, elle ne dépend plus d’Internet.',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.inkSoft,
+                                    height: 1.45,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 14),
+                  _ReliabilityLine(
+                    icon: Icons.notifications_active_outlined,
+                    title: 'Notifications autorisées',
+                    text: 'Android doit laisser GardeFlow afficher l’alarme et son écran de réveil.',
+                  ),
+                  SizedBox(height: 10),
+                  _ReliabilityLine(
+                    icon: Icons.alarm_on_outlined,
+                    title: 'Alarmes et rappels autorisés',
+                    text: 'Permet une programmation exacte, même téléphone verrouillé.',
+                  ),
+                  SizedBox(height: 10),
+                  _ReliabilityLine(
+                    icon: Icons.battery_saver_outlined,
+                    title: 'Batterie non restreinte',
+                    text: 'Recommandé surtout sur Samsung pour éviter la mise en veille agressive.',
+                  ),
+                  SizedBox(height: 15),
+                  SizedBox(
                     width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 11,
-                      vertical: 9,
+                    child: FilledButton.icon(
+                      onPressed: _saving
+                          ? null
+                          : () => _configureAndroid(appState),
+                      icon: Icon(Icons.settings_rounded),
+                      label: Text('Configurer les autorisations Android'),
                     ),
-                    decoration: BoxDecoration(
-                      color: AppColors.paperAlt,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          size: 17,
-                          color: AppColors.inkSoft,
+                  ),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : _requestNotifications,
+                          icon: Icon(
+                            Icons.notifications_none_rounded,
+                            size: 18,
+                          ),
+                          label: Text('Notifications'),
                         ),
-                        SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            status,
-                            style: TextStyle(
-                              color: AppColors.inkSoft,
-                              fontSize: 10.5,
-                              height: 1.3,
-                              fontWeight: FontWeight.w700,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _showBatteryHelp,
+                          icon: Icon(Icons.battery_saver_rounded, size: 18),
+                          label: Text('Batterie'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  ValueListenableBuilder<String>(
+                    valueListenable:
+                        NotificationService.instance.reminderStatus,
+                    builder: (context, status, _) => Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.paperAlt,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 17,
+                            color: AppColors.inkSoft,
+                          ),
+                          SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                color: AppColors.inkSoft,
+                                fontSize: 10.5,
+                                height: 1.3,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          SizedBox(height: AppSpace.xl),
-          SectionLabel('Test'),
-          AppCard(
-            padding: EdgeInsets.all(AppSpace.lg),
-            color: AppColors.brandSoft,
-            shadow: [],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            SizedBox(height: AppSpace.xl),
+            SectionLabel('Test'),
+            AppCard(
+              padding: EdgeInsets.all(AppSpace.lg),
+              color: AppColors.brandSoft,
+              shadow: [],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.play_circle_outline_rounded,
+                        color: AppColors.brand,
+                      ),
+                      SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          'Tester l’alarme maintenant',
+                          style: TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Le test doit lancer une vraie sonnerie en boucle avec l’écran d’alarme. Elle ne s’arrête que lorsque vous appuyez sur Arrêter.',
+                    style: TextStyle(
+                      color: AppColors.inkSoft,
+                      fontSize: 11.5,
+                      height: 1.45,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : () => _testAlarm(appState),
+                      icon: Icon(Icons.alarm_rounded),
+                      label: Text('Lancer le test'),
+                    ),
+                  ),
+                  SizedBox(height: 9),
+                  Text(
+                    'Si le test sonne correctement après avoir accordé les autorisations ci-dessus, la configuration locale de l’alarme est prête. Android peut toutefois modifier des autorisations après une mise à jour ou une réinstallation : revenez ici si un test échoue.',
+                    style: TextStyle(
+                      color: AppColors.inkSoft,
+                      fontSize: 10.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            if (appState.nextReminderSummary != null) ...[
+              SizedBox(height: AppSpace.lg),
+              AppCard(
+                padding: EdgeInsets.all(AppSpace.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
-                      Icons.play_circle_outline_rounded,
+                      Icons.event_available_rounded,
                       color: AppColors.brand,
+                      size: 20,
                     ),
                     SizedBox(width: 9),
                     Expanded(
                       child: Text(
-                        'Tester l’alarme maintenant',
+                        appState.nextReminderSummary!,
                         style: TextStyle(
-                          color: AppColors.ink,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          color: AppColors.inkSoft,
+                          fontSize: 11.5,
+                          height: 1.4,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'Le test doit lancer une vraie sonnerie en boucle avec l’écran d’alarme. Elle ne s’arrête que lorsque vous appuyez sur Arrêter.',
-                  style: TextStyle(
-                    color: AppColors.inkSoft,
-                    fontSize: 11.5,
-                    height: 1.45,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _saving
-                        ? null
-                        : () => _testAlarm(appState),
-                    icon: Icon(Icons.alarm_rounded),
-                    label: Text('Lancer le test'),
-                  ),
-                ),
-                SizedBox(height: 9),
-                Text(
-                  'Si le test sonne correctement après avoir accordé les autorisations ci-dessus, la configuration locale de l’alarme est prête. Android peut toutefois modifier des autorisations après une mise à jour ou une réinstallation : revenez ici si un test échoue.',
-                  style: TextStyle(
-                    color: AppColors.inkSoft,
-                    fontSize: 10.5,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          if (appState.nextReminderSummary != null) ...[
-            SizedBox(height: AppSpace.lg),
-            AppCard(
-              padding: EdgeInsets.all(AppSpace.md),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.event_available_rounded,
-                    color: AppColors.brand,
-                    size: 20,
-                  ),
-                  SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      appState.nextReminderSummary!,
-                      style: TextStyle(
-                        color: AppColors.inkSoft,
-                        fontSize: 11.5,
-                        height: 1.4,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -793,11 +771,7 @@ class _ReliabilityLine extends StatelessWidget {
             color: AppColors.paperAlt,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(
-            icon,
-            size: 17,
-            color: AppColors.brand,
-          ),
+          child: Icon(icon, size: 17, color: AppColors.brand),
         ),
         SizedBox(width: 9),
         Expanded(
@@ -833,10 +807,7 @@ class _GuideLine extends StatelessWidget {
   final String number;
   final String text;
 
-  const _GuideLine({
-    required this.number,
-    required this.text,
-  });
+  const _GuideLine({required this.number, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -902,8 +873,7 @@ class _AppearanceChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedBorder =
-        value == 'white' ? AppColors.inkSoft : swatch;
+    final selectedBorder = value == 'white' ? AppColors.inkSoft : swatch;
 
     return Material(
       color: selected ? swatch.withOpacity(0.16) : AppColors.paperAlt,
@@ -929,9 +899,7 @@ class _AppearanceChoice extends StatelessWidget {
                   color: swatch,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: value == 'white'
-                        ? Color(0xFFCBD6D0)
-                        : swatch,
+                    color: value == 'white' ? Color(0xFFCBD6D0) : swatch,
                     width: 1.2,
                   ),
                 ),
@@ -943,9 +911,8 @@ class _AppearanceChoice extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                     SizedBox(height: 1),
                     Text(
@@ -998,17 +965,10 @@ class ApplicationSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      appBar: AppBar(
-        title: GardeFlowTitle('Réglages de l’application'),
-      ),
+      appBar: AppBar(title: GardeFlowTitle('Réglages de l’application')),
       body: ListView(
         physics: BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          AppSpace.md,
-          AppSpace.lg,
-          34,
-        ),
+        padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 34),
         children: [
           SectionLabel('Thème de l’application'),
           AppCard(
@@ -1036,10 +996,8 @@ class ApplicationSettingsScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Choisissez l’apparence générale de GardeFlow. Le vert reste le thème par défaut.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.inkSoft,
-                              height: 1.4,
-                            ),
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AppColors.inkSoft, height: 1.4),
                       ),
                     ),
                   ],
@@ -1147,4 +1105,3 @@ class ApplicationSettingsScreen extends StatelessWidget {
     );
   }
 }
-

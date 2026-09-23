@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
@@ -12,6 +13,7 @@ import '../models/planning_month.dart';
 import '../models/shift_type.dart';
 import '../state/app_state.dart';
 import '../services/push_notification_service.dart';
+import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'admin_screen.dart';
@@ -149,8 +151,9 @@ class _GlobalTopBar extends StatelessWidget {
 
     final badge = appState.totalBadgeCount;
     final rawInitial = user.nom.trim();
-    final initial =
-        rawInitial.isEmpty ? 'D' : rawInitial.substring(0, 1).toUpperCase();
+    final initial = rawInitial.isEmpty
+        ? 'D'
+        : rawInitial.substring(0, 1).toUpperCase();
 
     return Container(
       height: 58,
@@ -209,8 +212,7 @@ class _GlobalTopBar extends StatelessWidget {
                   right: -4,
                   top: -4,
                   child: Container(
-                    constraints:
-                        BoxConstraints(minWidth: 18, minHeight: 18),
+                    constraints: BoxConstraints(minWidth: 18, minHeight: 18),
                     padding: EdgeInsets.symmetric(horizontal: 4),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
@@ -533,11 +535,7 @@ class _AstreinteFeatureCard extends StatelessWidget {
               SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(
-                    Icons.touch_app_outlined,
-                    size: 16,
-                    color: accent,
-                  ),
+                  Icon(Icons.touch_app_outlined, size: 16, color: accent),
                   SizedBox(width: 7),
                   Expanded(
                     child: Text(
@@ -573,22 +571,25 @@ class _DashboardView extends StatelessWidget {
   });
 
   List<PlanningEntry> _futureGuards(AppUser me) {
-    final entries = appState.planning
-        .where((entry) =>
-            (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
-            entry.shiftId != 'conge' &&
-            appState.isPlanningEntryApproved(entry) &&
-            !appState.guardHasStarted(entry))
-        .toList()
-      ..sort((a, b) {
-        final ad = DateTime.parse(a.dateStr);
-        final bd = DateTime.parse(b.dateStr);
-        final cmp = ad.compareTo(bd);
-        if (cmp != 0) return cmp;
-        final ashift = ShiftCatalog.byId(a.shiftId);
-        final bshift = ShiftCatalog.byId(b.shiftId);
-        return (ashift.start ?? '').compareTo(bshift.start ?? '');
-      });
+    final entries =
+        appState.planning
+            .where(
+              (entry) =>
+                  (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
+                  entry.shiftId != 'conge' &&
+                  appState.isPlanningEntryApproved(entry) &&
+                  !appState.guardHasStarted(entry),
+            )
+            .toList()
+          ..sort((a, b) {
+            final ad = DateTime.parse(a.dateStr);
+            final bd = DateTime.parse(b.dateStr);
+            final cmp = ad.compareTo(bd);
+            if (cmp != 0) return cmp;
+            final ashift = ShiftCatalog.byId(a.shiftId);
+            final bshift = ShiftCatalog.byId(b.shiftId);
+            return (ashift.start ?? '').compareTo(bshift.start ?? '');
+          });
     return entries;
   }
 
@@ -602,12 +603,17 @@ class _DashboardView extends StatelessWidget {
     }).length;
   }
 
-  int _guardsThisMonthByCategory(AppUser me, DateTime now, {required bool urgence}) {
+  int _guardsThisMonthByCategory(
+    AppUser me,
+    DateTime now, {
+    required bool urgence,
+  }) {
     return appState.planning.where((entry) {
       if (entry.ownerId != me.id && entry.ownerPhone != me.phone) return false;
       if (entry.shiftId == 'conge') return false;
       final date = DateTime.tryParse(entry.dateStr);
-      if (date == null || date.year != now.year || date.month != now.month) return false;
+      if (date == null || date.year != now.year || date.month != now.month)
+        return false;
       final id = entry.shiftId.toLowerCase();
       final isUrgence = id.contains('urg');
       return urgence ? isUrgence : !isUrgence;
@@ -628,8 +634,16 @@ class _DashboardView extends StatelessWidget {
     final isNight = hour >= 18 || hour < 6;
     final greeting = isNight ? 'Bonsoir' : 'Bonjour';
     final monthlyCount = _guardsThisMonth(me, now);
-    final urgenceMonthlyCount = _guardsThisMonthByCategory(me, now, urgence: true);
-    final serviceMonthlyCount = _guardsThisMonthByCategory(me, now, urgence: false);
+    final urgenceMonthlyCount = _guardsThisMonthByCategory(
+      me,
+      now,
+      urgence: true,
+    );
+    final serviceMonthlyCount = _guardsThisMonthByCategory(
+      me,
+      now,
+      urgence: false,
+    );
 
     final rawDate = DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(now);
     final dateLabel = rawDate.isEmpty
@@ -670,9 +684,7 @@ class _DashboardView extends StatelessWidget {
                 right: -8,
                 top: -14,
                 child: Icon(
-                  isNight
-                      ? Icons.nightlight_round
-                      : Icons.wb_sunny_rounded,
+                  isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
                   size: 104,
                   color: Colors.white.withOpacity(0.12),
                 ),
@@ -731,16 +743,11 @@ class _DashboardView extends StatelessWidget {
                   ),
                   SizedBox(height: 17),
                   Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 13,
-                      vertical: 9,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.13),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.14),
-                      ),
+                      border: Border.all(color: Colors.white.withOpacity(0.14)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -748,11 +755,19 @@ class _DashboardView extends StatelessWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.calendar_month_rounded, color: Colors.white, size: 18),
+                            Icon(
+                              Icons.calendar_month_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
                             SizedBox(width: 7),
                             Text(
                               '$monthlyCount garde${monthlyCount > 1 ? 's' : ''} au total ce mois',
-                              style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ],
                         ),
@@ -761,8 +776,14 @@ class _DashboardView extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 6,
                           children: [
-                            _MonthlyGuardChip(label: 'Urgences', value: urgenceMonthlyCount),
-                            _MonthlyGuardChip(label: 'Service', value: serviceMonthlyCount),
+                            _MonthlyGuardChip(
+                              label: 'Urgences',
+                              value: urgenceMonthlyCount,
+                            ),
+                            _MonthlyGuardChip(
+                              label: 'Service',
+                              value: serviceMonthlyCount,
+                            ),
                           ],
                         ),
                       ],
@@ -777,40 +798,29 @@ class _DashboardView extends StatelessWidget {
         Text(
           'Prochaine garde à venir',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontFamily: 'SpaceGrotesk',
-                fontWeight: FontWeight.w900,
-                color: AppColors.ink,
-              ),
+            fontFamily: 'SpaceGrotesk',
+            fontWeight: FontWeight.w900,
+            color: AppColors.ink,
+          ),
         ),
         SizedBox(height: 6),
         Text(
           next == null
               ? 'Aucune garde validée à venir pour le moment.'
               : 'Voici votre prochaine garde programmée.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.inkSoft,
-                fontWeight: FontWeight.w500,
-              ),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: AppColors.inkSoft, fontWeight: FontWeight.w500),
         ),
         SizedBox(height: 14),
-        _NextGuardCard(
-          entry: next,
-          onTap: onOpenPlanning,
-        ),
+        _NextGuardCard(entry: next, onTap: onOpenPlanning),
         SizedBox(height: 14),
         Center(
           child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: 13,
-              vertical: 8,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
             decoration: BoxDecoration(
               color: AppColors.card,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: AppColors.brandBright,
-                width: 1.2,
-              ),
+              border: Border.all(color: AppColors.brandBright, width: 1.2),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -847,17 +857,21 @@ class _MonthlyGuardChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.13),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: Colors.white.withOpacity(0.13)),
-        ),
-        child: Text(
-          '$label · $value',
-          style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.13),
+      borderRadius: BorderRadius.circular(11),
+      border: Border.all(color: Colors.white.withOpacity(0.13)),
+    ),
+    child: Text(
+      '$label · $value',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 }
 
 class _BadgeCount extends StatelessWidget {
@@ -866,19 +880,23 @@ class _BadgeCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        constraints: BoxConstraints(minWidth: 19, minHeight: 19),
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(horizontal: 5),
-        decoration: BoxDecoration(
-          color: AppColors.danger,
-          borderRadius: AppRadius.pillR,
-          border: Border.all(color: AppColors.paper, width: 2),
-        ),
-        child: Text(
-          value > 99 ? '99+' : '$value',
-          style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900),
-        ),
-      );
+    constraints: BoxConstraints(minWidth: 19, minHeight: 19),
+    alignment: Alignment.center,
+    padding: EdgeInsets.symmetric(horizontal: 5),
+    decoration: BoxDecoration(
+      color: AppColors.danger,
+      borderRadius: AppRadius.pillR,
+      border: Border.all(color: AppColors.paper, width: 2),
+    ),
+    child: Text(
+      value > 99 ? '99+' : '$value',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 8.5,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _MetricCard extends StatelessWidget {
@@ -887,32 +905,51 @@ class _MetricCard extends StatelessWidget {
   final String label;
   final Color tint;
 
-  const _MetricCard({required this.icon, required this.value, required this.label, required this.tint});
+  const _MetricCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.tint,
+  });
 
   @override
   Widget build(BuildContext context) => AppCard(
-        padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
-        shadow: [],
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: tint, size: 19),
-            SizedBox(height: 8),
-            Text(value, style: TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 21, fontWeight: FontWeight.w700, color: AppColors.ink)),
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9.8, fontWeight: FontWeight.w700, color: AppColors.inkSoft)),
-          ],
+    padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
+    shadow: [],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: tint, size: 19),
+        SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'SpaceGrotesk',
+            fontSize: 21,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+          ),
         ),
-      );
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 9.8,
+            fontWeight: FontWeight.w700,
+            color: AppColors.inkSoft,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _NextGuardCard extends StatelessWidget {
   final PlanningEntry? entry;
   final VoidCallback onTap;
 
-  const _NextGuardCard({
-    required this.entry,
-    required this.onTap,
-  });
+  const _NextGuardCard({required this.entry, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -954,22 +991,24 @@ class _NextGuardCard extends StatelessWidget {
     final shiftId = shift.id.toLowerCase();
     final shiftLabel = shift.label.trim();
 
-    final isUrgence = shiftId.startsWith('urg-') ||
+    final isUrgence =
+        shiftId.startsWith('urg-') ||
         shiftId.contains('urgence') ||
         shiftLabel.toLowerCase().contains('urgence');
-    final is24h = shiftId.contains('24h') ||
+    final is24h =
+        shiftId.contains('24h') ||
         shiftId.contains('24-h') ||
         shiftLabel.toLowerCase().contains('24h');
-    final isNight = !is24h &&
-        (shiftId.contains('nuit') ||
-            shiftLabel.toLowerCase().contains('nuit'));
+    final isNight =
+        !is24h &&
+        (shiftId.contains('nuit') || shiftLabel.toLowerCase().contains('nuit'));
 
     final category = isUrgence ? 'URGENCES' : 'SERVICE';
     final period = is24h
         ? '24H'
         : isNight
-            ? 'NUIT'
-            : 'JOUR';
+        ? 'NUIT'
+        : 'JOUR';
 
     final date = DateTime.tryParse(current.dateStr);
     final dateLabel = date == null
@@ -979,8 +1018,8 @@ class _NextGuardCard extends StatelessWidget {
     final timeLabel = is24h
         ? '08:00 → 08:00'
         : isNight
-            ? '20:00 → 08:00'
-            : '08:00 → 20:00';
+        ? '20:00 → 08:00'
+        : '08:00 → 20:00';
 
     final guardTitle = shiftLabel.isEmpty
         ? 'Garde de \${period.toLowerCase()}'
@@ -994,24 +1033,16 @@ class _NextGuardCard extends StatelessWidget {
             Color(0xFF071426),
           ]
         : isNight
-            ? const [
-                Color(0xFF071426),
-                Color(0xFF123D70),
-              ]
-            : const [
-                Color(0xFF62CBFF),
-                Color(0xFF168DE9),
-              ];
+        ? const [Color(0xFF071426), Color(0xFF123D70)]
+        : const [Color(0xFF62CBFF), Color(0xFF168DE9)];
 
-    final stops = is24h
-        ? const [0.0, 0.44, 0.58, 1.0]
-        : null;
+    final stops = is24h ? const [0.0, 0.44, 0.58, 1.0] : null;
 
     final mainIcon = is24h
         ? Icons.brightness_6_rounded
         : isNight
-            ? Icons.nightlight_round
-            : Icons.wb_sunny_rounded;
+        ? Icons.nightlight_round
+        : Icons.wb_sunny_rounded;
 
     return Material(
       color: Colors.transparent,
@@ -1047,8 +1078,8 @@ class _NextGuardCard extends StatelessWidget {
                     is24h
                         ? Icons.brightness_6_rounded
                         : isNight
-                            ? Icons.nightlight_round
-                            : Icons.wb_sunny_rounded,
+                        ? Icons.nightlight_round
+                        : Icons.wb_sunny_rounded,
                     size: 102,
                     color: Colors.white.withOpacity(0.12),
                   ),
@@ -1109,11 +1140,7 @@ class _NextGuardCard extends StatelessWidget {
                             color: Colors.white.withOpacity(0.22),
                           ),
                         ),
-                        child: Icon(
-                          mainIcon,
-                          color: Colors.white,
-                          size: 31,
-                        ),
+                        child: Icon(mainIcon, color: Colors.white, size: 31),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -1198,21 +1225,14 @@ class _NextGuardInfoLine extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _NextGuardInfoLine({
-    required this.icon,
-    required this.text,
-  });
+  const _NextGuardInfoLine({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(
-          icon,
-          color: Colors.white.withOpacity(0.90),
-          size: 16,
-        ),
+        Icon(icon, color: Colors.white.withOpacity(0.90), size: 16),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
@@ -1263,13 +1283,26 @@ class _DashboardAction extends StatelessWidget {
               Container(
                 width: 42,
                 height: 42,
-                decoration: BoxDecoration(color: tint.withOpacity(0.11), borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: tint.withOpacity(0.11),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Icon(icon, color: tint, size: 23),
               ),
               const Spacer(),
-              Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 3),
-              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
@@ -1295,38 +1328,41 @@ class _ServiceShortcut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.lgR,
-          child: AppCard(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            shadow: [],
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: tint.withOpacity(0.10), borderRadius: BorderRadius.circular(14)),
-                  child: Icon(icon, color: tint, size: 22),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: Theme.of(context).textTheme.titleSmall),
-                      SizedBox(height: 2),
-                      Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-              ],
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.lgR,
+      child: AppCard(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        shadow: [],
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: tint.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: tint, size: 22),
             ),
-          ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  SizedBox(height: 2),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _PlanningView extends StatelessWidget {
@@ -1342,108 +1378,117 @@ class _PlanningView extends StatelessWidget {
     );
     final now = DateTime.now();
     final visibleMonth = appState.visibleMonth;
-    final visibleMonthStart = DateTime(visibleMonth.year, visibleMonth.month, 1);
+    final visibleMonthStart = DateTime(
+      visibleMonth.year,
+      visibleMonth.month,
+      1,
+    );
     final currentMonthStart = DateTime(now.year, now.month, 1);
     final isPastMonth = visibleMonthStart.isBefore(currentMonthStart);
 
     return Column(
       children: [
         Padding(
-          padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 7,
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+          child: Row(
             children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                  child: Ink(
-                    height: 40,
-                    padding: EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.line),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.navy.withOpacity(0.08),
-                          blurRadius: 14,
-                          offset: Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: AppColors.urg24h),
-                        SizedBox(width: 8),
-                        Text(
-                          'Planning officiel',
-                          style: TextStyle(color: AppColors.ink, fontSize: 12.5, fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (promotionLabel != null)
-                Container(
-                  height: 40,
-                  padding: EdgeInsets.symmetric(horizontal: 13),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.brandBright, width: 1.2),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.school_rounded, size: 17, color: AppColors.brandBright),
-                      SizedBox(width: 7),
-                      Text(
-                        promotionLabel,
-                        style: TextStyle(color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
+              Expanded(
+                flex: 10,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => OfficialPlanningScreen(),
                       ),
-                    ],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    child: Ink(
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: AppColors.line),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.navy.withOpacity(0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.picture_as_pdf_rounded,
+                            size: 17,
+                            color: AppColors.urg24h,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Planning officiel',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.ink,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                  child: Ink(
-                    height: 40,
-                    padding: EdgeInsets.symmetric(horizontal: 13),
+              ),
+              if (promotionLabel != null) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 11,
+                  child: Container(
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.line),
+                      border: Border.all(
+                        color: AppColors.brandBright,
+                        width: 1.2,
+                      ),
                     ),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.forum_rounded, size: 17, color: AppColors.brand),
-                        SizedBox(width: 7),
-                        Text(
-                          'Annonces',
-                          style: TextStyle(color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
+                        Icon(
+                          Icons.school_rounded,
+                          size: 16,
+                          color: AppColors.brandBright,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            promotionLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.ink,
+                              fontSize: 10.8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
+              ],
+              const SizedBox(width: 6),
+              const _AnnouncementsCompactButton(),
             ],
           ),
         ),
@@ -1456,6 +1501,160 @@ class _PlanningView extends StatelessWidget {
             enabled: appState.canEditMyPlanningMonth(appState.visibleMonth),
           ),
       ],
+    );
+  }
+}
+
+class _AnnouncementsCompactButton extends StatefulWidget {
+  const _AnnouncementsCompactButton();
+
+  @override
+  State<_AnnouncementsCompactButton> createState() =>
+      _AnnouncementsCompactButtonState();
+}
+
+class _AnnouncementsCompactButtonState
+    extends State<_AnnouncementsCompactButton> {
+  StreamSubscription? _realtime;
+  int _newCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    final backend = SupabaseBackendService.instance;
+    if (backend.enabled) {
+      _realtime = backend.client
+          .from('public_announcements')
+          .stream(primaryKey: ['id'])
+          .listen((_) => _refresh(), onError: (_) {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _realtime?.cancel();
+    super.dispose();
+  }
+
+  String? _seenKey() {
+    final userId = context.read<AppState>().currentUser?.id;
+    if (userId == null || userId.isEmpty) return null;
+    return 'guardeflow_announcements_seen_$userId';
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    final backend = SupabaseBackendService.instance;
+    final key = _seenKey();
+    if (!backend.enabled || key == null) {
+      if (mounted && _newCount != 0) setState(() => _newCount = 0);
+      return;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seenRaw = prefs.getString(key);
+      final seenAt = seenRaw == null ? null : DateTime.tryParse(seenRaw);
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final rows = await backend.client
+          .from('public_announcements')
+          .select('created_at')
+          .isFilter('closed_at', null)
+          .gte('date_str', today)
+          .order('created_at', ascending: false)
+          .limit(150);
+      var count = 0;
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final createdAt = DateTime.tryParse('${row['created_at']}');
+        if (createdAt != null &&
+            (seenAt == null || createdAt.isAfter(seenAt))) {
+          count++;
+        }
+      }
+      if (!mounted || count == _newCount) return;
+      setState(() => _newCount = count);
+    } catch (_) {
+      // Le badge ne doit jamais bloquer l'ouverture du planning.
+    }
+  }
+
+  Future<void> _openAnnouncements() async {
+    final key = _seenKey();
+    if (key != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, DateTime.now().toUtc().toIso8601String());
+    }
+    if (!mounted) return;
+    setState(() => _newCount = 0);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
+    );
+    if (mounted) await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Annonces',
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _openAnnouncements,
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.line),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.navy.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.campaign_rounded,
+                  size: 20,
+                  color: AppColors.brandBright,
+                ),
+              ),
+            ),
+          ),
+          if (_newCount > 0)
+            Positioned(
+              right: -5,
+              top: -5,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.paper, width: 2),
+                ),
+                child: Text(
+                  _newCount > 99 ? '99+' : '$_newCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1543,12 +1742,7 @@ class _MainBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    Widget item(
-      int index,
-      IconData icon,
-      IconData selectedIcon,
-      String label,
-    ) {
+    Widget item(int index, IconData icon, IconData selectedIcon, String label) {
       final selected = selectedIndex == index;
       return Expanded(
         child: Material(
@@ -1574,9 +1768,7 @@ class _MainBottomBar extends StatelessWidget {
                     alignment: Alignment.center,
                     child: Icon(
                       selected ? selectedIcon : icon,
-                      color: selected
-                          ? AppColors.brand
-                          : AppColors.inkSoft,
+                      color: selected ? AppColors.brand : AppColors.inkSoft,
                       size: 21,
                     ),
                   ),
@@ -1590,9 +1782,7 @@ class _MainBottomBar extends StatelessWidget {
                       fontSize: 9,
                       height: 1.05,
                       fontWeight: FontWeight.w800,
-                      color: selected
-                          ? AppColors.brand
-                          : AppColors.inkSoft,
+                      color: selected ? AppColors.brand : AppColors.inkSoft,
                     ),
                   ),
                 ],
@@ -1607,9 +1797,7 @@ class _MainBottomBar extends StatelessWidget {
       height: 72 + bottomInset,
       decoration: BoxDecoration(
         color: AppColors.card,
-        border: Border(
-          top: BorderSide(color: AppColors.line),
-        ),
+        border: Border(top: BorderSide(color: AppColors.line)),
         boxShadow: [
           BoxShadow(
             color: AppColors.navy.withOpacity(0.08),
@@ -1629,12 +1817,7 @@ class _MainBottomBar extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  item(
-                    0,
-                    Icons.home_outlined,
-                    Icons.home_rounded,
-                    'Accueil',
-                  ),
+                  item(0, Icons.home_outlined, Icons.home_rounded, 'Accueil'),
                   item(
                     1,
                     Icons.calendar_month_outlined,
@@ -1674,15 +1857,9 @@ class _MainBottomBar extends StatelessWidget {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.brandDark,
-                              AppColors.brand,
-                            ],
+                            colors: [AppColors.brandDark, AppColors.brand],
                           ),
-                          border: Border.all(
-                            color: AppColors.card,
-                            width: 4,
-                          ),
+                          border: Border.all(color: AppColors.card, width: 4),
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.brand.withOpacity(0.30),
@@ -1739,7 +1916,9 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
     final now = DateTime.now();
     final chosen = await showDatePicker(
       context: context,
-      initialDate: _date.isBefore(DateTime(now.year, now.month, now.day)) ? now : _date,
+      initialDate: _date.isBefore(DateTime(now.year, now.month, now.day))
+          ? now
+          : _date,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year + 2, 12, 31),
       locale: const Locale('fr', 'FR'),
@@ -1750,11 +1929,15 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
-    final error = await widget.appState.placeShift(AppState.dateKey(_date), _shift.id);
+    final error = await widget.appState.placeShift(
+      AppState.dateKey(_date),
+      _shift.id,
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
       return;
     }
     Navigator.pop(context, true);
@@ -1764,14 +1947,25 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Ajouter une garde', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Ajouter une garde',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             SizedBox(height: 4),
-            Text('Même logique que le calendrier : choisissez une date et une tuile.', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Même logique que le calendrier : choisissez une date et une tuile.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             SizedBox(height: 16),
             InkWell(
               onTap: _chooseDate,
@@ -1781,16 +1975,31 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
                 shadow: [],
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today_rounded, color: AppColors.brand, size: 20),
+                    Icon(
+                      Icons.calendar_today_rounded,
+                      color: AppColors.brand,
+                      size: 20,
+                    ),
                     SizedBox(width: 10),
-                    Expanded(child: Text(DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(_date), style: TextStyle(fontWeight: FontWeight.w800))),
-                    Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+                    Expanded(
+                      child: Text(
+                        DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(_date),
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.inkFaint,
+                    ),
                   ],
                 ),
               ),
             ),
             SizedBox(height: 16),
-            Text('Type de garde', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              'Type de garde',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -1800,8 +2009,18 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
                   ChoiceChip(
                     selected: _shift.id == shift.id,
                     showCheckmark: false,
-                    avatar: Icon(shift.icon, size: 17, color: _shift.id == shift.id ? Colors.white : shift.textColor),
-                    label: Text(shift.id == 'conge' ? 'Congé' : '${shift.id.startsWith('urg-') ? 'Urg.' : 'Service'} · ${shift.label}'),
+                    avatar: Icon(
+                      shift.icon,
+                      size: 17,
+                      color: _shift.id == shift.id
+                          ? Colors.white
+                          : shift.textColor,
+                    ),
+                    label: Text(
+                      shift.id == 'conge'
+                          ? 'Congé'
+                          : '${shift.id.startsWith('urg-') ? 'Urg.' : 'Service'} · ${shift.label}',
+                    ),
                     onSelected: (_) => setState(() => _shift = shift),
                   ),
               ],
@@ -1812,7 +2031,14 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
               child: FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
-                    ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : Icon(Icons.add_rounded),
                 label: Text(_saving ? 'Enregistrement…' : 'Ajouter la garde'),
               ),
@@ -1848,7 +2074,9 @@ class _TopBarState extends State<_TopBar> {
     _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       final now = DateTime.now();
-      if (now.minute != _now.minute || now.day != _now.day || now.hour != _now.hour) {
+      if (now.minute != _now.minute ||
+          now.day != _now.day ||
+          now.hour != _now.hour) {
         setState(() => _now = now);
       }
     });
@@ -1870,7 +2098,12 @@ class _TopBarState extends State<_TopBar> {
     final badge = widget.appState.totalBadgeCount;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.xs),
+      padding: EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.sm,
+        AppSpace.lg,
+        AppSpace.xs,
+      ),
       child: Column(
         children: [
           Row(
@@ -1882,8 +2115,11 @@ class _TopBarState extends State<_TopBar> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('GardeFlow',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    Text(
+                      'GardeFlow',
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                     Row(
                       children: [
                         Flexible(
@@ -1895,7 +2131,12 @@ class _TopBarState extends State<_TopBar> {
                         ),
                         if (isAdmin) ...[
                           SizedBox(width: 6),
-                          Pill(text: 'ADMIN', background: AppColors.ink, foreground: Colors.white, fontSize: 9),
+                          Pill(
+                            text: 'ADMIN',
+                            background: AppColors.ink,
+                            foreground: Colors.white,
+                            fontSize: 9,
+                          ),
                         ],
                       ],
                     ),
@@ -1912,7 +2153,10 @@ class _TopBarState extends State<_TopBar> {
               SizedBox(width: AppSpace.sm),
               _BellButton(
                 badge: badge,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => NotificationsScreen()),
+                ),
               ),
             ],
           ),
@@ -1937,15 +2181,21 @@ class _TopBarState extends State<_TopBar> {
       final leave = appState.leaveRequestForEntry(entry);
       final pending = leave?.status == LeaveRequestStatus.pendingAdmin;
       return _TodayStatus(
-        title: pending ? 'Congé en attente de validation' : 'Vous êtes en congé aujourd’hui',
-        icon: pending ? Icons.hourglass_top_rounded : Icons.beach_access_rounded,
+        title: pending
+            ? 'Congé en attente de validation'
+            : 'Vous êtes en congé aujourd’hui',
+        icon: pending
+            ? Icons.hourglass_top_rounded
+            : Icons.beach_access_rounded,
         background: shift.color,
         foreground: shift.textColor,
       );
     }
     final isUrgence = shift.id.startsWith('urg-');
     final location = isUrgence ? 'Urgences' : 'Service';
-    final schedule = shift.start == null ? '' : ' · ${shift.start} → ${shift.end}';
+    final schedule = shift.start == null
+        ? ''
+        : ' · ${shift.start} → ${shift.end}';
     return _TodayStatus(
       title: '$location · ${shift.label}$schedule',
       icon: shift.icon,
@@ -1960,7 +2210,12 @@ class _TodayStatus {
   final IconData icon;
   final Color background;
   final Color foreground;
-  const _TodayStatus({required this.title, required this.icon, required this.background, required this.foreground});
+  const _TodayStatus({
+    required this.title,
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
 }
 
 class _BellButton extends StatelessWidget {
@@ -1973,7 +2228,11 @@ class _BellButton extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        SoftIconButton(icon: Icons.notifications_rounded, onTap: onTap, tooltip: 'Notifications'),
+        SoftIconButton(
+          icon: Icons.notifications_rounded,
+          onTap: onTap,
+          tooltip: 'Notifications',
+        ),
         if (badge > 0)
           Positioned(
             top: -3,
@@ -1989,7 +2248,11 @@ class _BellButton extends StatelessWidget {
               ),
               child: Text(
                 badge > 99 ? '99+' : '$badge',
-                style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
@@ -2063,19 +2326,61 @@ class _NavRailState extends State<_NavRail> {
   @override
   Widget build(BuildContext context) {
     final items = <_NavItem>[
-      _NavItem(Icons.picture_as_pdf_rounded, 'Planning de Garde Officiel', AppColors.urg24h,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => OfficialPlanningScreen()))),
-      _NavItem(Icons.badge_rounded, 'Annuaire', AppColors.catService,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => DirectoryScreen()))),
-      _NavItem(Icons.medical_services_rounded, 'Séniors d’astreinte', AppColors.conge,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => SeniorOnCallScreen()))),
-      _NavItem(Icons.groups_2_rounded, 'Juniors d’astreinte', AppColors.service24h,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => JuniorOnCallScreen()))),
-      _NavItem(Icons.tune_rounded, 'Réglages', AppColors.inkSoft,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen()))),
+      _NavItem(
+        Icons.picture_as_pdf_rounded,
+        'Planning de Garde Officiel',
+        AppColors.urg24h,
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
+        ),
+      ),
+      _NavItem(
+        Icons.badge_rounded,
+        'Annuaire',
+        AppColors.catService,
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => DirectoryScreen()),
+        ),
+      ),
+      _NavItem(
+        Icons.medical_services_rounded,
+        'Séniors d’astreinte',
+        AppColors.conge,
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SeniorOnCallScreen()),
+        ),
+      ),
+      _NavItem(
+        Icons.groups_2_rounded,
+        'Juniors d’astreinte',
+        AppColors.service24h,
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => JuniorOnCallScreen()),
+        ),
+      ),
+      _NavItem(
+        Icons.tune_rounded,
+        'Réglages',
+        AppColors.inkSoft,
+        () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SettingsScreen()),
+        ),
+      ),
       if (widget.isAdmin)
-        _NavItem(Icons.admin_panel_settings_rounded, 'Vue Admin', AppColors.ink,
-            () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminScreen()))),
+        _NavItem(
+          Icons.admin_panel_settings_rounded,
+          'Vue Admin',
+          AppColors.ink,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AdminScreen()),
+          ),
+        ),
     ];
 
     return Container(
@@ -2098,7 +2403,9 @@ class _NavRailState extends State<_NavRail> {
               child: ListView.separated(
                 controller: _controller,
                 scrollDirection: Axis.horizontal,
-                physics: BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                physics: BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
                 padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 itemCount: items.length,
                 separatorBuilder: (_, __) => SizedBox(width: 8),
@@ -2144,7 +2451,11 @@ class _ScrollHintButton extends StatelessWidget {
           child: SizedBox(
             width: 34,
             height: 46,
-            child: Icon(icon, size: 22, color: enabled ? AppColors.ink : AppColors.inkFaint),
+            child: Icon(
+              icon,
+              size: 22,
+              color: enabled ? AppColors.ink : AppColors.inkFaint,
+            ),
           ),
         ),
       ),
@@ -2178,7 +2489,11 @@ class _NavChip extends StatelessWidget {
             borderRadius: AppRadius.mdR,
             border: Border.all(color: AppColors.line),
             boxShadow: [
-              BoxShadow(color: Color(0x0A000000), blurRadius: 6, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           alignment: Alignment.center,
@@ -2198,7 +2513,11 @@ class _NavChip extends StatelessWidget {
               SizedBox(width: 7),
               Text(
                 item.label,
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
               ),
             ],
           ),
@@ -2223,8 +2542,11 @@ class _MonthBar extends StatelessWidget {
     final status = record?.status ?? PlanningMonthStatus.draft;
     final monthLabel = _capitalize(DateFormat.yMMMM('fr_FR').format(month));
     final now = DateTime.now();
-    final isPastMonth = DateTime(month.year, month.month, 1)
-        .isBefore(DateTime(now.year, now.month, 1));
+    final isPastMonth = DateTime(
+      month.year,
+      month.month,
+      1,
+    ).isBefore(DateTime(now.year, now.month, 1));
 
     String statusLabel;
     IconData statusIcon;
@@ -2245,15 +2567,15 @@ class _MonthBar extends StatelessWidget {
         reopenReason = record?.rejectionReason?.trim();
         final reopened = reopenReason != null && reopenReason.isNotEmpty;
         statusLabel = reopened ? 'Rouvert' : 'En préparation';
-        statusIcon =
-            reopened ? Icons.lock_open_rounded : Icons.edit_calendar_rounded;
+        statusIcon = reopened
+            ? Icons.lock_open_rounded
+            : Icons.edit_calendar_rounded;
         statusBg = reopened ? Color(0xFFB3261E) : AppColors.paperAlt;
         statusFg = reopened ? Colors.white : AppColors.ink;
         break;
     }
 
-    final canSubmit =
-        !isPastMonth && status != PlanningMonthStatus.approved;
+    final canSubmit = !isPastMonth && status != PlanningMonthStatus.approved;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(10, 4, 10, 4),
@@ -2297,11 +2619,7 @@ class _MonthBar extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 GestureDetector(
-                  onTap: () => _showMonthInfo(
-                    context,
-                    status,
-                    reopenReason,
-                  ),
+                  onTap: () => _showMonthInfo(context, status, reopenReason),
                   child: Container(
                     height: 30,
                     padding: EdgeInsets.symmetric(horizontal: 11),
@@ -2364,8 +2682,7 @@ class _MonthBar extends StatelessWidget {
     switch (status) {
       case PlanningMonthStatus.approved:
         title = 'Calendrier validé définitivement';
-        detail =
-            'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
+        detail = 'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
         break;
       case PlanningMonthStatus.draft:
       case PlanningMonthStatus.submitted:
@@ -2376,8 +2693,7 @@ class _MonthBar extends StatelessWidget {
               'Motif : $reopenReason. Modifiez vos tuiles puis validez à nouveau le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
         } else {
           title = 'Calendrier en préparation';
-          detail =
-              'Placez vos tuiles Service, Urgences et Congé puis validez définitivement le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
+          detail = 'Placez vos tuiles Service, Urgences et Congé puis validez définitivement le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
         }
         break;
     }
@@ -2399,15 +2715,9 @@ class _MonthBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: Theme.of(sheetContext).textTheme.titleLarge,
-              ),
+              Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
               const SizedBox(height: AppSpace.sm),
-              Text(
-                detail,
-                style: Theme.of(sheetContext).textTheme.bodyMedium,
-              ),
+              Text(detail, style: Theme.of(sheetContext).textTheme.bodyMedium),
             ],
           ),
         ),
@@ -2420,10 +2730,7 @@ class _MonthArrowButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _MonthArrowButton({
-    required this.icon,
-    required this.onTap,
-  });
+  const _MonthArrowButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2453,7 +2760,13 @@ class _ValidateButton extends StatelessWidget {
     return SizedBox(
       height: 34,
       child: FilledButton(
-        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14), textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          textStyle: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         onPressed: () async {
           final confirm = await showDialog<bool>(
             context: context,
@@ -2465,15 +2778,23 @@ class _ValidateButton extends StatelessWidget {
                 'Les tuiles Congé seront envoyées à l’administration pour approbation.',
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
-                FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Valider définitivement')),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Annuler'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Valider définitivement'),
+                ),
               ],
             ),
           );
           if (confirm != true || !context.mounted) return;
           final err = await appState.submitMyPlanningMonth(month);
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? 'Calendrier validé définitivement.')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(err ?? 'Calendrier validé définitivement.')),
+          );
         },
         child: const Text('Valider'),
       ),
@@ -2491,12 +2812,23 @@ class _WeekdaysRow extends StatelessWidget {
   Widget build(BuildContext context) {
     const days = ['L', 'Ma', 'Me', 'J', 'V', 'S', 'D'];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.xs, AppSpace.lg, 0),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.xs,
+        AppSpace.lg,
+        0,
+      ),
       child: Row(
         children: days
-            .map((d) => Expanded(
-                  child: Text(d, textAlign: TextAlign.center, style: Theme.of(context).textTheme.labelMedium),
-                ))
+            .map(
+              (d) => Expanded(
+                child: Text(
+                  d,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+            )
             .toList(),
       ),
     );
@@ -2533,10 +2865,7 @@ class _CalendarGrid extends StatelessWidget {
 
     for (var i = 0; i < firstWeekday; i++) {
       cells.add(
-        KeyedSubtree(
-          key: ValueKey('empty-$i'),
-          child: const SizedBox.shrink(),
-        ),
+        KeyedSubtree(key: ValueKey('empty-$i'), child: const SizedBox.shrink()),
       );
     }
 
@@ -2544,10 +2873,13 @@ class _CalendarGrid extends StatelessWidget {
       final date = DateTime(month.year, month.month, d);
       final dateStr = AppState.dateKey(date);
       final entry = appState.myEntryForDate(dateStr);
-      final editable = monthEditable &&
+      final editable =
+          monthEditable &&
           !appState.dateIsPast(dateStr) &&
-          (entry == null || (!entry.isDisciplinary && !appState.isApprovedLeaveEntry(entry)));
-      final canExchange = monthApproved &&
+          (entry == null ||
+              (!entry.isDisciplinary && !appState.isApprovedLeaveEntry(entry)));
+      final canExchange =
+          monthApproved &&
           entry != null &&
           !entry.isDisciplinary &&
           ShiftCatalog.byId(entry.shiftId).hasSchedule &&
@@ -2583,13 +2915,13 @@ class _CalendarGrid extends StatelessWidget {
             onExchange: entry == null
                 ? null
                 : () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      showDragHandle: true,
-                      builder: (_) =>
-                          ExchangeRequestSheet(dateStr: dateStr, entry: entry),
-                    ),
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    showDragHandle: true,
+                    builder: (_) =>
+                        ExchangeRequestSheet(dateStr: dateStr, entry: entry),
+                  ),
           ),
         ),
       );
@@ -2600,12 +2932,11 @@ class _CalendarGrid extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           const gap = 5.0;
-          final itemWidth =
-              (constraints.maxWidth - gap * 6) / 7;
-          final itemHeight =
-              (constraints.maxHeight - gap * (rows - 1)) / rows;
-          final safeHeight =
-              itemHeight.isFinite && itemHeight > 1 ? itemHeight : 1.0;
+          final itemWidth = (constraints.maxWidth - gap * 6) / 7;
+          final itemHeight = (constraints.maxHeight - gap * (rows - 1)) / rows;
+          final safeHeight = itemHeight.isFinite && itemHeight > 1
+              ? itemHeight
+              : 1.0;
           final aspectRatio = itemWidth / safeHeight;
 
           return GridView.count(
@@ -2652,8 +2983,9 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentEntry = entry;
-    final shift =
-        currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
+    final shift = currentEntry == null
+        ? null
+        : ShiftCatalog.byId(currentEntry.shiftId);
     final isUrgence = shift?.id.startsWith('urg-') ?? false;
     final isLeave = shift?.id == 'conge';
     final isDisciplinary = currentEntry?.isDisciplinary ?? false;
@@ -2662,8 +2994,9 @@ class _DayCell extends StatelessWidget {
     String? shiftLabel;
     if (shift != null) {
       if (isLeave) {
-        final leave =
-            context.watch<AppState>().leaveRequestForEntry(currentEntry!);
+        final leave = context.watch<AppState>().leaveRequestForEntry(
+          currentEntry!,
+        );
         final pending = leave?.status == LeaveRequestStatus.pendingAdmin;
         groupLabel = 'CONGÉ';
         shiftLabel = pending ? 'Attente' : 'Congé';
@@ -2696,8 +3029,8 @@ class _DayCell extends StatelessWidget {
                 color: hovering || isToday
                     ? AppColors.brand
                     : shift != null
-                        ? foreground.withOpacity(0.15)
-                        : AppColors.line,
+                    ? foreground.withOpacity(0.15)
+                    : AppColors.line,
                 width: hovering ? 2 : (isToday ? 1.8 : 1),
               ),
               boxShadow: [
@@ -2724,38 +3057,38 @@ class _DayCell extends StatelessWidget {
                               size: 24,
                             )
                           : shift == null
-                              ? SizedBox.shrink()
-                              : FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        groupLabel!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: foreground.withOpacity(0.84),
-                                          fontSize: 10.5,
-                                          height: 1,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.25,
-                                        ),
-                                      ),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        shiftLabel!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: foreground,
-                                          fontFamily: 'SpaceGrotesk',
-                                          fontSize: 12,
-                                          height: 1,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
+                          ? SizedBox.shrink()
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    groupLabel!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: foreground.withOpacity(0.84),
+                                      fontSize: 10.5,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.25,
+                                    ),
                                   ),
-                                ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    shiftLabel!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: foreground,
+                                      fontFamily: 'SpaceGrotesk',
+                                      fontSize: 12,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -2763,20 +3096,17 @@ class _DayCell extends StatelessWidget {
                   top: 5,
                   left: 5,
                   child: Container(
-                    constraints: BoxConstraints(
-                      minWidth: 23,
-                      minHeight: 23,
-                    ),
+                    constraints: BoxConstraints(minWidth: 23, minHeight: 23),
                     padding: EdgeInsets.symmetric(horizontal: 5),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: isToday
                           ? AppColors.brandDark
                           : shift != null
-                              ? (AppColors.isDarkMode
-                                  ? AppColors.paperAlt.withOpacity(0.96)
-                                  : Colors.white.withOpacity(0.78))
-                              : Colors.transparent,
+                          ? (AppColors.isDarkMode
+                                ? AppColors.paperAlt.withOpacity(0.96)
+                                : Colors.white.withOpacity(0.78))
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -2795,7 +3125,8 @@ class _DayCell extends StatelessWidget {
                     top: -4,
                     right: -4,
                     child: Tooltip(
-                      message: 'Garde disciplinaire · suppression admin uniquement',
+                      message:
+                          'Garde disciplinaire · suppression admin uniquement',
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Color(0xFFB42318),
@@ -2891,11 +3222,7 @@ class _CalendarCellAction extends StatelessWidget {
           child: SizedBox(
             width: size,
             height: size,
-            child: Icon(
-              icon,
-              size: compact ? 15 : 18,
-              color: foreground,
-            ),
+            child: Icon(icon, size: compact ? 15 : 18, color: foreground),
           ),
         ),
       ),
@@ -2913,17 +3240,19 @@ class _ShiftChip extends StatelessWidget {
     final shift = ShiftCatalog.byId(entry.shiftId);
     final isUrgence = shift.id.startsWith('urg-');
     final isLeave = shift.id == 'conge';
-    final leave =
-        isLeave ? context.watch<AppState>().leaveRequestForEntry(entry) : null;
+    final leave = isLeave
+        ? context.watch<AppState>().leaveRequestForEntry(entry)
+        : null;
     final pendingLeave = leave?.status == LeaveRequestStatus.pendingAdmin;
 
     final groupLabel = isLeave
         ? 'CONGÉ'
         : isUrgence
-            ? 'URG'
-            : 'SERV';
-    final shiftLabel =
-        isLeave ? (pendingLeave ? 'Attente' : 'Congé') : shift.label;
+        ? 'URG'
+        : 'SERV';
+    final shiftLabel = isLeave
+        ? (pendingLeave ? 'Attente' : 'Congé')
+        : shift.label;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2932,10 +3261,7 @@ class _ShiftChip extends StatelessWidget {
         return Container(
           width: double.infinity,
           height: double.infinity,
-          padding: EdgeInsets.symmetric(
-            horizontal: 3,
-            vertical: short ? 3 : 5,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: 3, vertical: short ? 3 : 5),
           decoration: BoxDecoration(
             color: shift.color,
             borderRadius: BorderRadius.circular(11),
@@ -2958,11 +3284,7 @@ class _ShiftChip extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (!short) ...[
-                  Icon(
-                    shift.icon,
-                    size: 18,
-                    color: shift.textColor,
-                  ),
+                  Icon(shift.icon, size: 18, color: shift.textColor),
                   const SizedBox(height: 3),
                 ],
                 Text(
@@ -3052,12 +3374,8 @@ class _ShiftTray extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(7, 6, 7, 7),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(22),
-        ),
-        border: Border(
-          top: BorderSide(color: AppColors.line),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        border: Border(top: BorderSide(color: AppColors.line)),
         boxShadow: [
           BoxShadow(
             color: AppColors.navy.withOpacity(0.08),
@@ -3157,9 +3475,7 @@ class _PlanningShiftGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: accent.withOpacity(0.055),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: accent.withOpacity(0.18),
-        ),
+        border: Border.all(color: accent.withOpacity(0.18)),
       ),
       child: Column(
         children: [
@@ -3194,10 +3510,7 @@ class _PlanningShiftGroup extends StatelessWidget {
                 for (var i = 0; i < shifts.length; i++) ...[
                   if (i > 0) const SizedBox(width: 3),
                   Expanded(
-                    child: _CompactShiftTile(
-                      shift: shifts[i],
-                      enabled: true,
-                    ),
+                    child: _CompactShiftTile(shift: shifts[i], enabled: true),
                   ),
                 ],
               ],
@@ -3229,20 +3542,14 @@ class _CompactShiftTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: shift.color,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: shift.textColor.withOpacity(0.11),
-        ),
+        border: Border.all(color: shift.textColor.withOpacity(0.11)),
       ),
       child: FittedBox(
         fit: BoxFit.scaleDown,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              shift.icon,
-              size: showLabel ? 14 : 19,
-              color: shift.textColor,
-            ),
+            Icon(shift.icon, size: showLabel ? 14 : 19, color: shift.textColor),
             if (showLabel) ...[
               const SizedBox(height: 2),
               Text(
@@ -3267,16 +3574,9 @@ class _CompactShiftTile extends StatelessWidget {
       maxSimultaneousDrags: enabled ? 1 : 0,
       feedback: Material(
         color: Colors.transparent,
-        child: SizedBox(
-          width: 56,
-          height: 58,
-          child: tile,
-        ),
+        child: SizedBox(width: 56, height: 58, child: tile),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.28,
-        child: tile,
-      ),
+      childWhenDragging: Opacity(opacity: 0.28, child: tile),
       child: tile,
     );
   }
@@ -3305,10 +3605,7 @@ class _TrayRow extends StatelessWidget {
             Container(
               width: 7,
               height: 7,
-              decoration: BoxDecoration(
-                color: accent,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
             ),
             SizedBox(width: 7),
             Text(
@@ -3326,10 +3623,7 @@ class _TrayRow extends StatelessWidget {
           children: shifts
               .map(
                 (shift) => Expanded(
-                  child: _ShiftTile(
-                    shift: shift,
-                    enabled: enabled,
-                  ),
+                  child: _ShiftTile(shift: shift, enabled: enabled),
                 ),
               )
               .toList(),
@@ -3343,10 +3637,7 @@ class _ShiftTile extends StatelessWidget {
   final ShiftType shift;
   final bool enabled;
 
-  const _ShiftTile({
-    required this.shift,
-    required this.enabled,
-  });
+  const _ShiftTile({required this.shift, required this.enabled});
 
   @override
   Widget build(BuildContext context) {
@@ -3356,9 +3647,7 @@ class _ShiftTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: shift.color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: shift.textColor.withOpacity(0.09),
-        ),
+        border: Border.all(color: shift.textColor.withOpacity(0.09)),
         boxShadow: [
           BoxShadow(
             color: shift.textColor.withOpacity(0.08),
@@ -3371,11 +3660,7 @@ class _ShiftTile extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            shift.icon,
-            size: 20,
-            color: shift.textColor,
-          ),
+          Icon(shift.icon, size: 20, color: shift.textColor),
           const SizedBox(height: 3),
           Text(
             shift.label,
@@ -3407,10 +3692,7 @@ class _ShiftTile extends StatelessWidget {
           ),
         ),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.26,
-        child: tile,
-      ),
+      childWhenDragging: Opacity(opacity: 0.26, child: tile),
       child: tile,
     );
   }
@@ -3420,10 +3702,7 @@ class _CongeDock extends StatelessWidget {
   final ShiftType shift;
   final bool enabled;
 
-  const _CongeDock({
-    required this.shift,
-    required this.enabled,
-  });
+  const _CongeDock({required this.shift, required this.enabled});
 
   @override
   Widget build(BuildContext context) {
@@ -3433,9 +3712,7 @@ class _CongeDock extends StatelessWidget {
       decoration: BoxDecoration(
         color: shift.color,
         borderRadius: BorderRadius.circular(19),
-        border: Border.all(
-          color: shift.textColor.withOpacity(0.10),
-        ),
+        border: Border.all(color: shift.textColor.withOpacity(0.10)),
         boxShadow: [
           BoxShadow(
             color: shift.textColor.withOpacity(0.08),
@@ -3455,11 +3732,7 @@ class _CongeDock extends StatelessWidget {
               color: Colors.white.withOpacity(0.30),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              shift.icon,
-              size: 24,
-              color: shift.textColor,
-            ),
+            child: Icon(shift.icon, size: 24, color: shift.textColor),
           ),
           const SizedBox(height: 8),
           Text(
@@ -3492,13 +3765,11 @@ class _CongeDock extends StatelessWidget {
           ),
         ),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.26,
-        child: dock,
-      ),
+      childWhenDragging: Opacity(opacity: 0.26, child: dock),
       child: dock,
     );
   }
 }
 
-String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+String _capitalize(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
