@@ -5,189 +5,31 @@ on:
     branches:
       - audit-fixes-v11.6.70
     paths:
-      - '.github/workflows/one-time-announcements-promo-patch.yml'
+      - .github/workflows/one-time-announcements-promo-patch.yml
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: audit-fixes-v11.6.70
           fetch-depth: 0
-
-      - name: Apply safe source patches
+      - name: Apply integration patch
         shell: bash
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path('source/lib/screens/exchange_request_sheet.dart')
-          s = p.read_text()
-          broken = "setState(() => _error = err;\n                          );"
-          if broken in s:
-              s = s.replace(broken, "setState(() => _error = err);")
-          p.write_text(s)
-
-          p = Path('supabase/functions/send-push/index.ts')
-          s = p.read_text()
-          s = s.replace(
-              "grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'ietf:params:oauth:grant-type'),",
-              "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',",
-          )
-          p.write_text(s)
-
-          p = Path('source/lib/screens/home_screen.dart')
-          s = p.read_text()
-          if "import '../data/intern_promotions.dart';" not in s:
-              s = s.replace(
-                  "import '../models/app_user.dart';",
-                  "import '../data/intern_promotions.dart';\nimport '../models/app_user.dart';",
-                  1,
-              )
-          if "import 'announcements_screen.dart';" not in s:
-              s = s.replace(
-                  "import 'admin_screen.dart';",
-                  "import 'admin_screen.dart';\nimport 'announcements_screen.dart';",
-                  1,
-              )
-
-          build_marker = "  Widget build(BuildContext context) {\n    final now = DateTime.now();\n    final visibleMonth = appState.visibleMonth;"
-          replacement_marker = "  Widget build(BuildContext context) {\n    final promotionLabel = InternPromotions.labelFor(appState.currentUser);\n    final now = DateTime.now();\n    final visibleMonth = appState.visibleMonth;"
-          if build_marker in s:
-              s = s.replace(build_marker, replacement_marker, 1)
-
-          class_pos = s.index('class _PlanningView extends StatelessWidget')
-          start = s.index("        Padding(\n          padding: EdgeInsets.fromLTRB(12, 8, 12, 2),", class_pos)
-          end = s.index("        _MonthBar(appState: appState),", start)
-          new_header = '''        Padding(
-          padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 7,
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                  child: Ink(
-                    height: 40,
-                    padding: EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.line),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.navy.withOpacity(0.08),
-                          blurRadius: 14,
-                          offset: Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.picture_as_pdf_rounded, size: 18, color: AppColors.urg24h),
-                        SizedBox(width: 8),
-                        Text(
-                          'Planning officiel',
-                          style: TextStyle(color: AppColors.ink, fontSize: 12.5, fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (promotionLabel != null)
-                Container(
-                  height: 40,
-                  padding: EdgeInsets.symmetric(horizontal: 13),
-                  decoration: BoxDecoration(
-                    color: AppColors.brandSoft,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.brand.withOpacity(0.18)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.school_rounded, size: 17, color: AppColors.brandDark),
-                      SizedBox(width: 7),
-                      Text(
-                        promotionLabel,
-                        style: TextStyle(color: AppColors.brandDark, fontSize: 11.5, fontWeight: FontWeight.w900),
-                      ),
-                    ],
-                  ),
-                ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                  child: Ink(
-                    height: 40,
-                    padding: EdgeInsets.symmetric(horizontal: 13),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.line),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.forum_rounded, size: 17, color: AppColors.brand),
-                        SizedBox(width: 7),
-                        Text(
-                          'Annonces',
-                          style: TextStyle(color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-          '''
-          s = s[:start] + new_header + s[end:]
-          p.write_text(s)
-          PY
-
-          cp supabase/functions/send-push/index.ts source/supabase/functions/send-push/index.ts
-
-          grep -Fq "final promotionLabel = InternPromotions.labelFor(appState.currentUser);" source/lib/screens/home_screen.dart
-          grep -Fq "const AnnouncementsScreen()" source/lib/screens/home_screen.dart
-          grep -Fq "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer'" supabase/functions/send-push/index.ts
-          grep -Fq "setState(() => _error = err);" source/lib/screens/exchange_request_sheet.dart
-          grep -Fq "announcement_created" source/supabase/functions/send-push/index.ts
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwID0gUGF0aCgic291cmNlL2xpYi9zY3JlZW5zL2V4Y2hhbmdlX3JlcXVlc3Rfc2hlZXQuZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCmJyb2tlbiA9ICJzZXRTdGF0ZSgoKSA9PiBfZXJyb3IgPSBlcnI7XG4gICAgICAgICAgICAgICAgICAgICAgICAgICk7IgppZiBicm9rZW4gaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoYnJva2VuLCAic2V0U3RhdGUoKCkgPT4gX2Vycm9yID0gZXJyKTsiKQpwLndyaXRlX3RleHQocykKCnAgPSBQYXRoKCJzdXBhYmFzZS9mdW5jdGlvbnMvc2VuZC1wdXNoL2luZGV4LnRzIikKcyA9IHAucmVhZF90ZXh0KCkKcyA9IHMucmVwbGFjZSgKICAgICJncmFudF90eXBlOiAndXJuOmlldGY6cGFyYW1zOm9hdXRoLXR5cGU6and0LWJlYXJlcicucmVwbGFjZSgnb2F1dGgtdHlwZScsICdpZXRmOnBhcmFtczpvYXV0aDpncmFudC10eXBlJyksIiwKICAgICJncmFudF90eXBlOiAndXJuOmlldGY6cGFyYW1zOm9hdXRoOmdyYW50LXR5cGU6and0LWJlYXJlcicsIiwKKQpwLndyaXRlX3RleHQocykKCnAgPSBQYXRoKCJzb3VyY2UvbGliL3NjcmVlbnMvaG9tZV9zY3JlZW4uZGFydCIpCnMgPSBwLnJlYWRfdGV4dCgpCmlmICJpbXBvcnQgJy4uL2RhdGEvaW50ZXJuX3Byb21vdGlvbnMuZGFydCc7IiBub3QgaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoCiAgICAgICAgImltcG9ydCAnLi4vbW9kZWxzL2FwcF91c2VyLmRhcnQnOyIsCiAgICAgICAgImltcG9ydCAnLi4vZGF0YS9pbnRlcm5fcHJvbW90aW9ucy5kYXJ0JztcbmltcG9ydCAnLi4vbW9kZWxzL2FwcF91c2VyLmRhcnQnOyIsCiAgICAgICAgMSwKICAgICkKaWYgImltcG9ydCAnYW5ub3VuY2VtZW50c19zY3JlZW4uZGFydCc7IiBub3QgaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoCiAgICAgICAgImltcG9ydCAnYWRtaW5fc2NyZWVuLmRhcnQnOyIsCiAgICAgICAgImltcG9ydCAnYWRtaW5fc2NyZWVuLmRhcnQnO1xuaW1wb3J0ICdhbm5vdW5jZW1lbnRzX3NjcmVlbi5kYXJ0JzsiLAogICAgICAgIDEsCiAgICApCgpidWlsZF9tYXJrZXIgPSAiICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHtcbiAgICBmaW5hbCBub3cgPSBEYXRlVGltZS5ub3coKTtcbiAgICBmaW5hbCB2aXNpYmxlTW9udGggPSBhcHBTdGF0ZS52aXNpYmxlTW9udGg7IgpyZXBsYWNlbWVudF9tYXJrZXIgPSAiICBXaWRnZXQgYnVpbGQoQnVpbGRDb250ZXh0IGNvbnRleHQpIHtcbiAgICBmaW5hbCBwcm9tb3Rpb25MYWJlbCA9IEludGVyblByb21vdGlvbnMubGFiZWxGb3IoYXBwU3RhdGUuY3VycmVudFVzZXIpO1xuICAgIGZpbmFsIG5vdyA9IERhdGVUaW1lLm5vdygpO1xuICAgIGZpbmFsIHZpc2libGVNb250aCA9IGFwcFN0YXRlLnZpc2libGVNb250aDsiCmlmIGJ1aWxkX21hcmtlciBpbiBzOgogICAgcyA9IHMucmVwbGFjZShidWlsZF9tYXJrZXIsIHJlcGxhY2VtZW50X21hcmtlciwgMSkKCmNsYXNzX3BvcyA9IHMuaW5kZXgoImNsYXNzIF9QbGFubmluZ1ZpZXcgZXh0ZW5kcyBTdGF0ZWxlc3NXaWRnZXQiKQpzdGFydCA9IHMuaW5kZXgoIiAgICAgICAgUGFkZGluZyhcbiAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLmZyb21MVFJCKDEyLCA4LCAxMiwgMiksIiwgY2xhc3NfcG9zKQplbmQgPSBzLmluZGV4KCIgICAgICAgIF9Nb250aEJhcihhcHBTdGF0ZTogYXBwU3RhdGUpLCIsIHN0YXJ0KQpuZXdfaGVhZGVyID0gIiIiICAgICAgICBQYWRkaW5nKAogICAgICAgICAgcGFkZGluZzogRWRnZUluc2V0cy5mcm9tTFRSQigxMiwgOCwgMTIsIDQpLAogICAgICAgICAgY2hpbGQ6IFdyYXAoCiAgICAgICAgICAgIGFsaWdubWVudDogV3JhcEFsaWdubWVudC5jZW50ZXIsCiAgICAgICAgICAgIGNyb3NzQXhpc0FsaWdubWVudDogV3JhcENyb3NzQWxpZ25tZW50LmNlbnRlciwKICAgICAgICAgICAgc3BhY2luZzogOCwKICAgICAgICAgICAgcnVuU3BhY2luZzogNywKICAgICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgICBNYXRlcmlhbCgKICAgICAgICAgICAgICAgIGNvbG9yOiBDb2xvcnMudHJhbnNwYXJlbnQsCiAgICAgICAgICAgICAgICBjaGlsZDogSW5rV2VsbCgKICAgICAgICAgICAgICAgICAgb25UYXA6ICgpID0+IE5hdmlnYXRvci5wdXNoKAogICAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgICAgTWF0ZXJpYWxQYWdlUm91dGUoYnVpbGRlcjogKF8pID0+IE9mZmljaWFsUGxhbm5pbmdTY3JlZW4oKSksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBJbmsoCiAgICAgICAgICAgICAgICAgICAgaGVpZ2h0OiA0MCwKICAgICAgICAgICAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiAxNCksCiAgICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogQm94RGVjb3JhdGlvbigKICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiBBcHBDb2xvcnMuY2FyZCwKICAgICAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IEFwcENvbG9ycy5saW5lKSwKICAgICAgICAgICAgICAgICAgICAgIGJveFNoYWRvdzogWwogICAgICAgICAgICAgICAgICAgICAgICBCb3hTaGFkb3coCiAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IEFwcENvbG9ycy5uYXZ5LndpdGhPcGFjaXR5KDAuMDgpLAogICAgICAgICAgICAgICAgICAgICAgICAgIGJsdXJSYWRpdXM6IDE0LAogICAgICAgICAgICAgICAgICAgICAgICAgIG9mZnNldDogT2Zmc2V0KDAsIDUpLAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgIGNoaWxkOiBSb3coCiAgICAgICAgICAgICAgICAgICAgICBtYWluQXhpc1NpemU6IE1haW5BeGlzU2l6ZS5taW4sCiAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgICBJY29uKEljb25zLnBpY3R1cmVfYXNfcGRmX3JvdW5kZWQsIHNpemU6IDE4LCBjb2xvcjogQXBwQ29sb3JzLnVyZzI0aCksCiAgICAgICAgICAgICAgICAgICAgICAgIFNpemVkQm94KHdpZHRoOiA4KSwKICAgICAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICAnUGxhbm5pbmcgb2ZmaWNpZWwnLAogICAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlOiBUZXh0U3R5bGUoY29sb3I6IEFwcENvbG9ycy5pbmssIGZvbnRTaXplOiAxMi41LCBmb250V2VpZ2h0OiBGb250V2VpZ2h0Lnc5MDApLAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICApLAogICAgICAgICAgICAgIGlmIChwcm9tb3Rpb25MYWJlbCAhPSBudWxsKQogICAgICAgICAgICAgICAgQ29udGFpbmVyKAogICAgICAgICAgICAgICAgICBoZWlnaHQ6IDQwLAogICAgICAgICAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiAxMyksCiAgICAgICAgICAgICAgICAgIGRlY29yYXRpb246IEJveERlY29yYXRpb24oCiAgICAgICAgICAgICAgICAgICAgY29sb3I6IEFwcENvbG9ycy5icmFuZFNvZnQsCiAgICAgICAgICAgICAgICAgICAgYm9yZGVyUmFkaXVzOiBCb3JkZXJSYWRpdXMuY2lyY3VsYXIoOTk5KSwKICAgICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IEFwcENvbG9ycy5icmFuZC53aXRoT3BhY2l0eSgwLjE4KSksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBSb3coCiAgICAgICAgICAgICAgICAgICAgbWFpbkF4aXNTaXplOiBNYWluQXhpc1NpemUubWluLAogICAgICAgICAgICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgICAgICAgICAgICBJY29uKEljb25zLnNjaG9vbF9yb3VuZGVkLCBzaXplOiAxNywgY29sb3I6IEFwcENvbG9ycy5icmFuZERhcmspLAogICAgICAgICAgICAgICAgICAgICAgU2l6ZWRCb3god2lkdGg6IDcpLAogICAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgcHJvbW90aW9uTGFiZWwsCiAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlOiBUZXh0U3R5bGUoY29sb3I6IEFwcENvbG9ycy5icmFuZERhcmssIGZvbnRTaXplOiAxMS41LCBmb250V2VpZ2h0OiBGb250V2VpZ2h0Lnc5MDApLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICBNYXRlcmlhbCgKICAgICAgICAgICAgICAgIGNvbG9yOiBDb2xvcnMudHJhbnNwYXJlbnQsCiAgICAgICAgICAgICAgICBjaGlsZDogSW5rV2VsbCgKICAgICAgICAgICAgICAgICAgb25UYXA6ICgpID0+IE5hdmlnYXRvci5wdXNoKAogICAgICAgICAgICAgICAgICAgIGNvbnRleHQsCiAgICAgICAgICAgICAgICAgICAgTWF0ZXJpYWxQYWdlUm91dGUoYnVpbGRlcjogKF8pID0+IGNvbnN0IEFubm91bmNlbWVudHNTY3JlZW4oKSksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgIGNoaWxkOiBJbmsoCiAgICAgICAgICAgICAgICAgICAgaGVpZ2h0OiA0MCwKICAgICAgICAgICAgICAgICAgICBwYWRkaW5nOiBFZGdlSW5zZXRzLnN5bW1ldHJpYyhob3Jpem9udGFsOiAxMyksCiAgICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogQm94RGVjb3JhdGlvbigKICAgICAgICAgICAgICAgICAgICAgIGNvbG9yOiBBcHBDb2xvcnMuY2FyZCwKICAgICAgICAgICAgICAgICAgICAgIGJvcmRlclJhZGl1czogQm9yZGVyUmFkaXVzLmNpcmN1bGFyKDk5OSksCiAgICAgICAgICAgICAgICAgICAgICBib3JkZXI6IEJvcmRlci5hbGwoY29sb3I6IEFwcENvbG9ycy5saW5lKSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgIGNoaWxkOiBSb3coCiAgICAgICAgICAgICAgICAgICAgICBtYWluQXhpc1NpemU6IE1haW5BeGlzU2l6ZS5taW4sCiAgICAgICAgICAgICAgICAgICAgICBjaGlsZHJlbjogWwogICAgICAgICAgICAgICAgICAgICAgICBJY29uKEljb25zLmZvcnVtX3JvdW5kZWQsIHNpemU6IDE3LCBjb2xvcjogQXBwQ29sb3JzLmJyYW5kKSwKICAgICAgICAgICAgICAgICAgICAgICAgU2l6ZWRCb3god2lkdGg6IDcpLAogICAgICAgICAgICAgICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAgICdBbm5vbmNlcycsCiAgICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IFRleHRTdHlsZShjb2xvcjogQXBwQ29sb3JzLmluaywgZm9udFNpemU6IDExLjUsIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzkwMCksCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICksCiAgICAgICAgICAgIF0sCiAgICAgICAgICApLAogICAgICAgICksCiIiIgpzID0gc1s6c3RhcnRdICsgbmV3X2hlYWRlciArIHNbZW5kOl0KcC53cml0ZV90ZXh0KHMpCgojIE1pcnJvciBwcm9kdWN0aW9uLXNhZmUgcHVzaCBjb2RlClBhdGgoInNvdXJjZS9zdXBhYmFzZS9mdW5jdGlvbnMvc2VuZC1wdXNoL2luZGV4LnRzIikud3JpdGVfdGV4dCgKICAgIFBhdGgoInN1cGFiYXNlL2Z1bmN0aW9ucy9zZW5kLXB1c2gvaW5kZXgudHMiKS5yZWFkX3RleHQoKQopCgojIEFzc2VydGlvbnMKYXNzZXJ0ICJmaW5hbCBwcm9tb3Rpb25MYWJlbCA9IEludGVyblByb21vdGlvbnMubGFiZWxGb3IoYXBwU3RhdGUuY3VycmVudFVzZXIpOyIgaW4gUGF0aCgic291cmNlL2xpYi9zY3JlZW5zL2hvbWVfc2NyZWVuLmRhcnQiKS5yZWFkX3RleHQoKQphc3NlcnQgImNvbnN0IEFubm91bmNlbWVudHNTY3JlZW4oKSIgaW4gUGF0aCgic291cmNlL2xpYi9zY3JlZW5zL2hvbWVfc2NyZWVuLmRhcnQiKS5yZWFkX3RleHQoKQphc3NlcnQgImdyYW50X3R5cGU6ICd1cm46aWV0ZjpwYXJhbXM6b2F1dGg6Z3JhbnQtdHlwZTpqd3QtYmVhcmVyJyIgaW4gUGF0aCgic3VwYWJhc2UvZnVuY3Rpb25zL3NlbmQtcHVzaC9pbmRleC50cyIpLnJlYWRfdGV4dCgpCmFzc2VydCAic2V0U3RhdGUoKCkgPT4gX2Vycm9yID0gZXJyKTsiIGluIFBhdGgoInNvdXJjZS9saWIvc2NyZWVucy9leGNoYW5nZV9yZXF1ZXN0X3NoZWV0LmRhcnQiKS5yZWFkX3RleHQoKQphc3NlcnQgImFubm91bmNlbWVudF9jcmVhdGVkIiBpbiBQYXRoKCJzb3VyY2Uvc3VwYWJhc2UvZnVuY3Rpb25zL3NlbmQtcHVzaC9pbmRleC50cyIpLnJlYWRfdGV4dCgpCg==' | base64 -d > /tmp/gardeflow_patch.py
+          python3 /tmp/gardeflow_patch.py
           git diff --check
-
       - name: Commit integration
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name "GardeFlow CI"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
           git add source/lib/screens/home_screen.dart source/lib/screens/exchange_request_sheet.dart supabase/functions/send-push/index.ts source/supabase/functions/send-push/index.ts
-          if git diff --cached --quiet; then
-            echo "Nothing to commit"
-            exit 0
-          fi
-          git commit -m "feat: integrate announcement feed and promotion rules"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'feat: integrate announcement feed and promotion rules'
           git push origin HEAD:audit-fixes-v11.6.70
