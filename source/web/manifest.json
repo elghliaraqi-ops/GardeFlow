@@ -1,0 +1,19 @@
+{
+  "name": "GardeFlow",
+  "short_name": "GardeFlow",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F4F7F6",
+  "theme_color": "#0B5D55",
+  "description": "GardeFlow — planning médical intelligent.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "assets/assets/branding/gardeflow_logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
