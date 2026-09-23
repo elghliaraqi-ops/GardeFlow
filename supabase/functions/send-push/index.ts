@@ -45,7 +45,7 @@ async function googleAccessToken(sa: any): Promise<string> {
   const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(unsigned));
   const assertion = `${unsigned}.${b64url(new Uint8Array(signature))}`;
   const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    grant_type: 'urn:ietf:params:oauth-type:jwt-bearer'.replace('oauth-type', 'ietf:params:oauth:grant-type'),
     assertion,
   });
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -72,18 +72,14 @@ async function sendFcm(
     // recipientId in its background isolate.
     message.android = { priority: 'HIGH' };
   } else if (platform === 'ios') {
-    // Silent data push. The app verifies recipientId before showing locally.
     message.apns = {
       headers: {
         'apns-priority': '5',
         'apns-push-type': 'background',
       },
-      payload: {
-        aps: { 'content-available': 1 },
-      },
+      payload: { aps: { 'content-available': 1 } },
     };
   } else {
-    // Web keeps browser-managed presentation.
     message.webpush = {
       headers: { Urgency: 'high' },
       notification: {
@@ -133,7 +129,8 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey);
     const { data: caller, error: callerError } = await admin.from('profiles')
-      .select('id,phone,nom,prenom,hospital,role,account_status').eq('id', authData.user.id).single();
+      .select('id,phone,nom,prenom,hospital,role,account_status,promotion_number')
+      .eq('id', authData.user.id).single();
     if (callerError || !caller) throw new Error('Profil appelant introuvable');
     if (kind !== 'account_created' && caller.account_status !== 'active') {
       return new Response('Compte inactif', { status: 403, headers: corsHeaders });
@@ -148,7 +145,6 @@ Deno.serve(async (req) => {
         .select('id').eq('role', 'admin').eq('account_status', 'active').eq('hospital', hospital);
       const ids = (data ?? []).map((x: any) => x.id as string);
       if (ids.length > 0) return ids;
-      // Secours pour un administrateur réseau dont le profil est rattaché à un autre établissement.
       const { data: allAdmins } = await admin.from('profiles')
         .select('id').eq('role', 'admin').eq('account_status', 'active');
       return (allAdmins ?? []).map((x: any) => x.id as string);
@@ -161,6 +157,27 @@ Deno.serve(async (req) => {
       recipients = await adminsForHospital(profile.hospital);
       title = 'Nouveau compte à vérifier';
       body = `${profile.prenom} ${profile.nom} demande l’accès à ${profile.hospital}.`;
+    } else if (kind === 'announcement_created') {
+      const { data: announcement, error } = await admin.from('public_announcements')
+        .select('*').eq('id', resourceId).single();
+      if (error || !announcement) throw new Error('Annonce introuvable');
+      if (caller.id !== announcement.author_id || announcement.closed_at) {
+        throw new Error('Action non autorisée');
+      }
+
+      let cohortQuery = admin.from('profiles')
+        .select('id')
+        .eq('account_status', 'active')
+        .eq('hospital', announcement.hospital);
+      const promo = Number(announcement.promotion_number);
+      if (promo === 6 || promo === 7) {
+        cohortQuery = cohortQuery.eq('promotion_number', promo);
+      }
+      const { data: cohort, error: cohortError } = await cohortQuery;
+      if (cohortError) throw cohortError;
+      recipients = (cohort ?? []).map((x: any) => x.id as string);
+      title = 'Nouvelle annonce d’échange';
+      body = `${announcement.author_name} cherche un échange pour sa garde du ${announcement.date_str}.`;
     } else if (kind.startsWith('exchange_')) {
       const { data: ex, error } = await admin.from('exchange_requests').select('*').eq('id', resourceId).single();
       if (error || !ex) throw new Error('Demande transfert/échange introuvable');
