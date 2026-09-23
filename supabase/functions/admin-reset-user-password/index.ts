@@ -76,6 +76,21 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: 'update_failed' }, 500);
     }
 
+    const { error: requestResolveError } = await adminClient
+      .from('password_reset_requests')
+      .update({
+        status: 'resolved',
+        handled_at: new Date().toISOString(),
+        handled_by: callerId,
+      })
+      .eq('profile_id', targetUserId)
+      .eq('status', 'pending');
+    if (requestResolveError) {
+      // Password reset succeeded; do not roll it back only because the notification
+      // cleanup failed. Realtime/refresh can reconcile later.
+      console.error('admin-reset-user-password request resolution failed', requestResolveError);
+    }
+
     return json({ ok: true });
   } catch (error) {
     console.error('admin-reset-user-password error', error);

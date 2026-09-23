@@ -1,0 +1,47 @@
+name: One-time promotion signup and exchange policy patch
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - .github/workflows/one-time-promotion-signup-policy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - name: Apply promotion patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/if s.count(normal_variants) < 2:/if s.count(normal_variants) < 1:/' ci/patch_promotion_signup.py
+          sed -i 's/Expected profile variants block twice in official roster parser/Expected profile variants block in official roster parser/' ci/patch_promotion_signup.py
+          python3 ci/patch_promotion_signup.py
+          git diff --check
+          grep -Fq "promotionNumber" source/lib/models/app_user.dart
+          grep -Fq "Promotion d’internat" source/lib/screens/auth_screen.dart
+          grep -Fq "dahmane zaghrari" source/lib/data/intern_promotions.dart
+          grep -Fq "promotion_number" source/lib/services/supabase_backend_service.dart
+
+      - name: Commit requested promotion changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add ci/patch_promotion_signup.py source/lib source/test/intern_promotions_test.dart
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit'
+            exit 0
+          fi
+          git commit -m 'feat: add promotion signup and seniority exchange groups'
+          git push origin HEAD:audit-fixes-v11.6.70

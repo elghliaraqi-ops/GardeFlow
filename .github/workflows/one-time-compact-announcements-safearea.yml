@@ -1,0 +1,67 @@
+name: One-time compact announcements and safe-area fix
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - '.github/workflows/one-time-compact-announcements-safearea.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply UI patch
+        run: |
+          set -euo pipefail
+          python3 ci/patch_compact_announcements_safearea.py
+          dart format \
+            source/lib/screens/home_screen.dart \
+            source/lib/screens/announcements_screen.dart \
+            source/lib/screens/settings_screen.dart \
+            source/lib/screens/admin_password_reset_screen.dart
+          git diff --check
+
+      - name: Validate Flutter
+        working-directory: source
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/intern_promotions_test.dart
+          dart analyze \
+            --no-fatal-warnings \
+            lib/screens/home_screen.dart \
+            lib/screens/announcements_screen.dart \
+            lib/screens/settings_screen.dart \
+            lib/screens/admin_password_reset_screen.dart
+
+      - name: Commit source changes
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            source/lib/screens/home_screen.dart \
+            source/lib/screens/announcements_screen.dart \
+            source/lib/screens/settings_screen.dart \
+            source/lib/screens/admin_password_reset_screen.dart
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix: compact planning announcements and safe areas'
+          git push origin HEAD:audit-fixes-v11.6.70

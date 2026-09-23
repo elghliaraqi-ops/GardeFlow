@@ -1,32 +1,41 @@
-# GardeFlow — V11.6.0
+# GardeFlow — V12
 
-Application Flutter de planning des gardes pour le réseau HUIM6 / HUICK.
+GardeFlow est l’application Flutter de gestion des gardes médicales du réseau HUIM6 / HUICK.
 
-## V11.6.0 — Transposition automatique des plannings Urgences
+## Source de référence
 
-Les PDF déjà publiés dans **Planning de Garde Officiel** peuvent désormais être analysés automatiquement pour préremplir les calendriers individuels :
+À partir de **V12**, l’application complète et consolidée se trouve dans **`source/`**.
 
-- **08h–20h** → `urg-jour`
-- **20h–08h** → `urg-nuit`
-- **grande cellule fusionnée** → `urg-24h`
+Les dizaines de correctifs historiques V11.6.x ont été intégrés directement dans cette source. Les builds de production ne reconstruisent plus l’application en rejouant la chaîne de patches : Android, Web et iOS compilent désormais `source/` directement.
 
-Les gardes reconnues sont transposées automatiquement, sans validation admin intermédiaire. Le médecin peut ensuite les modifier tant que son mois n'est pas validé définitivement.
+- Version : **12.0.0+300**
+- Flutter : `source/lib/`
+- Tests : `source/test/`
+- Outils de génération Android/iOS : `source/tool/`
+- Backend versionné : `source/supabase/` et `supabase/`
+- Documentation d’optimisation : `source/V12_OPTIMISATION.md`
 
-### Fichiers principaux V11.6.0
+Les dossiers `ci/v11_6_*` et les anciens fichiers V11 restent uniquement comme **historique technique**. Ils ne constituent plus la chaîne de build V12.
 
-- `lib/services/official_roster_import_service.dart` — lecture structurée des PDF et rapprochement des médecins
-- `lib/screens/official_planning_screen.dart` — déclenchement automatique de la transposition
-- `lib/services/supabase_backend_service.dart` — appels RPC Supabase
-- `PATCH_SUPABASE_V11_6_0_OFFICIAL_PDF_AUTO_IMPORT.sql` — migration à exécuter une fois dans Supabase
-- `supabase/patch_v11_6_0_official_pdf_auto_import.sql` — copie de la migration dans le dossier Supabase
-- `CHANGELOG_V11_6_0.md` — détail fonctionnel
-- `MIGRATION_V11_6_0.md` — procédure de migration
+## Règles métier conservées
 
-## Migration
+V12 conserve les règles métier validées de GardeFlow : planning JOUR / NUIT / 24H, Service et Urgences, congés, validation mensuelle, échanges et transferts, gardes disciplinaires, promotions d’internat, astreintes juniors et seniors, annuaire, planning officiel, notifications et alarmes de garde.
 
-1. Exécuter `PATCH_SUPABASE_V11_6_0_OFFICIAL_PDF_AUTO_IMPORT.sql` dans **Supabase → SQL Editor**.
-2. Compiler/installer GardeFlow V11.6.0.
-3. Se connecter avec un compte admin et ouvrir **Planning de Garde Officiel**.
-4. Les PDF déjà présents seront analysés automatiquement.
+Les mois passés restent en lecture seule. Les échanges inter-établissements sont interdits. Les échanges de gardes de service restent soumis aux règles de même service, tandis que les opérations nécessitant une validation administrative conservent leur circuit dédié.
 
-Les mois déjà validés définitivement ne sont jamais modifiés par l'import automatique.
+## Builds
+
+Les workflows V12 principaux sont :
+
+- `.github/workflows/build-android-apk.yml`
+- `.github/workflows/build-web-v12.yml`
+- `.github/workflows/build-ios.yml`
+- `.github/workflows/build-ios-signed.yml`
+
+Ils compilent tous la source consolidée, sans empilement de patches V11.
+
+## Sauvegarde
+
+L’état de `main` antérieur à la migration V12 est conservé dans la branche :
+
+`backup-main-pre-v12-20260923`

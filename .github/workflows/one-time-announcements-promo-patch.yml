@@ -1,0 +1,77 @@
+name: One-time announcements and promotion compile fix
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - .github/workflows/one-time-announcements-promo-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - name: Patch compile issues safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('source/lib/screens/announcements_screen.dart')
+          s = p.read_text()
+          s = s.replace(
+              "child: const Icon(Icons.forum_rounded, color: AppColors.brand),",
+              "child: Icon(Icons.forum_rounded, color: AppColors.brand),",
+          )
+          s = s.replace(
+              "style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),",
+              "style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900),",
+          )
+          p.write_text(s)
+
+          p = Path('source/lib/screens/exchange_request_sheet.dart')
+          s = p.read_text()
+          s = s.replace(
+              "style: const TextStyle(\n                        color: AppColors.brandDark,",
+              "style: TextStyle(\n                        color: AppColors.brandDark,",
+          )
+          p.write_text(s)
+
+          p = Path('source/lib/data/intern_promotions.dart')
+          s = p.read_text()
+          anchor = "'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'belhaj anas',"
+          replacement = "'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'araqui houssaini elghali', 'araqui houssaini el ghali', 'belhaj anas',"
+          if 'araqui houssaini elghali' not in s:
+              if anchor not in s:
+                  raise SystemExit('Promotion 6 alias anchor not found')
+              s = s.replace(anchor, replacement, 1)
+          p.write_text(s)
+          PY
+
+          grep -Fq "child: Icon(Icons.forum_rounded, color: AppColors.brand)" source/lib/screens/announcements_screen.dart
+          grep -Fq "style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w900)" source/lib/screens/announcements_screen.dart
+          grep -Fq "araqui houssaini elghali" source/lib/data/intern_promotions.dart
+          git diff --check
+
+      - name: Commit compile fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib/screens/announcements_screen.dart source/lib/screens/exchange_request_sheet.dart source/lib/data/intern_promotions.dart
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit'
+            exit 0
+          fi
+          git commit -m 'fix: compile announcements and map Promo 6 account alias'
+          git push origin HEAD:audit-fixes-v11.6.70

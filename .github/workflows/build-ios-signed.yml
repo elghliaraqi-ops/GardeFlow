@@ -1,4 +1,4 @@
-name: Build iOS Signed v11.6.70
+name: Build GardeFlow V12 iOS Signed
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - '.github/workflows/build-ios-signed.yml'
+      - 'source/**'
 
 permissions:
   contents: read
@@ -19,22 +20,20 @@ jobs:
     env:
       PROJECT_DIR: source
       BUNDLE_ID: com.huim6.gardeflow
-      APP_VERSION: 11.6.70
-      BUILD_NUMBER: "230"
+      APP_VERSION: 12.0.0
+      BUILD_NUMBER: "300"
 
     steps:
-      - name: Checkout GardeFlow v11.6.70
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: audit-fixes-v11.6.70
 
-      - name: Verify exact version
+      - name: Verify canonical V12 source
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '^version: 11.6.70+230$' pubspec.yaml
-          echo "Building GardeFlow 11.6.70+230"
+          grep -q '^version: 12.0.0+300$' pubspec.yaml
+          test -f lib/main.dart
 
       - name: Verify signing secrets
         shell: bash
@@ -65,13 +64,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter --version
-          if [ ! -f ios/Runner.xcodeproj/project.pbxproj ]; then
-            rm -rf ios
-            flutter create --no-pub --platforms=ios --org com.huim6 --project-name huim6_planning .
-          fi
+          rm -rf ios
+          flutter create --no-pub --platforms=ios --org com.huim6 --project-name huim6_planning .
           dart tool/configure_ios.dart
-          grep -q 'com.huim6.gardeflow' ios/Runner.xcodeproj/project.pbxproj
           flutter clean
           flutter pub get
           if [ -f ios/Podfile ]; then
@@ -88,63 +83,34 @@ jobs:
           IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
-
           CERTIFICATE_PATH="$RUNNER_TEMP/gardeflow_distribution.p12"
           PROFILE_PATH="$RUNNER_TEMP/gardeflow.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/gardeflow-signing.keychain-db"
-
           printf '%s' "$IOS_P12_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
           printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
-
           security create-keychain -p "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERTIFICATE_PATH" \
-            -P "$IOS_P12_PASSWORD" \
-            -A \
-            -t cert \
-            -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-          security set-key-partition-list \
-            -S apple-tool:,apple: \
-            -s \
-            -k "$IOS_KEYCHAIN_PASSWORD" \
-            "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$IOS_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH"
-
           security cms -D -i "$PROFILE_PATH" > "$RUNNER_TEMP/profile.plist"
           PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist")"
           PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/profile.plist")"
           TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$RUNNER_TEMP/profile.plist")"
           PROFILE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$RUNNER_TEMP/profile.plist")"
-
           case "$PROFILE_APP_ID" in
             "$TEAM_ID.$BUNDLE_ID") ;;
-            *)
-              echo "::error::Provisioning profile is for $PROFILE_APP_ID, expected $TEAM_ID.$BUNDLE_ID"
-              exit 1
-              ;;
+            *) echo "::error::Provisioning profile is for $PROFILE_APP_ID, expected $TEAM_ID.$BUNDLE_ID"; exit 1 ;;
           esac
-
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
-
-          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
           echo "profile_name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
           echo "team_id=$TEAM_ID" >> "$GITHUB_OUTPUT"
 
-          echo "Installed provisioning profile: $PROFILE_NAME"
-          echo "Apple Team ID: $TEAM_ID"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-
-      - name: Build unsigned Flutter iOS release
+      - name: Build Flutter iOS release
         working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          flutter build ios --release --no-codesign \
-            --build-name "$APP_VERSION" \
-            --build-number "$BUILD_NUMBER"
+        run: flutter build ios --release --no-codesign --build-name "$APP_VERSION" --build-number "$BUILD_NUMBER"
 
       - name: Archive signed iOS app
         working-directory: ${{ env.PROJECT_DIR }}
@@ -156,7 +122,6 @@ jobs:
           set -euo pipefail
           rm -rf build/ios/archive
           mkdir -p build/ios/archive
-
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
@@ -173,9 +138,7 @@ jobs:
             FLUTTER_BUILD_NAME="$APP_VERSION" \
             FLUTTER_BUILD_NUMBER="$BUILD_NUMBER"
 
-          test -d build/ios/archive/Runner.xcarchive
-
-      - name: Export signed IPA for App Store Connect / TestFlight
+      - name: Export signed IPA
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         env:
@@ -183,50 +146,30 @@ jobs:
           PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
         run: |
           set -euo pipefail
-
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store-connect</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>teamID</key>
-            <string>$TEAM_ID</string>
-            <key>signingCertificate</key>
-            <string>Apple Distribution</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>$BUNDLE_ID</key>
-              <string>$PROFILE_NAME</string>
-            </dict>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>uploadSymbols</key>
-            <true/>
-          </dict>
-          </plist>
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_NAME</string></dict>
+            <key>stripSwiftSymbols</key><true/>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
           PLIST
-
           rm -rf build/ios/ipa
           mkdir -p build/ios/ipa
-          xcodebuild \
-            -exportArchive \
-            -archivePath build/ios/archive/Runner.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
-
+          xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive -exportPath build/ios/ipa -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
           IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)"
           test -n "$IPA_PATH"
-          cp "$IPA_PATH" "build/ios/ipa/GardeFlow-v11.6.70-signed.ipa"
-          ls -lh "build/ios/ipa/GardeFlow-v11.6.70-signed.ipa"
+          cp "$IPA_PATH" build/ios/ipa/GardeFlow-v12.0.0-signed.ipa
 
       - name: Upload signed IPA
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.70-ios-signed
-          path: source/build/ios/ipa/GardeFlow-v11.6.70-signed.ipa
+          name: GardeFlow-v12.0.0-ios-signed
+          path: source/build/ios/ipa/GardeFlow-v12.0.0-signed.ipa
           if-no-files-found: error
           retention-days: 30

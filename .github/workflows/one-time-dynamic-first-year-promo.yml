@@ -1,0 +1,46 @@
+name: One-time dynamic first-year promotion patch
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - ci/patch_dynamic_first_year_policy.py
+      - .github/workflows/one-time-dynamic-first-year-promo.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - name: Apply dynamic promotion policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/patch_dynamic_first_year_policy.py
+          git diff --check
+          grep -Fq "promotionExchangeBlocked" source/lib/state/app_state.dart
+          grep -Fq "fetchCurrentFirstYearPromotion" source/lib/services/supabase_backend_service.dart
+          grep -Fq "Numéro de promotion" source/lib/screens/auth_screen.dart
+          grep -Fq "state.currentFirstYearPromotion" source/lib/screens/exchange_request_sheet.dart
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib/screens/auth_screen.dart source/lib/services/supabase_backend_service.dart source/lib/state/app_state.dart source/lib/screens/exchange_request_sheet.dart
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit'
+            exit 0
+          fi
+          git commit -m 'feat: make first-year promotion rule dynamic'
+          git push origin HEAD:audit-fixes-v11.6.70

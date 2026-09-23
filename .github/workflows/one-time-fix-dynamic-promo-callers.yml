@@ -1,0 +1,45 @@
+name: One-time fix dynamic promotion callers
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - ci/fix_dynamic_promo_callers.py
+      - .github/workflows/one-time-fix-dynamic-promo-callers.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - name: Fix dynamic promotion callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/fix_dynamic_promo_callers.py
+          git diff --check
+          grep -Fq "firstYearPromotion: state.currentFirstYearPromotion" source/lib/screens/announcements_screen.dart
+          grep -Fq "firstYearPromotion: appState.currentFirstYearPromotion" source/lib/screens/home_screen.dart
+          ! grep -Fq "final sourceIsUrgence" source/lib/screens/exchange_request_sheet.dart
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib/screens/announcements_screen.dart source/lib/screens/home_screen.dart source/lib/screens/exchange_request_sheet.dart
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit'
+            exit 0
+          fi
+          git commit -m 'fix: update dynamic promotion callers'
+          git push origin HEAD:audit-fixes-v11.6.70

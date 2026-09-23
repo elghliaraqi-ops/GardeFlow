@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="GardeFlow — planning médical intelligent, gardes, échanges, astreintes et actualités hospitalières.">
+  <meta name="theme-color" content="#0B5D55">
+  <meta name="application-name" content="GardeFlow">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GardeFlow">
+  <link rel="apple-touch-icon" href="assets/assets/branding/gardeflow_logo.png">
+
+  <link rel="icon" type="image/png" href="assets/assets/branding/gardeflow_logo.png">
+  <link rel="manifest" href="manifest.json">
+
+  <title>GardeFlow</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #F4F7F6;
+    }
+    #gardeflow-loader {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      font-family: Arial, sans-serif;
+      color: #173A37;
+      background: #F4F7F6;
+      z-index: 9999;
+    }
+    #gardeflow-loader img {
+      width: 92px;
+      height: 92px;
+      object-fit: contain;
+      border-radius: 22px;
+    }
+    #gardeflow-loader strong {
+      font-size: 24px;
+      letter-spacing: -0.4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="gardeflow-loader">
+    <img src="assets/assets/branding/gardeflow_logo.png" alt="Logo GardeFlow">
+    <strong>GardeFlow</strong>
+  </div>
+
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var loader = document.getElementById('gardeflow-loader');
+      if (loader) loader.remove();
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+name: One-time admin promotion management
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - .github/workflows/one-time-admin-add-promotion.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply source patch
+        run: |
+          set -euo pipefail
+          python3 ci/patch_admin_promotion_management.py
+          sed -i "s/child: const Icon(Icons.school_rounded, color: AppColors.brand)/child: Icon(Icons.school_rounded, color: AppColors.brand)/" source/lib/screens/admin_screen.dart
+          dart format \
+            source/lib/screens/auth_screen.dart \
+            source/lib/screens/admin_screen.dart \
+            source/lib/state/app_state.dart \
+            source/lib/services/supabase_backend_service.dart
+          git diff --check
+
+      - name: Validate Flutter
+        working-directory: source
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/intern_promotions_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/screens/auth_screen.dart \
+            lib/screens/admin_screen.dart \
+            lib/state/app_state.dart \
+            lib/services/supabase_backend_service.dart
+
+      - name: Commit source changes
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            source/lib/screens/auth_screen.dart \
+            source/lib/screens/admin_screen.dart \
+            source/lib/state/app_state.dart \
+            source/lib/services/supabase_backend_service.dart
+          git commit -m 'feat: add admin-managed internship promotions'
+          git push origin HEAD:audit-fixes-v11.6.70

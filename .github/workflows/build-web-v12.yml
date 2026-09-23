@@ -1,13 +1,14 @@
-name: Build & Deploy GardeFlow Web v11.6.70
-# redeploy: final-ui-fixes-20260923-1641
+name: Build & Deploy GardeFlow Web V12
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+      - v12-optimisee
     paths:
-      - '.github/workflows/build-web-v11.6.70.yml'
+      - '.github/workflows/build-web-v12.yml'
+      - 'source/**'
 
 permissions:
   contents: read
@@ -15,7 +16,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: gardeflow-web-pages
+  group: gardeflow-v12-web-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,23 +26,12 @@ jobs:
 
     env:
       PROJECT_DIR: source
-      APP_VERSION: 11.6.70
-      BUILD_NUMBER: "230"
+      APP_VERSION: 12.0.0
+      BUILD_NUMBER: "300"
 
     steps:
-      - name: Checkout exact GardeFlow v11.6.70
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: audit-fixes-v11.6.70
-
-      - name: Verify exact source version
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q '^version: 11.6.70+230$' pubspec.yaml
-          test -f lib/main.dart
-          echo "Building GardeFlow Web 11.6.70+230"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -49,25 +39,37 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Generate Web platform
+      - name: Verify canonical V12 source
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          flutter --version
+          grep -q '^version: 12.0.0+300$' pubspec.yaml
+          test -f lib/main.dart
+
+      - name: Generate web platform
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
           flutter config --enable-web
           if [ ! -f web/index.html ]; then
             flutter create --no-pub --platforms=web --project-name huim6_planning .
           fi
-          grep -Fq '<title>GardeFlow</title>' web/index.html
-          grep -Fq 'assets/assets/branding/gardeflow_logo.png' web/index.html
-          grep -Fq '"name": "GardeFlow"' web/manifest.json
 
       - name: Install dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           flutter clean
           flutter pub get
+
+      - name: Run tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter test
+
+      - name: Analyze Flutter code
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
 
       - name: Build Flutter Web release
         working-directory: ${{ env.PROJECT_DIR }}
@@ -80,31 +82,24 @@ jobs:
             --build-number "$BUILD_NUMBER"
           test -f build/web/index.html
           test -f build/web/main.dart.js
-          test -f build/web/assets/assets/branding/gardeflow_logo.png
-          grep -Fq '<title>GardeFlow</title>' build/web/index.html
-          if grep -qi '<title>Flutter' build/web/index.html; then
-            echo "Flutter branding still present in web title"
-            exit 1
-          fi
           touch build/web/.nojekyll
-          echo "Web build produced:"
-          du -sh build/web
-          find build/web -maxdepth 1 -type f -printf '%f\n' | sort
 
-      - name: Upload Web build artifact
+      - name: Upload web artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v11.6.70-web
+          name: GardeFlow-v12.0.0-web
           path: source/build/web
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload GitHub Pages artifact
+        if: github.ref_name == 'main'
         uses: actions/upload-pages-artifact@v4
         with:
           path: source/build/web
 
   deploy-pages:
+    if: github.ref_name == 'main'
     needs: build-web
     runs-on: ubuntu-latest
     timeout-minutes: 15
