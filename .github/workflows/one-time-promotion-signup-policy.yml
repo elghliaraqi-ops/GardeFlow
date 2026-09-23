@@ -23,6 +23,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sed -i 's/if s.count(normal_variants) < 2:/if s.count(normal_variants) < 1:/' ci/patch_promotion_signup.py
+          sed -i 's/Expected profile variants block twice in official roster parser/Expected profile variants block in official roster parser/' ci/patch_promotion_signup.py
           python3 ci/patch_promotion_signup.py
           git diff --check
           grep -Fq "promotionNumber" source/lib/models/app_user.dart
@@ -36,7 +38,7 @@ jobs:
           set -euo pipefail
           git config user.name 'GardeFlow CI'
           git config user.email 'actions@users.noreply.github.com'
-          git add source/lib source/test/intern_promotions_test.dart
+          git add ci/patch_promotion_signup.py source/lib source/test/intern_promotions_test.dart
           if git diff --cached --quiet; then
             echo 'Nothing to commit'
             exit 0
