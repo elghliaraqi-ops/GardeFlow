@@ -245,6 +245,16 @@ class SupabaseBackendService {
         .toList();
   }
 
+  Future<int> fetchCurrentFirstYearPromotion() async {
+    final row = await client
+        .from('internship_promotion_config')
+        .select('current_first_year_promotion')
+        .eq('id', 1)
+        .single();
+    final value = (row['current_first_year_promotion'] as num?)?.toInt();
+    return value != null && value > 0 ? value : 7;
+  }
+
   Future<List<PasswordResetRequest>> fetchPasswordResetRequests() async {
     final rows = await client.rpc('admin_password_reset_requests');
     return (rows as List)

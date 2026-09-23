@@ -274,6 +274,7 @@ class AppState extends ChangeNotifier {
 
     // Start independent requests together instead of serializing the whole home refresh.
     final profilesFuture = backend.fetchVisibleProfiles();
+    final firstYearPromotionFuture = backend.fetchCurrentFirstYearPromotion();
     final planningFuture = backend.fetchPlanning();
     final planningMonthsFuture = backend.fetchPlanningMonths();
     final exchangesFuture = backend.fetchExchanges();
@@ -284,6 +285,7 @@ class AppState extends ChangeNotifier {
         : Future<List<PasswordResetRequest>>.value(const <PasswordResetRequest>[]);
 
     final profiles = await profilesFuture;
+    final firstYearPromotion = await firstYearPromotionFuture;
     final planning = await planningFuture;
     final planningMonths = await planningMonthsFuture;
     final exchanges = await exchangesFuture;
@@ -302,6 +304,7 @@ class AppState extends ChangeNotifier {
     _users
       ..clear()
       ..addAll(profiles);
+    _currentFirstYearPromotion=firstYearPromotion;
     final refreshedMe=_users.where((u)=>u.id==currentUser!.id).firstOrNull;
     if(refreshedMe!=null){
       currentUser=refreshedMe;
@@ -619,6 +622,14 @@ class AppState extends ChangeNotifier {
 
   final List<AppUser> _users=[];
   List<AppUser> get users=>List.unmodifiable(_users);
+  int _currentFirstYearPromotion=7;
+  int get currentFirstYearPromotion {
+    final local=InternPromotions.highestPromotion(_users);
+    if(!backendEnabled)return local??_currentFirstYearPromotion;
+    return _currentFirstYearPromotion>0?_currentFirstYearPromotion:(local??7);
+  }
+  bool promotionExchangeBlocked(AppUser? a,AppUser? b)=>InternPromotions.crossYearBlocked(
+    a,b,firstYearPromotion:currentFirstYearPromotion);
   AppUser? currentUser;
 
   final List<DirectoryContact> _manualDirectoryContacts=[];
@@ -850,7 +861,7 @@ class AppState extends ChangeNotifier {
     final phone=normalizePhone(rawPhone);
     if(nom.trim().isEmpty||prenom.trim().isEmpty||phone.isEmpty||password.isEmpty)return 'Merci de remplir tous les champs.';
     if(password.length<8)return 'Le mot de passe doit contenir au moins 8 caractères.';
-    if(grade==MedicalGrade.junior&&(promotionNumber==null||promotionNumber<1||promotionNumber>7))return 'Sélectionnez votre promotion d’internat.';
+    if(grade==MedicalGrade.junior&&(promotionNumber==null||promotionNumber<1||promotionNumber>999))return 'Renseignez un numéro de promotion valide.';
     if (backendEnabled) {
       try {
         final backend=SupabaseBackendService.instance;
@@ -1363,7 +1374,7 @@ class AppState extends ChangeNotifier {
     if(_guardHasStarted(entry))return 'Une garde commencée ou passée ne peut plus être transférée.';
     if(BusinessRules.sameHospitalRequired&&target.hospital!=me.hospital)return 'Les transferts sont limités au même établissement.';
     final targetUser=_users.where((u)=>u.id==target.id||u.phone==target.phone).firstOrNull;
-    if(entry.shiftId.startsWith('urg-')&&InternPromotions.crossYearBlocked(me,targetUser))return 'Les gardes d’Urgences ne peuvent pas être transférées entre la première année (Promo 7) et les promotions plus anciennes (Promo 6, 5, 4…).';
+    if(promotionExchangeBlocked(me,targetUser))return 'La promotion de première année (Promo $currentFirstYearPromotion) ne peut transférer des gardes qu’avec la même promotion.';
     if(!isUserPlanningMonthApproved(target.id,date))return 'Le calendrier du destinataire doit aussi être validé pour ce mois.';
     if(_isEntryLocked(entry.id))return 'Une demande est déjà en cours pour cette garde.';
     if(_planning.any((e)=>e.dateStr==date&&(e.ownerId==target.id||e.ownerPhone==target.phone)))return '${target.name} a déjà une affectation ce jour-là.';
@@ -1391,11 +1402,9 @@ class AppState extends ChangeNotifier {
     if((sourceIsService||targetIsService)&&target.service!=me.service){
       return 'Toute garde de Service ne peut être échangée qu’entre médecins du même service.';
     }
-    final sourceIsUrgence=entry.shiftId.startsWith('urg-');
-    final targetIsUrgence=targetEntry.shiftId.startsWith('urg-');
     final targetUser=_users.where((u)=>u.id==target.id||u.phone==target.phone).firstOrNull;
-    if((sourceIsUrgence||targetIsUrgence)&&InternPromotions.crossYearBlocked(me,targetUser)){
-      return 'Les échanges impliquant une garde d’Urgences sont interdits entre la première année (Promo 7) et les promotions plus anciennes (Promo 6, 5, 4…).';
+    if(promotionExchangeBlocked(me,targetUser)){
+      return 'La promotion de première année (Promo $currentFirstYearPromotion) ne peut échanger des gardes qu’avec la même promotion.';
     }
     if(targetEntry.ownerId!=target.id&&targetEntry.ownerPhone!=target.phone)return 'La garde choisie n’appartient plus au médecin destinataire.';
     if(!isUserPlanningMonthApproved(me.id,targetEntry.dateStr)||!isUserPlanningMonthApproved(target.id,entry.dateStr))return 'Les mois de destination des deux médecins doivent aussi être validés.';
@@ -1444,8 +1453,7 @@ class AppState extends ChangeNotifier {
     final toUser=_users.where((u)=>u.id==ex.toId||u.phone==ex.toPhone).firstOrNull;
     if(fromUser==null||toUser==null)return 'Un des médecins participant à l’échange est introuvable.';
     if(BusinessRules.sameHospitalRequired&&fromUser.hospital!=toUser.hospital)return 'Les échanges sont limités aux médecins du même établissement.';
-    final involvesUrgence=source.shiftId.startsWith('urg-')||target.shiftId.startsWith('urg-');
-    if(involvesUrgence&&InternPromotions.crossYearBlocked(fromUser,toUser))return 'Les échanges impliquant une garde d’Urgences sont interdits entre la première année (Promo 7) et les promotions plus anciennes (Promo 6, 5, 4…).';
+    if(promotionExchangeBlocked(fromUser,toUser))return 'La promotion de première année (Promo $currentFirstYearPromotion) ne peut échanger des gardes qu’avec la même promotion.';
     final involvesService=source.shiftId.startsWith('service-')||target.shiftId.startsWith('service-');
     if(involvesService&&fromUser.service!=toUser.service)return 'Toute garde de Service ne peut être échangée qu’entre médecins du même service.';
     final conflictTo=_planning.where((e)=>e.dateStr==source.dateStr&&(e.ownerId==ex.toId||e.ownerPhone==ex.toPhone)).firstOrNull;

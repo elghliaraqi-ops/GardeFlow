@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/hospitals.dart';
-import '../data/intern_promotions.dart';
 import '../data/services.dart';
 import '../models/app_user.dart';
 import '../state/app_state.dart';
@@ -44,9 +43,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   final _regPrenomCtrl = TextEditingController();
   final _regPhoneCtrl = TextEditingController();
   final _regPasswordCtrl = TextEditingController();
+  final _regPromotionCtrl = TextEditingController();
   String _regService = kServices.first;
   MedicalGrade _regGrade = MedicalGrade.junior;
-  int _regPromotion = 7;
 
   @override
   void initState() {
@@ -78,6 +77,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     _regPrenomCtrl.dispose();
     _regPhoneCtrl.dispose();
     _regPasswordCtrl.dispose();
+    _regPromotionCtrl.dispose();
     super.dispose();
   }
 
@@ -102,7 +102,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       service: _regService,
       grade: _regGrade,
       hospital: _hospital,
-      promotionNumber: _regGrade == MedicalGrade.junior ? _regPromotion : null,
+      promotionNumber: _regGrade == MedicalGrade.junior
+          ? int.tryParse(_regPromotionCtrl.text.trim())
+          : null,
     );
     if (!mounted) return;
     if (err == null) {
@@ -512,24 +514,17 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           SizedBox(height: 16),
           Text('Promotion d’internat', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.inkSoft)),
           SizedBox(height: 8),
-          DropdownButtonFormField<int>(
-            value: _regPromotion,
-            isExpanded: true,
-            decoration: _glassInputDecoration(hint: 'Promotion', icon: Icons.school_outlined),
-            items: List<int>.generate(7, (index) => 7 - index)
-                .map((promo) => DropdownMenuItem<int>(
-                      value: promo,
-                      child: Text(
-                        'Promo $promo · ${InternPromotions.yearLabelForPromotion(promo)}',
-                        style: TextStyle(fontSize: 12.5),
-                      ),
-                    ))
-                .toList(),
-            onChanged: (value) => setState(() => _regPromotion = value ?? _regPromotion),
+          TextField(
+            controller: _regPromotionCtrl,
+            keyboardType: TextInputType.number,
+            decoration: _glassInputDecoration(
+              hint: 'Numéro de promotion (ex. 7)',
+              icon: Icons.school_outlined,
+            ),
           ),
           SizedBox(height: 7),
           Text(
-            'Votre année d’internat est calculée automatiquement à partir de la promotion.',
+            'La promotion la plus récente devient automatiquement la 1re année. Les années d’internat sont recalculées sans modifier l’application.',
             style: TextStyle(fontSize: 10.8, height: 1.35, color: AppColors.inkFaint, fontWeight: FontWeight.w600),
           ),
         ],

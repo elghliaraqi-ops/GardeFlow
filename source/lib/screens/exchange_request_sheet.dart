@@ -67,7 +67,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
       final targetUser = state.users
           .where((u) => u.id == contact.id || u.phone == contact.phone)
           .firstOrNull;
-      if (sourceIsUrgence && InternPromotions.crossYearBlocked(me, targetUser)) {
+      if (state.promotionExchangeBlocked(me, targetUser)) {
         return false;
       }
       return true;
@@ -87,7 +87,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             .where((u) => u.id == selectedDoctor.id || u.phone == selectedDoctor.phone)
             .firstOrNull;
     final crossYearWithSelected =
-        InternPromotions.crossYearBlocked(me, selectedDoctorUser);
+        state.promotionExchangeBlocked(me, selectedDoctorUser);
     final allTargetEntries = selectedDoctor == null
         ? <PlanningEntry>[]
         : state.exchangeableEntriesFor(selectedDoctor.id, excludingDate: widget.dateStr);
@@ -96,14 +96,16 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
         : allTargetEntries.where((e) {
             if (!exchangeMode) return true;
             final targetIsService = e.shiftId.startsWith('service-');
-            final targetIsUrgence = e.shiftId.startsWith('urg-');
             if (targetIsService && selectedDoctor.service != state.currentUser?.service) return false;
-            if (crossYearWithSelected && (sourceIsUrgence || targetIsUrgence)) return false;
+            if (crossYearWithSelected) return false;
             return true;
           }).toList();
     final selectedTargetEntryId =
         _targetEntryId != null && targetEntries.any((e) => e.id == _targetEntryId) ? _targetEntryId : null;
-    final promotionLabel = InternPromotions.labelFor(me);
+    final promotionLabel = InternPromotions.labelFor(
+      me,
+      firstYearPromotion: state.currentFirstYearPromotion,
+    );
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -198,12 +200,12 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const SizedBox(height: AppSpace.sm),
             _RuleNotice(
               text: _mode == _Mode.transfer
-                  ? sourceIsUrgence
-                      ? 'Transfert Urgences : même hôpital. La Promo 7 (1re année) reste séparée des promotions plus anciennes. Les Promo 6, 5, 4… peuvent transférer entre elles. Le destinataire accepte, puis l’admin valide.'
-                      : 'Transfert Service : même hôpital. Les transferts de garde de Service restent possibles entre Promo 6 et Promo 7. Le destinataire accepte, puis l’admin valide.'
+                  ? sourceIsService
+                      ? 'Transfert Service : même hôpital. La Promo ${state.currentFirstYearPromotion} (1re année) ne peut transférer qu’avec la même promotion. Les promotions antérieures peuvent transférer entre elles. Le destinataire accepte, puis l’admin valide.'
+                      : 'Transfert Urgences : même hôpital. La Promo ${state.currentFirstYearPromotion} (1re année) ne peut transférer qu’avec la même promotion. Les promotions antérieures peuvent transférer entre elles. Le destinataire accepte, puis l’admin valide.'
                   : sourceIsService
-                      ? 'Échange Service : uniquement avec un médecin de votre service. Les échanges de Service restent possibles entre Promo 6 et Promo 7. Si les deux gardes sont de Service, l’échange est appliqué dès l’acceptation du collègue, sans validation admin.'
-                      : 'Échange Urgences : même hôpital. La Promo 7 (1re année) ne peut échanger qu’avec la Promo 7. Les Promo 6, 5, 4… peuvent échanger entre elles. Validation admin obligatoire.',
+                      ? 'Échange Service : uniquement avec un médecin de votre service. La Promo ${state.currentFirstYearPromotion} (1re année) ne peut échanger qu’avec la même promotion. Les promotions antérieures peuvent échanger entre elles. Entre deux gardes de Service, pas de validation admin.'
+                      : 'Échange Urgences : même hôpital. La Promo ${state.currentFirstYearPromotion} (1re année) ne peut échanger qu’avec la même promotion. Les promotions antérieures peuvent échanger entre elles. Validation admin obligatoire.',
               icon: _mode == _Mode.transfer
                   ? Icons.arrow_forward_rounded
                   : sourceIsService
@@ -213,8 +215,8 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const SizedBox(height: AppSpace.lg),
             if (targets.isEmpty)
               Text(
-                rawTargets.isNotEmpty && sourceIsUrgence
-                    ? 'Aucun médecin compatible avec votre groupe d’ancienneté pour cette garde d’Urgences.'
+                rawTargets.isNotEmpty
+                    ? 'Aucun médecin compatible avec votre groupe d’ancienneté pour cette garde.'
                     : 'Aucun autre médecin disponible dans votre établissement.',
                 style: Theme.of(context).textTheme.bodyMedium,
               )
@@ -331,12 +333,11 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                           final doctorUser = state.users
                               .where((u) => u.id == doctor.id || u.phone == doctor.phone)
                               .firstOrNull;
-                          final crossYear = InternPromotions.crossYearBlocked(me, doctorUser);
+                          final crossYear = state.promotionExchangeBlocked(me, doctorUser);
                           final available = state.exchangeableEntriesFor(doctor.id, excludingDate: widget.dateStr).where((e) {
                             final targetIsService = e.shiftId.startsWith('service-');
-                            final targetIsUrgence = e.shiftId.startsWith('urg-');
                             if (targetIsService && doctor.service != state.currentUser?.service) return false;
-                            if (crossYear && (sourceIsUrgence || targetIsUrgence)) return false;
+                            if (crossYear) return false;
                             return true;
                           }).toList();
                           if (available.isEmpty) {
