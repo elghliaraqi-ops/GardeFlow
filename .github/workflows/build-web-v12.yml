@@ -1,0 +1,118 @@
+name: Build & Deploy GardeFlow Web V12
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - v12-optimisee
+    paths:
+      - '.github/workflows/build-web-v12.yml'
+      - 'source/**'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: gardeflow-v12-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      PROJECT_DIR: source
+      APP_VERSION: 12.0.0
+      BUILD_NUMBER: "300"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Verify canonical V12 source
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^version: 12.0.0+300$' pubspec.yaml
+          test -f lib/main.dart
+
+      - name: Generate web platform
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --enable-web
+          if [ ! -f web/index.html ]; then
+            flutter create --no-pub --platforms=web --project-name huim6_planning .
+          fi
+
+      - name: Install dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Run tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter test
+
+      - name: Analyze Flutter code
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Flutter Web release
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release \
+            --base-href "/GardeFlow/" \
+            --build-name "$APP_VERSION" \
+            --build-number "$BUILD_NUMBER"
+          test -f build/web/index.html
+          test -f build/web/main.dart.js
+          touch build/web/.nojekyll
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-v12.0.0-web
+          path: source/build/web
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload GitHub Pages artifact
+        if: github.ref_name == 'main'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: source/build/web
+
+  deploy-pages:
+    if: github.ref_name == 'main'
+    needs: build-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
