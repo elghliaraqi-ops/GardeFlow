@@ -260,12 +260,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       );
       return;
     }
-    final crossYear = InternPromotions.crossYearBlocked(me, author);
-    final announcementIsUrgence = targetEntry.shiftId.startsWith('urg-');
-    if (crossYear && announcementIsUrgence) {
+    if (state.promotionExchangeBlocked(me, author)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Les échanges de gardes d’Urgences sont impossibles entre première et deuxième année.'),
+        SnackBar(
+          content: Text(
+            'La promotion de première année (Promo ${state.currentFirstYearPromotion}) ne peut échanger des gardes qu’avec la même promotion.',
+          ),
         ),
       );
       return;
@@ -395,7 +395,10 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final me = state.currentUser;
-    final myPromotion = InternPromotions.labelFor(me);
+    final myPromotion = InternPromotions.labelFor(
+      me,
+      firstYearPromotion: state.currentFirstYearPromotion,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -501,9 +504,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final me = state.currentUser;
     if (me == null || me.id == item.authorId) return false;
     final author = state.users.where((u) => u.id == item.authorId).firstOrNull;
-    if (author != null &&
-        item.shiftId.startsWith('urg-') &&
-        InternPromotions.crossYearBlocked(me, author)) return true;
+    if (author != null && state.promotionExchangeBlocked(me, author)) {
+      return true;
+    }
     return me.hospital != item.hospital;
   }
 }

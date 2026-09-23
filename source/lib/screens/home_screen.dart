@@ -1336,7 +1336,10 @@ class _PlanningView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final promotionLabel = InternPromotions.labelFor(appState.currentUser);
+    final promotionLabel = InternPromotions.labelFor(
+      appState.currentUser,
+      firstYearPromotion: appState.currentFirstYearPromotion,
+    );
     final now = DateTime.now();
     final visibleMonth = appState.visibleMonth;
     final visibleMonthStart = DateTime(visibleMonth.year, visibleMonth.month, 1);

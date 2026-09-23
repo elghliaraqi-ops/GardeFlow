@@ -58,7 +58,6 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
     final me = state.currentUser;
     final shift = ShiftCatalog.byId(widget.entry.shiftId);
     final sourceIsService = widget.entry.shiftId.startsWith('service-');
-    final sourceIsUrgence = widget.entry.shiftId.startsWith('urg-');
     final exchangeMode = _mode == _Mode.exchange;
     final rawTargets = state.exchangeTargets(
       sameServiceOnly: exchangeMode && sourceIsService,
