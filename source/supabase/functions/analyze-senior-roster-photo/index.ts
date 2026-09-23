@@ -4,6 +4,7 @@ import {
   initializeImageMagick,
   MagickFormat,
 } from 'npm:@imagemagick/magick-wasm@0.0.30';
+import * as XLSX from 'npm:xlsx@0.18.5';
 
 const magickWasm = await Deno.readFile(
   new URL(
@@ -15,7 +16,8 @@ await initializeImageMagick(magickWasm);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -58,7 +60,9 @@ function parseJsonLoose(raw: string): any {
   if (fenced) return JSON.parse(fenced[1]);
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start >= 0 && end > start) return JSON.parse(text.slice(start, end + 1));
+  if (start >= 0 && end > start) {
+    return JSON.parse(text.slice(start, end + 1));
+  }
   throw new Error('invalid_model_json');
 }
 
@@ -87,7 +91,8 @@ function normalizeDraft(raw: any, hospital: string) {
 
     if (!name || !service || dates.length === 0) continue;
 
-    const key = `${service.toLocaleLowerCase('fr')}|${name.toLocaleLowerCase('fr')}`;
+    const key =
+      `${service.toLocaleLowerCase('fr')}|${name.toLocaleLowerCase('fr')}`;
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, {
@@ -166,7 +171,10 @@ const extractionSchema = {
           phone: { type: 'string' },
           dates: {
             type: 'array',
-            items: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+            items: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+            },
           },
           confidence: { type: 'number', minimum: 0, maximum: 1 },
         },
@@ -176,28 +184,29 @@ const extractionSchema = {
 };
 
 const systemPrompt = `
-Tu extrais les ASTREINTES DES MÉDECINS SÉNIORS d'une photographie de planning hospitalier.
+Tu extrais les ASTREINTES DES MÉDECINS SÉNIORS d'un planning hospitalier fourni sous forme de photo, PDF ou tableur Excel.
 Le résultat reste toujours un BROUILLON soumis à validation humaine avant publication.
 
 MÉTHODE À SUIVRE:
 1. Identifier le service, le mois et l'année dans l'en-tête.
 2. Identifier la géométrie du tableau: colonnes de dates, Sénior, Résident, Jour/Nuit, adulte/pédiatrique.
 3. Lire toutes les lignes de dates de haut en bas. Une cellule Sénior fusionnée verticalement s'applique à toutes les dates couvertes jusqu'au prochain nom Sénior.
-4. Lire ensuite la zone GSM/téléphones en bas de feuille et associer un numéro uniquement au bon médecin.
+4. Lire ensuite la zone GSM/téléphones et associer un numéro uniquement au bon médecin.
 5. Regrouper un même médecin + même type de service sur une seule ligne avec toutes ses dates.
 6. Vérifier une seconde fois les dates et les téléphones avant de répondre.
 
 RÈGLES IMPÉRATIVES:
 - Ne jamais inventer un nom, un numéro ou une date.
-- Extraire les médecins séniors / médecins d'astreinte principaux. Exclure les résidents lorsque la feuille distingue "Médecin Sénior" et "Médecin Résident".
+- Extraire les médecins séniors / médecins d'astreinte principaux. Exclure les résidents lorsque le document distingue "Médecin Sénior" et "Médecin Résident".
 - Si un téléphone n'est pas clairement attribuable, phone="" et ajouter un warning.
 - Développer toutes les plages: 01–06 signifie six dates distinctes.
 - Conserver plusieurs séniors le même jour s'ils sont tous réellement indiqués.
 - Utiliser uniquement des dates ISO YYYY-MM-DD.
-- Si le titre indique par exemple SEPTEMBRE 2026 mais quelques lignes imprimées affichent 16/09/2027 ou 17/09/2027 au milieu d'une séquence 2026, considérer cela comme une erreur de gabarit seulement si le contexte est sans ambiguïté; corriger vers 2026 ET ajouter un warning explicite.
+- Si le titre indique par exemple SEPTEMBRE 2026 mais quelques lignes affichent 16/09/2027 ou 17/09/2027 au milieu d'une séquence 2026, considérer cela comme une erreur de gabarit seulement si le contexte est sans ambiguïté; corriger vers 2026 ET ajouter un warning explicite.
 - Ne jamais transformer "MEDECIN DE GARDE" en nom de personne.
 - Ne jamais utiliser un nom de résident comme sénior.
-- Respecter les annotations manuscrites lorsqu'elles corrigent clairement une cellule imprimée, et ajouter un warning indiquant qu'une correction manuscrite a été suivie.
+- Pour un PDF ou un tableur, respecter les cellules fusionnées, les onglets et la structure réelle du tableau.
+- Respecter les annotations manuscrites d'une photo ou d'un PDF lorsqu'elles corrigent clairement une cellule imprimée, et ajouter un warning indiquant qu'une correction manuscrite a été suivie.
 
 CAS SPÉCIAUX OBLIGATOIRES:
 - USIP: séparer exactement "USIP — Jour" et "USIP — Nuit".
@@ -210,11 +219,35 @@ CAS SPÉCIAUX OBLIGATOIRES:
 - Si une feuille comporte JOUR et NUIT pour un autre service, conserver ces catégories séparées dans service.
 
 CONTRÔLES DE QUALITÉ:
-- Vérifier qu'un même médecin n'a pas des dates contradictoires par simple répétition OCR.
+- Vérifier qu'un même médecin n'a pas des dates contradictoires par simple répétition OCR ou duplication de cellule.
 - Vérifier les chiffres de téléphone caractère par caractère. Ne jamais compléter un chiffre manquant par intuition.
 - En cas d'ambiguïté, diminuer confidence et ajouter un warning précis.
 - service au niveau racine = nom général de la feuille (ex. "USIP", "Réanimation adultes + pédiatrique", "Urologie").
 `;
+
+type ResourceType = 'image' | 'pdf' | 'spreadsheet' | 'unsupported';
+
+function detectResourceType(mimeType: string, displayName: string): ResourceType {
+  const mime = mimeType.toLowerCase();
+  const name = displayName.toLowerCase();
+  if (
+    mime.startsWith('image/') ||
+    /\.(jpe?g|png|webp)$/.test(name)
+  ) {
+    return 'image';
+  }
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  if (
+    mime === 'application/vnd.ms-excel' ||
+    mime ===
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    name.endsWith('.xls') ||
+    name.endsWith('.xlsx')
+  ) {
+    return 'spreadsheet';
+  }
+  return 'unsupported';
+}
 
 function enhanceForOcr(bytes: Uint8Array): Uint8Array {
   return ImageMagick.read(bytes, (img): Uint8Array => {
@@ -275,7 +308,10 @@ async function runOcr(bytes: Uint8Array) {
 
     return {
       text: combined,
-      confidence: Math.max(Number(sparse.data.confidence ?? 0), blockConfidence),
+      confidence: Math.max(
+        Number(sparse.data.confidence ?? 0),
+        blockConfidence,
+      ),
       tsv: String(sparse.data.tsv ?? ''),
     };
   } finally {
@@ -283,22 +319,59 @@ async function runOcr(bytes: Uint8Array) {
   }
 }
 
-async function analyzeWithOpenAI(
-  original: Uint8Array,
-  enhanced: Uint8Array,
-  mimeType: string,
-  ocrText: string,
+function spreadsheetToText(bytes: Uint8Array): {
+  text: string;
+  truncated: boolean;
+  sheetCount: number;
+} {
+  const workbook = XLSX.read(bytes, {
+    type: 'array',
+    cellDates: false,
+    cellFormula: true,
+    cellText: true,
+  });
+  const sections: string[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+    const merges = Array.isArray(sheet['!merges'])
+      ? sheet['!merges']
+          .map((range: any) => XLSX.utils.encode_range(range))
+          .join(', ')
+      : '';
+    const tsv = XLSX.utils.sheet_to_csv(sheet, {
+      FS: '\t',
+      RS: '\n',
+      blankrows: false,
+      strip: false,
+    });
+    sections.push(
+      [
+        `=== FEUILLE EXCEL: ${sheetName} ===`,
+        merges ? `Cellules fusionnées: ${merges}` : 'Cellules fusionnées: aucune détectée',
+        tsv,
+      ].join('\n'),
+    );
+  }
+
+  const full = sections.join('\n\n');
+  const maxChars = 90000;
+  return {
+    text: full.slice(0, maxChars),
+    truncated: full.length > maxChars,
+    sheetCount: workbook.SheetNames.length,
+  };
+}
+
+async function requestStructuredExtraction(
+  content: any[],
+  schemaName: string,
 ) {
   const key = Deno.env.get('OPENAI_API_KEY');
   if (!key) return null;
 
   const model = Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-5.6';
-  const originalData = `data:${mimeType};base64,${toBase64(original)}`;
-  const enhancedData = `data:image/png;base64,${toBase64(enhanced)}`;
-  const ocrAssist = ocrText.trim().isEmpty
-    ? 'Aucun texte OCR auxiliaire disponible.'
-    : `Texte OCR auxiliaire (peut contenir des erreurs; la photo reste la source de vérité):\n${ocrText.slice(0, 26000)}`;
-
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -311,28 +384,13 @@ async function analyzeWithOpenAI(
       input: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'input_text',
-              text: `${systemPrompt}\n\n${ocrAssist}\n\nCompare l'image originale, la version améliorée et l'OCR. En cas de désaccord, privilégie ce qui est visuellement lisible sur la feuille.`,
-            },
-            {
-              type: 'input_image',
-              image_url: originalData,
-              detail: 'high',
-            },
-            {
-              type: 'input_image',
-              image_url: enhancedData,
-              detail: 'high',
-            },
-          ],
+          content,
         },
       ],
       text: {
         format: {
           type: 'json_schema',
-          name: 'senior_oncall_photo_extraction',
+          name: schemaName,
           strict: true,
           schema: extractionSchema,
         },
@@ -346,6 +404,74 @@ async function analyzeWithOpenAI(
     throw new Error('openai_analysis_failed');
   }
   return parseJsonLoose(extractResponseText(payload));
+}
+
+async function analyzeImageWithOpenAI(
+  original: Uint8Array,
+  enhanced: Uint8Array,
+  mimeType: string,
+  ocrText: string,
+) {
+  const originalData = `data:${mimeType};base64,${toBase64(original)}`;
+  const enhancedData = `data:image/png;base64,${toBase64(enhanced)}`;
+  const ocrAssist = ocrText.trim().isEmpty
+    ? 'Aucun texte OCR auxiliaire disponible.'
+    : `Texte OCR auxiliaire (peut contenir des erreurs; l'image reste la source de vérité):\n${ocrText.slice(0, 26000)}`;
+
+  return requestStructuredExtraction(
+    [
+      {
+        type: 'input_text',
+        text: `${systemPrompt}\n\n${ocrAssist}\n\nCompare l'image originale, la version améliorée et l'OCR. En cas de désaccord, privilégie ce qui est visuellement lisible sur la feuille.`,
+      },
+      {
+        type: 'input_image',
+        image_url: originalData,
+        detail: 'high',
+      },
+      {
+        type: 'input_image',
+        image_url: enhancedData,
+        detail: 'high',
+      },
+    ],
+    'senior_oncall_image_extraction',
+  );
+}
+
+async function analyzePdfWithOpenAI(
+  original: Uint8Array,
+  fileName: string,
+) {
+  return requestStructuredExtraction(
+    [
+      {
+        type: 'input_text',
+        text: `${systemPrompt}\n\nLe document joint est un PDF. Analyse toutes les pages utiles du planning, y compris les tableaux, zones de téléphones et éventuelles annotations visuelles.`,
+      },
+      {
+        type: 'input_file',
+        filename: fileName || 'planning-astreinte.pdf',
+        file_data: toBase64(original),
+      },
+    ],
+    'senior_oncall_pdf_extraction',
+  );
+}
+
+async function analyzeSpreadsheetWithOpenAI(
+  spreadsheetText: string,
+  fileName: string,
+) {
+  return requestStructuredExtraction(
+    [
+      {
+        type: 'input_text',
+        text: `${systemPrompt}\n\nLe document source est le tableur ${fileName}. Les données ci-dessous sont une transcription structurée des onglets Excel, avec tabulations entre cellules. Les plages fusionnées sont indiquées explicitement. Utilise uniquement ces données et n'invente jamais le contenu d'une cellule vide.\n\n${spreadsheetText}`,
+      },
+    ],
+    'senior_oncall_spreadsheet_extraction',
+  );
 }
 
 Deno.serve(async (req: Request) => {
@@ -423,11 +549,19 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: 'resource_not_found' }, 404);
     }
 
+    const resourceType = detectResourceType(
+      String(resource.mime_type ?? ''),
+      String(resource.display_name ?? ''),
+    );
+    if (resourceType === 'unsupported') {
+      return json({ ok: false, error: 'unsupported_resource_type' }, 400);
+    }
+
     const { data: blob, error: downloadError } = await adminClient.storage
       .from('gardeflow-shared')
       .download(resource.storage_path);
     if (downloadError || !blob) {
-      console.error('Image download failed', downloadError);
+      console.error('Resource download failed', downloadError);
       return json({ ok: false, error: 'image_download_failed' }, 500);
     }
 
@@ -437,68 +571,159 @@ Deno.serve(async (req: Request) => {
     }
 
     const warnings: string[] = [];
-    let enhanced = original;
-    try {
-      enhanced = enhanceForOcr(original);
-    } catch (error) {
-      console.error('Image enhancement failed', error);
-      warnings.push(
-        'Prétraitement de l’image indisponible; analyse effectuée sur la photo originale.',
-      );
-    }
-
-    let ocrText = '';
+    const openAiConfigured = Boolean(Deno.env.get('OPENAI_API_KEY'));
+    let rawText = '';
     let ocrConfidence = 0;
-    try {
-      const ocr = await runOcr(enhanced);
-      ocrText = ocr.text;
-      ocrConfidence = ocr.confidence;
-      if (ocrConfidence > 0 && ocrConfidence < 65) {
+    let enhancedImage = false;
+    let extracted: any = null;
+    let engine = 'manual_review_required';
+
+    if (resourceType === 'image') {
+      let enhanced = original;
+      try {
+        enhanced = enhanceForOcr(original);
+        enhancedImage = enhanced !== original;
+      } catch (error) {
+        console.error('Image enhancement failed', error);
         warnings.push(
-          `OCR de confiance limitée (${Math.round(ocrConfidence)} %): vérifier soigneusement noms, dates et numéros.`,
+          'Prétraitement de l’image indisponible; analyse effectuée sur la photo originale.',
         );
       }
-    } catch (error) {
-      console.error('OCR failed', error);
-      warnings.push('OCR auxiliaire indisponible sur cette photo.');
-    }
 
-    let engine = 'openai_vision_ocr_assisted';
-    let extracted: any = null;
-    try {
-      extracted = await analyzeWithOpenAI(
-        original,
-        enhanced,
-        resource.mime_type || 'image/jpeg',
-        ocrText,
-      );
-    } catch (error) {
-      console.error('Vision analysis failed', error);
-      warnings.push(
-        'Analyse visuelle avancée indisponible; le brouillon reste en vérification manuelle.',
-      );
-    }
+      try {
+        const ocr = await runOcr(enhanced);
+        rawText = ocr.text;
+        ocrConfidence = ocr.confidence;
+        if (ocrConfidence > 0 && ocrConfidence < 65) {
+          warnings.push(
+            `OCR de confiance limitée (${Math.round(ocrConfidence)} %): vérifier soigneusement noms, dates et numéros.`,
+          );
+        }
+      } catch (error) {
+        console.error('OCR failed', error);
+        warnings.push('OCR auxiliaire indisponible sur cette photo.');
+      }
 
-    if (!extracted) {
-      engine = 'ocr_review_assist';
-      extracted = {
-        service: '',
-        month: null,
-        year: null,
-        confidence: ocrConfidence > 0 ? Math.min(0.49, ocrConfidence / 100) : 0,
-        warnings: [
-          ocrText.trim().isEmpty
-            ? 'Aucun texte OCR exploitable n’a été reconnu automatiquement.'
-            : 'Le texte OCR a été amélioré et conservé comme aide, mais aucune affectation n’est créée automatiquement sans analyse visuelle structurée.',
-        ],
-        rows: [],
-      };
+      try {
+        extracted = await analyzeImageWithOpenAI(
+          original,
+          enhanced,
+          resource.mime_type || 'image/jpeg',
+          rawText,
+        );
+        if (extracted) engine = 'openai_vision_ocr_assisted';
+      } catch (error) {
+        console.error('Vision analysis failed', error);
+        warnings.push(
+          'Analyse visuelle avancée indisponible; le brouillon reste en vérification manuelle.',
+        );
+      }
+
+      if (!extracted) {
+        engine = 'ocr_review_assist';
+        if (!openAiConfigured) {
+          warnings.push(
+            'La vision structurée nécessite la clé serveur OPENAI_API_KEY. Aucun résultat n’est publié automatiquement.',
+          );
+        }
+        extracted = {
+          service: '',
+          month: null,
+          year: null,
+          confidence:
+            ocrConfidence > 0 ? Math.min(0.49, ocrConfidence / 100) : 0,
+          warnings: [
+            rawText.trim().isEmpty
+              ? 'Aucun texte OCR exploitable n’a été reconnu automatiquement.'
+              : 'Le texte OCR est conservé comme aide, mais aucune affectation n’est créée sans analyse structurée.',
+          ],
+          rows: [],
+        };
+      }
+    } else if (resourceType === 'pdf') {
+      try {
+        extracted = await analyzePdfWithOpenAI(
+          original,
+          String(resource.display_name ?? 'planning-astreinte.pdf'),
+        );
+        if (extracted) engine = 'openai_pdf';
+      } catch (error) {
+        console.error('PDF analysis failed', error);
+        warnings.push(
+          'Analyse automatique du PDF indisponible; vérifiez ou saisissez les lignes manuellement.',
+        );
+      }
+
+      if (!extracted) {
+        engine = 'pdf_manual_review';
+        if (!openAiConfigured) {
+          warnings.push(
+            'L’analyse structurée des PDF nécessite la clé serveur OPENAI_API_KEY.',
+          );
+        }
+        extracted = {
+          service: '',
+          month: null,
+          year: null,
+          confidence: 0,
+          warnings: [
+            'Le PDF a bien été importé mais aucune ligne fiable n’a été créée automatiquement.',
+          ],
+          rows: [],
+        };
+      }
+    } else {
+      try {
+        const spreadsheet = spreadsheetToText(original);
+        rawText = spreadsheet.text;
+        if (spreadsheet.truncated) {
+          warnings.push(
+            'Le tableur est très volumineux; seule la première partie utile a été envoyée à l’analyse structurée.',
+          );
+        }
+        if (spreadsheet.sheetCount > 1) {
+          warnings.push(
+            `${spreadsheet.sheetCount} onglets Excel détectés et analysés.`,
+          );
+        }
+        extracted = await analyzeSpreadsheetWithOpenAI(
+          rawText,
+          String(resource.display_name ?? 'planning-astreinte.xlsx'),
+        );
+        if (extracted) engine = 'openai_spreadsheet';
+      } catch (error) {
+        console.error('Spreadsheet analysis failed', error);
+        warnings.push(
+          'Lecture ou analyse automatique du tableur indisponible; vérifiez le fichier ou saisissez les lignes manuellement.',
+        );
+      }
+
+      if (!extracted) {
+        engine = 'spreadsheet_manual_review';
+        if (!openAiConfigured) {
+          warnings.push(
+            'Le tableur est lisible côté serveur, mais sa structuration en astreintes nécessite la clé serveur OPENAI_API_KEY.',
+          );
+        }
+        extracted = {
+          service: '',
+          month: null,
+          year: null,
+          confidence: 0,
+          warnings: [
+            rawText.trim().isEmpty
+              ? 'Aucune donnée de tableur exploitable n’a été détectée.'
+              : 'Les cellules Excel ont été lues, mais aucune affectation n’est créée automatiquement sans analyse structurée.',
+          ],
+          rows: [],
+        };
+      }
     }
 
     const draft = normalizeDraft(extracted, resource.hospital);
     draft.warnings.unshift(...warnings);
 
-    if (draft.rows.length === 0 && ocrText.trim()) {
+    if (draft.rows.length === 0) {
       draft.warnings.push(
         'Utilisez « Ajouter » dans l’écran de vérification pour saisir/corriger les lignes si nécessaire.',
       );
@@ -515,7 +740,7 @@ Deno.serve(async (req: Request) => {
       analysis_engine: engine,
       draft_rows: draft.rows,
       warnings: draft.warnings,
-      raw_text: ocrText || null,
+      raw_text: rawText || null,
       created_by: callerId,
       updated_at: new Date().toISOString(),
       published_at: null,
@@ -538,9 +763,10 @@ Deno.serve(async (req: Request) => {
       ok: true,
       import: saved,
       diagnostics: {
+        resourceType,
         ocrConfidence: Math.round(ocrConfidence),
-        enhancedImage: enhanced !== original,
-        advancedVisionConfigured: Boolean(Deno.env.get('OPENAI_API_KEY')),
+        enhancedImage,
+        advancedVisionConfigured: openAiConfigured,
       },
     });
   } catch (error) {
