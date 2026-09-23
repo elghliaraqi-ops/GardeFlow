@@ -1,0 +1,52 @@
+name: One-time fix announcement dynamic promotion filter
+
+on:
+  push:
+    branches:
+      - audit-fixes-v11.6.70
+    paths:
+      - .github/workflows/one-time-fix-announcement-crossyear.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-v11.6.70
+          fetch-depth: 0
+
+      - name: Remove obsolete crossYear filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('source/lib/screens/announcements_screen.dart')
+          s = p.read_text()
+          old = """    final mine = _myPublishableEntries(state)
+              .where((e) => e.id != targetEntry.id)
+              .where((e) => !crossYear || e.shiftId.startsWith('service-'))
+              .toList();"""
+          new = """    final mine = _myPublishableEntries(state)
+              .where((e) => e.id != targetEntry.id)
+              .toList();"""
+          if old not in s:
+              raise SystemExit('obsolete crossYear filter anchor not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git diff --check
+          ! grep -Fq "crossYear" source/lib/screens/announcements_screen.dart
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib/screens/announcements_screen.dart
+          git commit -m 'fix: remove obsolete announcement cross-year filter'
+          git push origin HEAD:audit-fixes-v11.6.70
