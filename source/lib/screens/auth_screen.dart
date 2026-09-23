@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/hospitals.dart';
+import '../data/intern_promotions.dart';
 import '../data/services.dart';
 import '../models/app_user.dart';
 import '../state/app_state.dart';
@@ -22,7 +23,8 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateMixin {
+class _AuthScreenState extends State<AuthScreen>
+    with SingleTickerProviderStateMixin {
   bool _showRegister = false;
   bool _obscureLoginPassword = true;
   bool _obscureRegisterPassword = true;
@@ -43,7 +45,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   final _regPrenomCtrl = TextEditingController();
   final _regPhoneCtrl = TextEditingController();
   final _regPasswordCtrl = TextEditingController();
-  final _regPromotionCtrl = TextEditingController();
+  int? _regPromotion;
   String _regService = kServices.first;
   MedicalGrade _regGrade = MedicalGrade.junior;
 
@@ -58,14 +60,17 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       parent: _entranceController,
       curve: const Interval(0.18, 1, curve: Curves.easeOutCubic),
     );
-    _contentSlide = Tween<Offset>(
-      begin: const Offset(0, 0.035),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceController,
-      curve: const Interval(0.12, 1, curve: Curves.easeOutCubic),
-    ));
+    _contentSlide =
+        Tween<Offset>(begin: const Offset(0, 0.035), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(0.12, 1, curve: Curves.easeOutCubic),
+          ),
+        );
     _entranceController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AppState>().refreshPromotionConfig();
+    });
   }
 
   @override
@@ -77,13 +82,15 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     _regPrenomCtrl.dispose();
     _regPhoneCtrl.dispose();
     _regPasswordCtrl.dispose();
-    _regPromotionCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submitLogin() async {
     final appState = context.read<AppState>();
-    final err = await appState.login(_loginPhoneCtrl.text, _loginPasswordCtrl.text);
+    final err = await appState.login(
+      _loginPhoneCtrl.text,
+      _loginPasswordCtrl.text,
+    );
     if (!mounted) return;
     setState(() {
       _error = err;
@@ -103,7 +110,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       grade: _regGrade,
       hospital: _hospital,
       promotionNumber: _regGrade == MedicalGrade.junior
-          ? int.tryParse(_regPromotionCtrl.text.trim())
+          ? (_regPromotion ?? appState.currentFirstYearPromotion)
           : null,
     );
     if (!mounted) return;
@@ -123,13 +130,15 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   }
 
   void _goToApp() {
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+    Navigator.of(context)
+        .pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
   Future<void> _showPasswordHelp() async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => ForgotPasswordScreen(initialPhone: _loginPhoneCtrl.text),
+        builder: (_) =>
+            ForgotPasswordScreen(initialPhone: _loginPhoneCtrl.text),
       ),
     );
     if (!mounted || changed != true) return;
@@ -156,8 +165,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           AnimatedBuilder(
             animation: _entranceController,
             builder: (context, child) {
-              final t =
-                  Curves.easeInOutCubic.transform(_entranceController.value);
+              final t = Curves.easeInOutCubic.transform(
+                _entranceController.value,
+              );
               final sigma = 8.5 * t;
               return BackdropFilter(
                 filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
@@ -202,8 +212,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                       return Center(
                         child: SingleChildScrollView(
                           physics: BouncingScrollPhysics(),
-                          padding:
-                              EdgeInsets.fromLTRB(18, 16, 18, 20),
+                          padding: EdgeInsets.fromLTRB(18, 16, 18, 20),
                           child: ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: 460),
                             child: _buildAuthContent(
@@ -216,8 +225,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                     }
 
                     final availableWidth = constraints.maxWidth - 28;
-                    final contentWidth =
-                        availableWidth > 440 ? 440.0 : availableWidth;
+                    final contentWidth = availableWidth > 440
+                        ? 440.0
+                        : availableWidth;
 
                     return Padding(
                       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
@@ -252,10 +262,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GardeFlowBrandBlock(
-          compact: true,
-          subtitleColor: _loginGreen,
-        ),
+        GardeFlowBrandBlock(compact: true, subtitleColor: _loginGreen),
         SizedBox(height: compactLogin ? 10 : 18),
         if (_info != null) ...[
           _Banner(
@@ -306,7 +313,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         Text(
           'Connectez-vous pour accéder\nà votre planning de gardes',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, height: 1.35, color: AppColors.inkSoft, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 14,
+            height: 1.35,
+            color: AppColors.inkSoft,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         SizedBox(height: 15),
         TextField(
@@ -328,12 +340,18 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             hint: 'Mot de passe',
             icon: Icons.lock_outline_rounded,
             suffix: IconButton(
-              onPressed: () => setState(() => _obscureLoginPassword = !_obscureLoginPassword),
+              onPressed: () => setState(
+                () => _obscureLoginPassword = !_obscureLoginPassword,
+              ),
               icon: Icon(
-                _obscureLoginPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                _obscureLoginPassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
                 color: AppColors.inkFaint,
               ),
-              tooltip: _obscureLoginPassword ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
+              tooltip: _obscureLoginPassword
+                  ? 'Afficher le mot de passe'
+                  : 'Masquer le mot de passe',
             ),
           ),
         ),
@@ -341,7 +359,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           alignment: Alignment.centerRight,
           child: TextButton(
             onPressed: _showPasswordHelp,
-            style: TextButton.styleFrom(foregroundColor: _loginGreenDark, padding: EdgeInsets.fromLTRB(8, 10, 2, 8)),
+            style: TextButton.styleFrom(
+              foregroundColor: _loginGreenDark,
+              padding: EdgeInsets.fromLTRB(8, 10, 2, 8),
+            ),
             child: Text('Mot de passe oublié ?'),
           ),
         ),
@@ -363,7 +384,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               _info = null;
             }),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.isDarkMode ? Colors.white : _loginGreenDark,
+              foregroundColor: AppColors.isDarkMode
+                  ? Colors.white
+                  : _loginGreenDark,
               backgroundColor: AppColors.isDarkMode
                   ? AppColors.brand.withOpacity(0.18)
                   : Colors.white.withOpacity(0.28),
@@ -371,9 +394,14 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                 color: AppColors.isDarkMode ? AppColors.brand : _loginGreen,
                 width: 1.4,
               ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
-            child: Text('Créer un compte', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: Text(
+              'Créer un compte',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ),
       ],
@@ -381,6 +409,19 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildRegisterForm() {
+    final appState = context.watch<AppState>();
+    final latestPromotion = appState.currentFirstYearPromotion;
+    final selectedPromotion =
+        _regPromotion != null &&
+            _regPromotion! >= 1 &&
+            _regPromotion! <= latestPromotion
+        ? _regPromotion!
+        : latestPromotion;
+    final promotions = List<int>.generate(
+      latestPromotion,
+      (index) => latestPromotion - index,
+    );
+
     return Column(
       key: ValueKey('register'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -392,9 +433,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           decoration: BoxDecoration(
             color: AppColors.brandSoft,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.brand.withOpacity(0.16),
-            ),
+            border: Border.all(color: AppColors.brand.withOpacity(0.16)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,7 +473,12 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         Text(
           'Votre inscription sera validée par un administrateur.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.inkSoft, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.35,
+            color: AppColors.inkSoft,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         SizedBox(height: 20),
         Row(
@@ -442,14 +486,20 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             Expanded(
               child: TextField(
                 controller: _regNomCtrl,
-                decoration: _glassInputDecoration(hint: 'Nom', icon: Icons.person_outline_rounded),
+                decoration: _glassInputDecoration(
+                  hint: 'Nom',
+                  icon: Icons.person_outline_rounded,
+                ),
               ),
             ),
             SizedBox(width: 10),
             Expanded(
               child: TextField(
                 controller: _regPrenomCtrl,
-                decoration: _glassInputDecoration(hint: 'Prénom', icon: Icons.badge_outlined),
+                decoration: _glassInputDecoration(
+                  hint: 'Prénom',
+                  icon: Icons.badge_outlined,
+                ),
               ),
             ),
           ],
@@ -458,7 +508,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         TextField(
           controller: _regPhoneCtrl,
           keyboardType: TextInputType.phone,
-          decoration: _glassInputDecoration(hint: 'Numéro de téléphone', icon: Icons.phone_android_rounded),
+          decoration: _glassInputDecoration(
+            hint: 'Numéro de téléphone',
+            icon: Icons.phone_android_rounded,
+          ),
         ),
         SizedBox(height: 12),
         TextField(
@@ -468,9 +521,13 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             hint: 'Mot de passe',
             icon: Icons.lock_outline_rounded,
             suffix: IconButton(
-              onPressed: () => setState(() => _obscureRegisterPassword = !_obscureRegisterPassword),
+              onPressed: () => setState(
+                () => _obscureRegisterPassword = !_obscureRegisterPassword,
+              ),
               icon: Icon(
-                _obscureRegisterPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                _obscureRegisterPassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
                 color: AppColors.inkFaint,
               ),
             ),
@@ -480,12 +537,21 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         DropdownButtonFormField<String>(
           value: _hospital,
           isExpanded: true,
-          decoration: _glassInputDecoration(hint: 'Établissement', icon: Icons.local_hospital_outlined),
+          decoration: _glassInputDecoration(
+            hint: 'Établissement',
+            icon: Icons.local_hospital_outlined,
+          ),
           items: kHospitals
-              .map((h) => DropdownMenuItem(
-                    value: h,
-                    child: Text(hospitalDisplayName(h), style: TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis),
-                  ))
+              .map(
+                (h) => DropdownMenuItem(
+                  value: h,
+                  child: Text(
+                    hospitalDisplayName(h),
+                    style: TextStyle(fontSize: 12.5),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
               .toList(),
           onChanged: (v) => setState(() => _hospital = v ?? _hospital),
         ),
@@ -493,43 +559,91 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         DropdownButtonFormField<String>(
           value: _regService,
           isExpanded: true,
-          decoration: _glassInputDecoration(hint: 'Service actuel', icon: Icons.medical_services_outlined),
+          decoration: _glassInputDecoration(
+            hint: 'Service actuel',
+            icon: Icons.medical_services_outlined,
+          ),
           items: kServices
-              .map((s) => DropdownMenuItem(
-                    value: s,
-                    child: Text(s, style: TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis),
-                  ))
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Text(
+                    s,
+                    style: TextStyle(fontSize: 12.5),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
               .toList(),
           onChanged: (v) => setState(() => _regService = v ?? _regService),
         ),
         SizedBox(height: 16),
-        Text('Grade médical', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.inkSoft)),
+        Text(
+          'Grade médical',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: AppColors.inkSoft,
+          ),
+        ),
         SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: _gradeOption(MedicalGrade.junior, 'Junior')),
-          SizedBox(width: 10),
-          Expanded(child: _gradeOption(MedicalGrade.senior, 'Senior')),
-        ]),
+        Row(
+          children: [
+            Expanded(child: _gradeOption(MedicalGrade.junior, 'Junior')),
+            SizedBox(width: 10),
+            Expanded(child: _gradeOption(MedicalGrade.senior, 'Senior')),
+          ],
+        ),
         if (_regGrade == MedicalGrade.junior) ...[
           SizedBox(height: 16),
-          Text('Promotion d’internat', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.inkSoft)),
+          Text(
+            'Promotion d’internat',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: AppColors.inkSoft,
+            ),
+          ),
           SizedBox(height: 8),
-          TextField(
-            controller: _regPromotionCtrl,
-            keyboardType: TextInputType.number,
+          DropdownButtonFormField<int>(
+            value: selectedPromotion,
+            isExpanded: true,
             decoration: _glassInputDecoration(
-              hint: 'Numéro de promotion (ex. 7)',
+              hint: 'Promotion',
               icon: Icons.school_outlined,
             ),
+            items: promotions.map((promo) {
+              final year = InternPromotions.yearLabelForPromotion(
+                promo,
+                firstYearPromotion: latestPromotion,
+              );
+              return DropdownMenuItem<int>(
+                value: promo,
+                child: Text(
+                  'Promo $promo${year == null ? '' : ' · $year'}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => _regPromotion = value),
           ),
           SizedBox(height: 7),
           Text(
-            'La promotion la plus récente devient automatiquement la 1re année. Les années d’internat sont recalculées sans modifier l’application.',
-            style: TextStyle(fontSize: 10.8, height: 1.35, color: AppColors.inkFaint, fontWeight: FontWeight.w600),
+            'La Promo $latestPromotion est actuellement la 1re année. Une nouvelle promotion n’apparaît ici qu’après son ajout par un administrateur.',
+            style: TextStyle(
+              fontSize: 10.8,
+              height: 1.35,
+              color: AppColors.inkFaint,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
         SizedBox(height: 20),
-        _GradientPrimaryButton(label: 'Créer mon compte', icon: Icons.person_add_alt_1_rounded, onPressed: _submitRegister),
+        _GradientPrimaryButton(
+          label: 'Créer mon compte',
+          icon: Icons.person_add_alt_1_rounded,
+          onPressed: _submitRegister,
+        ),
         SizedBox(height: 10),
         TextButton(
           onPressed: () => setState(() {
@@ -538,7 +652,9 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
             _info = null;
           }),
           style: TextButton.styleFrom(
-            foregroundColor: AppColors.isDarkMode ? AppColors.brand : _loginGreenDark,
+            foregroundColor: AppColors.isDarkMode
+                ? AppColors.brand
+                : _loginGreenDark,
           ),
           child: Text('Déjà inscrit ? Se connecter'),
         ),
@@ -562,7 +678,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       suffixIcon: suffix,
       filled: true,
       fillColor: AppColors.paperAlt.withOpacity(0.70),
-      hintStyle: TextStyle(color: AppColors.inkFaint, fontWeight: FontWeight.w500),
+      hintStyle: TextStyle(
+        color: AppColors.inkFaint,
+        fontWeight: FontWeight.w500,
+      ),
       contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       border: border,
       enabledBorder: border,
@@ -583,7 +702,10 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         padding: EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: selected ? _loginGreen : Colors.white.withOpacity(0.62),
-          border: Border.all(color: selected ? _loginGreen : Colors.white.withOpacity(0.92), width: 1.4),
+          border: Border.all(
+            color: selected ? _loginGreen : Colors.white.withOpacity(0.92),
+            width: 1.4,
+          ),
           borderRadius: BorderRadius.circular(15),
         ),
         child: Text(
@@ -612,9 +734,14 @@ class _GlassCard extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.fromLTRB(24, 24, 24, 22),
           decoration: BoxDecoration(
-            color: (AppColors.isDarkMode ? AppColors.card : Colors.white).withOpacity(0.72),
+            color: (AppColors.isDarkMode ? AppColors.card : Colors.white)
+                .withOpacity(0.72),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: (AppColors.isDarkMode ? AppColors.card : Colors.white).withOpacity(0.90), width: 1.2),
+            border: Border.all(
+              color: (AppColors.isDarkMode ? AppColors.card : Colors.white)
+                  .withOpacity(0.90),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.11),
@@ -635,7 +762,11 @@ class _GradientPrimaryButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
 
-  const _GradientPrimaryButton({required this.label, required this.icon, required this.onPressed});
+  const _GradientPrimaryButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -654,13 +785,24 @@ class _GradientPrimaryButton extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
-              BoxShadow(color: _loginGreen.withOpacity(0.25), blurRadius: 14, offset: Offset(0, 7)),
+              BoxShadow(
+                color: _loginGreen.withOpacity(0.25),
+                blurRadius: 14,
+                offset: Offset(0, 7),
+              ),
             ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(label, style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               SizedBox(width: 10),
               Icon(icon, color: Colors.white, size: 21),
             ],
@@ -681,7 +823,13 @@ class _OrDivider extends StatelessWidget {
         Expanded(child: Divider(color: AppColors.inkFaint.withOpacity(0.45))),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 12),
-          child: Text('ou', style: TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w600)),
+          child: Text(
+            'ou',
+            style: TextStyle(
+              color: AppColors.inkSoft,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
         Expanded(child: Divider(color: AppColors.inkFaint.withOpacity(0.45))),
       ],
@@ -694,7 +842,12 @@ class _Banner extends StatelessWidget {
   final Color background;
   final Color foreground;
   final IconData icon;
-  const _Banner({required this.text, required this.background, required this.foreground, required this.icon});
+  const _Banner({
+    required this.text,
+    required this.background,
+    required this.foreground,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -707,11 +860,22 @@ class _Banner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.72)),
       ),
-      child: Row(children: [
-        Icon(icon, size: 18, color: foreground),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text, style: TextStyle(color: foreground, fontWeight: FontWeight.w600, fontSize: 12.5))),
-      ]),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: foreground),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

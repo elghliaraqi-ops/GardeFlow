@@ -1,5 +1,6 @@
 import '../widgets/month_navigation.dart';
 import '../widgets/admin_reason_dialog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -45,23 +46,27 @@ class _AdminScreenState extends State<AdminScreen> {
     final appState = context.watch<AppState>();
     final hospitalItems = kHospitals.toSet().toList();
     final query = _doctorQuery.trim().toLowerCase();
-    final doctors = appState.users.where((user) {
-      if (user.accountStatus != AccountStatus.active) return false;
-      if (_hospital != _kAllHospitals && user.hospital != _hospital) return false;
-      if (query.isEmpty) return true;
-      final searchable = [
-        user.fullName,
-        user.nom,
-        user.prenom,
-        user.phone,
-        user.service,
-        user.gradeLabel,
-        user.roleLabel,
-        hospitalDisplayName(user.hospital),
-      ].join(' ').toLowerCase();
-      return searchable.contains(query);
-    }).toList()
-      ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+    final doctors =
+        appState.users.where((user) {
+          if (user.accountStatus != AccountStatus.active) return false;
+          if (_hospital != _kAllHospitals && user.hospital != _hospital)
+            return false;
+          if (query.isEmpty) return true;
+          final searchable = [
+            user.fullName,
+            user.nom,
+            user.prenom,
+            user.phone,
+            user.service,
+            user.gradeLabel,
+            user.roleLabel,
+            hospitalDisplayName(user.hospital),
+          ].join(' ').toLowerCase();
+          return searchable.contains(query);
+        }).toList()..sort(
+          (a, b) =>
+              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+        );
 
     final selectedId = doctors.any((u) => u.id == _doctorId)
         ? _doctorId
@@ -70,14 +75,30 @@ class _AdminScreenState extends State<AdminScreen> {
         ? null
         : doctors.firstWhere((u) => u.id == selectedId);
 
-    final doctorEntries = selectedDoctor == null
-        ? <PlanningEntry>[]
-        : appState.planning.where((e) => e.ownerId == selectedDoctor.id || e.ownerPhone == selectedDoctor.phone).toList()
-      ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
+    final doctorEntries =
+        selectedDoctor == null
+              ? <PlanningEntry>[]
+              : appState.planning
+                    .where(
+                      (e) =>
+                          e.ownerId == selectedDoctor.id ||
+                          e.ownerPhone == selectedDoctor.phone,
+                    )
+                    .toList()
+          ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
 
-    final monthPrefix = '${_visibleMonth.year}-${_visibleMonth.month.toString().padLeft(2, '0')}-';
-    final monthEntries = doctorEntries.where((e) => e.dateStr.startsWith(monthPrefix)).toList();
-    final monthRecord = selectedDoctor == null ? null : appState.planningMonthForUser(selectedDoctor.id, _visibleMonth.year, _visibleMonth.month);
+    final monthPrefix =
+        '${_visibleMonth.year}-${_visibleMonth.month.toString().padLeft(2, '0')}-';
+    final monthEntries = doctorEntries
+        .where((e) => e.dateStr.startsWith(monthPrefix))
+        .toList();
+    final monthRecord = selectedDoctor == null
+        ? null
+        : appState.planningMonthForUser(
+            selectedDoctor.id,
+            _visibleMonth.year,
+            _visibleMonth.month,
+          );
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -89,7 +110,10 @@ class _AdminScreenState extends State<AdminScreen> {
             child: SoftIconButton(
               icon: Icons.history_rounded,
               tooltip: 'Journal des actions',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AuditScreen())),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AuditScreen()),
+              ),
             ),
           ),
         ],
@@ -104,8 +128,22 @@ class _AdminScreenState extends State<AdminScreen> {
               pendingExchanges: appState.exchangeActionableCount(),
               pendingLeaves: appState.leaveActionableCount(),
               onAccountsTap: () => _showPendingAccounts(context, appState),
-              onExchangesTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsScreen(initialIndex: 1))),
-              onLeavesTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsScreen(initialIndex: 2))),
+              onExchangesTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotificationsScreen(initialIndex: 1),
+                ),
+              ),
+              onLeavesTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotificationsScreen(initialIndex: 2),
+                ),
+              ),
+            ),
+            _PromotionManagementCard(
+              currentPromotion: appState.currentFirstYearPromotion,
+              onAdd: () => _confirmAddPromotion(context, appState),
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(16, 6, 16, 10),
@@ -120,12 +158,26 @@ class _AdminScreenState extends State<AdminScreen> {
                       prefixIcon: Icon(Icons.local_hospital_outlined, size: 19),
                     ),
                     items: [
-                      const DropdownMenuItem(value: _kAllHospitals, child: Text('Tous les établissements')),
-                      ...hospitalItems.map((h) => DropdownMenuItem(value: h, child: Text(hospitalDisplayName(h), overflow: TextOverflow.ellipsis))),
+                      const DropdownMenuItem(
+                        value: _kAllHospitals,
+                        child: Text('Tous les établissements'),
+                      ),
+                      ...hospitalItems.map(
+                        (h) => DropdownMenuItem(
+                          value: h,
+                          child: Text(
+                            hospitalDisplayName(h),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
-                      setState(() { _hospital = value; _doctorId = null; });
+                      setState(() {
+                        _hospital = value;
+                        _doctorId = null;
+                      });
                     },
                   );
                   final doctorSearch = TextField(
@@ -140,12 +192,18 @@ class _AdminScreenState extends State<AdminScreen> {
                               tooltip: 'Effacer la recherche',
                               onPressed: () {
                                 _doctorSearchController.clear();
-                                setState(() { _doctorQuery = ''; _doctorId = null; });
+                                setState(() {
+                                  _doctorQuery = '';
+                                  _doctorId = null;
+                                });
                               },
                               icon: const Icon(Icons.close_rounded, size: 18),
                             ),
                     ),
-                    onChanged: (value) => setState(() { _doctorQuery = value; _doctorId = null; }),
+                    onChanged: (value) => setState(() {
+                      _doctorQuery = value;
+                      _doctorId = null;
+                    }),
                   );
                   final doctorFilter = DropdownButtonFormField<String>(
                     value: selectedId,
@@ -154,32 +212,46 @@ class _AdminScreenState extends State<AdminScreen> {
                       labelText: 'Médecin',
                       prefixIcon: Icon(Icons.person_search_outlined, size: 19),
                     ),
-                    hint: Text(query.isEmpty ? 'Aucun médecin disponible' : 'Aucun résultat'),
-                    items: doctors.map((doctor) => DropdownMenuItem(
-                      value: doctor.id,
-                      child: Text(
-                        '${doctor.fullName} — ${doctor.gradeLabel}${doctor.role == UserRole.admin ? ' · Admin' : ''}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    )).toList(),
-                    onChanged: doctors.isEmpty ? null : (value) => setState(() => _doctorId = value),
+                    hint: Text(
+                      query.isEmpty
+                          ? 'Aucun médecin disponible'
+                          : 'Aucun résultat',
+                    ),
+                    items: doctors
+                        .map(
+                          (doctor) => DropdownMenuItem(
+                            value: doctor.id,
+                            child: Text(
+                              '${doctor.fullName} — ${doctor.gradeLabel}${doctor.role == UserRole.admin ? ' · Admin' : ''}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: doctors.isEmpty
+                        ? null
+                        : (value) => setState(() => _doctorId = value),
                   );
                   if (narrow) {
-                    return Column(children: [
-                      hospitalFilter,
-                      const SizedBox(height: 8),
-                      doctorSearch,
-                      const SizedBox(height: 8),
-                      doctorFilter,
-                    ]);
+                    return Column(
+                      children: [
+                        hospitalFilter,
+                        const SizedBox(height: 8),
+                        doctorSearch,
+                        const SizedBox(height: 8),
+                        doctorFilter,
+                      ],
+                    );
                   }
-                  return Row(children: [
-                    Expanded(child: hospitalFilter),
-                    const SizedBox(width: 10),
-                    Expanded(child: doctorSearch),
-                    const SizedBox(width: 10),
-                    Expanded(child: doctorFilter),
-                  ]);
+                  return Row(
+                    children: [
+                      Expanded(child: hospitalFilter),
+                      const SizedBox(width: 10),
+                      Expanded(child: doctorSearch),
+                      const SizedBox(width: 10),
+                      Expanded(child: doctorFilter),
+                    ],
+                  );
                 },
               ),
             ),
@@ -191,8 +263,18 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               _MonthHeader(
                 month: _visibleMonth,
-                onPrevious: () => setState(() => _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1)),
-                onNext: () => setState(() => _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1)),
+                onPrevious: () => setState(
+                  () => _visibleMonth = DateTime(
+                    _visibleMonth.year,
+                    _visibleMonth.month - 1,
+                  ),
+                ),
+                onNext: () => setState(
+                  () => _visibleMonth = DateTime(
+                    _visibleMonth.year,
+                    _visibleMonth.month + 1,
+                  ),
+                ),
                 onToday: () {
                   final now = DateTime.now();
                   setState(() => _visibleMonth = DateTime(now.year, now.month));
@@ -202,17 +284,31 @@ class _AdminScreenState extends State<AdminScreen> {
                 doctor: selectedDoctor,
                 month: _visibleMonth,
                 record: monthRecord,
-                onReopen: monthRecord?.status == PlanningMonthStatus.approved &&
-                        !DateTime(_visibleMonth.year, _visibleMonth.month, 1).isBefore(
-                          DateTime(DateTime.now().year, DateTime.now().month, 1),
+                onReopen:
+                    monthRecord?.status == PlanningMonthStatus.approved &&
+                        !DateTime(
+                          _visibleMonth.year,
+                          _visibleMonth.month,
+                          1,
+                        ).isBefore(
+                          DateTime(
+                            DateTime.now().year,
+                            DateTime.now().month,
+                            1,
+                          ),
                         )
-                    ? () => _confirmReopenPlanningMonth(context, appState, selectedDoctor)
+                    ? () => _confirmReopenPlanningMonth(
+                        context,
+                        appState,
+                        selectedDoctor,
+                      )
                     : null,
               ),
               _DoctorCalendar(
                 month: _visibleMonth,
                 entries: doctorEntries,
-                onDeleteEntry: (entry) => _confirmDeleteShift(context, appState, entry),
+                onDeleteEntry: (entry) =>
+                    _confirmDeleteShift(context, appState, entry),
               ),
               const _CalendarLegend(),
             ] else
@@ -223,7 +319,11 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  Future<void> _confirmReopenPlanningMonth(BuildContext context, AppState appState, AppUser doctor) async {
+  Future<void> _confirmReopenPlanningMonth(
+    BuildContext context,
+    AppState appState,
+    AppUser doctor,
+  ) async {
     if (_adminActionOpen) return;
     _adminActionOpen = true;
     final month = _visibleMonth;
@@ -238,32 +338,96 @@ class _AdminScreenState extends State<AdminScreen> {
           subject: '${doctor.fullName} · $monthLabel',
           explanation: doctor.id == appState.currentUser?.id
               ? 'Votre calendrier redeviendra modifiable dans Mon planning. Vous pourrez placer, remplacer ou retirer vos tuiles puis le valider à nouveau. '
-                'Les échanges et transferts en cours sur ce mois seront annulés. '
-                'Les congés en attente seront recréés à la prochaine validation. '
-                'Les congés déjà approuvés restent protégés et peuvent être supprimés avec votre droit administrateur.'
+                    'Les échanges et transferts en cours sur ce mois seront annulés. '
+                    'Les congés en attente seront recréés à la prochaine validation. '
+                    'Les congés déjà approuvés restent protégés et peuvent être supprimés avec votre droit administrateur.'
               : 'Le médecin pourra modifier ses tuiles puis valider à nouveau son calendrier. '
-                'Les échanges et transferts en cours sur ce mois seront annulés. '
-                'Les congés en attente seront recréés à la prochaine validation. '
-                'Les congés déjà approuvés restent protégés.',
+                    'Les échanges et transferts en cours sur ce mois seront annulés. '
+                    'Les congés en attente seront recréés à la prochaine validation. '
+                    'Les congés déjà approuvés restent protégés.',
           actionLabel: 'Dévalider',
         ),
       );
       if (!context.mounted || reason == null) return;
-      final error = await appState.adminReopenPlanningMonth(doctor, month, reason: reason);
+      final error = await appState.adminReopenPlanningMonth(
+        doctor,
+        month,
+        reason: reason,
+      );
       if (!context.mounted) return;
       final isOwnCalendar = doctor.id == appState.currentUser?.id;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
-        error ?? (isOwnCalendar
-            ? 'Votre calendrier est dévalidé. Vous pouvez maintenant le modifier dans Mon planning puis le valider à nouveau.'
-            : 'Calendrier dévalidé. ${doctor.fullName} peut le modifier puis le valider à nouveau.'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error ??
+                (isOwnCalendar
+                    ? 'Votre calendrier est dévalidé. Vous pouvez maintenant le modifier dans Mon planning puis le valider à nouveau.'
+                    : 'Calendrier dévalidé. ${doctor.fullName} peut le modifier puis le valider à nouveau.'),
+          ),
+        ),
+      );
     } finally {
       _adminActionOpen = false;
     }
   }
 
-  Future<void> _showPendingAccounts(BuildContext context, AppState appState) async {
+  Future<void> _confirmAddPromotion(
+    BuildContext context,
+    AppState appState,
+  ) async {
+    if (_adminActionOpen) return;
+    final current = appState.currentFirstYearPromotion;
+    final next = current + 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Ajouter la Promo $next ?'),
+        content: Text(
+          'La Promo $next deviendra immédiatement la nouvelle 1re année. '
+          'La Promo $current passera en 2e année et pourra échanger/transférer '
+          'avec les promotions plus anciennes. Cette action ne modifie pas les '
+          'promotions déjà attribuées aux comptes existants.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: Text('Ajouter Promo $next'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    _adminActionOpen = true;
+    try {
+      final error = await appState.adminAddPromotion();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error ??
+                'Promo ${appState.currentFirstYearPromotion} ajoutée : elle devient la 1re année.',
+          ),
+        ),
+      );
+    } finally {
+      _adminActionOpen = false;
+    }
+  }
+
+  Future<void> _showPendingAccounts(
+    BuildContext context,
+    AppState appState,
+  ) async {
     final pending = appState.pendingUsers.toList()
-      ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+      ..sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -280,8 +444,13 @@ class _AdminScreenState extends State<AdminScreen> {
                     final user = pending[i];
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text(user.fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text('${user.gradeLabel} · ${user.service}\n${hospitalDisplayName(user.hospital)} · ${user.phone}'),
+                      title: Text(
+                        user.fullName,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        '${user.gradeLabel} · ${user.service}\n${hospitalDisplayName(user.hospital)} · ${user.phone}',
+                      ),
                       isThreeLine: true,
                       trailing: Wrap(
                         spacing: 6,
@@ -289,20 +458,35 @@ class _AdminScreenState extends State<AdminScreen> {
                           IconButton(
                             tooltip: 'Refuser / suspendre',
                             onPressed: () async {
-                              final err = await appState.reviewAccount(user.id, false);
+                              final err = await appState.reviewAccount(
+                                user.id,
+                                false,
+                              );
                               if (!dialogContext.mounted) return;
-                              if (err != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                              if (err != null)
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(SnackBar(content: Text(err)));
                               Navigator.pop(dialogContext);
                             },
-                            icon: const Icon(Icons.block_outlined, color: AppColors.danger),
+                            icon: const Icon(
+                              Icons.block_outlined,
+                              color: AppColors.danger,
+                            ),
                           ),
                           IconButton(
                             tooltip: 'Vérifier et valider le compte',
                             onPressed: () async {
                               Navigator.pop(dialogContext);
-                              await _verifyAndApproveAccount(context, appState, user);
+                              await _verifyAndApproveAccount(
+                                context,
+                                appState,
+                                user,
+                              );
                             },
-                            icon: const Icon(Icons.check_circle_outline, color: AppColors.success),
+                            icon: const Icon(
+                              Icons.check_circle_outline,
+                              color: AppColors.success,
+                            ),
                           ),
                         ],
                       ),
@@ -310,14 +494,27 @@ class _AdminScreenState extends State<AdminScreen> {
                   },
                 ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Fermer'),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _verifyAndApproveAccount(BuildContext context, AppState appState, AppUser user) async {
-    var hospital = kHospitals.contains(user.hospital) ? user.hospital : kHospitals.first;
-    var service = kServices.contains(user.service) ? user.service : kServices.first;
+  Future<void> _verifyAndApproveAccount(
+    BuildContext context,
+    AppState appState,
+    AppUser user,
+  ) async {
+    var hospital = kHospitals.contains(user.hospital)
+        ? user.hospital
+        : kHospitals.first;
+    var service = kServices.contains(user.service)
+        ? user.service
+        : kServices.first;
     var grade = user.grade;
 
     final approved = await showDialog<bool>(
@@ -332,46 +529,91 @@ class _AdminScreenState extends State<AdminScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user.fullName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  Text(
+                    user.fullName,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                  ),
                   SizedBox(height: 2),
                   Text(user.phone, style: TextStyle(color: AppColors.inkSoft)),
                   SizedBox(height: 14),
                   Text(
                     'Vérifiez les informations déclarées avant d’activer le compte. Elles peuvent être corrigées ici.',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.inkSoft,
+                      height: 1.4,
+                    ),
                   ),
                   SizedBox(height: 14),
                   DropdownButtonFormField<String>(
                     value: hospital,
                     isExpanded: true,
-                    decoration: InputDecoration(labelText: 'Établissement validé'),
-                    items: kHospitals.map((h) => DropdownMenuItem(value: h, child: Text(hospitalDisplayName(h), overflow: TextOverflow.ellipsis))).toList(),
-                    onChanged: (v) { if (v != null) setLocalState(() => hospital = v); },
+                    decoration: InputDecoration(
+                      labelText: 'Établissement validé',
+                    ),
+                    items: kHospitals
+                        .map(
+                          (h) => DropdownMenuItem(
+                            value: h,
+                            child: Text(
+                              hospitalDisplayName(h),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setLocalState(() => hospital = v);
+                    },
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: service,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Service validé'),
-                    items: kServices.map((v) => DropdownMenuItem(value: v, child: Text(v, overflow: TextOverflow.ellipsis))).toList(),
-                    onChanged: (v) { if (v != null) setLocalState(() => service = v); },
+                    decoration: const InputDecoration(
+                      labelText: 'Service validé',
+                    ),
+                    items: kServices
+                        .map(
+                          (v) => DropdownMenuItem(
+                            value: v,
+                            child: Text(v, overflow: TextOverflow.ellipsis),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setLocalState(() => service = v);
+                    },
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<MedicalGrade>(
                     value: grade,
-                    decoration: const InputDecoration(labelText: 'Grade médical validé'),
+                    decoration: const InputDecoration(
+                      labelText: 'Grade médical validé',
+                    ),
                     items: const [
-                      DropdownMenuItem(value: MedicalGrade.junior, child: Text('Junior')),
-                      DropdownMenuItem(value: MedicalGrade.senior, child: Text('Senior')),
+                      DropdownMenuItem(
+                        value: MedicalGrade.junior,
+                        child: Text('Junior'),
+                      ),
+                      DropdownMenuItem(
+                        value: MedicalGrade.senior,
+                        child: Text('Senior'),
+                      ),
                     ],
-                    onChanged: (v) { if (v != null) setLocalState(() => grade = v); },
+                    onChanged: (v) {
+                      if (v != null) setLocalState(() => grade = v);
+                    },
                   ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
             FilledButton.icon(
               onPressed: () => Navigator.pop(dialogContext, true),
               icon: const Icon(Icons.verified_user_outlined, size: 18),
@@ -382,16 +624,30 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
     );
     if (approved != true) return;
-    final err = await appState.reviewAccount(user.id, true, hospital: hospital, service: service, grade: grade);
+    final err = await appState.reviewAccount(
+      user.id,
+      true,
+      hospital: hospital,
+      service: service,
+      grade: grade,
+    );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? 'Compte validé.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(err ?? 'Compte validé.')));
   }
 
-  Future<void> _confirmDeleteShift(BuildContext context, AppState appState, PlanningEntry entry) async {
+  Future<void> _confirmDeleteShift(
+    BuildContext context,
+    AppState appState,
+    PlanningEntry entry,
+  ) async {
     if (_adminActionOpen) return;
     _adminActionOpen = true;
     final shift = ShiftCatalog.byId(entry.shiftId);
-    final dateLabel = DateFormat('dd/MM/yyyy', 'fr_FR').format(DateTime.parse(entry.dateStr));
+    final dateLabel = DateFormat(
+      'dd/MM/yyyy',
+      'fr_FR',
+    ).format(DateTime.parse(entry.dateStr));
     final isLeave = entry.shiftId == 'conge';
     try {
       final reason = await showDialog<String>(
@@ -408,13 +664,91 @@ class _AdminScreenState extends State<AdminScreen> {
       if (!context.mounted || reason == null) return;
       final error = await appState.adminDeleteShift(entry.id, reason: reason);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
-        error ?? (isLeave ? 'Congé supprimé.' : 'Garde supprimée.'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error ?? (isLeave ? 'Congé supprimé.' : 'Garde supprimée.'),
+          ),
+        ),
+      );
     } finally {
       _adminActionOpen = false;
     }
   }
+}
 
+class _PromotionManagementCard extends StatelessWidget {
+  final int currentPromotion;
+  final VoidCallback onAdd;
+
+  const _PromotionManagementCard({
+    required this.currentPromotion,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final next = currentPromotion + 1;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.brandSoft,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(Icons.school_rounded, color: AppColors.brand),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Promotions d’internat',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Promo $currentPromotion = 1re année · prochaine : Promo $next',
+                          style: TextStyle(
+                            color: AppColors.inkSoft,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add_rounded),
+                  label: Text('Ajouter la Promo $next'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AdminSummary extends StatelessWidget {
@@ -436,14 +770,45 @@ class _AdminSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, AppSpace.sm),
-      child: Row(children: [
-        Expanded(child: _SummaryChip(icon: Icons.person_add_alt_1_rounded, count: pendingAccounts, label: 'comptes', accent: AppColors.catService, onTap: onAccountsTap)),
-        const SizedBox(width: AppSpace.sm),
-        Expanded(child: _SummaryChip(icon: Icons.swap_horiz_rounded, count: pendingExchanges, label: 'échanges', accent: AppColors.catUrgence, onTap: onExchangesTap)),
-        const SizedBox(width: AppSpace.sm),
-        Expanded(child: _SummaryChip(icon: Icons.beach_access_rounded, count: pendingLeaves, label: 'congés', accent: AppColors.conge, onTap: onLeavesTap)),
-      ]),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        AppSpace.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SummaryChip(
+              icon: Icons.person_add_alt_1_rounded,
+              count: pendingAccounts,
+              label: 'comptes',
+              accent: AppColors.catService,
+              onTap: onAccountsTap,
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _SummaryChip(
+              icon: Icons.swap_horiz_rounded,
+              count: pendingExchanges,
+              label: 'échanges',
+              accent: AppColors.catUrgence,
+              onTap: onExchangesTap,
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _SummaryChip(
+              icon: Icons.beach_access_rounded,
+              count: pendingLeaves,
+              label: 'congés',
+              accent: AppColors.conge,
+              onTap: onLeavesTap,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -454,7 +819,13 @@ class _SummaryChip extends StatelessWidget {
   final String label;
   final Color accent;
   final VoidCallback? onTap;
-  const _SummaryChip({required this.icon, required this.count, required this.label, required this.accent, this.onTap});
+  const _SummaryChip({
+    required this.icon,
+    required this.count,
+    required this.label,
+    required this.accent,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -465,26 +836,40 @@ class _SummaryChip extends StatelessWidget {
         borderRadius: AppRadius.mdR,
         onTap: onTap,
         child: AppCard(
-          padding: EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpace.md,
+            vertical: AppSpace.md,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(children: [
-                Icon(icon, size: 16, color: active ? accent : AppColors.inkFaint),
-                Spacer(),
-                Text(
-                  '$count',
-                  style: TextStyle(
-                    fontFamily: 'SpaceGrotesk',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: active ? AppColors.ink : AppColors.inkFaint,
+              Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: active ? accent : AppColors.inkFaint,
                   ),
-                ),
-              ]),
+                  Spacer(),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontFamily: 'SpaceGrotesk',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: active ? AppColors.ink : AppColors.inkFaint,
+                    ),
+                  ),
+                ],
+              ),
               SizedBox(height: 2),
-              Text(label, style: Theme.of(context).textTheme.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -498,43 +883,73 @@ class _PlanningValidationBar extends StatelessWidget {
   final DateTime month;
   final PlanningMonth? record;
   final VoidCallback? onReopen;
-  const _PlanningValidationBar({required this.doctor, required this.month, required this.record, this.onReopen});
+  const _PlanningValidationBar({
+    required this.doctor,
+    required this.month,
+    required this.record,
+    this.onReopen,
+  });
 
   @override
   Widget build(BuildContext context) {
     final status = record?.status ?? PlanningMonthStatus.draft;
     final validated = status == PlanningMonthStatus.approved;
-    final label = validated ? 'Calendrier validé définitivement' : 'Calendrier en préparation';
+    final label = validated
+        ? 'Calendrier validé définitivement'
+        : 'Calendrier en préparation';
     final detail = validated
         ? (onReopen != null
-            ? 'Validé par ${doctor.fullName}. Un administrateur peut le dévalider pour autoriser une correction, y compris lorsqu’il s’agit de son propre calendrier.'
-            : 'Validé par ${doctor.fullName}. Les mois passés restent verrouillés.')
+              ? 'Validé par ${doctor.fullName}. Un administrateur peut le dévalider pour autoriser une correction, y compris lorsqu’il s’agit de son propre calendrier.'
+              : 'Validé par ${doctor.fullName}. Les mois passés restent verrouillés.')
         : '${doctor.fullName} peut placer, remplacer ou retirer ses tuiles avant sa prochaine validation.';
-    final icon = validated ? Icons.verified_outlined : Icons.edit_calendar_outlined;
-    final bg = validated ? AppColors.conge.withOpacity(0.18) : AppColors.paperAlt;
+    final icon = validated
+        ? Icons.verified_outlined
+        : Icons.edit_calendar_outlined;
+    final bg = validated
+        ? AppColors.conge.withOpacity(0.18)
+        : AppColors.paperAlt;
     return Container(
       margin: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.sm),
       padding: EdgeInsets.all(AppSpace.md),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: AppRadius.mdR,
-        border: Border.all(color: validated ? AppColors.conge.withOpacity(0.4) : AppColors.line),
+        border: Border.all(
+          color: validated ? AppColors.conge.withOpacity(0.4) : AppColors.line,
+        ),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(icon, size: 19, color: validated ? AppColors.congeText : AppColors.ink),
-          SizedBox(width: AppSpace.sm),
-          Expanded(child: Text(label, style: Theme.of(context).textTheme.titleSmall)),
-        ]),
-        SizedBox(height: 4),
-        Text(detail, style: Theme.of(context).textTheme.bodySmall),
-        if (validated && onReopen != null)
-          Align(alignment: Alignment.centerRight, child: OutlinedButton.icon(
-            onPressed: onReopen,
-            icon: Icon(Icons.lock_open_rounded, size: 16),
-            label: Text('Dévalider'),
-          )),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 19,
+                color: validated ? AppColors.congeText : AppColors.ink,
+              ),
+              SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 4),
+          Text(detail, style: Theme.of(context).textTheme.bodySmall),
+          if (validated && onReopen != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: onReopen,
+                icon: Icon(Icons.lock_open_rounded, size: 16),
+                label: Text('Dévalider'),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -543,7 +958,11 @@ class _DoctorHeader extends StatelessWidget {
   final AppUser doctor;
   final int totalAssignments;
   final int monthAssignments;
-  const _DoctorHeader({required this.doctor, required this.totalAssignments, required this.monthAssignments});
+  const _DoctorHeader({
+    required this.doctor,
+    required this.totalAssignments,
+    required this.monthAssignments,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -552,34 +971,77 @@ class _DoctorHeader extends StatelessWidget {
       margin: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
       child: AppCard(
         padding: EdgeInsets.all(AppSpace.md),
-        child: Row(children: [
-          CircleAvatar(
-            radius: 21,
-            backgroundColor: AppColors.paperAlt,
-            child: Text(_initials(doctor.fullName), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.ink)),
-          ),
-          SizedBox(width: AppSpace.md),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Flexible(child: Text(doctor.fullName, style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis)),
-              if (doctor.role == UserRole.admin) ...[
-                SizedBox(width: 6),
-                Pill(text: 'ADMIN', background: AppColors.ink, foreground: Colors.white, fontSize: 9),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 21,
+              backgroundColor: AppColors.paperAlt,
+              child: Text(
+                _initials(doctor.fullName),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+            ),
+            SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          doctor.fullName,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (doctor.role == UserRole.admin) ...[
+                        SizedBox(width: 6),
+                        Pill(
+                          text: 'ADMIN',
+                          background: AppColors.ink,
+                          foreground: Colors.white,
+                          fontSize: 9,
+                        ),
+                      ],
+                    ],
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    '${doctor.gradeLabel} · ${doctor.service} · ${hospitalDisplayName(doctor.hospital)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: AppSpace.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '$monthAssignments',
+                  style: TextStyle(
+                    fontFamily: 'SpaceGrotesk',
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+                Text('ce mois', style: Theme.of(context).textTheme.labelSmall),
+                SizedBox(height: 3),
+                Text(
+                  '$totalAssignments au total',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ],
-            ]),
-            SizedBox(height: 2),
-            Text('${doctor.gradeLabel} · ${doctor.service} · ${hospitalDisplayName(doctor.hospital)}',
-                style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
-          ])),
-          SizedBox(width: AppSpace.sm),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('$monthAssignments',
-                style: TextStyle(fontFamily: 'SpaceGrotesk', fontSize: 19, fontWeight: FontWeight.w600, color: AppColors.ink)),
-            Text('ce mois', style: Theme.of(context).textTheme.labelSmall),
-            SizedBox(height: 3),
-            Text('$totalAssignments au total', style: Theme.of(context).textTheme.labelSmall),
-          ]),
-        ]),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -590,18 +1052,29 @@ class _MonthHeader extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onToday;
-  const _MonthHeader({required this.month, required this.onPrevious, required this.onNext, required this.onToday});
+  const _MonthHeader({
+    required this.month,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onToday,
+  });
 
   @override
   Widget build(BuildContext context) {
     final label = _capitalize(DateFormat.yMMMM('fr_FR').format(month));
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        MonthNavigation(label: label, onPrevious: onPrevious, onNext: onNext),
-        TextButton.icon(onPressed: onToday, icon: const Icon(Icons.today_rounded, size: 16),
-          label: const Text("Aujourd'hui")),
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          MonthNavigation(label: label, onPrevious: onPrevious, onNext: onNext),
+          TextButton.icon(
+            onPressed: onToday,
+            icon: const Icon(Icons.today_rounded, size: 16),
+            label: const Text("Aujourd'hui"),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -613,7 +1086,19 @@ class _WeekdaysRow extends StatelessWidget {
     const days = ['L', 'Ma', 'Me', 'J', 'V', 'S', 'D'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-      child: Row(children: days.map((day) => Expanded(child: Text(day, textAlign: TextAlign.center, style: Theme.of(context).textTheme.labelMedium))).toList()),
+      child: Row(
+        children: days
+            .map(
+              (day) => Expanded(
+                child: Text(
+                  day,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 }
@@ -622,7 +1107,11 @@ class _DoctorCalendar extends StatelessWidget {
   final DateTime month;
   final List<PlanningEntry> entries;
   final ValueChanged<PlanningEntry> onDeleteEntry;
-  const _DoctorCalendar({required this.month, required this.entries, required this.onDeleteEntry});
+  const _DoctorCalendar({
+    required this.month,
+    required this.entries,
+    required this.onDeleteEntry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -630,7 +1119,9 @@ class _DoctorCalendar extends StatelessWidget {
     final firstWeekday = DateTime(month.year, month.month, 1).weekday - 1;
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final todayKey = AppState.dateKey(DateTime.now());
-    final entriesByDate = <String, PlanningEntry>{for (final entry in entries) entry.dateStr: entry};
+    final entriesByDate = <String, PlanningEntry>{
+      for (final entry in entries) entry.dateStr: entry,
+    };
     final cells = <Widget>[];
     for (var i = 0; i < firstWeekday; i++) {
       cells.add(const SizedBox.shrink());
@@ -644,12 +1135,14 @@ class _DoctorCalendar extends StatelessWidget {
         final currentEntry = entry;
         deleteCallback = () => onDeleteEntry(currentEntry);
       }
-      cells.add(_AdminDayCell(
-        day: day,
-        isToday: key == todayKey,
-        entry: entry,
-        onDelete: deleteCallback,
-      ));
+      cells.add(
+        _AdminDayCell(
+          day: day,
+          isToday: key == todayKey,
+          entry: entry,
+          onDelete: deleteCallback,
+        ),
+      );
     }
 
     return Container(
@@ -667,13 +1160,17 @@ class _DoctorCalendar extends StatelessWidget {
           final width = constraints.maxWidth;
           final veryNarrow = width < 430;
           final narrow = width < 650;
-          final gap = veryNarrow ? 4.0 : narrow ? 5.0 : 8.0;
+          final gap = veryNarrow
+              ? 4.0
+              : narrow
+              ? 5.0
+              : 8.0;
           final cellWidth = (width - gap * 6) / 7;
           final targetHeight = veryNarrow
               ? (cellWidth * 1.66).clamp(70.0, 88.0).toDouble()
               : narrow
-                  ? (cellWidth * 1.34).clamp(80.0, 106.0).toDouble()
-                  : (cellWidth * 1.08).clamp(96.0, 148.0).toDouble();
+              ? (cellWidth * 1.34).clamp(80.0, 106.0).toDouble()
+              : (cellWidth * 1.08).clamp(96.0, 148.0).toDouble();
           final weekdayLabels = veryNarrow
               ? const ['L', 'Ma', 'Me', 'J', 'V', 'S', 'D']
               : const ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -685,17 +1182,20 @@ class _DoctorCalendar extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(0, 2, 0, veryNarrow ? 5 : 7),
                 child: Row(
                   children: weekdayLabels
-                      .map((day) => Expanded(
-                            child: Text(
-                              day,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    fontSize: veryNarrow ? 10.5 : 11.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.inkSoft,
-                                  ),
-                            ),
-                          ))
+                      .map(
+                        (day) => Expanded(
+                          child: Text(
+                            day,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  fontSize: veryNarrow ? 10.5 : 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.inkSoft,
+                                ),
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               ),
@@ -723,13 +1223,22 @@ class _AdminDayCell extends StatelessWidget {
   final bool isToday;
   final PlanningEntry? entry;
   final VoidCallback? onDelete;
-  const _AdminDayCell({required this.day, required this.isToday, required this.entry, required this.onDelete});
+  const _AdminDayCell({
+    required this.day,
+    required this.isToday,
+    required this.entry,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     final currentEntry = entry;
-    final shift = currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
-    final group = currentEntry == null ? null : _shiftGroup(currentEntry.shiftId);
+    final shift = currentEntry == null
+        ? null
+        : ShiftCatalog.byId(currentEntry.shiftId);
+    final group = currentEntry == null
+        ? null
+        : _shiftGroup(currentEntry.shiftId);
     final leave = currentEntry != null && currentEntry.shiftId == 'conge'
         ? context.read<AppState>().leaveRequestForEntry(currentEntry)
         : null;
@@ -742,13 +1251,18 @@ class _AdminDayCell extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: AppRadius.mdR,
-          border: Border.all(color: isToday ? AppColors.ink : AppColors.line, width: isToday ? 1.6 : 1),
+          border: Border.all(
+            color: isToday ? AppColors.ink : AppColors.line,
+            width: isToday ? 1.6 : 1,
+          ),
           boxShadow: entry == null ? null : AppShadow.low,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final tiny = constraints.maxWidth < 50 || constraints.maxHeight < 60;
-            final compact = constraints.maxWidth < 72 || constraints.maxHeight < 86;
+            final tiny =
+                constraints.maxWidth < 50 || constraints.maxHeight < 60;
+            final compact =
+                constraints.maxWidth < 72 || constraints.maxHeight < 86;
             final headerHeight = tiny ? 19.0 : 23.0;
 
             return Column(
@@ -845,20 +1359,23 @@ class _AdminShiftTile extends StatelessWidget {
     final groupLabel = shift.id == 'conge'
         ? 'Congé'
         : group == 'service'
-            ? (tiny ? 'SERV' : 'Service')
-            : (tiny ? 'URG' : 'Urgences');
+        ? (tiny ? 'SERV' : 'Service')
+        : (tiny ? 'URG' : 'Urgences');
     final secondLabel = shift.id == 'conge'
         ? (pendingLeave ? 'Attente' : null)
         : shift.label == 'Jour'
-            ? 'Jour'
-            : shift.label == 'Nuit'
-                ? 'Nuit'
-                : '24H';
+        ? 'Jour'
+        : shift.label == 'Nuit'
+        ? 'Nuit'
+        : '24H';
 
     return Container(
       width: double.infinity,
       height: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: tiny ? 2 : 4, vertical: tiny ? 1 : 3),
+      padding: EdgeInsets.symmetric(
+        horizontal: tiny ? 2 : 4,
+        vertical: tiny ? 1 : 3,
+      ),
       decoration: BoxDecoration(
         color: shift.color,
         borderRadius: AppRadius.smR,
@@ -874,14 +1391,22 @@ class _AdminShiftTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (showIcon) ...[
-                  Icon(shift.icon, size: compact ? 17 : 23, color: shift.textColor),
+                  Icon(
+                    shift.icon,
+                    size: compact ? 17 : 23,
+                    color: shift.textColor,
+                  ),
                   SizedBox(height: compact ? 1 : 2),
                 ],
                 Text(
                   groupLabel,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: tiny ? 9.5 : compact ? 10.5 : 13,
+                    fontSize: tiny
+                        ? 9.5
+                        : compact
+                        ? 10.5
+                        : 13,
                     height: 1.0,
                     fontWeight: FontWeight.w900,
                     color: shift.textColor,
@@ -893,7 +1418,11 @@ class _AdminShiftTile extends StatelessWidget {
                     secondLabel,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: tiny ? 9 : compact ? 10 : 11.5,
+                      fontSize: tiny
+                          ? 9
+                          : compact
+                          ? 10
+                          : 11.5,
                       height: 1.0,
                       fontWeight: FontWeight.w800,
                       color: shift.textColor.withOpacity(0.94),
@@ -914,11 +1443,16 @@ class _CalendarLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Padding(
     padding: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
-    child: Wrap(alignment: WrapAlignment.center, spacing: AppSpace.lg, runSpacing: AppSpace.xs, children: [
-      _LegendItem(color: AppColors.catService, label: 'Service'),
-      _LegendItem(color: AppColors.catUrgence, label: 'Urgences'),
-      _LegendItem(color: AppColors.conge, label: 'Congé'),
-    ]),
+    child: Wrap(
+      alignment: WrapAlignment.center,
+      spacing: AppSpace.lg,
+      runSpacing: AppSpace.xs,
+      children: [
+        _LegendItem(color: AppColors.catService, label: 'Service'),
+        _LegendItem(color: AppColors.catUrgence, label: 'Urgences'),
+        _LegendItem(color: AppColors.conge, label: 'Congé'),
+      ],
+    ),
   );
 }
 
@@ -927,11 +1461,25 @@ class _LegendItem extends StatelessWidget {
   final String label;
   const _LegendItem({required this.color, required this.label});
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-    Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-    SizedBox(width: 5),
-    Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.inkSoft)),
-  ]);
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      SizedBox(width: 5),
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.inkSoft,
+        ),
+      ),
+    ],
+  );
 }
 
 class _EmptyAdminView extends StatelessWidget {
@@ -940,11 +1488,22 @@ class _EmptyAdminView extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: Padding(
       padding: EdgeInsets.all(28),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.person_search_rounded, size: 40, color: AppColors.inkFaint),
-        SizedBox(height: AppSpace.md),
-        Text('Aucun médecin ne correspond à cet établissement.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.inkSoft)),
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.person_search_rounded,
+            size: 40,
+            color: AppColors.inkFaint,
+          ),
+          SizedBox(height: AppSpace.md),
+          Text(
+            'Aucun médecin ne correspond à cet établissement.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.inkSoft),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -955,7 +1514,8 @@ String _shiftGroup(String shiftId) {
   return 'conge';
 }
 
-String _capitalize(String value) => value.isEmpty ? value : value[0].toUpperCase() + value.substring(1);
+String _capitalize(String value) =>
+    value.isEmpty ? value : value[0].toUpperCase() + value.substring(1);
 String _initials(String name) {
   final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
   final values = parts.take(2).map((p) => p[0].toUpperCase()).join();

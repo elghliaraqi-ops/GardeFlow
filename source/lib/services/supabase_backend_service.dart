@@ -51,7 +51,10 @@ class SupabaseBackendService {
 
   Future<AppUser> signIn(String rawPhone, String password) async {
     final email = technicalEmail(rawPhone);
-    final res = await client.auth.signInWithPassword(email: email, password: password);
+    final res = await client.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
     if (res.user == null) throw StateError('Connexion impossible.');
     return fetchMyProfile();
   }
@@ -94,10 +97,13 @@ class SupabaseBackendService {
 
   Future<void> requestPasswordResetHelp(String rawPhone) async {
     if (!enabled) {
-      throw StateError('La récupération du mot de passe nécessite une connexion au serveur.');
+      throw StateError(
+        'La récupération du mot de passe nécessite une connexion au serveur.',
+      );
     }
     final phone = authPhone(rawPhone);
-    if (phone.trim().isEmpty) throw ArgumentError('Numéro de téléphone invalide.');
+    if (phone.trim().isEmpty)
+      throw ArgumentError('Numéro de téléphone invalide.');
 
     final response = await client.functions.invoke(
       'password-reset',
@@ -105,7 +111,9 @@ class SupabaseBackendService {
     );
     final raw = response.data;
     if (raw is Map && raw['ok'] == true) return;
-    throw StateError('La demande n’a pas pu être envoyée à l’administrateur. Réessayez.');
+    throw StateError(
+      'La demande n’a pas pu être envoyée à l’administrateur. Réessayez.',
+    );
   }
 
   Future<void> confirmPasswordReset({
@@ -114,10 +122,13 @@ class SupabaseBackendService {
     required String newPassword,
   }) async {
     if (!enabled) {
-      throw StateError('La récupération du mot de passe nécessite une connexion au serveur.');
+      throw StateError(
+        'La récupération du mot de passe nécessite une connexion au serveur.',
+      );
     }
     final phone = authPhone(rawPhone);
-    if (phone.trim().isEmpty) throw ArgumentError('Numéro de téléphone invalide.');
+    if (phone.trim().isEmpty)
+      throw ArgumentError('Numéro de téléphone invalide.');
 
     final response = await client.functions.invoke(
       'password-reset',
@@ -153,17 +164,17 @@ class SupabaseBackendService {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
     }
-    if (userId.trim().isEmpty) throw ArgumentError('Compte utilisateur invalide.');
+    if (userId.trim().isEmpty)
+      throw ArgumentError('Compte utilisateur invalide.');
     if (newPassword.length < 8 || newPassword.length > 72) {
-      throw ArgumentError('Le mot de passe doit contenir entre 8 et 72 caractères.');
+      throw ArgumentError(
+        'Le mot de passe doit contenir entre 8 et 72 caractères.',
+      );
     }
 
     final response = await client.functions.invoke(
       'admin-reset-user-password',
-      body: {
-        'userId': userId.trim(),
-        'newPassword': newPassword,
-      },
+      body: {'userId': userId.trim(), 'newPassword': newPassword},
     );
     final raw = response.data;
     if (raw is Map && raw['ok'] == true) return;
@@ -171,13 +182,19 @@ class SupabaseBackendService {
     final error = raw is Map ? raw['error']?.toString() : null;
     switch (error) {
       case 'forbidden':
-        throw StateError('Cette action est réservée aux administrateurs GardeFlow.');
+        throw StateError(
+          'Cette action est réservée aux administrateurs GardeFlow.',
+        );
       case 'unauthorized':
-        throw StateError('Votre session administrateur a expiré. Reconnectez-vous.');
+        throw StateError(
+          'Votre session administrateur a expiré. Reconnectez-vous.',
+        );
       case 'user_not_found':
         throw StateError('Ce compte médecin est introuvable ou inactif.');
       case 'invalid_password':
-        throw StateError('Le nouveau mot de passe ne respecte pas les critères requis.');
+        throw StateError(
+          'Le nouveau mot de passe ne respecte pas les critères requis.',
+        );
       default:
         throw StateError('Le mot de passe n’a pas pu être modifié. Réessayez.');
     }
@@ -187,7 +204,8 @@ class SupabaseBackendService {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
     }
-    if (userId.trim().isEmpty) throw ArgumentError('Compte utilisateur invalide.');
+    if (userId.trim().isEmpty)
+      throw ArgumentError('Compte utilisateur invalide.');
 
     final response = await client.functions.invoke(
       'admin-delete-user',
@@ -199,17 +217,27 @@ class SupabaseBackendService {
     final error = raw is Map ? raw['error']?.toString() : null;
     switch (error) {
       case 'forbidden':
-        throw StateError('Cette action est réservée aux administrateurs GardeFlow.');
+        throw StateError(
+          'Cette action est réservée aux administrateurs GardeFlow.',
+        );
       case 'unauthorized':
-        throw StateError('Votre session administrateur a expiré. Reconnectez-vous.');
+        throw StateError(
+          'Votre session administrateur a expiré. Reconnectez-vous.',
+        );
       case 'user_not_found':
         throw StateError('Ce compte utilisateur est introuvable.');
       case 'cannot_delete_admin':
-        throw StateError('Un compte administrateur ne peut pas être supprimé depuis cette fonction.');
+        throw StateError(
+          'Un compte administrateur ne peut pas être supprimé depuis cette fonction.',
+        );
       case 'storage_cleanup_failed':
-        throw StateError('Les fichiers du compte n’ont pas pu être supprimés. Le compte a été conservé.');
+        throw StateError(
+          'Les fichiers du compte n’ont pas pu être supprimés. Le compte a été conservé.',
+        );
       case 'data_cleanup_failed':
-        throw StateError('Les données du compte n’ont pas pu être supprimées complètement. Réessayez.');
+        throw StateError(
+          'Les données du compte n’ont pas pu être supprimées complètement. Réessayez.',
+        );
       case 'delete_failed':
         throw StateError('Le compte Auth n’a pas pu être supprimé. Réessayez.');
       default:
@@ -229,10 +257,12 @@ class SupabaseBackendService {
   Future<List<AppUser>> fetchVisibleProfiles() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('profiles')
-          .select('id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number')
+          .select(
+            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number',
+          )
           .order('prenom')
           .order('nom')
           .order('id')
@@ -255,10 +285,25 @@ class SupabaseBackendService {
     return value != null && value > 0 ? value : 7;
   }
 
+  Future<int> adminAddInternshipPromotion() async {
+    final result = await client.rpc('admin_add_internship_promotion');
+    final value = result is num
+        ? result.toInt()
+        : int.tryParse(result?.toString() ?? '');
+    if (value == null || value < 1) {
+      throw StateError('La nouvelle promotion n’a pas pu être créée.');
+    }
+    return value;
+  }
+
   Future<List<PasswordResetRequest>> fetchPasswordResetRequests() async {
     final rows = await client.rpc('admin_password_reset_requests');
     return (rows as List)
-        .map((raw) => PasswordResetRequest.fromJson(Map<String, dynamic>.from(raw as Map)))
+        .map(
+          (raw) => PasswordResetRequest.fromJson(
+            Map<String, dynamic>.from(raw as Map),
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -309,14 +354,17 @@ class SupabaseBackendService {
     required String hospital,
     String? service,
   }) async {
-    await client.from('directory_contacts').update({
-      'category': categoryId,
-      'name': name.trim(),
-      'phone': phone.trim(),
-      'hospital': hospital,
-      'service': (service ?? '').trim().isEmpty ? null : service!.trim(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', id);
+    await client
+        .from('directory_contacts')
+        .update({
+          'category': categoryId,
+          'name': name.trim(),
+          'phone': phone.trim(),
+          'hospital': hospital,
+          'service': (service ?? '').trim().isEmpty ? null : service!.trim(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id);
   }
 
   Future<void> deleteManualDirectoryContact(String id) async {
@@ -324,8 +372,13 @@ class SupabaseBackendService {
   }
 
   AppUser _profileToUser(Map<String, dynamic> j) {
-    final rawGrade = (j['medical_grade'] as String?) ?? (j['fonction'] as String?) ?? 'junior';
-    final grade = rawGrade == 'senior' ? MedicalGrade.senior : MedicalGrade.junior;
+    final rawGrade =
+        (j['medical_grade'] as String?) ??
+        (j['fonction'] as String?) ??
+        'junior';
+    final grade = rawGrade == 'senior'
+        ? MedicalGrade.senior
+        : MedicalGrade.junior;
     final rawStatus = (j['account_status'] as String?) ?? 'active';
     return AppUser(
       id: j['id'] as String,
@@ -346,10 +399,12 @@ class SupabaseBackendService {
   Future<List<PlanningEntry>> fetchPlanning() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('planning_entries')
-          .select('id,date_str,shift_id,owner_id,owner_phone,owner_name,leave_request_id,is_disciplinary,created_at')
+          .select(
+            'id,date_str,shift_id,owner_id,owner_phone,owner_name,leave_request_id,is_disciplinary,created_at',
+          )
           .isFilter('deleted_at', null)
           .order('date_str')
           .order('id')
@@ -382,10 +437,10 @@ class SupabaseBackendService {
   }) async {
     String date(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    final rows = await client.rpc('junior_oncall_roster', params: {
-      'p_from': date(from),
-      'p_to': date(to),
-    });
+    final rows = await client.rpc(
+      'junior_oncall_roster',
+      params: {'p_from': date(from), 'p_to': date(to)},
+    );
     return (rows as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
@@ -398,10 +453,10 @@ class SupabaseBackendService {
   }) async {
     String date(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    final rows = await client.rpc('senior_oncall_roster', params: {
-      'p_from': date(from),
-      'p_to': date(to),
-    });
+    final rows = await client.rpc(
+      'senior_oncall_roster',
+      params: {'p_from': date(from), 'p_to': date(to)},
+    );
     return (rows as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
@@ -435,9 +490,13 @@ class SupabaseBackendService {
         case 'image_download_failed':
           throw StateError('Impossible de charger la photo pour l’analyse.');
         case 'invalid_image_size':
-          throw StateError('La photo est vide ou trop volumineuse pour l’analyse.');
+          throw StateError(
+            'La photo est vide ou trop volumineuse pour l’analyse.',
+          );
         case 'analysis_save_failed':
-          throw StateError('L’analyse a réussi mais son brouillon n’a pas pu être enregistré.');
+          throw StateError(
+            'L’analyse a réussi mais son brouillon n’a pas pu être enregistré.',
+          );
         default:
           throw StateError(
             'Analyse automatique indisponible. Réessayez ou saisissez le tableau manuellement.',
@@ -455,10 +514,7 @@ class SupabaseBackendService {
   }) async {
     final result = await client.rpc(
       'publish_senior_oncall_import',
-      params: {
-        'p_import_id': importId,
-        'p_rows': rows,
-      },
+      params: {'p_import_id': importId, 'p_rows': rows},
     );
     return Map<String, dynamic>.from(result as Map);
   }
@@ -466,10 +522,12 @@ class SupabaseBackendService {
   Future<List<PlanningMonth>> fetchPlanningMonths() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('planning_months')
-          .select('owner_id,year,month,status,submitted_at,reviewed_at,reviewed_by,rejection_reason')
+          .select(
+            'owner_id,year,month,status,submitted_at,reviewed_at,reviewed_by,rejection_reason',
+          )
           .order('year')
           .order('month')
           .order('owner_id')
@@ -483,9 +541,15 @@ class SupabaseBackendService {
         ownerId: j['owner_id'] as String,
         year: (j['year'] as num).toInt(),
         month: (j['month'] as num).toInt(),
-        status: PlanningMonthStatus.values.byName((j['status'] as String?) ?? 'draft'),
-        submittedAt: j['submitted_at'] == null ? null : DateTime.parse(j['submitted_at'] as String),
-        reviewedAt: j['reviewed_at'] == null ? null : DateTime.parse(j['reviewed_at'] as String),
+        status: PlanningMonthStatus.values.byName(
+          (j['status'] as String?) ?? 'draft',
+        ),
+        submittedAt: j['submitted_at'] == null
+            ? null
+            : DateTime.parse(j['submitted_at'] as String),
+        reviewedAt: j['reviewed_at'] == null
+            ? null
+            : DateTime.parse(j['reviewed_at'] as String),
         reviewedBy: j['reviewed_by'] as String?,
         rejectionReason: j['rejection_reason'] as String?,
       );
@@ -495,10 +559,12 @@ class SupabaseBackendService {
   Future<List<ExchangeRequest>> fetchExchanges() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('exchange_requests')
-          .select('id,type,planning_entry_id,date_str,shift_id,target_planning_entry_id,target_date_str,target_shift_id,from_id,from_phone,from_name,to_id,to_phone,to_name,status,created_at')
+          .select(
+            'id,type,planning_entry_id,date_str,shift_id,target_planning_entry_id,target_date_str,target_shift_id,from_id,from_phone,from_name,to_id,to_phone,to_name,status,created_at',
+          )
           .order('created_at')
           .order('id')
           .range(offset, offset + pageSize - 1);
@@ -531,10 +597,12 @@ class SupabaseBackendService {
   Future<List<LeaveRequest>> fetchLeaveRequests() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('leave_requests')
-          .select('id,start_date,end_date,date_str,owner_id,owner_phone,owner_name,status,created_at,reviewed_at')
+          .select(
+            'id,start_date,end_date,date_str,owner_id,owner_phone,owner_name,status,created_at,reviewed_at',
+          )
           .order('created_at')
           .range(offset, offset + pageSize - 1);
       allRows.addAll(rows);
@@ -552,7 +620,9 @@ class SupabaseBackendService {
         ownerName: j['owner_name'] as String,
         status: LeaveRequestStatus.values.byName(j['status'] as String),
         createdAt: DateTime.parse(j['created_at'] as String),
-        reviewedAt: j['reviewed_at'] == null ? null : DateTime.parse(j['reviewed_at'] as String),
+        reviewedAt: j['reviewed_at'] == null
+            ? null
+            : DateTime.parse(j['reviewed_at'] as String),
       );
     }).toList();
   }
@@ -587,22 +657,25 @@ class SupabaseBackendService {
     required String dateStr,
     required String shiftId,
   }) async {
-    final result = await client.rpc('save_my_planning_entry', params: {
-      'p_date': dateStr,
-      'p_shift_id': shiftId,
-    });
+    final result = await client.rpc(
+      'save_my_planning_entry',
+      params: {'p_date': dateStr, 'p_shift_id': shiftId},
+    );
     return result.toString();
   }
 
   Future<void> deleteMyPlanningEntry(String entryId) async {
-    await client.rpc('delete_my_planning_entry', params: {'p_entry_id': entryId});
+    await client.rpc(
+      'delete_my_planning_entry',
+      params: {'p_entry_id': entryId},
+    );
   }
 
   Future<List<String>> submitMyPlanningMonth(int year, int month) async {
-    final result = await client.rpc('submit_my_planning_month', params: {
-      'p_year': year,
-      'p_month': month,
-    });
+    final result = await client.rpc(
+      'submit_my_planning_month',
+      params: {'p_year': year, 'p_month': month},
+    );
     if (result == null) return const <String>[];
     if (result is List) return result.map((e) => e.toString()).toList();
     return <String>[result.toString()];
@@ -614,40 +687,44 @@ class SupabaseBackendService {
     required int month,
     required String reason,
   }) async {
-    await client.rpc('admin_reopen_planning_month', params: {
-      'p_owner_id': ownerId,
-      'p_year': year,
-      'p_month': month,
-      'p_reason': reason,
-    });
+    await client.rpc(
+      'admin_reopen_planning_month',
+      params: {
+        'p_owner_id': ownerId,
+        'p_year': year,
+        'p_month': month,
+        'p_reason': reason,
+      },
+    );
   }
 
-
   Future<void> createLeaveRequest(LeaveRequest request) async {
-    await client.rpc('create_leave_request', params: {
-      'p_request_id': request.id,
-      'p_start_date': request.startDateStr,
-      'p_end_date': request.endDateStr,
-    });
+    await client.rpc(
+      'create_leave_request',
+      params: {
+        'p_request_id': request.id,
+        'p_start_date': request.startDateStr,
+        'p_end_date': request.endDateStr,
+      },
+    );
   }
 
   Future<void> reviewLeaveRequest(String id, String action) async {
-    await client.rpc('review_leave_request', params: {
-      'p_request_id': id,
-      'p_action': action,
-    });
+    await client.rpc(
+      'review_leave_request',
+      params: {'p_request_id': id, 'p_action': action},
+    );
   }
 
   Future<void> cancelLeaveRequest(String id) async {
     await client.rpc('cancel_leave_request', params: {'p_request_id': id});
   }
 
-
   Future<void> adminDeletePlanning(String id, String reason) async {
-    await client.rpc('admin_delete_planning', params: {
-      'p_entry_id': id,
-      'p_reason': reason,
-    });
+    await client.rpc(
+      'admin_delete_planning',
+      params: {'p_entry_id': id, 'p_reason': reason},
+    );
   }
 
   Future<void> reviewAccount(
@@ -657,20 +734,26 @@ class SupabaseBackendService {
     String? service,
     MedicalGrade? grade,
   }) async {
-    await client.rpc('review_profile_account', params: {
-      'p_profile_id': profileId,
-      'p_action': action,
-      'p_hospital': hospital,
-      'p_service': service,
-      'p_medical_grade': grade?.name,
-    });
+    await client.rpc(
+      'review_profile_account',
+      params: {
+        'p_profile_id': profileId,
+        'p_action': action,
+        'p_hospital': hospital,
+        'p_service': service,
+        'p_medical_grade': grade?.name,
+      },
+    );
   }
 
-  Future<void> registerPushToken(String token, {required String platform}) async {
-    await client.rpc('register_push_token', params: {
-      'p_token': token,
-      'p_platform': platform,
-    });
+  Future<void> registerPushToken(
+    String token, {
+    required String platform,
+  }) async {
+    await client.rpc(
+      'register_push_token',
+      params: {'p_token': token, 'p_platform': platform},
+    );
   }
 
   Future<void> registerPushDevice(
@@ -678,21 +761,25 @@ class SupabaseBackendService {
     required String platform,
     required String deviceId,
   }) async {
-    await client.rpc('register_push_device', params: {
-      'p_token': token,
-      'p_platform': platform,
-      'p_device_id': deviceId,
-    });
+    await client.rpc(
+      'register_push_device',
+      params: {
+        'p_token': token,
+        'p_platform': platform,
+        'p_device_id': deviceId,
+      },
+    );
   }
 
   Future<void> unregisterPushToken(String token) async {
     await client.rpc('unregister_push_token', params: {'p_token': token});
   }
 
-
   static const String sharedBucket = 'gardeflow-shared';
 
-  Future<List<SharedResource>> fetchSharedResources({required String kind}) async {
+  Future<List<SharedResource>> fetchSharedResources({
+    required String kind,
+  }) async {
     final rows = await client
         .from('shared_resources')
         .select()
@@ -703,8 +790,11 @@ class SupabaseBackendService {
         .toList();
   }
 
-  Future<List<SharedResource>> fetchAstreintePhotos({required String hospital}) async {
-    if (!kHospitals.contains(hospital)) throw ArgumentError('Établissement invalide.');
+  Future<List<SharedResource>> fetchAstreintePhotos({
+    required String hospital,
+  }) async {
+    if (!kHospitals.contains(hospital))
+      throw ArgumentError('Établissement invalide.');
     final rows = await client
         .from('shared_resources')
         .select()
@@ -723,8 +813,13 @@ class SupabaseBackendService {
     return client.storage.from(sharedBucket).download(storagePath);
   }
 
-  Future<String> signedSharedResourceUrl(String storagePath, {int expiresIn = 3600}) async {
-    return client.storage.from(sharedBucket).createSignedUrl(storagePath, expiresIn);
+  Future<String> signedSharedResourceUrl(
+    String storagePath, {
+    int expiresIn = 3600,
+  }) async {
+    return client.storage
+        .from(sharedBucket)
+        .createSignedUrl(storagePath, expiresIn);
   }
 
   Future<SharedResource> uploadAstreintePhoto({
@@ -735,19 +830,26 @@ class SupabaseBackendService {
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
-    if (!kHospitals.contains(hospital)) throw ArgumentError('Établissement invalide.');
+    if (!kHospitals.contains(hospital))
+      throw ArgumentError('Établissement invalide.');
     final hospitalSlot = hospital == kHospitalBouskoura
         ? 'hm6_bouskoura'
         : hospital == kHospitalRabat
-            ? 'hm6_rabat'
-            : 'hck_casa';
-    final ext = _safeExtension(fileName, fallback: _extensionForMime(mimeType, fallback: 'jpg'));
-    final path = 'astreinte/$hospitalSlot/${uid}_${DateTime.now().microsecondsSinceEpoch}.$ext';
-    await client.storage.from(sharedBucket).uploadBinary(
-      path,
-      bytes,
-      fileOptions: FileOptions(contentType: mimeType, upsert: false),
+        ? 'hm6_rabat'
+        : 'hck_casa';
+    final ext = _safeExtension(
+      fileName,
+      fallback: _extensionForMime(mimeType, fallback: 'jpg'),
     );
+    final path =
+        'astreinte/$hospitalSlot/${uid}_${DateTime.now().microsecondsSinceEpoch}.$ext';
+    await client.storage
+        .from(sharedBucket)
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(contentType: mimeType, upsert: false),
+        );
     try {
       final row = await client
           .from('shared_resources')
@@ -776,11 +878,16 @@ class SupabaseBackendService {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
     final path = 'official/$slot.pdf';
-    await client.storage.from(sharedBucket).uploadBinary(
-      path,
-      bytes,
-      fileOptions: const FileOptions(contentType: 'application/pdf', upsert: true),
-    );
+    await client.storage
+        .from(sharedBucket)
+        .uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/pdf',
+            upsert: true,
+          ),
+        );
     await client.from('shared_resources').upsert({
       'kind': 'official_pdf',
       'slot': slot,
@@ -800,10 +907,13 @@ class SupabaseBackendService {
   }
 
   Future<bool> officialRosterImportIsCurrent(SharedResource resource) async {
-    final result = await client.rpc('official_roster_import_is_current', params: {
-      'p_resource_id': resource.id,
-      'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
-    });
+    final result = await client.rpc(
+      'official_roster_import_is_current',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
+      },
+    );
     return result == true;
   }
 
@@ -812,12 +922,15 @@ class SupabaseBackendService {
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
   }) async {
-    final result = await client.rpc('import_official_emergency_roster', params: {
-      'p_resource_id': resource.id,
-      'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
-      'p_assignments': assignments,
-      'p_unmatched_cells': unmatchedCells,
-    });
+    final result = await client.rpc(
+      'import_official_emergency_roster',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
+        'p_assignments': assignments,
+        'p_unmatched_cells': unmatchedCells,
+      },
+    );
     return Map<String, dynamic>.from(result as Map);
   }
 
@@ -870,11 +983,14 @@ class SupabaseBackendService {
     required SharedResource resource,
     required String profileId,
   }) async {
-    final result = await client.rpc('official_roster_profile_sync_is_current', params: {
-      'p_resource_id': resource.id,
-      'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
-      'p_profile_id': profileId,
-    });
+    final result = await client.rpc(
+      'official_roster_profile_sync_is_current',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
+        'p_profile_id': profileId,
+      },
+    );
     return result == true;
   }
 
@@ -884,13 +1000,16 @@ class SupabaseBackendService {
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
   }) async {
-    final result = await client.rpc('import_official_emergency_roster_for_profile', params: {
-      'p_resource_id': resource.id,
-      'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
-      'p_profile_id': profileId,
-      'p_assignments': assignments,
-      'p_unmatched_cells': unmatchedCells,
-    });
+    final result = await client.rpc(
+      'import_official_emergency_roster_for_profile',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
+        'p_profile_id': profileId,
+        'p_assignments': assignments,
+        'p_unmatched_cells': unmatchedCells,
+      },
+    );
     return Map<String, dynamic>.from(result as Map);
   }
 
@@ -903,17 +1022,24 @@ class SupabaseBackendService {
     final clean = fileName.trim();
     final dot = clean.lastIndexOf('.');
     if (dot <= 0 || dot == clean.length - 1) return fallback;
-    final ext = clean.substring(dot + 1).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final ext = clean
+        .substring(dot + 1)
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
     return ext.isEmpty || ext.length > 5 ? fallback : ext;
   }
 
   String _extensionForMime(String mimeType, {required String fallback}) {
     switch (mimeType.toLowerCase()) {
-      case 'image/png': return 'png';
-      case 'image/webp': return 'webp';
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
       case 'image/jpeg':
-      case 'image/jpg': return 'jpg';
-      default: return fallback;
+      case 'image/jpg':
+        return 'jpg';
+      default:
+        return fallback;
     }
   }
 
@@ -924,7 +1050,9 @@ class SupabaseBackendService {
     );
     final data = response.data;
     if (data is Map && (data['failed'] as num? ?? 0) > 0) {
-      throw StateError('Certains appareils n’ont pas reçu la notification push. Consulter send-push.');
+      throw StateError(
+        'Certains appareils n’ont pas reçu la notification push. Consulter send-push.',
+      );
     }
   }
 
@@ -950,11 +1078,17 @@ class SupabaseBackendService {
   }
 
   Future<void> respondRequest(String id, String action) async {
-    await client.rpc('respond_shift_request', params: {'p_request_id': id, 'p_action': action});
+    await client.rpc(
+      'respond_shift_request',
+      params: {'p_request_id': id, 'p_action': action},
+    );
   }
 
   Future<void> reviewRequest(String id, String action) async {
-    await client.rpc('review_shift_request', params: {'p_request_id': id, 'p_action': action});
+    await client.rpc(
+      'review_shift_request',
+      params: {'p_request_id': id, 'p_action': action},
+    );
   }
 
   Future<void> cancelRequest(String id) async {
