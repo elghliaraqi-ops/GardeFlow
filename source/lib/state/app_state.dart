@@ -846,14 +846,15 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> register({required String nom,required String prenom,required String rawPhone,required String password,
-    required String service,required MedicalGrade grade,required String hospital}) async {
+    required String service,required MedicalGrade grade,required String hospital,int? promotionNumber}) async {
     final phone=normalizePhone(rawPhone);
     if(nom.trim().isEmpty||prenom.trim().isEmpty||phone.isEmpty||password.isEmpty)return 'Merci de remplir tous les champs.';
     if(password.length<8)return 'Le mot de passe doit contenir au moins 8 caractères.';
+    if(grade==MedicalGrade.junior&&(promotionNumber==null||promotionNumber<1||promotionNumber>7))return 'Sélectionnez votre promotion d’internat.';
     if (backendEnabled) {
       try {
         final backend=SupabaseBackendService.instance;
-        final pending=await backend.signUp(nom:nom,prenom:prenom,rawPhone:rawPhone,password:password,service:service,grade:grade,hospital:hospital);
+        final pending=await backend.signUp(nom:nom,prenom:prenom,rawPhone:rawPhone,password:password,service:service,grade:grade,hospital:hospital,promotionNumber:promotionNumber);
         try{await backend.triggerPush('account_created',pending.id);}catch(_){}
         await backend.signOut();
         currentUser=null;
@@ -868,7 +869,7 @@ class AppState extends ChangeNotifier {
     if(_users.any((u)=>u.phone==phone))return 'Un compte existe déjà avec ce numéro. Connectez-vous.';
     final salt=PasswordService.generateSalt();
     final user=AppUser(id:'local-${DateTime.now().microsecondsSinceEpoch}',nom:nom.trim(),prenom:prenom.trim(),phone:phone,passwordHash:PasswordService.hash(password,salt),passwordSalt:salt,
-      service:service,grade:grade,hospital:hospital);
+      service:service,grade:grade,hospital:hospital,promotionNumber:promotionNumber);
     _users.add(user);_rebuildDirectory();currentUser=user;if(_notificationsOn)unawaited(NotificationService.instance.requestPermission());_persist();unawaited(LocalStorageService.saveSessionPhone(user.phone));notifyListeners();return null;
   }
 
@@ -1362,7 +1363,7 @@ class AppState extends ChangeNotifier {
     if(_guardHasStarted(entry))return 'Une garde commencée ou passée ne peut plus être transférée.';
     if(BusinessRules.sameHospitalRequired&&target.hospital!=me.hospital)return 'Les transferts sont limités au même établissement.';
     final targetUser=_users.where((u)=>u.id==target.id||u.phone==target.phone).firstOrNull;
-    if(entry.shiftId.startsWith('urg-')&&InternPromotions.crossYearBlocked(me,targetUser))return 'Les transferts de gardes d’Urgences sont interdits entre première année (Promo 7) et deuxième année (Promo 6).';
+    if(entry.shiftId.startsWith('urg-')&&InternPromotions.crossYearBlocked(me,targetUser))return 'Les gardes d’Urgences ne peuvent pas être transférées entre la première année (Promo 7) et les promotions plus anciennes (Promo 6, 5, 4…).';
     if(!isUserPlanningMonthApproved(target.id,date))return 'Le calendrier du destinataire doit aussi être validé pour ce mois.';
     if(_isEntryLocked(entry.id))return 'Une demande est déjà en cours pour cette garde.';
     if(_planning.any((e)=>e.dateStr==date&&(e.ownerId==target.id||e.ownerPhone==target.phone)))return '${target.name} a déjà une affectation ce jour-là.';
@@ -1394,7 +1395,7 @@ class AppState extends ChangeNotifier {
     final targetIsUrgence=targetEntry.shiftId.startsWith('urg-');
     final targetUser=_users.where((u)=>u.id==target.id||u.phone==target.phone).firstOrNull;
     if((sourceIsUrgence||targetIsUrgence)&&InternPromotions.crossYearBlocked(me,targetUser)){
-      return 'Les échanges impliquant une garde d’Urgences sont interdits entre première année (Promo 7) et deuxième année (Promo 6).';
+      return 'Les échanges impliquant une garde d’Urgences sont interdits entre la première année (Promo 7) et les promotions plus anciennes (Promo 6, 5, 4…).';
     }
     if(targetEntry.ownerId!=target.id&&targetEntry.ownerPhone!=target.phone)return 'La garde choisie n’appartient plus au médecin destinataire.';
     if(!isUserPlanningMonthApproved(me.id,targetEntry.dateStr)||!isUserPlanningMonthApproved(target.id,entry.dateStr))return 'Les mois de destination des deux médecins doivent aussi être validés.';
@@ -1444,7 +1445,7 @@ class AppState extends ChangeNotifier {
     if(fromUser==null||toUser==null)return 'Un des médecins participant à l’échange est introuvable.';
     if(BusinessRules.sameHospitalRequired&&fromUser.hospital!=toUser.hospital)return 'Les échanges sont limités aux médecins du même établissement.';
     final involvesUrgence=source.shiftId.startsWith('urg-')||target.shiftId.startsWith('urg-');
-    if(involvesUrgence&&InternPromotions.crossYearBlocked(fromUser,toUser))return 'Les échanges impliquant une garde d’Urgences sont interdits entre première année (Promo 7) et deuxième année (Promo 6).';
+    if(involvesUrgence&&InternPromotions.crossYearBlocked(fromUser,toUser))return 'Les échanges impliquant une garde d’Urgences sont interdits entre la première année (Promo 7) et les promotions plus anciennes (Promo 6, 5, 4…).';
     final involvesService=source.shiftId.startsWith('service-')||target.shiftId.startsWith('service-');
     if(involvesService&&fromUser.service!=toUser.service)return 'Toute garde de Service ne peut être échangée qu’entre médecins du même service.';
     final conflictTo=_planning.where((e)=>e.dateStr==source.dateStr&&(e.ownerId==ex.toId||e.ownerPhone==ex.toPhone)).firstOrNull;

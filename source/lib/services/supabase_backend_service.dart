@@ -64,6 +64,7 @@ class SupabaseBackendService {
     required String service,
     required MedicalGrade grade,
     required String hospital,
+    int? promotionNumber,
   }) async {
     final phone = authPhone(rawPhone);
     final email = technicalEmail(phone);
@@ -78,6 +79,7 @@ class SupabaseBackendService {
         'medical_grade': grade.name,
         'fonction': grade.name,
         'hospital': hospital,
+        if (promotionNumber != null) 'promotion_number': promotionNumber,
       },
     );
     if (res.user == null) throw StateError('Création du compte impossible.');
@@ -230,7 +232,7 @@ class SupabaseBackendService {
     for (var offset = 0;; offset += pageSize) {
       final rows = await client
           .from('profiles')
-          .select('id,nom,prenom,phone,role,service,medical_grade,hospital,account_status')
+          .select('id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number')
           .order('prenom')
           .order('nom')
           .order('id')
@@ -325,6 +327,7 @@ class SupabaseBackendService {
       service: j['service'] as String,
       grade: grade,
       hospital: j['hospital'] as String,
+      promotionNumber: (j['promotion_number'] as num?)?.toInt(),
       role: UserRole.values.byName((j['role'] as String?) ?? 'medecin'),
       accountStatus: AccountStatus.values.byName(rawStatus),
     );

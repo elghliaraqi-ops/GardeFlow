@@ -199,11 +199,11 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             _RuleNotice(
               text: _mode == _Mode.transfer
                   ? sourceIsUrgence
-                      ? 'Transfert Urgences : même hôpital et même promotion d’internat. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas se transférer une garde d’Urgences. Le destinataire accepte, puis l’admin valide.'
+                      ? 'Transfert Urgences : même hôpital. La Promo 7 (1re année) reste séparée des promotions plus anciennes. Les Promo 6, 5, 4… peuvent transférer entre elles. Le destinataire accepte, puis l’admin valide.'
                       : 'Transfert Service : même hôpital. Les transferts de garde de Service restent possibles entre Promo 6 et Promo 7. Le destinataire accepte, puis l’admin valide.'
                   : sourceIsService
                       ? 'Échange Service : uniquement avec un médecin de votre service. Les échanges de Service restent possibles entre Promo 6 et Promo 7. Si les deux gardes sont de Service, l’échange est appliqué dès l’acceptation du collègue, sans validation admin.'
-                      : 'Échange Urgences : même hôpital et même promotion d’internat. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas échanger une garde d’Urgences entre elles. Validation admin obligatoire.',
+                      : 'Échange Urgences : même hôpital. La Promo 7 (1re année) ne peut échanger qu’avec la Promo 7. Les Promo 6, 5, 4… peuvent échanger entre elles. Validation admin obligatoire.',
               icon: _mode == _Mode.transfer
                   ? Icons.arrow_forward_rounded
                   : sourceIsService
@@ -214,7 +214,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             if (targets.isEmpty)
               Text(
                 rawTargets.isNotEmpty && sourceIsUrgence
-                    ? 'Aucun médecin compatible avec votre promotion pour cette garde d’Urgences.'
+                    ? 'Aucun médecin compatible avec votre groupe d’ancienneté pour cette garde d’Urgences.'
                     : 'Aucun autre médecin disponible dans votre établissement.',
                 style: Theme.of(context).textTheme.bodyMedium,
               )

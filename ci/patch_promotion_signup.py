@@ -261,8 +261,8 @@ alias_variants = """      final variants = <String>{
         _normalizeName('${profile.nom} ${profile.prenom}'),
         ...InternPromotions.officialRosterAliasesFor(profile).map(_normalizeName),
       }..removeWhere((v) => v.isEmpty);"""
-if s.count(normal_variants) < 2:
-    raise SystemExit("Expected profile variants block twice in official roster parser")
+if s.count(normal_variants) < 1:
+    raise SystemExit("Expected profile variants block in official roster parser")
 s = s.replace(normal_variants, alias_variants)
 p.write_text(s)
 

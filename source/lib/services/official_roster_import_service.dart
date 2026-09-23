@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdfrx/pdfrx.dart';
 
+import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
 
 class OfficialRosterAssignment {
@@ -22,7 +23,7 @@ class OfficialRosterAssignment {
         'date': dateStr,
         'shift_id': shiftId,
         'is_disciplinary': isDisciplinary,
-        'parser_revision': 'v11.6.52-r1',
+        'parser_revision': 'v11.6.70-r2',
       };
 }
 
@@ -42,7 +43,7 @@ class OfficialRosterDisciplinaryMark {
         'date': dateStr,
         'shift_id': shiftId,
         'red_text': redText,
-        'parser_revision': 'v11.6.52-r1',
+        'parser_revision': 'v11.6.70-r2',
       };
 }
 
@@ -503,6 +504,7 @@ class OfficialRosterImportService {
       final variants = <String>{
         _normalizeName('${profile.prenom} ${profile.nom}'),
         _normalizeName('${profile.nom} ${profile.prenom}'),
+        ...InternPromotions.officialRosterAliasesFor(profile).map(_normalizeName),
       }..removeWhere((v) => v.isEmpty);
 
       var found = false;

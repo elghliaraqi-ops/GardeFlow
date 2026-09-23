@@ -12,6 +12,7 @@ class AppUser {
   final String service;
   final MedicalGrade grade;
   final String hospital;
+  final int? promotionNumber;
   final UserRole role;
   final AccountStatus accountStatus;
 
@@ -25,6 +26,7 @@ class AppUser {
     required this.service,
     required this.grade,
     required this.hospital,
+    this.promotionNumber,
     this.role = UserRole.medecin,
     this.accountStatus = AccountStatus.active,
   });
@@ -43,6 +45,7 @@ class AppUser {
         'service': service,
         'grade': grade.name,
         'hospital': hospital,
+        'promotionNumber': promotionNumber,
         'role': role.name,
         'accountStatus': accountStatus.name,
       };
@@ -63,6 +66,8 @@ class AppUser {
       service: json['service'] as String,
       grade: grade,
       hospital: json['hospital'] as String,
+      promotionNumber: (json['promotionNumber'] as num?)?.toInt() ??
+          (json['promotion_number'] as num?)?.toInt(),
       role: UserRole.values.byName((json['role'] as String?) ?? 'medecin'),
       accountStatus: AccountStatus.values.byName((json['accountStatus'] as String?) ?? 'active'),
     );

@@ -23,6 +23,10 @@ class InternPromotions {
 
   static String _key(String nom, String prenom) => _normalize('$nom $prenom');
 
+  static const Set<String> _promo5 = {
+    'najid saad', 'saad najid',
+  };
+
   static const Set<String> _promo6 = {
     'aamer anas', 'abderrahmane elferdaous', 'adil lina', 'ahlsidimouloud aicha',
     'akdim aymen', 'amchaarou hamza', 'araqi el ghali', 'araqui houssaini elghali', 'araqui houssaini el ghali', 'belhaj anas',
@@ -35,7 +39,11 @@ class InternPromotions {
     'nouhaila aarab',
     'nyar malak', 'qossaim safaa', 'sahel ibtihal', 'sekkat kenza',
     'serir ahmed', 'tary yasmine', 'tlem aya', 'trabelsi salma',
-    'wiame khalifi', 'yazid marfoq', 'zaghrari dahmane', 'zahid mohamed amine',
+    'wiame khalifi', 'yazid marfoq', 'zaghrari dahmane',
+    'zaghrari mohammed dahmane', 'zaghrari mohamed dahmane',
+    'mohammed dahmane zaghrari', 'mohamed dahmane zaghrari',
+    'dahmane mohammed zaghrari', 'dahmane mohamed zaghrari',
+    'zahid mohamed amine',
   };
 
   static const Set<String> _promo7 = {
@@ -64,27 +72,69 @@ class InternPromotions {
     final key = _key(nom, prenom);
     if (_promo7.contains(key)) return 7;
     if (_promo6.contains(key)) return 6;
+    if (_promo5.contains(key)) return 5;
 
     // Tolère les comptes saisis avec Nom/Prénom inversés.
     final reverse = _key(prenom, nom);
     if (_promo7.contains(reverse)) return 7;
     if (_promo6.contains(reverse)) return 6;
+    if (_promo5.contains(reverse)) return 5;
     return null;
   }
 
-  static int? numberFor(AppUser? user) =>
-      user == null ? null : numberForNames(user.nom, user.prenom);
+  static int? numberFor(AppUser? user) => user == null
+      ? null
+      : user.promotionNumber ?? numberForNames(user.nom, user.prenom);
+
+  /// Promo 7 = 1re année, Promo 6 = 2e année, Promo 5 = 3e année, etc.
+  static int? trainingYearForPromotion(int? promo) {
+    if (promo == null || promo < 1 || promo > 7) return null;
+    return 8 - promo;
+  }
+
+  static String? yearLabelForPromotion(int? promo) {
+    final year = trainingYearForPromotion(promo);
+    if (year == null) return null;
+    return year == 1 ? '1re année' : '${year}e année';
+  }
 
   static String? labelFor(AppUser? user) {
     final promo = numberFor(user);
-    if (promo == 7) return '1re année · Promo 7';
-    if (promo == 6) return '2e année · Promo 6';
-    return null;
+    final year = yearLabelForPromotion(promo);
+    if (promo == null || year == null) return null;
+    return '$year · Promo $promo';
   }
 
+  /// Pour les gardes d'Urgences, la première année (Promo 7) reste
+  /// séparée des internes plus avancés. Les Promo 6, 5, 4... peuvent
+  /// en revanche transférer/échanger entre elles.
   static bool crossYearBlocked(AppUser? a, AppUser? b) {
     final pa = numberFor(a);
     final pb = numberFor(b);
-    return pa != null && pb != null && {pa, pb}.every((p) => p == 6 || p == 7) && pa != pb;
+    if (pa == null || pb == null) return false;
+    final aFirstYear = pa == 7;
+    final bFirstYear = pb == 7;
+    final aOlder = pa >= 1 && pa <= 6;
+    final bOlder = pb >= 1 && pb <= 6;
+    return (aFirstYear && bOlder) || (bFirstYear && aOlder);
+  }
+
+  /// Alias du planning officiel quand le compte contient plusieurs prénoms.
+  /// Le compte « Mohammed Dahmane Zaghrari » doit reconnaître « Dahmane Zaghrari ».
+  static Set<String> officialRosterAliasesFor(AppUser user) {
+    final key = _key(user.nom, user.prenom);
+    final reverse = _key(user.prenom, user.nom);
+    const zaghrariKeys = <String>{
+      'zaghrari mohammed dahmane',
+      'zaghrari mohamed dahmane',
+      'mohammed dahmane zaghrari',
+      'mohamed dahmane zaghrari',
+      'dahmane mohammed zaghrari',
+      'dahmane mohamed zaghrari',
+    };
+    if (zaghrariKeys.contains(key) || zaghrariKeys.contains(reverse)) {
+      return const <String>{'dahmane zaghrari', 'zaghrari dahmane'};
+    }
+    return const <String>{};
   }
 }

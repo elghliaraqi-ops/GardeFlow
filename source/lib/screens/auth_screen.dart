@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/hospitals.dart';
+import '../data/intern_promotions.dart';
 import '../data/services.dart';
 import '../models/app_user.dart';
 import '../state/app_state.dart';
@@ -45,6 +46,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   final _regPasswordCtrl = TextEditingController();
   String _regService = kServices.first;
   MedicalGrade _regGrade = MedicalGrade.junior;
+  int _regPromotion = 7;
 
   @override
   void initState() {
@@ -100,6 +102,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
       service: _regService,
       grade: _regGrade,
       hospital: _hospital,
+      promotionNumber: _regGrade == MedicalGrade.junior ? _regPromotion : null,
     );
     if (!mounted) return;
     if (err == null) {
@@ -402,7 +405,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  'Important : renseignez votre nom et prénom exactement comme ils apparaissent sur le PDF du planning de garde. Cela permet à GardeFlow de reconnaître automatiquement vos gardes.',
+                  'Important : renseignez vos nom et prénoms complets. GardeFlow rapproche automatiquement les variantes usuelles du planning officiel (par exemple un prénom composé abrégé).',
                   style: TextStyle(
                     color: AppColors.ink,
                     fontSize: 11.5,
@@ -505,6 +508,31 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           SizedBox(width: 10),
           Expanded(child: _gradeOption(MedicalGrade.senior, 'Senior')),
         ]),
+        if (_regGrade == MedicalGrade.junior) ...[
+          SizedBox(height: 16),
+          Text('Promotion d’internat', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.inkSoft)),
+          SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            value: _regPromotion,
+            isExpanded: true,
+            decoration: _glassInputDecoration(hint: 'Promotion', icon: Icons.school_outlined),
+            items: List<int>.generate(7, (index) => 7 - index)
+                .map((promo) => DropdownMenuItem<int>(
+                      value: promo,
+                      child: Text(
+                        'Promo $promo · ${InternPromotions.yearLabelForPromotion(promo)}',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ))
+                .toList(),
+            onChanged: (value) => setState(() => _regPromotion = value ?? _regPromotion),
+          ),
+          SizedBox(height: 7),
+          Text(
+            'Votre année d’internat est calculée automatiquement à partir de la promotion.',
+            style: TextStyle(fontSize: 10.8, height: 1.35, color: AppColors.inkFaint, fontWeight: FontWeight.w600),
+          ),
+        ],
         SizedBox(height: 20),
         _GradientPrimaryButton(label: 'Créer mon compte', icon: Icons.person_add_alt_1_rounded, onPressed: _submitRegister),
         SizedBox(height: 10),
