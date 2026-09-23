@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +27,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Fix the exchange sheet syntax and keep promotion filtering active.
           p = Path('source/lib/screens/exchange_request_sheet.dart')
           s = p.read_text()
           broken = "setState(() => _error = err;\n                          );"
@@ -35,7 +34,6 @@ jobs:
               s = s.replace(broken, "setState(() => _error = err);")
           p.write_text(s)
 
-          # Keep the exact OAuth grant type from the proven push implementation.
           p = Path('supabase/functions/send-push/index.ts')
           s = p.read_text()
           s = s.replace(
@@ -44,7 +42,6 @@ jobs:
           )
           p.write_text(s)
 
-          # Integrate promotion identity + public announcement feed above calendar.
           p = Path('source/lib/screens/home_screen.dart')
           s = p.read_text()
           if "import '../data/intern_promotions.dart';" not in s:
@@ -167,19 +164,17 @@ jobs:
             ],
           ),
         ),
-'''
+          '''
           s = s[:start] + new_header + s[end:]
           p.write_text(s)
           PY
 
-          # Mirror the production-safe push function into the source tree.
           cp supabase/functions/send-push/index.ts source/supabase/functions/send-push/index.ts
 
-          # Hard assertions: do not commit a partial patch.
           grep -Fq "final promotionLabel = InternPromotions.labelFor(appState.currentUser);" source/lib/screens/home_screen.dart
           grep -Fq "const AnnouncementsScreen()" source/lib/screens/home_screen.dart
           grep -Fq "grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer'" supabase/functions/send-push/index.ts
-          ! grep -Fq "setState(() => _error = err;" source/lib/screens/exchange_request_sheet.dart
+          grep -Fq "setState(() => _error = err);" source/lib/screens/exchange_request_sheet.dart
           grep -Fq "announcement_created" source/supabase/functions/send-push/index.ts
           git diff --check
 
