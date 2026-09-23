@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../data/intern_promotions.dart';
 import '../models/planning_entry.dart';
 import '../models/shift_type.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'announcements_screen.dart';
 
 enum _Mode { transfer, exchange }
 
@@ -53,10 +55,19 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final me = state.currentUser;
     final shift = ShiftCatalog.byId(widget.entry.shiftId);
     final sourceIsService = widget.entry.shiftId.startsWith('service-');
     final exchangeMode = _mode == _Mode.exchange;
-    final targets = state.exchangeTargets(sameServiceOnly: exchangeMode && sourceIsService);
+    final rawTargets = state.exchangeTargets(
+      sameServiceOnly: exchangeMode && sourceIsService,
+    );
+    final targets = rawTargets.where((contact) {
+      final targetUser = state.users
+          .where((u) => u.id == contact.id || u.phone == contact.phone)
+          .firstOrNull;
+      return !InternPromotions.crossYearBlocked(me, targetUser);
+    }).toList();
     final search = _normalizeDoctorSearch(_doctorSearch);
     final filteredTargets = search.isEmpty
         ? targets
@@ -79,6 +90,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
           }).toList();
     final selectedTargetEntryId =
         _targetEntryId != null && targetEntries.any((e) => e.id == _targetEntryId) ? _targetEntryId : null;
+    final promotionLabel = InternPromotions.labelFor(me);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -89,14 +101,73 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
           children: [
             Text('Transfert / échange de garde', style: Theme.of(context).textTheme.displaySmall),
             const SizedBox(height: AppSpace.sm),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
-              decoration: BoxDecoration(color: shift.color, borderRadius: AppRadius.smR),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(shift.icon, size: 15, color: shift.textColor),
-                const SizedBox(width: AppSpace.xs),
-                Text('$dateLabel · ${shift.label}', style: TextStyle(fontSize: 12.5, color: shift.textColor, fontWeight: FontWeight.w700)),
-              ]),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+                  decoration: BoxDecoration(color: shift.color, borderRadius: AppRadius.smR),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(shift.icon, size: 15, color: shift.textColor),
+                    const SizedBox(width: AppSpace.xs),
+                    Text('$dateLabel · ${shift.label}', style: TextStyle(fontSize: 12.5, color: shift.textColor, fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+                if (promotionLabel != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandSoft,
+                      borderRadius: AppRadius.pillR,
+                      border: Border.all(color: AppColors.brand.withOpacity(0.18)),
+                    ),
+                    child: Text(
+                      promotionLabel,
+                      style: const TextStyle(
+                        color: AppColors.brandDark,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AnnouncementsScreen(
+                          initialEntryId: widget.entry.id,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.forum_rounded, size: 18),
+                    label: const Text('Fil public'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AnnouncementsScreen(
+                          initialEntryId: widget.entry.id,
+                          autoOpenComposer: true,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.campaign_rounded, size: 18),
+                    label: const Text('Publier'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpace.lg),
             SegmentedButton<_Mode>(
@@ -114,10 +185,10 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const SizedBox(height: AppSpace.sm),
             _RuleNotice(
               text: _mode == _Mode.transfer
-                  ? 'Transfert : vous donnez cette garde à un collègue du même hôpital. Il doit accepter, puis l’admin valide.'
+                  ? 'Transfert : vous donnez cette garde à un collègue du même hôpital. Il doit accepter, puis l’admin valide. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas se transférer de garde entre elles.'
                   : sourceIsService
-                      ? 'Échange Service : uniquement avec un médecin de votre service. Si les deux gardes sont des gardes de Service, l’échange est appliqué dès l’acceptation du collègue, sans validation admin. Si une garde Urgences intervient, l’admin doit valider.'
-                      : 'Échange Urgences : possible avec tout médecin du même hôpital et validation admin obligatoire. Une garde de Service ne peut être choisie que si le médecin appartient au même service que vous.',
+                      ? 'Échange Service : uniquement avec un médecin de votre service. Si les deux gardes sont des gardes de Service, l’échange est appliqué dès l’acceptation du collègue, sans validation admin. Première année (Promo 7) et deuxième année (Promo 6) restent séparées.'
+                      : 'Échange Urgences : possible avec un médecin du même hôpital et de la même promotion d’internat. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas échanger entre elles. Validation admin obligatoire.',
               icon: _mode == _Mode.transfer
                   ? Icons.arrow_forward_rounded
                   : sourceIsService
@@ -126,7 +197,12 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             ),
             const SizedBox(height: AppSpace.lg),
             if (targets.isEmpty)
-              Text('Aucun autre médecin inscrit dans votre établissement.', style: Theme.of(context).textTheme.bodyMedium)
+              Text(
+                rawTargets.isNotEmpty
+                    ? 'Aucun médecin compatible avec votre promotion pour cette demande.'
+                    : 'Aucun autre médecin inscrit dans votre établissement.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
             else ...[
               TextField(
                 controller: _doctorSearchController,
@@ -255,7 +331,8 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                         }
                         if (!context.mounted) return;
                         if (err != null) {
-                          setState(() => _error = err);
+                          setState(() => _error = err;
+                          );
                           return;
                         }
                         Navigator.of(context).pop();
