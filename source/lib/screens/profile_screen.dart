@@ -6,6 +6,7 @@ import '../models/app_user.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import 'admin_disciplinary_assignment_screen.dart';
 import 'admin_password_reset_screen.dart';
 import 'admin_screen.dart';
 import 'astreinte_screen.dart';
@@ -240,6 +241,18 @@ class _ProfileContent extends StatelessWidget {
                 subtitle: 'Comptes, plannings et validations',
                 color: AppColors.navy,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminScreen())),
+              ),
+              _ProfileMenuItem(
+                icon: Icons.gavel_rounded,
+                title: 'Gardes disciplinaires',
+                subtitle: 'Attribuer une ou plusieurs gardes à un médecin',
+                color: AppColors.danger,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminDisciplinaryAssignmentScreen(),
+                  ),
+                ),
               ),
               _ProfileMenuItem(
                 icon: Icons.manage_accounts_rounded,
