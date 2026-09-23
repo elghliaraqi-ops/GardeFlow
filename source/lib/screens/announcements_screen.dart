@@ -279,7 +279,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
     final mine = _myPublishableEntries(state)
         .where((e) => e.id != targetEntry.id)
-        .where((e) => !crossYear || e.shiftId.startsWith('service-'))
         .toList();
     if (mine.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
