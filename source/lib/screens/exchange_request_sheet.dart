@@ -58,6 +58,7 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
     final me = state.currentUser;
     final shift = ShiftCatalog.byId(widget.entry.shiftId);
     final sourceIsService = widget.entry.shiftId.startsWith('service-');
+    final sourceIsUrgence = widget.entry.shiftId.startsWith('urg-');
     final exchangeMode = _mode == _Mode.exchange;
     final rawTargets = state.exchangeTargets(
       sameServiceOnly: exchangeMode && sourceIsService,
@@ -66,7 +67,10 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
       final targetUser = state.users
           .where((u) => u.id == contact.id || u.phone == contact.phone)
           .firstOrNull;
-      return !InternPromotions.crossYearBlocked(me, targetUser);
+      if (sourceIsUrgence && InternPromotions.crossYearBlocked(me, targetUser)) {
+        return false;
+      }
+      return true;
     }).toList();
     final search = _normalizeDoctorSearch(_doctorSearch);
     final filteredTargets = search.isEmpty
@@ -77,6 +81,13 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
           }).toList();
     final dateLabel = DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.parse(widget.dateStr));
     final selectedDoctor = _doctorId == null ? null : targets.where((c) => c.id == _doctorId).firstOrNull;
+    final selectedDoctorUser = selectedDoctor == null
+        ? null
+        : state.users
+            .where((u) => u.id == selectedDoctor.id || u.phone == selectedDoctor.phone)
+            .firstOrNull;
+    final crossYearWithSelected =
+        InternPromotions.crossYearBlocked(me, selectedDoctorUser);
     final allTargetEntries = selectedDoctor == null
         ? <PlanningEntry>[]
         : state.exchangeableEntriesFor(selectedDoctor.id, excludingDate: widget.dateStr);
@@ -85,7 +96,9 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
         : allTargetEntries.where((e) {
             if (!exchangeMode) return true;
             final targetIsService = e.shiftId.startsWith('service-');
+            final targetIsUrgence = e.shiftId.startsWith('urg-');
             if (targetIsService && selectedDoctor.service != state.currentUser?.service) return false;
+            if (crossYearWithSelected && (sourceIsUrgence || targetIsUrgence)) return false;
             return true;
           }).toList();
     final selectedTargetEntryId =
@@ -119,14 +132,14 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.brandSoft,
+                      color: AppColors.card,
                       borderRadius: AppRadius.pillR,
-                      border: Border.all(color: AppColors.brand.withOpacity(0.18)),
+                      border: Border.all(color: AppColors.brandBright, width: 1.2),
                     ),
                     child: Text(
                       promotionLabel,
                       style: TextStyle(
-                        color: AppColors.brandDark,
+                        color: AppColors.ink,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w900,
                       ),
@@ -185,10 +198,12 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const SizedBox(height: AppSpace.sm),
             _RuleNotice(
               text: _mode == _Mode.transfer
-                  ? 'Transfert : vous donnez cette garde à un collègue du même hôpital. Il doit accepter, puis l’admin valide. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas se transférer de garde entre elles.'
+                  ? sourceIsUrgence
+                      ? 'Transfert Urgences : même hôpital et même promotion d’internat. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas se transférer une garde d’Urgences. Le destinataire accepte, puis l’admin valide.'
+                      : 'Transfert Service : même hôpital. Les transferts de garde de Service restent possibles entre Promo 6 et Promo 7. Le destinataire accepte, puis l’admin valide.'
                   : sourceIsService
-                      ? 'Échange Service : uniquement avec un médecin de votre service. Si les deux gardes sont des gardes de Service, l’échange est appliqué dès l’acceptation du collègue, sans validation admin. Première année (Promo 7) et deuxième année (Promo 6) restent séparées.'
-                      : 'Échange Urgences : possible avec un médecin du même hôpital et de la même promotion d’internat. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas échanger entre elles. Validation admin obligatoire.',
+                      ? 'Échange Service : uniquement avec un médecin de votre service. Les échanges de Service restent possibles entre Promo 6 et Promo 7. Si les deux gardes sont de Service, l’échange est appliqué dès l’acceptation du collègue, sans validation admin.'
+                      : 'Échange Urgences : même hôpital et même promotion d’internat. Première année (Promo 7) et deuxième année (Promo 6) ne peuvent pas échanger une garde d’Urgences entre elles. Validation admin obligatoire.',
               icon: _mode == _Mode.transfer
                   ? Icons.arrow_forward_rounded
                   : sourceIsService
@@ -198,9 +213,9 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const SizedBox(height: AppSpace.lg),
             if (targets.isEmpty)
               Text(
-                rawTargets.isNotEmpty
-                    ? 'Aucun médecin compatible avec votre promotion pour cette demande.'
-                    : 'Aucun autre médecin inscrit dans votre établissement.',
+                rawTargets.isNotEmpty && sourceIsUrgence
+                    ? 'Aucun médecin compatible avec votre promotion pour cette garde d’Urgences.'
+                    : 'Aucun autre médecin disponible dans votre établissement.',
                 style: Theme.of(context).textTheme.bodyMedium,
               )
             else ...[
@@ -313,9 +328,15 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                         if (_mode == _Mode.transfer) {
                           err = await state.createTransferRequest(widget.dateStr, widget.entry, doctor);
                         } else {
+                          final doctorUser = state.users
+                              .where((u) => u.id == doctor.id || u.phone == doctor.phone)
+                              .firstOrNull;
+                          final crossYear = InternPromotions.crossYearBlocked(me, doctorUser);
                           final available = state.exchangeableEntriesFor(doctor.id, excludingDate: widget.dateStr).where((e) {
                             final targetIsService = e.shiftId.startsWith('service-');
+                            final targetIsUrgence = e.shiftId.startsWith('urg-');
                             if (targetIsService && doctor.service != state.currentUser?.service) return false;
+                            if (crossYear && (sourceIsUrgence || targetIsUrgence)) return false;
                             return true;
                           }).toList();
                           if (available.isEmpty) {

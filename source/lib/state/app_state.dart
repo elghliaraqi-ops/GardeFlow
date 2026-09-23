@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../config/business_rules.dart';
 import '../data/seed_data.dart';
 import '../data/hospitals.dart';
+import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
 import '../models/directory_contact.dart';
 import '../models/exchange_request.dart';
@@ -1360,6 +1361,8 @@ class AppState extends ChangeNotifier {
     if(entry.dateStr!=date)return 'La date de la garde est incohérente.';
     if(_guardHasStarted(entry))return 'Une garde commencée ou passée ne peut plus être transférée.';
     if(BusinessRules.sameHospitalRequired&&target.hospital!=me.hospital)return 'Les transferts sont limités au même établissement.';
+    final targetUser=_users.where((u)=>u.id==target.id||u.phone==target.phone).firstOrNull;
+    if(entry.shiftId.startsWith('urg-')&&InternPromotions.crossYearBlocked(me,targetUser))return 'Les transferts de gardes d’Urgences sont interdits entre première année (Promo 7) et deuxième année (Promo 6).';
     if(!isUserPlanningMonthApproved(target.id,date))return 'Le calendrier du destinataire doit aussi être validé pour ce mois.';
     if(_isEntryLocked(entry.id))return 'Une demande est déjà en cours pour cette garde.';
     if(_planning.any((e)=>e.dateStr==date&&(e.ownerId==target.id||e.ownerPhone==target.phone)))return '${target.name} a déjà une affectation ce jour-là.';
@@ -1386,6 +1389,12 @@ class AppState extends ChangeNotifier {
     final targetIsService=targetEntry.shiftId.startsWith('service-');
     if((sourceIsService||targetIsService)&&target.service!=me.service){
       return 'Toute garde de Service ne peut être échangée qu’entre médecins du même service.';
+    }
+    final sourceIsUrgence=entry.shiftId.startsWith('urg-');
+    final targetIsUrgence=targetEntry.shiftId.startsWith('urg-');
+    final targetUser=_users.where((u)=>u.id==target.id||u.phone==target.phone).firstOrNull;
+    if((sourceIsUrgence||targetIsUrgence)&&InternPromotions.crossYearBlocked(me,targetUser)){
+      return 'Les échanges impliquant une garde d’Urgences sont interdits entre première année (Promo 7) et deuxième année (Promo 6).';
     }
     if(targetEntry.ownerId!=target.id&&targetEntry.ownerPhone!=target.phone)return 'La garde choisie n’appartient plus au médecin destinataire.';
     if(!isUserPlanningMonthApproved(me.id,targetEntry.dateStr)||!isUserPlanningMonthApproved(target.id,entry.dateStr))return 'Les mois de destination des deux médecins doivent aussi être validés.';
@@ -1434,6 +1443,8 @@ class AppState extends ChangeNotifier {
     final toUser=_users.where((u)=>u.id==ex.toId||u.phone==ex.toPhone).firstOrNull;
     if(fromUser==null||toUser==null)return 'Un des médecins participant à l’échange est introuvable.';
     if(BusinessRules.sameHospitalRequired&&fromUser.hospital!=toUser.hospital)return 'Les échanges sont limités aux médecins du même établissement.';
+    final involvesUrgence=source.shiftId.startsWith('urg-')||target.shiftId.startsWith('urg-');
+    if(involvesUrgence&&InternPromotions.crossYearBlocked(fromUser,toUser))return 'Les échanges impliquant une garde d’Urgences sont interdits entre première année (Promo 7) et deuxième année (Promo 6).';
     final involvesService=source.shiftId.startsWith('service-')||target.shiftId.startsWith('service-');
     if(involvesService&&fromUser.service!=toUser.service)return 'Toute garde de Service ne peut être échangée qu’entre médecins du même service.';
     final conflictTo=_planning.where((e)=>e.dateStr==source.dateStr&&(e.ownerId==ex.toId||e.ownerPhone==ex.toPhone)).firstOrNull;

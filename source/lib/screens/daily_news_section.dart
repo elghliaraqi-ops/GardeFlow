@@ -15,6 +15,7 @@ class DailyNewsSection extends StatefulWidget {
 class _DailyNewsSectionState extends State<DailyNewsSection> {
   late Future<List<_DailyNewsItem>> _future;
   bool _refreshing = false;
+  String? _selectedCategory;
 
   static const _profiles = <_NewsProfile>[
     _NewsProfile('AMI UM6', 'https://www.instagram.com/ami_um6/'),
@@ -228,39 +229,80 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              SizedBox(height: 16),
-              for (final category in _categoryOrder)
-                if (items.any((item) => _categoryFor(item) == category)) ...[
-                  Container(
-                    width: double.infinity,
-                    margin: EdgeInsets.only(top: 4, bottom: 10),
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                    decoration: BoxDecoration(
-                      color: AppColors.brandSoft,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.line),
-                    ),
-                    child: Text(
-                      category,
-                      style: TextStyle(
-                        fontFamily: 'SpaceGrotesk',
-                        color: AppColors.ink,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
+              SizedBox(height: 14),
+              Builder(
+                builder: (context) {
+                  final availableCategories = _categoryOrder
+                      .where((category) =>
+                          items.any((item) => _categoryFor(item) == category))
+                      .toList(growable: false);
+                  if (availableCategories.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final activeCategory = _selectedCategory != null &&
+                          availableCategories.contains(_selectedCategory)
+                      ? _selectedCategory!
+                      : availableCategories.first;
+                  final visibleItems = items
+                      .where((item) => _categoryFor(item) == activeCategory)
+                      .toList(growable: false);
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          children: [
+                            for (final category in availableCategories) ...[
+                              OutlinedButton(
+                                onPressed: () =>
+                                    setState(() => _selectedCategory = category),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: activeCategory == category
+                                      ? AppColors.brand
+                                      : AppColors.card,
+                                  foregroundColor: activeCategory == category
+                                      ? Colors.white
+                                      : AppColors.ink,
+                                  side: BorderSide(
+                                    color: activeCategory == category
+                                        ? AppColors.brandBright
+                                        : AppColors.line,
+                                    width: 1.2,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 11,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                child: Text(category),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                  for (final item in items.where(
-                    (item) => _categoryFor(item) == category,
-                  )) ...[
-                    _NewsDetailCard(
-                      item: item,
-                      onTap: () => _open(item.permalink),
-                    ),
-                    SizedBox(height: 12),
-                  ],
-                  SizedBox(height: 8),
-                ],
+                      const SizedBox(height: 14),
+                      for (final item in visibleItems) ...[
+                        _NewsDetailCard(
+                          item: item,
+                          onTap: () => _open(item.permalink),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                  );
+                },
+              ),
             ],
           ],
         );

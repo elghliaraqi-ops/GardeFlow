@@ -805,10 +805,11 @@ class _DashboardView extends StatelessWidget {
               vertical: 8,
             ),
             decoration: BoxDecoration(
-              color: AppColors.brandSoft,
+              color: AppColors.card,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: AppColors.brand.withOpacity(0.12),
+                color: AppColors.brandBright,
+                width: 1.2,
               ),
             ),
             child: Row(
@@ -817,7 +818,7 @@ class _DashboardView extends StatelessWidget {
                 Text(
                   'Actualités plus bas',
                   style: TextStyle(
-                    color: AppColors.brandDark,
+                    color: AppColors.ink,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -825,7 +826,7 @@ class _DashboardView extends StatelessWidget {
                 SizedBox(width: 6),
                 Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.brand,
+                  color: AppColors.brandBright,
                   size: 20,
                 ),
               ],
@@ -1394,18 +1395,18 @@ class _PlanningView extends StatelessWidget {
                   height: 40,
                   padding: EdgeInsets.symmetric(horizontal: 13),
                   decoration: BoxDecoration(
-                    color: AppColors.brandSoft,
+                    color: AppColors.card,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.brand.withOpacity(0.18)),
+                    border: Border.all(color: AppColors.brandBright, width: 1.2),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.school_rounded, size: 17, color: AppColors.brandDark),
+                      Icon(Icons.school_rounded, size: 17, color: AppColors.brandBright),
                       SizedBox(width: 7),
                       Text(
                         promotionLabel,
-                        style: TextStyle(color: AppColors.brandDark, fontSize: 11.5, fontWeight: FontWeight.w900),
+                        style: TextStyle(color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w900),
                       ),
                     ],
                   ),
@@ -2232,8 +2233,8 @@ class _MonthBar extends StatelessWidget {
       case PlanningMonthStatus.approved:
         statusLabel = 'Validé';
         statusIcon = Icons.verified_rounded;
-        statusBg = AppColors.conge.withOpacity(0.22);
-        statusFg = AppColors.congeText;
+        statusBg = AppColors.success;
+        statusFg = Colors.white;
         break;
       case PlanningMonthStatus.draft:
       case PlanningMonthStatus.submitted:

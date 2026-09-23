@@ -170,7 +170,9 @@ Deno.serve(async (req) => {
         .eq('account_status', 'active')
         .eq('hospital', announcement.hospital);
       const promo = Number(announcement.promotion_number);
-      if (promo === 6 || promo === 7) {
+      const isServiceAnnouncement = typeof announcement.shift_id === 'string'
+        && announcement.shift_id.startsWith('service-');
+      if (!isServiceAnnouncement && (promo === 6 || promo === 7)) {
         cohortQuery = cohortQuery.eq('promotion_number', promo);
       }
       const { data: cohort, error: cohortError } = await cohortQuery;

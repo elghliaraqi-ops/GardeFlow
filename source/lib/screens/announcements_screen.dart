@@ -137,7 +137,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  'L’annonce est visible dans le fil. Les médecins de votre hôpital et de votre promotion reçoivent une notification.',
+                  'L’annonce est visible dans le fil. Pour une garde d’Urgences, la notification reste limitée à votre promotion ; pour une garde de Service, Promo 6 et Promo 7 peuvent répondre.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
@@ -260,10 +260,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       );
       return;
     }
-    if (InternPromotions.crossYearBlocked(me, author)) {
+    final crossYear = InternPromotions.crossYearBlocked(me, author);
+    final announcementIsUrgence = targetEntry.shiftId.startsWith('urg-');
+    if (crossYear && announcementIsUrgence) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Échanges impossibles entre première et deuxième année.'),
+          content: Text('Les échanges de gardes d’Urgences sont impossibles entre première et deuxième année.'),
         ),
       );
       return;
@@ -277,6 +279,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
 
     final mine = _myPublishableEntries(state)
         .where((e) => e.id != targetEntry.id)
+        .where((e) => !crossYear || e.shiftId.startsWith('service-'))
         .toList();
     if (mine.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -450,7 +453,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                             Text(
                               myPromotion == null
                                   ? 'Publiez une garde et trouvez un collègue pour l’échanger.'
-                                  : '$myPromotion · échanges uniquement dans la même promotion.',
+                                  : '$myPromotion · Urgences : même promo · Service : interpromo autorisé.',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
@@ -498,7 +501,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final me = state.currentUser;
     if (me == null || me.id == item.authorId) return false;
     final author = state.users.where((u) => u.id == item.authorId).firstOrNull;
-    if (author != null && InternPromotions.crossYearBlocked(me, author)) return true;
+    if (author != null &&
+        item.shiftId.startsWith('urg-') &&
+        InternPromotions.crossYearBlocked(me, author)) return true;
     return me.hospital != item.hospital;
   }
 }
