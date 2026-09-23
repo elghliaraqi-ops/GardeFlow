@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../config/firebase_config.dart';
+import '../screens/announcements_screen.dart';
 import '../screens/notifications_screen.dart';
 import 'app_navigation.dart';
 import 'local_storage_service.dart';
@@ -130,6 +131,12 @@ class PushNotificationService {
   void _open(String kind) {
     if (!_navigationReady || huimNavigatorKey.currentState == null) {
       _pendingKind = kind;
+      return;
+    }
+    if (kind == 'announcement_created') {
+      huimNavigatorKey.currentState!.push(
+        MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
+      );
       return;
     }
     final isAccountNotification =
