@@ -25,13 +25,14 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('source/lib/screens/announcements_screen.dart')
           s = p.read_text()
-          needle = ".where((e) => !crossYear || e.shiftId.startsWith('service-'))"
-          if needle not in s:
-              raise SystemExit('obsolete crossYear filter not found')
-          s = s.replace(needle, '', 1)
-          p.write_text(s)
+          pattern = r"^[ \t]*\.where\(\(e\) => !crossYear \|\| e\.shiftId\.startsWith\('service-'\)\)[ \t]*\n"
+          s2, count = re.subn(pattern, '', s, count=1, flags=re.MULTILINE)
+          if count != 1:
+              raise SystemExit('obsolete crossYear filter line not found')
+          p.write_text(s2)
           PY
           git diff --check
           ! grep -Fq "crossYear" source/lib/screens/announcements_screen.dart
