@@ -3,7 +3,7 @@ name: Finalize GardeFlow V12 source
 on:
   push:
     branches:
-      - v12-optimisee
+      - main
     paths:
       - '.github/workflows/v12-finalize-source.yml'
 
@@ -14,10 +14,9 @@ jobs:
   finalize:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout V12 branch
+      - name: Checkout promoted V12 source
         uses: actions/checkout@v5
         with:
-          ref: v12-optimisee
           fetch-depth: 0
 
       - name: Finalize source tree
@@ -62,4 +61,4 @@ jobs:
           git config user.name 'GardeFlow CI'
           git config user.email 'actions@users.noreply.github.com'
           git commit -m 'v12: finalize canonical source tree'
-          git push origin HEAD:v12-optimisee
+          git push origin HEAD:main
