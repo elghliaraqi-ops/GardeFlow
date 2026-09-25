@@ -45,7 +45,7 @@ async function googleAccessToken(sa: any): Promise<string> {
   const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(unsigned));
   const assertion = `${unsigned}.${b64url(new Uint8Array(signature))}`;
   const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth2.0:grant-type:jwt-bearer',
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
     assertion,
   });
   const res = await fetch('https://oauth2.googleapis.com/token', {
