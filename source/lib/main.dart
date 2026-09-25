@@ -25,6 +25,18 @@ Future<void> main() async {
       child: const HuimApp(),
     ),
   );
+
+  // Après le premier rendu, Android peut afficher ses propres écrans système
+  // sans perturber le splash. GardeFlow demande alors les accès indispensables
+  // au mode « Alarme » : notifications, alarmes exactes et plein écran.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      await NotificationService.instance.prepareAlarmModePermissions();
+    } catch (_) {
+      // Les services de notification restent volontairement défensifs :
+      // un refus utilisateur ne doit jamais empêcher l'ouverture de l'app.
+    }
+  });
 }
 
 class HuimApp extends StatelessWidget {
