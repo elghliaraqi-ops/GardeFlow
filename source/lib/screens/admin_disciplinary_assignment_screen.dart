@@ -159,12 +159,37 @@ class _AdminDisciplinaryAssignmentScreenState
         },
       );
 
-      await state.refreshBackend();
-      if (!mounted) return;
-
       final map = result is Map
           ? Map<String, dynamic>.from(result)
           : const <String, dynamic>{};
+      final rawEntryIds = map['entry_ids'];
+      final entryIds = rawEntryIds is List
+          ? rawEntryIds
+              .map((e) => e?.toString().trim() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList(growable: false)
+          : const <String>[];
+
+      if (entryIds.isNotEmpty) {
+        await Future.wait<void>(
+          entryIds.map((entryId) async {
+            try {
+              await SupabaseBackendService.instance.triggerPush(
+                'disciplinary_assigned',
+                entryId,
+              );
+            } catch (e) {
+              debugPrint(
+                'Push garde disciplinaire non envoyé pour $entryId: $e',
+              );
+            }
+          }),
+        );
+      }
+
+      await state.refreshBackend();
+      if (!mounted) return;
+
       final applied = (map['applied'] as num?)?.toInt() ?? _drafts.length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
