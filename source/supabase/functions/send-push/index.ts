@@ -45,7 +45,7 @@ async function googleAccessToken(sa: any): Promise<string> {
   const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(unsigned));
   const assertion = `${unsigned}.${b64url(new Uint8Array(signature))}`;
   const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    grant_type: 'urn:ietf:params:oauth2.0:grant-type:jwt-bearer',
     assertion,
   });
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -68,8 +68,6 @@ async function sendFcm(
   const message: Record<string, unknown> = { token, data };
 
   if (platform === 'android') {
-    // Data-only: Android must not display this before GardeFlow verifies
-    // recipientId in its background isolate.
     message.android = { priority: 'HIGH' };
   } else if (platform === 'ios') {
     message.apns = {
@@ -249,18 +247,57 @@ Deno.serve(async (req) => {
         const period = leave.start_date === leave.end_date ? leave.start_date : `${leave.start_date} au ${leave.end_date}`;
         body = `${leave.owner_name} a annulé sa demande (${period}).`;
       } else throw new Error('Type de push inconnu');
+    } else if (kind === 'disciplinary_assigned') {
+      if (caller.role !== 'admin') throw new Error('Action non autorisée');
+      const { data: entry, error } = await admin.from('planning_entries')
+        .select('*').eq('id', resourceId).single();
+      if (error || !entry || !entry.is_disciplinary || entry.deleted_at) {
+        throw new Error('Garde disciplinaire introuvable');
+      }
+      const { data: audit } = await admin.from('audit_log')
+        .select('reason,actor_id')
+        .eq('action', 'planning.disciplinary_assigned')
+        .eq('entity_id', resourceId)
+        .eq('actor_id', caller.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!audit) throw new Error('Attribution disciplinaire non vérifiée');
+      recipients = [entry.owner_id];
+      title = 'Garde disciplinaire attribuée';
+      const shiftLabels: Record<string, string> = {
+        'urg-jour': 'Urgences · Jour',
+        'urg-nuit': 'Urgences · Nuit',
+        'urg-24h': 'Urgences · 24H',
+        'service-jour': 'Service · Jour',
+        'service-nuit': 'Service · Nuit',
+        'service-24h': 'Service · 24H',
+      };
+      const reason = String(audit.reason ?? '').trim();
+      body = `Une garde disciplinaire vous a été attribuée le ${entry.date_str} (${shiftLabels[entry.shift_id] ?? entry.shift_id}). Motif : ${reason || 'non renseigné'}.`;
     } else if (kind === 'planning_admin_deleted') {
       if (caller.role !== 'admin') throw new Error('Action non autorisée');
       const { data: entry, error } = await admin.from('planning_entries').select('*').eq('id', resourceId).single();
       if (error || !entry || !entry.deleted_at) throw new Error('Affectation supprimée introuvable');
+      const { data: audit } = await admin.from('audit_log')
+        .select('reason,actor_id')
+        .eq('action', 'planning.deleted')
+        .eq('entity_id', resourceId)
+        .eq('actor_id', caller.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const reason = String(audit?.reason ?? '').trim();
       recipients = [entry.owner_id];
-      title = entry.shift_id === 'conge' ? 'Congé supprimé' : 'Garde supprimée';
+      title = entry.shift_id === 'conge'
+        ? 'Congé annulé par l’administrateur'
+        : 'Garde annulée par l’administrateur';
       if (entry.shift_id === 'conge' && entry.leave_request_id) {
         const { data: leave } = await admin.from('leave_requests').select('start_date,end_date').eq('id', entry.leave_request_id).single();
         const period = leave && leave.start_date !== leave.end_date ? `${leave.start_date} au ${leave.end_date}` : (leave?.start_date ?? entry.date_str);
-        body = `L’administrateur a supprimé votre congé (${period}).`;
+        body = `L’administrateur a annulé votre congé (${period}).${reason ? ` Motif : ${reason}.` : ''}`;
       } else {
-        body = `L’administrateur a supprimé votre garde du ${entry.date_str}.`;
+        body = `L’administrateur a annulé votre garde du ${entry.date_str}.${reason ? ` Motif : ${reason}.` : ''}`;
       }
     } else {
       throw new Error('Type de push inconnu');
