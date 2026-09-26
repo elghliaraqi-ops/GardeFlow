@@ -17,15 +17,13 @@ class DailyNewsSection extends StatefulWidget {
 class _DailyNewsSectionState extends State<DailyNewsSection> {
   late Future<List<_DailyNewsItem>> _future;
   bool _refreshing = false;
+  bool _isAdmin = false;
   String? _selectedCategory;
 
   static const _profiles = <_NewsProfile>[
     _NewsProfile('AMI UM6', 'https://www.instagram.com/ami_um6/'),
     _NewsProfile('UM6SS', 'https://www.instagram.com/um6ss/'),
-    _NewsProfile(
-      'HUIM6 Bouskoura',
-      'https://www.instagram.com/huim6bouskoura/',
-    ),
+    _NewsProfile('HUIM6 Bouskoura', 'https://www.instagram.com/huim6bouskoura/'),
     _NewsProfile('HUIM6 Rabat', 'https://www.instagram.com/huim6rabat/'),
     _NewsProfile(
       'Hôpital Cheikh Khalifa',
@@ -42,6 +40,15 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
     'Autres',
   ];
 
+  static const _sourceChoices = <_NewsSourceChoice>[
+    _NewsSourceChoice('ami_um6', 'AMI UM6'),
+    _NewsSourceChoice('huim6_bouskoura', 'HUIM6 Bouskoura'),
+    _NewsSourceChoice('hck', 'Hôpital Cheikh Khalifa'),
+    _NewsSourceChoice('huim6_rabat', 'HUIM6 Rabat'),
+    _NewsSourceChoice('um6ss', 'UM6SS'),
+    _NewsSourceChoice('other', 'Autres'),
+  ];
+
   static String _categoryFor(_DailyNewsItem item) {
     final source = '${item.sourceKey} ${item.displayName}'.toLowerCase();
 
@@ -50,21 +57,15 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
         source.contains('amium6')) {
       return 'AMIUM6';
     }
-    if (source.contains('bouskoura')) {
-      return 'HUIM6 de Bouskoura';
-    }
+    if (source.contains('bouskoura')) return 'HUIM6 de Bouskoura';
     if (source.contains('huick') ||
         source.contains('cheikh khalifa') ||
         source.contains('cheikh_khalifa') ||
         source.contains('hopital.cheikh.khalifa')) {
       return 'HUICK de Casablanca';
     }
-    if (source.contains('rabat')) {
-      return 'HUIM6 de Rabat';
-    }
-    if (source.contains('um6ss')) {
-      return 'UM6SS';
-    }
+    if (source.contains('rabat')) return 'HUIM6 de Rabat';
+    if (source.contains('um6ss')) return 'UM6SS';
     return 'Autres';
   }
 
@@ -72,6 +73,17 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
   void initState() {
     super.initState();
     _future = _loadNews();
+    _loadAdminState();
+  }
+
+  Future<void> _loadAdminState() async {
+    try {
+      final result = await Supabase.instance.client.rpc('is_admin');
+      if (!mounted) return;
+      setState(() => _isAdmin = result == true);
+    } catch (_) {
+      // Le fil reste lisible même si le statut admin ne peut pas être chargé.
+    }
   }
 
   Future<List<_DailyNewsItem>> _loadNews() async {
@@ -81,18 +93,18 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
           'external_id,source_key,username,display_name,caption,media_type,media_url,cached_media_url,thumbnail_url,permalink,posted_at',
         )
         .order('posted_at', ascending: false)
-        .limit(40);
+        .limit(100);
 
     final rows = List<Map<String, dynamic>>.from(response as List);
-    final instagramRows = rows.where((row) {
-      final mediaType = (row['media_type'] ?? '').toString().toUpperCase();
-      final externalId = (row['external_id'] ?? '').toString();
-      return mediaType != 'WEB' && !externalId.startsWith('web-');
-    }).toList();
 
-    // L'ordre du flux horizontal suit désormais strictement la date de
-    // publication : aucune source n'est prioritaire.
-    return instagramRows.take(12).map(_DailyNewsItem.fromMap).toList();
+    // Source-agnostic by design: Instagram API, publications manuelles,
+    // sites/RSS futurs et anciens éléments du cache utilisent le même flux.
+    return rows.map(_DailyNewsItem.fromMap).toList(growable: false);
+  }
+
+  Future<void> _reloadCacheOnly() async {
+    if (!mounted) return;
+    setState(() => _future = _loadNews());
   }
 
   Future<void> _reload() async {
@@ -100,16 +112,12 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
     setState(() => _refreshing = true);
 
     try {
-      // Déclenche une vraie synchronisation Instagram côté serveur.
-      // La fonction SQL est sécurisée et ne révèle jamais le token Meta.
+      // Instagram reste une source optionnelle. Une panne Meta ne bloque plus
+      // le rechargement du cache universel daily_news_posts.
       await Supabase.instance.client.rpc('request_daily_news_refresh');
-
-      // pg_net exécute la synchronisation en arrière-plan. On laisse le temps
-      // au flux Instagram de se mettre à jour avant de relire la table.
-      await Future<void>.delayed(const Duration(seconds: 4));
+      await Future<void>.delayed(const Duration(seconds: 2));
     } catch (_) {
-      // Même si la synchronisation distante échoue momentanément,
-      // on recharge le cache Instagram déjà disponible.
+      // On continue immédiatement avec le cache et les publications manuelles.
     }
 
     if (!mounted) return;
@@ -121,8 +129,275 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
 
   Future<void> _open(String url) async {
     final uri = Uri.tryParse(url);
-    if (uri == null) return;
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _showPublishSheet() async {
+    if (!_isAdmin) return;
+
+    String sourceKey = _sourceChoices.first.key;
+    final displayNameController = TextEditingController(
+      text: _sourceChoices.first.label,
+    );
+    final captionController = TextEditingController();
+    final permalinkController = TextEditingController();
+    final mediaUrlController = TextEditingController();
+    bool submitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> publish() async {
+              final caption = captionController.text.trim();
+              final permalink = permalinkController.text.trim();
+              final mediaUrl = mediaUrlController.text.trim();
+              final displayName = displayNameController.text.trim();
+              final link = Uri.tryParse(permalink);
+              final image = mediaUrl.isEmpty ? null : Uri.tryParse(mediaUrl);
+
+              if (caption.isEmpty ||
+                  link == null ||
+                  !(link.scheme == 'http' || link.scheme == 'https')) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Ajoute un texte et un lien http(s) valide.'),
+                  ),
+                );
+                return;
+              }
+              if (mediaUrl.isNotEmpty &&
+                  (image == null ||
+                      !(image.scheme == 'http' || image.scheme == 'https'))) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('L’URL de l’image doit être un lien http(s).'),
+                  ),
+                );
+                return;
+              }
+
+              setSheetState(() => submitting = true);
+              try {
+                await Supabase.instance.client.rpc(
+                  'admin_publish_daily_news',
+                  params: {
+                    'p_source_key': sourceKey,
+                    'p_display_name': displayName,
+                    'p_caption': caption,
+                    'p_permalink': permalink,
+                    'p_media_url': mediaUrl.isEmpty ? null : mediaUrl,
+                    'p_posted_at': DateTime.now().toUtc().toIso8601String(),
+                  },
+                );
+
+                if (!mounted) return;
+                Navigator.of(sheetContext).pop();
+                await _reloadCacheOnly();
+                if (!mounted) return;
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(content: Text('Actualité publiée.')),
+                );
+              } catch (_) {
+                if (!mounted) return;
+                setSheetState(() => submitting = false);
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Publication impossible. Vérifie les champs.'),
+                  ),
+                );
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  18,
+                  16,
+                  18,
+                  18 + MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Publier une actualité',
+                              style: TextStyle(
+                                fontFamily: 'SpaceGrotesk',
+                                color: AppColors.ink,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: submitting
+                                ? null
+                                : () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Fonctionne sans API Instagram : colle un lien Instagram, un site ou toute autre source publique.',
+                        style: TextStyle(
+                          color: AppColors.inkSoft,
+                          fontSize: 12,
+                          height: 1.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      DropdownButtonFormField<String>(
+                        value: sourceKey,
+                        decoration: const InputDecoration(labelText: 'Catégorie'),
+                        items: _sourceChoices
+                            .map(
+                              (choice) => DropdownMenuItem<String>(
+                                value: choice.key,
+                                child: Text(choice.label),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: submitting
+                            ? null
+                            : (value) {
+                                if (value == null) return;
+                                final choice = _sourceChoices.firstWhere(
+                                  (item) => item.key == value,
+                                );
+                                setSheetState(() {
+                                  sourceKey = value;
+                                  displayNameController.text =
+                                      value == 'other' ? '' : choice.label;
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: displayNameController,
+                        enabled: !submitting,
+                        decoration: const InputDecoration(
+                          labelText: 'Nom affiché de la source',
+                          hintText: 'Ex. AMIUM6, HUIM6, UM6SS…',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: captionController,
+                        enabled: !submitting,
+                        minLines: 3,
+                        maxLines: 7,
+                        decoration: const InputDecoration(
+                          labelText: 'Texte de l’actualité',
+                          hintText: 'Titre, résumé ou légende…',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: permalinkController,
+                        enabled: !submitting,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'Lien de l’actualité',
+                          hintText: 'https://instagram.com/p/... ou https://...',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: mediaUrlController,
+                        enabled: !submitting,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'URL de l’image (facultatif)',
+                          hintText: 'https://…/image.jpg',
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: submitting ? null : publish,
+                          icon: submitting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.publish_rounded),
+                          label: Text(
+                            submitting ? 'Publication…' : 'Publier maintenant',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    displayNameController.dispose();
+    captionController.dispose();
+    permalinkController.dispose();
+    mediaUrlController.dispose();
+  }
+
+  Future<void> _deleteManualNews(_DailyNewsItem item) async {
+    if (!_isAdmin || !item.isManual) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer cette actualité ?'),
+        content: const Text(
+          'La publication manuelle sera retirée du fil pour tous les utilisateurs.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_delete_daily_news',
+        params: {'p_external_id': item.id},
+      );
+      await _reloadCacheOnly();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Suppression impossible.')),
+      );
+    }
   }
 
   @override
@@ -131,6 +406,7 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
       future: _future,
       builder: (context, snapshot) {
         final items = snapshot.data ?? const <_DailyNewsItem>[];
+        final horizontalItems = items.take(12).toList(growable: false);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,24 +426,25 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                     size: 21,
                   ),
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Actualités du jour',
-                        style: TextStyle(
-                          fontFamily: 'SpaceGrotesk',
-                          color: AppColors.ink,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.35,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Actualités du jour',
+                    style: TextStyle(
+                      fontFamily: 'SpaceGrotesk',
+                      color: AppColors.ink,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.35,
+                    ),
                   ),
                 ),
+                if (_isAdmin)
+                  IconButton(
+                    onPressed: _showPublishSheet,
+                    tooltip: 'Publier une actualité',
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                  ),
                 IconButton(
                   onPressed:
                       snapshot.connectionState == ConnectionState.waiting ||
@@ -175,33 +452,33 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                       ? null
                       : _reload,
                   tooltip: _refreshing
-                      ? 'Synchronisation Instagram…'
-                      : 'Actualiser Instagram',
+                      ? 'Actualisation…'
+                      : 'Actualiser les actualités',
                   icon: _refreshing
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 19,
                           height: 19,
                           child: CircularProgressIndicator(strokeWidth: 2.2),
                         )
-                      : Icon(Icons.refresh_rounded),
+                      : const Icon(Icons.refresh_rounded),
                 ),
               ],
             ),
-            SizedBox(height: 13),
+            const SizedBox(height: 13),
             if (snapshot.connectionState == ConnectionState.waiting &&
                 items.isEmpty)
-              _NewsLoading()
-            else if (items.isNotEmpty)
+              const _NewsLoading()
+            else if (horizontalItems.isNotEmpty)
               SizedBox(
                 height: 430,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  physics: BouncingScrollPhysics(),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => SizedBox(width: 12),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: horizontalItems.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
                   itemBuilder: (context, index) => _NewsCard(
-                    item: items[index],
-                    onTap: () => _open(items[index].permalink),
+                    item: horizontalItems[index],
+                    onTap: () => _open(horizontalItems[index].permalink),
                   ),
                 ),
               )
@@ -210,9 +487,11 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                 profiles: _profiles,
                 onOpen: _open,
                 hasError: snapshot.hasError,
+                isAdmin: _isAdmin,
+                onPublish: _showPublishSheet,
               ),
             if (items.isNotEmpty) ...[
-              SizedBox(height: 28),
+              const SizedBox(height: 28),
               Text(
                 'Fil d’actualités',
                 key: widget.verticalFeedKey,
@@ -224,16 +503,16 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                   letterSpacing: -0.3,
                 ),
               ),
-              SizedBox(height: 4),
+              const SizedBox(height: 4),
               Text(
-                'Dernières publications classées par source',
+                'Toutes les sources, classées par publication',
                 style: TextStyle(
                   color: AppColors.inkSoft,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              SizedBox(height: 14),
+              const SizedBox(height: 14),
               Builder(
                 builder: (context) {
                   final availableCategories = _categoryOrder
@@ -245,6 +524,7 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                   if (availableCategories.isEmpty) {
                     return const SizedBox.shrink();
                   }
+
                   final activeCategory =
                       _selectedCategory != null &&
                           availableCategories.contains(_selectedCategory)
@@ -304,6 +584,9 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
                         _NewsDetailCard(
                           item: item,
                           onTap: () => _open(item.permalink),
+                          onDelete: _isAdmin && item.isManual
+                              ? () => _deleteManualNews(item)
+                              : null,
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -346,7 +629,7 @@ class _NewsCard extends StatelessWidget {
                 BoxShadow(
                   color: AppColors.navy.withOpacity(0.055),
                   blurRadius: 15,
-                  offset: Offset(0, 7),
+                  offset: const Offset(0, 7),
                 ),
               ],
             ),
@@ -362,7 +645,7 @@ class _NewsCard extends StatelessWidget {
                         ? Container(
                             color: AppColors.brandSoft,
                             child: Icon(
-                              Icons.photo_camera_back_rounded,
+                              item.sourceIcon,
                               size: 38,
                               color: AppColors.brand,
                             ),
@@ -379,8 +662,9 @@ class _NewsCard extends StatelessWidget {
                                 color: AppColors.brandSoft,
                                 alignment: Alignment.center,
                                 child: Icon(
-                                  Icons.image_not_supported_outlined,
+                                  item.sourceIcon,
                                   color: AppColors.brand,
+                                  size: 34,
                                 ),
                               ),
                             ),
@@ -388,18 +672,20 @@ class _NewsCard extends StatelessWidget {
                   ),
                   Expanded(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(13, 11, 13, 12),
+                      padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
                               Icon(
-                                Icons.camera_alt_rounded,
+                                item.sourceIcon,
                                 size: 14,
-                                color: AppColors.danger,
+                                color: item.isInstagram
+                                    ? AppColors.danger
+                                    : AppColors.brand,
                               ),
-                              SizedBox(width: 5),
+                              const SizedBox(width: 5),
                               Expanded(
                                 child: Text(
                                   item.displayName,
@@ -422,7 +708,7 @@ class _NewsCard extends StatelessWidget {
                               ),
                             ],
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Expanded(
                             child: Text(
                               _cleanCaption(item.caption),
@@ -436,18 +722,18 @@ class _NewsCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          SizedBox(height: 5),
+                          const SizedBox(height: 5),
                           Row(
                             children: [
                               Text(
-                                'Voir sur Instagram',
+                                item.shortActionLabel,
                                 style: TextStyle(
                                   color: AppColors.brand,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
-                              SizedBox(width: 3),
+                              const SizedBox(width: 3),
                               Icon(
                                 Icons.open_in_new_rounded,
                                 size: 12,
@@ -496,8 +782,13 @@ class _NewsCard extends StatelessWidget {
 class _NewsDetailCard extends StatelessWidget {
   final _DailyNewsItem item;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
-  const _NewsDetailCard({required this.item, required this.onTap});
+  const _NewsDetailCard({
+    required this.item,
+    required this.onTap,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -524,7 +815,7 @@ class _NewsDetailCard extends StatelessWidget {
               BoxShadow(
                 color: AppColors.navy.withOpacity(0.045),
                 blurRadius: 16,
-                offset: Offset(0, 7),
+                offset: const Offset(0, 7),
               ),
             ],
           ),
@@ -548,15 +839,16 @@ class _NewsDetailCard extends StatelessWidget {
                           color: AppColors.brandSoft,
                           alignment: Alignment.center,
                           child: Icon(
-                            Icons.image_not_supported_outlined,
+                            item.sourceIcon,
                             color: AppColors.brand,
+                            size: 38,
                           ),
                         ),
                       ),
                     ),
                   ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(16, 14, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -570,12 +862,12 @@ class _NewsDetailCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
-                              Icons.camera_alt_rounded,
+                              item.sourceIcon,
                               color: AppColors.brand,
                               size: 15,
                             ),
                           ),
-                          SizedBox(width: 9),
+                          const SizedBox(width: 9),
                           Expanded(
                             child: Text(
                               item.displayName,
@@ -588,9 +880,9 @@ class _NewsDetailCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Container(
-                            padding: EdgeInsets.symmetric(
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 5,
                             ),
@@ -607,11 +899,23 @@ class _NewsDetailCard extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (onDelete != null) ...[
+                            const SizedBox(width: 4),
+                            IconButton(
+                              tooltip: 'Supprimer',
+                              onPressed: onDelete,
+                              icon: Icon(
+                                Icons.delete_outline_rounded,
+                                color: AppColors.danger,
+                                size: 20,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      SizedBox(height: 13),
+                      const SizedBox(height: 13),
                       Container(height: 1, color: AppColors.line),
-                      SizedBox(height: 13),
+                      const SizedBox(height: 13),
                       for (var i = 0; i < paragraphs.length; i++) ...[
                         Text(
                           i == paragraphs.length - 1 && truncated
@@ -624,27 +928,26 @@ class _NewsDetailCard extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (i != paragraphs.length - 1) SizedBox(height: 10),
+                        if (i != paragraphs.length - 1)
+                          const SizedBox(height: 10),
                       ],
-                      SizedBox(height: 14),
+                      const SizedBox(height: 14),
                       Container(
-                        padding: EdgeInsets.only(top: 11),
+                        padding: const EdgeInsets.only(top: 11),
                         decoration: BoxDecoration(
-                          border: Border(
-                            top: BorderSide(color: AppColors.line),
-                          ),
+                          border: Border(top: BorderSide(color: AppColors.line)),
                         ),
                         child: Row(
                           children: [
                             Text(
-                              'Lire la suite sur Instagram',
+                              item.longActionLabel,
                               style: TextStyle(
                                 color: AppColors.brand,
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            SizedBox(width: 5),
+                            const SizedBox(width: 5),
                             Icon(
                               Icons.arrow_outward_rounded,
                               size: 14,
@@ -725,13 +1028,15 @@ class _NewsLoading extends StatelessWidget {
           2,
           (_) => Expanded(
             child: Container(
-              margin: EdgeInsets.only(right: 10),
+              margin: const EdgeInsets.only(right: 10),
               decoration: BoxDecoration(
                 color: AppColors.card,
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(color: AppColors.line),
               ),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2.2)),
+              child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2.2),
+              ),
             ),
           ),
         ),
@@ -744,18 +1049,22 @@ class _NewsEmptyState extends StatelessWidget {
   final List<_NewsProfile> profiles;
   final Future<void> Function(String url) onOpen;
   final bool hasError;
+  final bool isAdmin;
+  final VoidCallback onPublish;
 
   const _NewsEmptyState({
     required this.profiles,
     required this.onOpen,
     required this.hasError,
+    required this.isAdmin,
+    required this.onPublish,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(15),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(22),
@@ -766,24 +1075,32 @@ class _NewsEmptyState extends StatelessWidget {
         children: [
           Text(
             hasError
-                ? 'Impossible d’actualiser le flux pour le moment.'
-                : 'Les publications Instagram officielles arrivent ici.',
+                ? 'Impossible d’actualiser les sources distantes pour le moment.'
+                : 'Aucune actualité disponible pour le moment.',
             style: TextStyle(
               color: AppColors.ink,
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
           ),
-          SizedBox(height: 5),
+          const SizedBox(height: 5),
           Text(
-            'Accès direct aux comptes Instagram officiels :',
+            'Le fil continue de fonctionner même si l’API Instagram est indisponible.',
             style: TextStyle(
               color: AppColors.inkSoft,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
           ),
-          SizedBox(height: 10),
+          if (isAdmin) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: onPublish,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Publier une actualité'),
+            ),
+          ],
+          const SizedBox(height: 12),
           Wrap(
             spacing: 7,
             runSpacing: 7,
@@ -791,9 +1108,9 @@ class _NewsEmptyState extends StatelessWidget {
               for (final profile in profiles)
                 ActionChip(
                   avatar: Icon(
-                    Icons.camera_alt_rounded,
+                    Icons.open_in_new_rounded,
                     size: 14,
-                    color: AppColors.danger,
+                    color: AppColors.brand,
                   ),
                   label: Text(profile.name),
                   onPressed: () => onOpen(profile.url),
@@ -811,6 +1128,7 @@ class _DailyNewsItem {
   final String sourceKey;
   final String displayName;
   final String? caption;
+  final String mediaType;
   final String? mediaUrl;
   final String? cachedMediaUrl;
   final String? thumbnailUrl;
@@ -822,6 +1140,7 @@ class _DailyNewsItem {
     required this.sourceKey,
     required this.displayName,
     required this.caption,
+    required this.mediaType,
     required this.mediaUrl,
     required this.cachedMediaUrl,
     required this.thumbnailUrl,
@@ -829,12 +1148,31 @@ class _DailyNewsItem {
     required this.postedAt,
   });
 
+  bool get isInstagram => permalink.toLowerCase().contains('instagram.com');
+
+  bool get isManual =>
+      mediaType.toUpperCase() == 'MANUAL' || id.startsWith('manual-');
+
+  IconData get sourceIcon {
+    if (isInstagram) return Icons.camera_alt_rounded;
+    if (mediaType.toUpperCase() == 'WEB') return Icons.language_rounded;
+    if (mediaType.toUpperCase() == 'RSS') return Icons.rss_feed_rounded;
+    return Icons.article_outlined;
+  }
+
+  String get shortActionLabel =>
+      isInstagram ? 'Voir sur Instagram' : 'Ouvrir la source';
+
+  String get longActionLabel =>
+      isInstagram ? 'Lire la suite sur Instagram' : 'Lire la source';
+
   factory _DailyNewsItem.fromMap(Map<String, dynamic> map) {
     return _DailyNewsItem(
       id: map['external_id']?.toString() ?? '',
       sourceKey: map['source_key']?.toString() ?? '',
       displayName: map['display_name']?.toString() ?? 'Actualité',
       caption: map['caption']?.toString(),
+      mediaType: map['media_type']?.toString() ?? 'IMAGE',
       mediaUrl: map['media_url']?.toString(),
       cachedMediaUrl: map['cached_media_url']?.toString(),
       thumbnailUrl: map['thumbnail_url']?.toString(),
@@ -851,4 +1189,11 @@ class _NewsProfile {
   final String url;
 
   const _NewsProfile(this.name, this.url);
+}
+
+class _NewsSourceChoice {
+  final String key;
+  final String label;
+
+  const _NewsSourceChoice(this.key, this.label);
 }
