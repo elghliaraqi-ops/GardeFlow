@@ -5,6 +5,30 @@
 revoke insert, update, delete, truncate on table public.daily_news_posts from anon, authenticated;
 grant select on table public.daily_news_posts to anon, authenticated;
 
+-- Source technique inactive : elle satisfait la FK de daily_news_posts sans
+-- être parcourue par le synchroniseur Instagram (qui ne lit que active=true).
+insert into public.daily_news_sources (
+  source_key,
+  username,
+  display_name,
+  profile_url,
+  sort_order,
+  active
+) values (
+  'other',
+  'gardeflow',
+  'Autres',
+  '',
+  999,
+  false
+)
+on conflict (source_key) do update
+set username = excluded.username,
+    display_name = excluded.display_name,
+    sort_order = excluded.sort_order,
+    active = false,
+    updated_at = now();
+
 create or replace function public.admin_publish_daily_news(
   p_source_key text,
   p_display_name text,
