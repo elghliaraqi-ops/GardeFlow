@@ -9,6 +9,7 @@ import '../theme/widgets.dart';
 import 'admin_disciplinary_assignment_screen.dart';
 import 'admin_password_reset_screen.dart';
 import 'admin_screen.dart';
+import 'application_settings_screen.dart';
 import 'astreinte_screen.dart';
 import 'auth_screen.dart';
 import 'junior_oncall_screen.dart';
@@ -78,7 +79,6 @@ class _ProfileContent extends StatelessWidget {
       physics: BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 8, 16, 120),
       children: [
-
         BlueHero(
           padding: EdgeInsets.all(20),
           child: Column(
