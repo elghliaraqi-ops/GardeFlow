@@ -31,11 +31,13 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Space
+import android.widget.TextClock
 import android.widget.TextView
 import com.gdelataillade.alarm.alarm.AlarmReceiver
 
@@ -44,6 +46,7 @@ class AlarmActivity : Activity() {{
 
     override fun onCreate(savedInstanceState: Bundle?) {{
         super.onCreate(savedInstanceState)
+
         val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
         val fullScreenEnabled = prefs.getBoolean("flutter.guard_fullscreen_alarm", true)
         if (!fullScreenEnabled) {{
@@ -51,7 +54,11 @@ class AlarmActivity : Activity() {{
             return
         }}
 
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {{
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -65,39 +72,81 @@ class AlarmActivity : Activity() {{
         }}
 
         alarmId = intent.getIntExtra("alarmId", -1)
+        enterImmersiveMode()
         renderAlarm()
     }}
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {{
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) enterImmersiveMode()
+    }}
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {{
+        // Intentionally disabled: the user must STOP or SNOOZE the alarm.
+    }}
+
+    @Suppress("DEPRECATION")
+    private fun enterImmersiveMode() {{
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }}
+
     private fun renderAlarm() {{
-        val title = intent.getStringExtra("alarmTitle")?.trim()?.takeIf {{ it.isNotEmpty() }} ?: "GARDE"
+        val title = intent.getStringExtra("alarmTitle")
+            ?.trim()
+            ?.takeIf {{ it.isNotEmpty() }}
+            ?: "Garde à venir"
         val body = intent.getStringExtra("alarmBody")?.trim().orEmpty()
         val snoozeAvailable = !intent.getStringExtra("alarmSnoozeLabel").isNullOrBlank()
-        val semantic = "$title $body".lowercase().replace("\\n", " ").replace(Regex("\\\\s+"), " ")
 
-        val is24h = semantic.contains("24h") || semantic.contains("24 h") || Regex("0?8[:h]?00.*0?8[:h]?00").containsMatchIn(semantic)
-        val isNight = !is24h && (semantic.contains("nuit") || Regex("20[:h]?00.*0?8[:h]?00").containsMatchIn(semantic))
+        val semantic = "$title $body"
+            .lowercase()
+            .replace("\\n", " ")
+            .replace(Regex("\\\\s+"), " ")
+
+        val is24h = semantic.contains("24h") ||
+            semantic.contains("24 h") ||
+            Regex("0?8[:h]?00.*0?8[:h]?00").containsMatchIn(semantic)
+        val isNight = !is24h && (
+            semantic.contains("nuit") ||
+                Regex("20[:h]?00.*0?8[:h]?00").containsMatchIn(semantic)
+            )
         val isUrgences = semantic.contains("urgence") || semantic.contains("urg-")
-        val category = if (isUrgences) "URGENCES" else "SERVICE"
-        val shiftKind = when {{ is24h -> "24H"; isNight -> "NUIT"; else -> "JOUR" }}
 
-        val dayTop = Color.rgb(78, 190, 255)
-        val dayBottom = Color.rgb(4, 119, 226)
-        val nightTop = Color.rgb(4, 15, 34)
-        val nightBottom = Color.rgb(15, 55, 103)
+        val category = if (isUrgences) "URGENCES" else "SERVICE"
+        val shiftKind = when {{
+            is24h -> "24H"
+            isNight -> "NUIT"
+            else -> "JOUR"
+        }}
+
+        val dayTop = Color.rgb(66, 183, 255)
+        val dayBottom = Color.rgb(0, 106, 214)
+        val nightTop = Color.rgb(3, 11, 27)
+        val nightBottom = Color.rgb(14, 47, 91)
         val colors = when {{
             is24h -> intArrayOf(dayTop, dayBottom, nightTop, nightBottom)
             isNight -> intArrayOf(nightTop, nightBottom)
             else -> intArrayOf(dayTop, dayBottom)
         }}
 
-        window.statusBarColor = colors.first()
-        window.navigationBarColor = colors.last()
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
 
         val root = LinearLayout(this).apply {{
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(28), dp(42), dp(28), dp(28))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, colors)
+            setPadding(dp(26), dp(34), dp(26), dp(26))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                colors
+            )
         }}
 
         root.addView(TextView(this).apply {{
@@ -106,57 +155,150 @@ class AlarmActivity : Activity() {{
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-        }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            alpha = 0.96f
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
 
-        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(24)))
+        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(14)))
+
+        root.addView(chip("ALARME DE GARDE"), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            dp(34)
+        ))
+
+        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(16)))
+
+        root.addView(TextClock(this).apply {{
+            format12Hour = "HH:mm"
+            format24Hour = "HH:mm"
+            textSize = 44f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(14)))
+
         root.addView(TextView(this).apply {{
-            text = when {{ is24h -> "☀     ☾"; isNight -> "✦   ☾   ·   ✦"; else -> "☀" }}
-            textSize = if (is24h) 48f else 60f
+            text = when {{
+                is24h -> "☀     ☾"
+                isNight -> "✦   ☾   ·   ✦"
+                else -> "☀"
+            }}
+            textSize = if (is24h) 42f else 52f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             alpha = 0.96f
-        }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
 
-        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(22)))
+        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(16)))
+
         root.addView(TextView(this).apply {{
             text = category
-            textSize = 24f
+            textSize = 22f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            letterSpacing = 0.04f
-        }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            letterSpacing = 0.05f
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
 
         root.addView(TextView(this).apply {{
             text = shiftKind
-            textSize = 62f
+            textSize = 64f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-        }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(8)))
+
+        root.addView(TextView(this).apply {{
+            text = title
+            textSize = if (title.length <= 30) 20f else 17f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            alpha = 0.98f
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
 
         if (body.isNotEmpty()) {{
-            root.addView(Space(this), LinearLayout.LayoutParams(1, dp(12)))
+            root.addView(Space(this), LinearLayout.LayoutParams(1, dp(8)))
             root.addView(TextView(this).apply {{
                 text = body
-                textSize = if (body.length <= 36) 22f else 18f
+                textSize = if (body.length <= 60) 17f else 15f
                 setTextColor(Color.WHITE)
-                typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
-                alpha = 0.94f
-            }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                alpha = 0.88f
+                maxLines = 4
+            }}, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
         }}
 
         root.addView(Space(this), LinearLayout.LayoutParams(1, 0, 1f))
+
+        root.addView(TextView(this).apply {{
+            text = "La sonnerie reste active jusqu’à votre action."
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            alpha = 0.78f
+        }}, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        root.addView(Space(this), LinearLayout.LayoutParams(1, dp(12)))
+
         if (snoozeAvailable) {{
-            root.addView(actionButton("Rappel dans…", Color.argb(235,255,255,255), Color.rgb(15,47,83)) {{
-                resolveAlarm(AlarmReceiver.ACTION_ALARM_SNOOZE)
-            }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)))
-            root.addView(Space(this), LinearLayout.LayoutParams(1, dp(11)))
+            root.addView(
+                actionButton(
+                    "RAPPEL 9 MIN",
+                    Color.argb(238, 255, 255, 255),
+                    Color.rgb(14, 44, 78)
+                ) {{
+                    resolveAlarm(AlarmReceiver.ACTION_ALARM_SNOOZE)
+                }},
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(62)
+                )
+            )
+            root.addView(Space(this), LinearLayout.LayoutParams(1, dp(10)))
         }}
-        root.addView(actionButton("Fermer", Color.argb(48,255,255,255), Color.WHITE) {{
-            resolveAlarm(AlarmReceiver.ACTION_ALARM_STOP)
-        }}, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)))
+
+        root.addView(
+            actionButton(
+                "J’AI VU — ARRÊTER",
+                Color.argb(48, 255, 255, 255),
+                Color.WHITE
+            ) {{
+                resolveAlarm(AlarmReceiver.ACTION_ALARM_STOP)
+            }},
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(62)
+            )
+        )
+
         setContentView(root)
     }}
 
@@ -170,7 +312,30 @@ class AlarmActivity : Activity() {{
         finishAndRemoveTask()
     }}
 
-    private fun actionButton(label: String, fill: Int, textColor: Int, onClick: () -> Unit): Button {{
+    private fun chip(label: String): TextView {{
+        return TextView(this).apply {{
+            text = label
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding(dp(16), 0, dp(16), 0)
+            letterSpacing = 0.08f
+            background = GradientDrawable().apply {{
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.argb(40, 255, 255, 255))
+                cornerRadius = dp(999).toFloat()
+                setStroke(dp(1), Color.argb(70, 255, 255, 255))
+            }}
+        }}
+    }}
+
+    private fun actionButton(
+        label: String,
+        fill: Int,
+        textColor: Int,
+        onClick: () -> Unit
+    ): Button {{
         return Button(this).apply {{
             text = label
             textSize = 16f
@@ -189,9 +354,11 @@ class AlarmActivity : Activity() {{
         }}
     }}
 
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 }}
 '''
+
 alarm_activity_path.write_text(kotlin, encoding="utf-8")
 
 tree = ET.parse(manifest_path)
@@ -201,30 +368,48 @@ if application is None:
     raise SystemExit("V12 AlarmActivity: <application> missing")
 
 ring_action = "com.gdelataillade.alarm.action.RING"
+
 for activity in list(application.findall("activity")):
     name = activity.get(A("name"), "")
     if name in {".AlarmActivity", f"{package_name}.AlarmActivity"}:
         application.remove(activity)
         continue
+
     for intent_filter in list(activity.findall("intent-filter")):
-        actions = [node.get(A("name"), "") for node in intent_filter.findall("action")]
+        actions = [
+            node.get(A("name"), "")
+            for node in intent_filter.findall("action")
+        ]
         if ring_action in actions:
             activity.remove(intent_filter)
 
-activity = ET.Element("activity", {
-    A("name"): ".AlarmActivity",
-    A("exported"): "false",
-    A("launchMode"): "singleInstance",
-    A("taskAffinity"): f"{package_name}.alarm",
-    A("excludeFromRecents"): "true",
-    A("showWhenLocked"): "true",
-    A("turnScreenOn"): "true",
-    A("theme"): "@android:style/Theme.Material.Light.NoActionBar",
-})
+activity = ET.Element(
+    "activity",
+    {
+        A("name"): ".AlarmActivity",
+        A("exported"): "false",
+        A("launchMode"): "singleInstance",
+        A("taskAffinity"): f"{package_name}.alarm",
+        A("excludeFromRecents"): "true",
+        A("showWhenLocked"): "true",
+        A("turnScreenOn"): "true",
+        A("theme"): "@android:style/Theme.Material.Light.NoActionBar",
+    },
+)
+
 intent_filter = ET.SubElement(activity, "intent-filter")
 ET.SubElement(intent_filter, "action", {A("name"): ring_action})
-ET.SubElement(intent_filter, "category", {A("name"): "android.intent.category.DEFAULT"})
-application.append(activity)
-tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+ET.SubElement(
+    intent_filter,
+    "category",
+    {A("name"): "android.intent.category.DEFAULT"},
+)
 
-print(f"Installed V12 dynamic AlarmActivity at {alarm_activity_path}")
+application.append(activity)
+tree.write(
+    manifest_path,
+    encoding="utf-8",
+    xml_declaration=True,
+)
+
+print(f"Installed V12 foreground AlarmActivity at {alarm_activity_path}")
