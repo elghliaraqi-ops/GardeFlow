@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - v12-optimisee
+      - alarm-reminders-v12
     paths:
       - '.github/workflows/build-android-apk.yml'
       - 'source/**'
