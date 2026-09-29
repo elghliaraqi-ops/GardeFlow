@@ -1,0 +1,70 @@
+name: One-time GardeFlow V12 visual refresh
+
+on:
+  push:
+    branches:
+      - ui-refresh-v12
+    paths:
+      - '.github/workflows/one-time-ui-refresh-v12.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v5
+        with:
+          ref: ui-refresh-v12
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Apply visual-only patch
+        run: |
+          set -euo pipefail
+          python3 ci/patch_ui_refresh_v12.py
+          dart format \
+            source/lib/services/doctor_visual_preference.dart \
+            source/lib/theme/doctor_visuals.dart \
+            source/lib/theme/widgets.dart \
+            source/lib/screens/application_settings_screen.dart \
+            source/lib/screens/profile_screen.dart \
+            source/lib/screens/home_screen.dart
+          git diff --check
+
+      - name: Validate Flutter
+        working-directory: source
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test
+          flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+          flutter build web --release
+
+      - name: Commit validated UI refresh
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            source/lib/services/doctor_visual_preference.dart \
+            source/lib/theme/doctor_visuals.dart \
+            source/lib/theme/widgets.dart \
+            source/lib/screens/application_settings_screen.dart \
+            source/lib/screens/profile_screen.dart \
+            source/lib/screens/home_screen.dart
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat(ui): add day-night hospital visuals and doctor avatars'
+          git push origin HEAD:ui-refresh-v12
