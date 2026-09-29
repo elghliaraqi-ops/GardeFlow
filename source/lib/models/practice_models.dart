@@ -21,6 +21,7 @@ class PracticeGuard {
   String get id => entry.id;
   String get shiftId => entry.shiftId;
   String get dateStr => entry.dateStr;
+  bool get isDisciplinary => entry.isDisciplinary;
 
   String get periodLabel {
     switch (shiftId) {
@@ -56,8 +57,10 @@ class PracticeGuard {
     late DateTime end;
     switch (entry.shiftId) {
       case 'urg-nuit':
-        start = DateTime(day.year, day.month, day.day, 20);
-        end = DateTime(day.year, day.month, day.day + 1, 8);
+        // Convention du planning Urgences : la tuile Nuit porte la date
+        // du matin de fin de garde. Ex. tuile 30/09 = 29/09 20h -> 30/09 08h.
+        start = DateTime(day.year, day.month, day.day - 1, 20);
+        end = DateTime(day.year, day.month, day.day, 8);
         break;
       case 'urg-24h':
         start = DateTime(day.year, day.month, day.day, 8);

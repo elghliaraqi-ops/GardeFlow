@@ -18,25 +18,77 @@ void main() {
       promotionNumber: 6,
     );
 
-    PlanningEntry entry(String shift, String date) => PlanningEntry(
-          id: '$shift-$date',
+    PlanningEntry entry(
+      String shift,
+      String date, {
+      bool isDisciplinary = false,
+    }) => PlanningEntry(
+          id: '$shift-$date${isDisciplinary ? '-disciplinary' : ''}',
           dateStr: date,
           shiftId: shift,
           ownerId: user.id,
           ownerPhone: user.phone,
           ownerName: user.fullName,
+          isDisciplinary: isDisciplinary,
         );
 
-    test('detects an overnight emergency night guard', () {
+    test('detects tonight when the night tile is dated the next morning', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-29')],
+        entries: [entry('urg-nuit', '2026-09-30')],
         user: user,
-        now: DateTime(2026, 9, 30, 2, 30),
+        now: DateTime(2026, 9, 29, 23, 3),
       );
       expect(guard, isNotNull);
       expect(guard!.periodLabel, 'Nuit');
       expect(guard.start, DateTime(2026, 9, 29, 20));
       expect(guard.end, DateTime(2026, 9, 30, 8));
+    });
+
+    test('keeps the same night guard active after midnight until 08:00', () {
+      final guard = PracticeGuard.current(
+        entries: [entry('urg-nuit', '2026-09-30')],
+        user: user,
+        now: DateTime(2026, 9, 30, 2, 30),
+      );
+      expect(guard, isNotNull);
+      expect(guard!.start, DateTime(2026, 9, 29, 20));
+      expect(guard.end, DateTime(2026, 9, 30, 8));
+    });
+
+    test('includes disciplinary emergency guards in Practice', () {
+      final guard = PracticeGuard.current(
+        entries: [
+          entry(
+            'urg-nuit',
+            '2026-09-30',
+            isDisciplinary: true,
+          ),
+        ],
+        user: user,
+        now: DateTime(2026, 9, 29, 23, 3),
+      );
+      expect(guard, isNotNull);
+      expect(guard!.isDisciplinary, isTrue);
+    });
+
+    test('night guard is inactive before 20:00 and from 08:00', () {
+      final night = entry('urg-nuit', '2026-09-30');
+      expect(
+        PracticeGuard.current(
+          entries: [night],
+          user: user,
+          now: DateTime(2026, 9, 29, 19, 59),
+        ),
+        isNull,
+      );
+      expect(
+        PracticeGuard.current(
+          entries: [night],
+          user: user,
+          now: DateTime(2026, 9, 30, 8),
+        ),
+        isNull,
+      );
     });
 
     test('ignores non emergency guards', () {
