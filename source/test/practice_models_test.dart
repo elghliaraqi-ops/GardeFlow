@@ -27,16 +27,71 @@ void main() {
           ownerName: user.fullName,
         );
 
-    test('detects an overnight emergency night guard', () {
-      final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-29')],
-        user: user,
-        now: DateTime(2026, 9, 30, 2, 30),
-      );
-      expect(guard, isNotNull);
-      expect(guard!.periodLabel, 'Nuit');
+    test('24H guard is J 08:00 to J+1 08:00 and stays attached to J', () {
+      final source = entry('urg-24h', '2026-09-29');
+      final guard = PracticeGuard.fromEntry(source)!;
+
+      expect(guard.start, DateTime(2026, 9, 29, 8));
+      expect(guard.end, DateTime(2026, 9, 30, 8));
+      expect(guard.dateStr, '2026-09-29');
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 8)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 7, 59, 59)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 8)), isFalse);
+    });
+
+    test('day guard is J 08:00 to J 20:00', () {
+      final guard = PracticeGuard.fromEntry(entry('urg-jour', '2026-09-29'))!;
+
+      expect(guard.start, DateTime(2026, 9, 29, 8));
+      expect(guard.end, DateTime(2026, 9, 29, 20));
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 8)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 19, 59, 59)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 20)), isFalse);
+    });
+
+    test('night/evening guard is J 20:00 to J+1 08:00 and stays attached to J', () {
+      final guard = PracticeGuard.fromEntry(entry('urg-nuit', '2026-09-29'))!;
+
       expect(guard.start, DateTime(2026, 9, 29, 20));
       expect(guard.end, DateTime(2026, 9, 30, 8));
+      expect(guard.dateStr, '2026-09-29');
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 19, 59, 59)), isFalse);
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 20)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 2, 30)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 7, 59, 59)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 8)), isFalse);
+    });
+
+    test('at 20:00 the day guard has ended and the evening guard has started', () {
+      final dayGuard = PracticeGuard.current(
+        entries: [entry('urg-jour', '2026-09-29')],
+        user: user,
+        now: DateTime(2026, 9, 29, 20),
+      );
+      final eveningGuard = PracticeGuard.current(
+        entries: [entry('urg-nuit', '2026-09-29')],
+        user: user,
+        now: DateTime(2026, 9, 29, 20),
+      );
+
+      expect(dayGuard, isNull);
+      expect(eveningGuard, isNotNull);
+    });
+
+    test('at 08:00 next day the previous overnight guard is finished', () {
+      final nightGuard = PracticeGuard.current(
+        entries: [entry('urg-nuit', '2026-09-29')],
+        user: user,
+        now: DateTime(2026, 9, 30, 8),
+      );
+      final fullDayGuard = PracticeGuard.current(
+        entries: [entry('urg-24h', '2026-09-29')],
+        user: user,
+        now: DateTime(2026, 9, 30, 8),
+      );
+
+      expect(nightGuard, isNull);
+      expect(fullDayGuard, isNull);
     });
 
     test('ignores non emergency guards', () {
