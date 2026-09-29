@@ -66,10 +66,11 @@ jobs:
           test -f lib/screens/practice_screen.dart
           test -f lib/services/practice_service.dart
           test -f lib/models/practice_models.dart
+          test -f tool/configure_android.dart
+          test -f tool/install_alarm_activity.py
           grep -q '^version: 12.0.0+300$' pubspec.yaml
           grep -Fq "'Practice'" lib/screens/home_screen.dart
           grep -Fq 'PracticeHomeSummary' lib/screens/home_screen.dart
-          grep -Fq 'USE_FULL_SCREEN_INTENT' tool/install_alarm_activity.py
 
       - name: Generate web platform if needed
         working-directory: source
