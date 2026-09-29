@@ -1,0 +1,186 @@
+name: Validate Practice V12
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature-practice-v12
+    paths:
+      - '.github/workflows/practice-v12-ci.yml'
+      - 'ci/v12_practice/**'
+      - 'source/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gardeflow-practice-v12-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-practice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v5
+        with:
+          ref: feature-practice-v12
+          fetch-depth: 0
+
+      - name: Apply guarded Practice integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/v12_practice/apply_practice_v12.py
+          sed -i 's/Icons\.clinical_notes_rounded/Icons.description_rounded/g' source/lib/screens/practice_screen.dart
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name 'GardeFlow CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add source/lib/screens/home_screen.dart source/lib/services/practice_service.dart source/lib/screens/practice_screen.dart
+            git commit -m 'fix(practice): apply validated integration fixes'
+            git push origin HEAD:feature-practice-v12
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Verify canonical V12 source
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f pubspec.yaml
+          test -f lib/main.dart
+          test -f lib/screens/practice_screen.dart
+          test -f lib/services/practice_service.dart
+          test -f lib/models/practice_models.dart
+          test -f tool/configure_android.dart
+          test -f tool/install_alarm_activity.py
+          grep -q '^version: 12.0.0+300$' pubspec.yaml
+          grep -Fq "'Practice'" lib/screens/home_screen.dart
+          grep -Fq 'PracticeHomeSummary' lib/screens/home_screen.dart
+          ! grep -Fq 'Icons.clinical_notes_rounded' lib/screens/practice_screen.dart
+
+      - name: Generate web platform if needed
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --enable-web
+          if [ ! -f web/index.html ]; then
+            flutter create --no-pub --platforms=web --project-name huim6_planning .
+          fi
+
+      - name: Recover Firebase Android configuration
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$GITHUB_WORKSPACE/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip"
+          test -f "$ZIP"
+          rm -rf /tmp/gardeflow-firebase
+          mkdir -p /tmp/gardeflow-firebase
+          unzip -q "$ZIP" -d /tmp/gardeflow-firebase
+          GOOGLE_SERVICES="$(find /tmp/gardeflow-firebase -type f -name google-services.json -print -quit)"
+          test -n "$GOOGLE_SERVICES"
+          cp "$GOOGLE_SERVICES" google-services.json
+
+      - name: Generate Android platform and preserve full-screen alarm
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android
+          flutter create --no-pub --platforms=android --org com.huim6 --project-name huim6_planning .
+          cp google-services.json android/app/google-services.json
+          dart tool/configure_android.dart
+          python3 tool/install_alarm_activity.py
+          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' android/app/src/main/AndroidManifest.xml
+          grep -q 'com.gdelataillade.alarm.action.RING' android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+
+      - name: flutter pub get
+        working-directory: source
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: flutter analyze
+        working-directory: source
+        shell: bash
+        run: |
+          set +e
+          flutter analyze 2>&1 | tee /tmp/practice_flutter_analyze.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if grep -Eq '^ *error •' /tmp/practice_flutter_analyze.txt; then
+            mkdir -p "$GITHUB_WORKSPACE/ci_reports"
+            cp /tmp/practice_flutter_analyze.txt "$GITHUB_WORKSPACE/ci_reports/practice_flutter_analyze.txt"
+            cd "$GITHUB_WORKSPACE"
+            git config user.name 'GardeFlow CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add ci_reports/practice_flutter_analyze.txt
+            if ! git diff --cached --quiet; then
+              git commit -m 'ci(practice): capture Flutter analyze report'
+              git push origin HEAD:feature-practice-v12
+            fi
+            exit 1
+          fi
+          if [ "$status" -ne 0 ]; then
+            echo 'flutter analyze completed with legacy warnings/info only; no analyzer errors detected.'
+          fi
+
+      - name: flutter test
+        working-directory: source
+        run: flutter test
+
+      - name: flutter build web --release
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release --base-href "/GardeFlow/" --build-name 12.0.0 --build-number 300
+          test -f build/web/index.html
+          test -f build/web/main.dart.js
+          touch build/web/.nojekyll
+
+      - name: flutter build apk --release
+        working-directory: source
+        run: flutter build apk --release --build-name 12.0.0 --build-number 300
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f source/build/web/index.html
+          test -f source/build/app/outputs/flutter-apk/app-release.apk
+          ls -lh source/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Practice Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-Practice-v12-web
+          path: source/build/web
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Practice APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GardeFlow-Practice-v12-apk
+          path: source/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

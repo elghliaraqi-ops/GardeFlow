@@ -20,6 +20,11 @@ import 'admin_screen.dart';
 import 'announcements_screen.dart';
 import 'astreinte_screen.dart';
 import 'directory_screen.dart';
+import 'practice_screen.dart';
+import 'practice_screen.dart';
+import 'practice_screen.dart';
+import 'practice_screen.dart';
+import 'practice_screen.dart';
 import 'exchange_request_sheet.dart';
 import 'junior_oncall_screen.dart';
 import 'notifications_screen.dart';
@@ -74,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             _GlobalTopBar(
-              title: ['Accueil', 'Planning', 'Annuaire', 'Astreintes'][_tab],
+              title: ['Accueil', 'Planning', 'Practice', 'Astreintes'][_tab],
               appState: appState,
               onNotifications: () => Navigator.push(
                 context,
@@ -100,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   _PlanningView(appState: appState),
-                  DirectoryScreen(embedded: true),
+                  PracticeScreen(appState: appState),
                   _AstreintesHubView(),
                 ],
               ),
@@ -305,6 +310,60 @@ class _AstreintesHubViewState extends State<_AstreintesHubView> {
                 if (senior == _showSenior) return;
                 setState(() => _showSenior = senior);
               },
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => DirectoryScreen()),
+                ),
+                borderRadius: BorderRadius.circular(16),
+                child: Ink(
+                  height: 46,
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 31,
+                        height: 31,
+                        decoration: BoxDecoration(
+                          color: AppColors.brandSoft,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.contacts_rounded,
+                          size: 18,
+                          color: AppColors.brand,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Ouvrir l’annuaire',
+                          style: TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.inkSoft,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -721,6 +780,7 @@ class _DashboardView extends StatelessWidget {
                       letterSpacing: -0.7,
                     ),
                   ),
+                  PracticeHomeSummary(appState: appState, user: me),
                   SizedBox(height: 12),
                   Row(
                     children: [
@@ -1847,9 +1907,9 @@ class _MainBottomBar extends StatelessWidget {
                   SizedBox(width: 74),
                   item(
                     2,
-                    Icons.badge_outlined,
-                    Icons.badge_rounded,
-                    'Annuaire',
+                    Icons.insights_outlined,
+                    Icons.insights_rounded,
+                    'Practice',
                   ),
                   item(
                     3,
@@ -2353,15 +2413,6 @@ class _NavRailState extends State<_NavRail> {
         () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
-        ),
-      ),
-      _NavItem(
-        Icons.badge_rounded,
-        'Annuaire',
-        AppColors.catService,
-        () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DirectoryScreen()),
         ),
       ),
       _NavItem(
