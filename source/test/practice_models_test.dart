@@ -32,78 +32,92 @@ void main() {
           isDisciplinary: isDisciplinary,
         );
 
-    test('night guard date is its start date: 29 20:00 to 30 08:00', () {
+    test('planning date is the start date for any night guard', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-29')],
+        entries: [entry('urg-nuit', '2026-10-15')],
         user: user,
-        now: DateTime(2026, 9, 29, 23, 3),
+        now: DateTime(2026, 10, 15, 23, 3),
       );
       expect(guard, isNotNull);
       expect(guard!.periodLabel, 'Nuit');
-      expect(guard.start, DateTime(2026, 9, 29, 20));
-      expect(guard.end, DateTime(2026, 9, 30, 8));
+      expect(guard.start, DateTime(2026, 10, 15, 20));
+      expect(guard.end, DateTime(2026, 10, 16, 8));
     });
 
     test('same night guard stays active after midnight until 08:00', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-29')],
+        entries: [entry('urg-nuit', '2026-10-15')],
         user: user,
-        now: DateTime(2026, 9, 30, 2, 30),
+        now: DateTime(2026, 10, 16, 2, 30),
       );
       expect(guard, isNotNull);
-      expect(guard!.start, DateTime(2026, 9, 29, 20));
-      expect(guard.end, DateTime(2026, 9, 30, 8));
+      expect(guard!.start, DateTime(2026, 10, 15, 20));
+      expect(guard.end, DateTime(2026, 10, 16, 8));
     });
 
-    test('day guard date is its start date: 29 08:00 to 29 20:00', () {
+    test('planning date is the start date for any day guard', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-jour', '2026-09-29')],
+        entries: [entry('urg-jour', '2026-11-07')],
         user: user,
-        now: DateTime(2026, 9, 29, 12),
+        now: DateTime(2026, 11, 7, 12),
       );
       expect(guard, isNotNull);
-      expect(guard!.start, DateTime(2026, 9, 29, 8));
-      expect(guard.end, DateTime(2026, 9, 29, 20));
+      expect(guard!.start, DateTime(2026, 11, 7, 8));
+      expect(guard.end, DateTime(2026, 11, 7, 20));
     });
 
-    test('24h guard date is its start date: 29 08:00 to 30 08:00', () {
+    test('planning date is the start date for any 24H guard', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-24h', '2026-09-29')],
+        entries: [entry('urg-24h', '2026-06-03')],
         user: user,
-        now: DateTime(2026, 9, 29, 23),
+        now: DateTime(2026, 6, 3, 23),
       );
       expect(guard, isNotNull);
-      expect(guard!.start, DateTime(2026, 9, 29, 8));
-      expect(guard.end, DateTime(2026, 9, 30, 8));
+      expect(guard!.start, DateTime(2026, 6, 3, 8));
+      expect(guard.end, DateTime(2026, 6, 4, 8));
+    });
+
+    test('night guard rolls correctly across month boundaries', () {
+      final guard = PracticeGuard.fromEntry(entry('urg-nuit', '2026-01-31'));
+      expect(guard, isNotNull);
+      expect(guard!.start, DateTime(2026, 1, 31, 20));
+      expect(guard.end, DateTime(2026, 2, 1, 8));
+    });
+
+    test('24H guard rolls correctly across year boundaries', () {
+      final guard = PracticeGuard.fromEntry(entry('urg-24h', '2026-12-31'));
+      expect(guard, isNotNull);
+      expect(guard!.start, DateTime(2026, 12, 31, 8));
+      expect(guard.end, DateTime(2027, 1, 1, 8));
     });
 
     test('includes disciplinary emergency guards in Practice', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-29', isDisciplinary: true)],
+        entries: [entry('urg-nuit', '2026-10-15', isDisciplinary: true)],
         user: user,
-        now: DateTime(2026, 9, 29, 23, 3),
+        now: DateTime(2026, 10, 15, 23, 3),
       );
       expect(guard, isNotNull);
       expect(guard!.isDisciplinary, isTrue);
     });
 
     test('night guard is inactive before 20:00 and from 08:00 next day', () {
-      final night = entry('urg-nuit', '2026-09-29');
+      final night = entry('urg-nuit', '2026-10-15');
       expect(
-        PracticeGuard.current(entries: [night], user: user, now: DateTime(2026, 9, 29, 19, 59)),
+        PracticeGuard.current(entries: [night], user: user, now: DateTime(2026, 10, 15, 19, 59)),
         isNull,
       );
       expect(
-        PracticeGuard.current(entries: [night], user: user, now: DateTime(2026, 9, 30, 8)),
+        PracticeGuard.current(entries: [night], user: user, now: DateTime(2026, 10, 16, 8)),
         isNull,
       );
     });
 
     test('ignores non emergency guards', () {
       final guard = PracticeGuard.current(
-        entries: [entry('service-jour', '2026-09-29')],
+        entries: [entry('service-jour', '2026-10-15')],
         user: user,
-        now: DateTime(2026, 9, 29, 10),
+        now: DateTime(2026, 10, 15, 10),
       );
       expect(guard, isNull);
     });
