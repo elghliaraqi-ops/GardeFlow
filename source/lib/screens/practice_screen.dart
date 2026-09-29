@@ -377,6 +377,7 @@ class _PracticeGuardScreenState extends State<PracticeGuardScreen> {
   bool _loadingMore = false;
   String _scope = 'guard';
   String _filter = 'all';
+  String _sort = 'recent';
   int _offset = 0;
   static const _pageSize = 50;
   bool _hasMore = false;
@@ -467,13 +468,34 @@ class _PracticeGuardScreenState extends State<PracticeGuardScreen> {
 
   List<PracticeCase> get _visible {
     final q = _search.text.trim().toLowerCase();
-    if (q.isEmpty) return _cases;
-    return _cases.where((item) {
-      return item.patientLabel.toLowerCase().contains(q) ||
-          item.displayReason.toLowerCase().contains(q) ||
-          (item.location ?? '').toLowerCase().contains(q) ||
-          (item.specialistService ?? '').toLowerCase().contains(q);
-    }).toList();
+    final rows = q.isEmpty
+        ? List<PracticeCase>.from(_cases)
+        : _cases.where((item) {
+            return item.patientLabel.toLowerCase().contains(q) ||
+                item.displayReason.toLowerCase().contains(q) ||
+                (item.location ?? '').toLowerCase().contains(q) ||
+                (item.specialistService ?? '').toLowerCase().contains(q);
+          }).toList();
+    DateTime effectiveTime(PracticeCase item) =>
+        item.arrivalTime ?? item.createdAt ?? DateTime.tryParse(item.guardDate) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    rows.sort((a, b) {
+      switch (_sort) {
+        case 'oldest':
+          return effectiveTime(a).compareTo(effectiveTime(b));
+        case 'patient':
+          return a.patientNumber.compareTo(b.patientNumber);
+        case 'arrival':
+          final aTime = a.arrivalTime;
+          final bTime = b.arrivalTime;
+          if (aTime == null && bTime == null) return a.patientNumber.compareTo(b.patientNumber);
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return aTime.compareTo(bTime);
+        default:
+          return effectiveTime(b).compareTo(effectiveTime(a));
+      }
+    });
+    return rows;
   }
 
   @override
@@ -547,6 +569,37 @@ class _PracticeGuardScreenState extends State<PracticeGuardScreen> {
                   _filterChip('hospitalized', 'Hospitalisés'),
                   _filterChip('prescription', 'Ordonnance faite'),
                 ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<String>(
+                initialValue: _sort,
+                onSelected: (value) => setState(() => _sort = value),
+                color: PracticeColors.surface,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'recent', child: Text('Plus récents')),
+                  PopupMenuItem(value: 'oldest', child: Text('Plus anciens')),
+                  PopupMenuItem(value: 'patient', child: Text('Patient #')),
+                  PopupMenuItem(value: 'arrival', child: Text('Heure d’arrivée')),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: PracticeColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: PracticeColors.line),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sort_rounded, color: PracticeColors.textSecondary, size: 17),
+                      SizedBox(width: 6),
+                      Text('Trier', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),
