@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - v12-optimisee
+      - feature-practice-v12
     paths:
       - '.github/workflows/build-web-v12.yml'
       - 'source/**'
@@ -93,13 +94,13 @@ jobs:
           retention-days: 30
 
       - name: Upload GitHub Pages artifact
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' || github.ref_name == 'feature-practice-v12'
         uses: actions/upload-pages-artifact@v4
         with:
           path: source/build/web
 
   deploy-pages:
-    if: github.ref_name == 'main'
+    if: github.ref_name == 'main' || github.ref_name == 'feature-practice-v12'
     needs: build-web
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -117,4 +118,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Manual build trigger: 2026-09-29 rollback-backup
+# Practice V12 direct GitHub Pages validation deployment.
