@@ -16,6 +16,7 @@ import '../services/push_notification_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/doctor_visuals.dart';
 import 'admin_screen.dart';
 import 'announcements_screen.dart';
 import 'astreinte_screen.dart';
@@ -262,14 +263,10 @@ class _GlobalTopBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Text(
-                    initial,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'SpaceGrotesk',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: const DoctorAvatar(
+                    size: 34,
+                    showBorder: false,
+                    showOnlineDot: true,
                   ),
                 ),
               ),
@@ -656,8 +653,8 @@ class _DashboardView extends StatelessWidget {
     final timeLabel = DateFormat('HH:mm').format(now);
 
     final heroColors = isNight
-        ? const [Color(0xFF071426), Color(0xFF123D70)]
-        : const [Color(0xFF55C2FF), Color(0xFF087FE8)];
+        ? const [Color(0xFF061A29), Color(0xFF0B6047)]
+        : const [Color(0xFF0A6846), Color(0xFF20B878)];
 
     return ListView(
       physics: BouncingScrollPhysics(),
@@ -684,6 +681,33 @@ class _DashboardView extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Opacity(
+                    opacity: isNight ? 0.72 : 0.62,
+                    child: HospitalScene(isNight: isNight),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.black.withOpacity(isNight ? 0.58 : 0.36),
+                          Colors.black.withOpacity(0.16),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               Positioned(
                 right: -8,
                 top: -14,
@@ -715,7 +739,7 @@ class _DashboardView extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontFamily: 'SpaceGrotesk',
-                      fontSize: 30,
+                      fontSize: 27,
                       height: 1.08,
                       fontWeight: FontWeight.w900,
                       letterSpacing: -0.7,

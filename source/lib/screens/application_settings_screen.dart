@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import '../services/doctor_visual_preference.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/doctor_visuals.dart';
 
 class ApplicationSettingsScreen extends StatelessWidget {
   const ApplicationSettingsScreen({super.key});
@@ -30,17 +32,10 @@ class ApplicationSettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      appBar: AppBar(
-        title: GardeFlowTitle('Réglages de l’application'),
-      ),
+      appBar: AppBar(title: GardeFlowTitle('Réglages de l’application')),
       body: ListView(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          AppSpace.md,
-          AppSpace.lg,
-          34,
-        ),
+        padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 34),
         children: [
           SectionLabel('Thème de l’application'),
           AppCard(
@@ -68,10 +63,8 @@ class ApplicationSettingsScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Choisissez l’apparence générale de GardeFlow. Le vert reste le thème par défaut.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.inkSoft,
-                              height: 1.4,
-                            ),
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AppColors.inkSoft, height: 1.4),
                       ),
                     ),
                   ],
@@ -123,6 +116,70 @@ class ApplicationSettingsScreen extends StatelessWidget {
                       ],
                     );
                   },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          SectionLabel('Médecin affiché'),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: AppColors.brandSoft,
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.person_rounded,
+                        color: AppColors.brandBright,
+                        size: 25,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Choisissez le médecin illustré qui vous représentera dans l’application.',
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AppColors.inkSoft, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                FutureBuilder<void>(
+                  future: DoctorVisualPreference.ensureLoaded(),
+                  builder: (context, _) => ValueListenableBuilder<String>(
+                    valueListenable: DoctorVisualPreference.gender,
+                    builder: (context, selectedGender, __) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: _DoctorVisualChoice(
+                              label: 'Femme',
+                              gender: 'female',
+                              selected: selectedGender == 'female',
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _DoctorVisualChoice(
+                              label: 'Homme',
+                              gender: 'male',
+                              selected: selectedGender == 'male',
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
@@ -183,6 +240,71 @@ class ApplicationSettingsScreen extends StatelessWidget {
   }
 }
 
+class _DoctorVisualChoice extends StatelessWidget {
+  final String label;
+  final String gender;
+  final bool selected;
+
+  const _DoctorVisualChoice({
+    required this.label,
+    required this.gender,
+    required this.selected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.brand.withOpacity(0.13) : AppColors.paperAlt,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => DoctorVisualPreference.setGender(gender),
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? AppColors.brandBright : AppColors.line,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              DoctorAvatar(gender: gender, size: 72),
+              const SizedBox(height: 9),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: selected
+                        ? AppColors.brandBright
+                        : AppColors.inkFaint,
+                    size: 21,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AppearanceChoice extends StatelessWidget {
   final String label;
   final String subtitle;
@@ -202,8 +324,7 @@ class _AppearanceChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedBorder =
-        value == 'white' ? AppColors.inkSoft : swatch;
+    final selectedBorder = value == 'white' ? AppColors.inkSoft : swatch;
 
     return Material(
       color: selected ? swatch.withOpacity(0.16) : AppColors.paperAlt,
@@ -212,10 +333,7 @@ class _AppearanceChoice extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 11,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -232,9 +350,7 @@ class _AppearanceChoice extends StatelessWidget {
                   color: swatch,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: value == 'white'
-                        ? const Color(0xFFCBD6D0)
-                        : swatch,
+                    color: value == 'white' ? const Color(0xFFCBD6D0) : swatch,
                     width: 1.2,
                   ),
                 ),
@@ -246,9 +362,8 @@ class _AppearanceChoice extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 1),
                     Text(

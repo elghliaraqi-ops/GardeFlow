@@ -6,6 +6,7 @@ import '../models/app_user.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/doctor_visuals.dart';
 import 'admin_disciplinary_assignment_screen.dart';
 import 'admin_password_reset_screen.dart';
 import 'admin_screen.dart';
@@ -47,9 +48,7 @@ class ProfileScreen extends StatelessWidget {
             tooltip: 'Réglages de l’application',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => ApplicationSettingsScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => ApplicationSettingsScreen()),
             ),
             icon: Icon(Icons.settings_outlined),
           ),
@@ -69,12 +68,6 @@ class _ProfileContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initials = [user.prenom, user.nom]
-        .where((part) => part.trim().isNotEmpty)
-        .map((part) => part.trim()[0].toUpperCase())
-        .take(2)
-        .join();
-
     return ListView(
       physics: BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 8, 16, 120),
@@ -86,19 +79,10 @@ class _ProfileContent extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 68,
-                    height: 68,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.white.withOpacity(0.22)),
-                    ),
-                    child: Text(
-                      initials.isEmpty ? '?' : initials,
-                      style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900),
-                    ),
+                  const DoctorAvatar(
+                    size: 72,
+                    shape: DoctorAvatarShape.roundedSquare,
+                    showOnlineDot: true,
                   ),
                   SizedBox(width: 14),
                   Expanded(
@@ -124,6 +108,7 @@ class _ProfileContent extends StatelessWidget {
                             if (user.role == UserRole.admin)
                               Pill(
                                 text: 'Admin',
+                                icon: Icons.workspace_premium_rounded,
                                 background: Colors.white,
                                 foreground: AppColors.brandDark,
                                 fontSize: 10,
@@ -135,14 +120,22 @@ class _ProfileContent extends StatelessWidget {
                           '${user.gradeLabel} · ${user.service}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.white.withOpacity(0.90), fontWeight: FontWeight.w700, fontSize: 13),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.90),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                         SizedBox(height: 3),
                         Text(
                           hospitalDisplayName(user.hospital),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.white.withOpacity(0.72), fontWeight: FontWeight.w600, fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.72),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -165,12 +158,19 @@ class _ProfileContent extends StatelessWidget {
                     Expanded(
                       child: Text(
                         user.phone,
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     Text(
                       user.roleLabel,
-                      style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 11.5, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.72),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -189,9 +189,7 @@ class _ProfileContent extends StatelessWidget {
               color: AppColors.brand,
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ApplicationSettingsScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => ApplicationSettingsScreen()),
               ),
             ),
             _ProfileMenuItem(
@@ -212,14 +210,20 @@ class _ProfileContent extends StatelessWidget {
               subtitle: 'Demandes, échanges et alertes',
               color: AppColors.warning,
               badge: appState.totalBadgeCount,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationsScreen())),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => NotificationsScreen()),
+              ),
             ),
             _ProfileMenuItem(
               icon: Icons.picture_as_pdf_rounded,
               title: 'Plannings officiels',
               subtitle: 'Consulter les PDF de garde des établissements',
               color: AppColors.urg24h,
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OfficialPlanningScreen())),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => OfficialPlanningScreen()),
+              ),
             ),
             _ProfileMenuItem(
               icon: Icons.medical_services_outlined,
@@ -240,7 +244,10 @@ class _ProfileContent extends StatelessWidget {
                 title: 'Console administrateur',
                 subtitle: 'Comptes, plannings et validations',
                 color: AppColors.navy,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AdminScreen()),
+                ),
               ),
               _ProfileMenuItem(
                 icon: Icons.gavel_rounded,
@@ -257,9 +264,13 @@ class _ProfileContent extends StatelessWidget {
               _ProfileMenuItem(
                 icon: Icons.manage_accounts_rounded,
                 title: 'Gestion des comptes',
-                subtitle: 'Réinitialiser un mot de passe ou supprimer un compte',
+                subtitle:
+                    'Réinitialiser un mot de passe ou supprimer un compte',
                 color: AppColors.cyan,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdminPasswordResetScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AdminPasswordResetScreen()),
+                ),
               ),
             ],
           ),
@@ -270,7 +281,10 @@ class _ProfileContent extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: () => _logout(context),
             icon: Icon(Icons.logout_rounded, color: AppColors.danger),
-            label: Text('Se déconnecter', style: TextStyle(color: AppColors.danger)),
+            label: Text(
+              'Se déconnecter',
+              style: TextStyle(color: AppColors.danger),
+            ),
             style: OutlinedButton.styleFrom(
               side: BorderSide(color: AppColors.danger.withOpacity(0.28)),
               backgroundColor: AppColors.card,
@@ -301,13 +315,19 @@ class _ProfileContent extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.medical_services_outlined, color: Color(0xFF7557D8)),
+                leading: const Icon(
+                  Icons.medical_services_outlined,
+                  color: Color(0xFF7557D8),
+                ),
                 title: const Text('Astreintes séniors'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.pop(ctx, 1),
               ),
               ListTile(
-                leading: const Icon(Icons.groups_2_outlined, color: Color(0xFFEF8D32)),
+                leading: const Icon(
+                  Icons.groups_2_outlined,
+                  color: Color(0xFFEF8D32),
+                ),
                 title: const Text('Astreintes juniors'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () => Navigator.pop(ctx, 2),
@@ -319,9 +339,15 @@ class _ProfileContent extends StatelessWidget {
     );
     if (!context.mounted || choice == null) return;
     if (choice == 1) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const AstreinteScreen()));
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AstreinteScreen()),
+      );
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const JuniorOnCallScreen()));
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const JuniorOnCallScreen()),
+      );
     }
   }
 }
@@ -379,7 +405,10 @@ class _ProfileMenuItem extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: color.withOpacity(0.11), borderRadius: BorderRadius.circular(13)),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.11),
+                borderRadius: BorderRadius.circular(13),
+              ),
               child: Icon(icon, color: color, size: 21),
             ),
             SizedBox(width: 12),
@@ -397,10 +426,17 @@ class _ProfileMenuItem extends StatelessWidget {
               Container(
                 margin: EdgeInsets.only(right: 7),
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: AppColors.danger, borderRadius: AppRadius.pillR),
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  borderRadius: AppRadius.pillR,
+                ),
                 child: Text(
                   badge > 99 ? '99+' : '$badge',
-                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),

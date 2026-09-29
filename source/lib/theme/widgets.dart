@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'app_theme.dart';
 
 class AppCard extends StatelessWidget {
@@ -66,9 +67,13 @@ class SoftIconButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: background ?? AppColors.brandSoft,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Color(0xFFD7E7F8)),
+            border: Border.all(color: AppColors.line),
           ),
-          child: Icon(icon, size: size * 0.48, color: foreground ?? AppColors.brand),
+          child: Icon(
+            icon,
+            size: size * 0.48,
+            color: foreground ?? AppColors.brand,
+          ),
         ),
       ),
     );
@@ -107,7 +112,14 @@ class Pill extends StatelessWidget {
             Icon(icon, size: fontSize + 3, color: foreground),
             SizedBox(width: 5),
           ],
-          Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w800, color: foreground)),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+              color: foreground,
+            ),
+          ),
         ],
       ),
     );
@@ -123,17 +135,44 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.titleMedium)),
-          if (trailing != null) trailing!,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  text,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.25,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 7),
+          Container(
+            width: 34,
+            height: 3,
+            decoration: BoxDecoration(
+              color: AppColors.brandBright,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-PreferredSizeWidget appBarOf(BuildContext context, String title, {List<Widget>? actions}) {
+PreferredSizeWidget appBarOf(
+  BuildContext context,
+  String title, {
+  List<Widget>? actions,
+}) {
   return AppBar(
     title: Text(title),
     actions: actions,
@@ -150,23 +189,21 @@ class GardeFlowTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GardeFlowLogo(size: 34),
-          SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              section,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink,
-                  ),
-            ),
-          ),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      GardeFlowLogo(size: 34),
+      SizedBox(width: 10),
+      Flexible(
+        child: Text(
+          section,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w900, color: AppColors.ink),
+        ),
+      ),
+    ],
+  );
 }
 
 class GardeFlowLogo extends StatelessWidget {
@@ -175,34 +212,65 @@ class GardeFlowLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(size * 0.24),
-        child: Image.asset(
-          'assets/branding/gardeflow_logo.png',
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          semanticLabel: 'Logo GardeFlow',
-        ),
-      );
+    borderRadius: BorderRadius.circular(size * 0.24),
+    child: Image.asset(
+      'assets/branding/gardeflow_logo.png',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      semanticLabel: 'Logo GardeFlow',
+    ),
+  );
 }
 
 class BlueHero extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  const BlueHero({super.key, required this.child, this.padding = const EdgeInsets.all(20)});
+  const BlueHero({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+  });
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0D74E6), AppColors.brandDark],
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          const Color(0xFF0E7B68),
+          AppColors.brandDark,
+          const Color(0xFF0E633B),
+        ],
+      ),
+      borderRadius: AppRadius.xlR,
+      border: Border.all(color: AppColors.brandBright.withOpacity(0.36)),
+      boxShadow: AppShadow.mid,
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Stack(
+      children: [
+        Positioned(
+          right: -24,
+          top: -20,
+          child: Icon(
+            Icons.medical_services_rounded,
+            size: 150,
+            color: Colors.white.withOpacity(0.045),
           ),
-          borderRadius: AppRadius.xlR,
-          boxShadow: AppShadow.mid,
         ),
-        child: child,
-      );
+        Positioned(
+          right: 18,
+          bottom: -26,
+          child: Icon(
+            Icons.monitor_heart_outlined,
+            size: 116,
+            color: Colors.white.withOpacity(0.055),
+          ),
+        ),
+        Padding(padding: padding, child: child),
+      ],
+    ),
+  );
 }
