@@ -153,10 +153,6 @@ class _GlobalTopBar extends StatelessWidget {
     if (user == null) return const SizedBox.shrink();
 
     final badge = appState.totalBadgeCount;
-    final rawInitial = user.nom.trim();
-    final initial = rawInitial.isEmpty
-        ? 'D'
-        : rawInitial.substring(0, 1).toUpperCase();
 
     return Container(
       height: 58,
