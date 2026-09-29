@@ -1310,7 +1310,7 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(children: [
-                  const Icon(Icons.clinical_notes_rounded, color: Colors.white, size: 17),
+                  const Icon(Icons.description_rounded, color: Colors.white, size: 17),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Text(
@@ -1786,7 +1786,7 @@ Widget _sectionLabel(String label) => Text(label, style: const TextStyle(color: 
 IconData _achievementIcon(String key) {
   switch (key) {
     case 'flag': return Icons.flag_rounded;
-    case 'clinical_notes': return Icons.clinical_notes_rounded;
+    case 'clinical_notes': return Icons.description_rounded;
     case 'verified': return Icons.verified_rounded;
     case 'groups': return Icons.groups_rounded;
     case 'calendar_month': return Icons.calendar_month_rounded;
