@@ -32,9 +32,9 @@ void main() {
           isDisciplinary: isDisciplinary,
         );
 
-    test('detects tonight when the night tile is dated the next morning', () {
+    test('night guard uses its planning date as the start date', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-30')],
+        entries: [entry('urg-nuit', '2026-09-29')],
         user: user,
         now: DateTime(2026, 9, 29, 23, 3),
       );
@@ -46,7 +46,7 @@ void main() {
 
     test('keeps the same night guard active after midnight until 08:00', () {
       final guard = PracticeGuard.current(
-        entries: [entry('urg-nuit', '2026-09-30')],
+        entries: [entry('urg-nuit', '2026-09-29')],
         user: user,
         now: DateTime(2026, 9, 30, 2, 30),
       );
@@ -60,7 +60,7 @@ void main() {
         entries: [
           entry(
             'urg-nuit',
-            '2026-09-30',
+            '2026-09-29',
             isDisciplinary: true,
           ),
         ],
@@ -72,7 +72,7 @@ void main() {
     });
 
     test('night guard is inactive before 20:00 and from 08:00', () {
-      final night = entry('urg-nuit', '2026-09-30');
+      final night = entry('urg-nuit', '2026-09-29');
       expect(
         PracticeGuard.current(
           entries: [night],
@@ -89,6 +89,24 @@ void main() {
         ),
         isNull,
       );
+    });
+
+    test('day guard on 29 runs from 08:00 to 20:00 on 29', () {
+      final guard = PracticeGuard.fromEntry(entry('urg-jour', '2026-09-29'));
+      expect(guard, isNotNull);
+      expect(guard!.start, DateTime(2026, 9, 29, 8));
+      expect(guard.end, DateTime(2026, 9, 29, 20));
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 12)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 29, 20)), isFalse);
+    });
+
+    test('24H guard on 29 runs from 29 08:00 to 30 08:00', () {
+      final guard = PracticeGuard.fromEntry(entry('urg-24h', '2026-09-29'));
+      expect(guard, isNotNull);
+      expect(guard!.start, DateTime(2026, 9, 29, 8));
+      expect(guard.end, DateTime(2026, 9, 30, 8));
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 7, 59)), isTrue);
+      expect(guard.isActiveAt(DateTime(2026, 9, 30, 8)), isFalse);
     });
 
     test('ignores non emergency guards', () {
