@@ -1,5 +1,6 @@
 import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /// Véritable alarme de réveil pour les gardes (V11.6.15).
 ///
@@ -14,6 +15,10 @@ import 'package:flutter/foundation.dart';
 class AlarmRingService {
   AlarmRingService._();
   static final AlarmRingService instance = AlarmRingService._();
+
+  static const MethodChannel _fullScreenAlarmChannel =
+      MethodChannel('gardeflow/fullscreen_alarm');
+  static const int _testAlarmId = 0x1ffffffe;
 
   bool _initialized = false;
   bool _initializing = false;
@@ -111,15 +116,20 @@ class AlarmRingService {
   }
 
   /// Sonne immédiatement jusqu’à Arrêter pour tester le réglage.
+  ///
+  /// Sur Android, le test ne dépend pas uniquement du full-screen intent du
+  /// système : GardeFlow ouvre directement l’activité native AlarmActivity via un MethodChannel
+  /// une fois l'alarme démarrée. Le full-screen intent reste inchangé pour les
+  /// vraies alarmes programmées lorsque l'application est en arrière-plan.
   Future<bool> ringTestNow({required bool vibration}) async {
     if (_isWeb) return false;
     await _ensureInitialized();
     if (!_initialized) return false;
     try {
-      return await Alarm.set(
+      final scheduled = await Alarm.set(
         alarmSettings: AlarmSettings(
-          id: 0x1ffffffe,
-          dateTime: DateTime.now().add(const Duration(seconds: 1)),
+          id: _testAlarmId,
+          dateTime: DateTime.now().add(const Duration(milliseconds: 500)),
           assetAudioPath: _customSoundAsset,
           loopAudio: true,
           vibrate: vibration,
@@ -127,6 +137,7 @@ class AlarmRingService {
           androidFullScreenIntent: true,
           androidStopAlarmOnTermination: false,
           payload: 'guard:test',
+          androidSnoozeDuration: const Duration(minutes: 9),
           volumeSettings: VolumeSettings.fade(
             volume: 1.0,
             fadeDuration: Duration(seconds: 2),
@@ -134,12 +145,37 @@ class AlarmRingService {
           ),
           notificationSettings: const NotificationSettings(
             title: 'Test alarme de garde',
-            body: 'Ceci est un test GardeFlow. Appuyez sur Arrêter pour couper la sonnerie.',
+            body: 'Ceci est un test GardeFlow. Utilisez Rappel 9 min ou Arrêter.',
             stopButton: 'Arrêter',
+            androidSnoozeButton: 'Répéter dans 9 min',
             androidStopAlarmOnDismiss: false,
           ),
         ),
       );
+
+      if (scheduled && defaultTargetPlatform == TargetPlatform.android) {
+        // L'alarme a le temps de réellement démarrer avant l'ouverture native.
+        // Ainsi les boutons STOP/SNOOZE pilotent déjà une alarme active.
+        await Future<void>.delayed(const Duration(milliseconds: 650));
+        try {
+          await _fullScreenAlarmChannel.invokeMethod<void>(
+            'openAlarmActivity',
+            const <String, Object>{
+              'alarmId': _testAlarmId,
+              'alarmTitle': 'Test alarme de garde',
+              'alarmBody':
+                  'Ceci est un test GardeFlow. Utilisez « RAPPEL 9 MIN » ou « J’AI VU — ARRÊTER ».',
+              'alarmSnoozeLabel': 'RAPPEL 9 MIN',
+              'forceFullScreen': true,
+            },
+          );
+        } catch (e) {
+          // Le full-screen intent du package alarm reste le filet de sécurité.
+          debugPrint('AlarmRingService: ouverture plein écran directe ignorée: $e');
+        }
+      }
+
+      return scheduled;
     } catch (e) {
       debugPrint('AlarmRingService: test ignoré: $e');
       return false;
