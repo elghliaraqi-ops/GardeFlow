@@ -172,7 +172,7 @@ class PracticeService {
     final uid = _authUserId;
     final remote = <PracticeCase>[];
     if (_backend.enabled && uid != null) {
-      dynamic query = _backend.client.from('practice_cases').select().eq('user_id', uid);
+      dynamic query = _backend.client.from('practice_cases').select().eq('user_id', uid).eq('is_draft', false);
       if (guardId != null) query = query.eq('guard_id', guardId);
       if (scope == 'month' || scope == 'year') {
         final now = DateTime.now();
