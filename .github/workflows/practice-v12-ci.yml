@@ -118,7 +118,25 @@ jobs:
 
       - name: flutter analyze
         working-directory: source
-        run: flutter analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze 2>&1 | tee /tmp/practice_flutter_analyze.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            mkdir -p "$GITHUB_WORKSPACE/ci_reports"
+            cp /tmp/practice_flutter_analyze.txt "$GITHUB_WORKSPACE/ci_reports/practice_flutter_analyze.txt"
+            cd "$GITHUB_WORKSPACE"
+            git config user.name 'GardeFlow CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add ci_reports/practice_flutter_analyze.txt
+            if ! git diff --cached --quiet; then
+              git commit -m 'ci(practice): capture Flutter analyze report'
+              git push origin HEAD:feature-practice-v12
+            fi
+            exit "$status"
+          fi
 
       - name: flutter test
         working-directory: source
