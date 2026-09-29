@@ -22,6 +22,7 @@ import 'astreinte_screen.dart';
 import 'directory_screen.dart';
 import 'practice_screen.dart';
 import 'practice_screen.dart';
+import 'practice_screen.dart';
 import 'exchange_request_sheet.dart';
 import 'junior_oncall_screen.dart';
 import 'notifications_screen.dart';
