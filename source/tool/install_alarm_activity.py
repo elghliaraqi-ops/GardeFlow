@@ -49,7 +49,8 @@ class AlarmActivity : Activity() {{
 
         val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
         val fullScreenEnabled = prefs.getBoolean("flutter.guard_fullscreen_alarm", true)
-        if (!fullScreenEnabled) {{
+        val forceFullScreen = intent.getBooleanExtra("forceFullScreen", false)
+        if (!forceFullScreen && !fullScreenEnabled) {{
             finish()
             return
         }}
@@ -361,6 +362,71 @@ class AlarmActivity : Activity() {{
 
 alarm_activity_path.write_text(kotlin, encoding="utf-8")
 
+# Le bouton de test Flutter doit ouvrir AlarmActivity directement lorsque
+# GardeFlow est déjà au premier plan. Cela évite que le test soit réduit à une
+# simple heads-up notification sur Android 14+.
+bridge_channel = "gardeflow/fullscreen_alarm"
+if bridge_channel not in main_text:
+    import_block = '''import android.content.Intent
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel'''
+    package_match = re.search(r"^package\s+[\w.]+\s*$", main_text, re.MULTILINE)
+    if package_match is None:
+        raise SystemExit("V12 AlarmActivity: package MainActivity introuvable")
+    main_text = (
+        main_text[: package_match.end()]
+        + "\n\n"
+        + import_block
+        + main_text[package_match.end() :]
+    )
+
+    main_class = re.compile(
+        r"class\s+MainActivity\s*:\s*FlutterActivity\(\)\s*\{?\s*\}?\s*$",
+        re.MULTILINE,
+    )
+    replacement = f'''class MainActivity : FlutterActivity() {{
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {{
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "{bridge_channel}"
+        ).setMethodCallHandler {{ call, result ->
+            when (call.method) {{
+                "openAlarmActivity" -> {{
+                    val alarmId = call.argument<Int>("alarmId") ?: -1
+                    val alarmTitle = call.argument<String>("alarmTitle")
+                        ?: "Test alarme de garde"
+                    val alarmBody = call.argument<String>("alarmBody").orEmpty()
+                    val alarmSnoozeLabel = call.argument<String>("alarmSnoozeLabel")
+                    val forceFullScreen = call.argument<Boolean>("forceFullScreen") ?: false
+
+                    startActivity(Intent(this, AlarmActivity::class.java).apply {{
+                        putExtra("alarmId", alarmId)
+                        putExtra("alarmTitle", alarmTitle)
+                        putExtra("alarmBody", alarmBody)
+                        putExtra("alarmSnoozeLabel", alarmSnoozeLabel)
+                        putExtra("forceFullScreen", forceFullScreen)
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        )
+                    }})
+                    result.success(true)
+                }}
+                else -> result.notImplemented()
+            }}
+        }}
+    }}
+}}
+'''
+    main_text, replacements = main_class.subn(replacement, main_text, count=1)
+    if replacements != 1:
+        raise SystemExit(
+            "V12 AlarmActivity: structure MainActivity non reconnue pour le bridge plein écran"
+        )
+    main_activity.write_text(main_text, encoding="utf-8")
+
 tree = ET.parse(manifest_path)
 root = tree.getroot()
 application = root.find("application")
@@ -413,3 +479,4 @@ tree.write(
 )
 
 print(f"Installed V12 foreground AlarmActivity at {alarm_activity_path}")
+print(f"Installed direct Flutter bridge in {main_activity}")
