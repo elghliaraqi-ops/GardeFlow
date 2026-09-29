@@ -182,4 +182,123 @@ query_new = "dynamic query = _backend.client.from('practice_cases').select().eq(
 service = replace_once(service, query_old, query_new, 'validated Practice case list')
 service_path.write_text(service, encoding='utf-8')
 
+# Explicit patient sorting controls requested for Ma garde.
+practice_path = Path('source/lib/screens/practice_screen.dart')
+practice = practice_path.read_text(encoding='utf-8')
+practice = replace_once(
+    practice,
+    "  String _scope = 'guard';\n  String _filter = 'all';\n  int _offset = 0;",
+    "  String _scope = 'guard';\n  String _filter = 'all';\n  String _sort = 'recent';\n  int _offset = 0;",
+    'Practice patient sort state',
+)
+
+visible_old = """  List<PracticeCase> get _visible {
+    final q = _search.text.trim().toLowerCase();
+    if (q.isEmpty) return _cases;
+    return _cases.where((item) {
+      return item.patientLabel.toLowerCase().contains(q) ||
+          item.displayReason.toLowerCase().contains(q) ||
+          (item.location ?? '').toLowerCase().contains(q) ||
+          (item.specialistService ?? '').toLowerCase().contains(q);
+    }).toList();
+  }
+"""
+visible_new = """  List<PracticeCase> get _visible {
+    final q = _search.text.trim().toLowerCase();
+    final rows = q.isEmpty
+        ? List<PracticeCase>.from(_cases)
+        : _cases.where((item) {
+            return item.patientLabel.toLowerCase().contains(q) ||
+                item.displayReason.toLowerCase().contains(q) ||
+                (item.location ?? '').toLowerCase().contains(q) ||
+                (item.specialistService ?? '').toLowerCase().contains(q);
+          }).toList();
+    DateTime effectiveTime(PracticeCase item) =>
+        item.arrivalTime ?? item.createdAt ?? DateTime.tryParse(item.guardDate) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    rows.sort((a, b) {
+      switch (_sort) {
+        case 'oldest':
+          return effectiveTime(a).compareTo(effectiveTime(b));
+        case 'patient':
+          return a.patientNumber.compareTo(b.patientNumber);
+        case 'arrival':
+          final aTime = a.arrivalTime;
+          final bTime = b.arrivalTime;
+          if (aTime == null && bTime == null) return a.patientNumber.compareTo(b.patientNumber);
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return aTime.compareTo(bTime);
+        default:
+          return effectiveTime(b).compareTo(effectiveTime(a));
+      }
+    });
+    return rows;
+  }
+"""
+practice = replace_once(practice, visible_old, visible_new, 'Practice sorted patient list')
+
+filter_anchor = """            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip('all', 'Tous'),
+                  _filterChip('waiting', 'En attente'),
+                  _filterChip('specialist', 'Avis spécialisé'),
+                  _filterChip('discharged', 'Sortants'),
+                  _filterChip('hospitalized', 'Hospitalisés'),
+                  _filterChip('prescription', 'Ordonnance faite'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+"""
+filter_replacement = """            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip('all', 'Tous'),
+                  _filterChip('waiting', 'En attente'),
+                  _filterChip('specialist', 'Avis spécialisé'),
+                  _filterChip('discharged', 'Sortants'),
+                  _filterChip('hospitalized', 'Hospitalisés'),
+                  _filterChip('prescription', 'Ordonnance faite'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<String>(
+                initialValue: _sort,
+                onSelected: (value) => setState(() => _sort = value),
+                color: PracticeColors.surface,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'recent', child: Text('Plus récents')),
+                  PopupMenuItem(value: 'oldest', child: Text('Plus anciens')),
+                  PopupMenuItem(value: 'patient', child: Text('Patient #')),
+                  PopupMenuItem(value: 'arrival', child: Text('Heure d’arrivée')),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: PracticeColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: PracticeColors.line),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sort_rounded, color: PracticeColors.textSecondary, size: 17),
+                      SizedBox(width: 6),
+                      Text('Trier', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+"""
+practice = replace_once(practice, filter_anchor, filter_replacement, 'Practice patient sort menu')
+practice_path.write_text(practice, encoding='utf-8')
+
 print('Practice V12 integration patch applied successfully.')
