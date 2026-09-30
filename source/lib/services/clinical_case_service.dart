@@ -26,10 +26,7 @@ class ClinicalCaseService {
     }
     final response = await _backend.client.rpc(
       'clinical_case_feed',
-      params: <String, dynamic>{
-        'p_offset': offset,
-        'p_limit': limit,
-      },
+      params: <String, dynamic>{'p_offset': offset, 'p_limit': limit},
     );
     if (response is! List) return const <ClinicalCasePost>[];
     final posts = response
@@ -37,13 +34,19 @@ class ClinicalCaseService {
         .map((row) => ClinicalCasePost.fromMap(Map<String, dynamic>.from(row)))
         .toList(growable: false);
 
-    // Les anciens cas/fallbacks sont enrichis en arrière-plan à la première
-    // consultation. La requête est dédupliquée pour toute la session.
+    // Les anciens cas/fallbacks sont utilisables immédiatement puis enrichis
+    // par l'IA en arrière-plan. On déduplique uniquement une requête en cours :
+    // en cas d'échec temporaire, un prochain rafraîchissement pourra réessayer.
     for (final post in posts) {
-      final needsAi = post.qcms.length < 5 ||
+      final needsAi =
+          post.qcms.length < 5 ||
           post.qcms.any((qcm) => qcm.generationSource != 'openai');
       if (needsAi && _enrichmentRequested.add(post.id)) {
-        unawaited(enrichQcmForPost(post.id));
+        unawaited(
+          enrichQcmForPost(post.id).whenComplete(() {
+            _enrichmentRequested.remove(post.id);
+          }),
+        );
       }
     }
     return posts;
@@ -142,16 +145,14 @@ class ClinicalCaseService {
     }
     final response = await _backend.client.rpc(
       'clinical_case_qcm_leaderboard',
-      params: <String, dynamic>{
-        'p_period': period,
-        'p_promotion': promotion,
-      },
+      params: <String, dynamic>{'p_period': period, 'p_promotion': promotion},
     );
     if (response is! List) return const <QcmLeaderboardEntry>[];
     return response
         .whereType<Map>()
-        .map((row) =>
-            QcmLeaderboardEntry.fromMap(Map<String, dynamic>.from(row)))
+        .map(
+          (row) => QcmLeaderboardEntry.fromMap(Map<String, dynamic>.from(row)),
+        )
         .toList(growable: false);
   }
 
@@ -243,12 +244,13 @@ class ClinicalCaseService {
       final rows = await _backend.client.rpc('practice_my_achievements');
       if (rows is List) {
         for (final raw in rows.whereType<Map>()) {
-          final unlockedAt =
-              DateTime.tryParse('${raw['unlocked_at'] ?? ''}')?.toLocal();
+          final unlockedAt = DateTime.tryParse('${raw['unlocked_at'] ?? ''}')
+              ?.toLocal();
           final key = '${raw['key'] ?? ''}'.trim();
           if (key.isEmpty || unlockedAt == null) continue;
-          if (unlockedAt
-              .isAfter(startedAt.subtract(const Duration(seconds: 5)))) {
+          if (unlockedAt.isAfter(
+            startedAt.subtract(const Duration(seconds: 5)),
+          )) {
             await _triggerPush('practice_achievement_unlocked', key);
           }
         }
