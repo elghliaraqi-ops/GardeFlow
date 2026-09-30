@@ -50,6 +50,13 @@ class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
   final GlobalKey _newsFeedKey = GlobalKey();
   final GlobalKey _clinicalCasesFeedKey = GlobalKey();
+  final ScrollController _homeScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _homeScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     appState: appState,
                     newsFeedKey: _newsFeedKey,
                     clinicalCasesFeedKey: _clinicalCasesFeedKey,
+                    scrollController: _homeScrollController,
                     onOpenPlanning: () => setState(() => _tab = 1),
                     onOpenDirectory: () => setState(() => _tab = 2),
                     onOpenProfile: () => Navigator.push(
@@ -625,6 +633,7 @@ class _DashboardView extends StatelessWidget {
   final AppState appState;
   final GlobalKey newsFeedKey;
   final GlobalKey clinicalCasesFeedKey;
+  final ScrollController scrollController;
   final VoidCallback onOpenPlanning;
   final VoidCallback onOpenDirectory;
   final VoidCallback onOpenProfile;
@@ -633,6 +642,7 @@ class _DashboardView extends StatelessWidget {
     required this.appState,
     required this.newsFeedKey,
     required this.clinicalCasesFeedKey,
+    required this.scrollController,
     required this.onOpenPlanning,
     required this.onOpenDirectory,
     required this.onOpenProfile,
@@ -724,6 +734,7 @@ class _DashboardView extends StatelessWidget {
         : const [Color(0xFF55C2FF), Color(0xFF087FE8)];
 
     return ListView(
+      controller: scrollController,
       physics: BouncingScrollPhysics(),
       padding: EdgeInsets.fromLTRB(18, 22, 18, 32),
       children: [
@@ -936,14 +947,22 @@ class _DashboardView extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(999),
-              onTap: () {
+              onTap: () async {
+                if (scrollController.hasClients) {
+                  await scrollController.animateTo(
+                    scrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 560),
+                    curve: Curves.easeOutCubic,
+                  );
+                }
+                await Future<void>.delayed(const Duration(milliseconds: 40));
                 final targetContext = clinicalCasesFeedKey.currentContext;
                 if (targetContext == null) return;
-                Scrollable.ensureVisible(
+                await Scrollable.ensureVisible(
                   targetContext,
-                  duration: const Duration(milliseconds: 520),
+                  duration: const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
-                  alignment: 0.04,
+                  alignment: 0.02,
                 );
               },
               child: Ink(
@@ -2021,7 +2040,7 @@ class _MainBottomBar extends StatelessWidget {
                 child: Text(
                   'Rappels',
                   style: TextStyle(
-                    color: AppColors.brandDark,
+                    color: Colors.white,
                     fontSize: 8.5,
                     height: 1,
                     fontWeight: FontWeight.w900,

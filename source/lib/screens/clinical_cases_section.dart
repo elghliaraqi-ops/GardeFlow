@@ -218,6 +218,36 @@ class _ClinicalCaseCard extends StatefulWidget {
 class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   int? _selected;
   bool _expanded = false;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.post.mySelectedIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _ClinicalCaseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.post.id != oldWidget.post.id || widget.post.mySelectedIndex != oldWidget.post.mySelectedIndex) {
+      _selected = widget.post.mySelectedIndex;
+    }
+  }
+
+  Future<void> _answer(int index) async {
+    if (_selected != null || _submitting) return;
+    setState(() => _submitting = true);
+    try {
+      final result = await ClinicalCaseService.instance.submitAnswer(postId: widget.post.id, selectedIndex: index);
+      if (!mounted) return;
+      setState(() => _selected = result.selectedIndex);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d’enregistrer cette réponse QCM.')));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +408,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                     selected: _selected == index,
                     showCorrection: answered,
                     isCorrect: index == post.correctIndex,
-                    onTap: answered ? null : () => setState(() => _selected = index),
+                    onTap: answered || _submitting ? null : () => _answer(index),
                   ),
                   if (index != post.options.length - 1) const SizedBox(height: 7),
                 ],
