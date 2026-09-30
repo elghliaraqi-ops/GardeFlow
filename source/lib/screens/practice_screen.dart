@@ -1162,7 +1162,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text(
-                'Ajoutez un motif de consultation et au moins une section clinique : interrogatoire, histoire, examen, bilan ou conduite à tenir.')),
+                'Ajoutez un motif de consultation et au moins une section clinique : histoire, examen, bilan ou conduite à tenir.')),
       );
       return;
     }
@@ -1315,33 +1315,55 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                           icon: Icons.short_text_rounded),
                     ],
                   ),
-                  _clinicalSection('1. INTERROGATOIRE', _interrogatoire,
-                      'Interrogatoire clinique…'),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 6, 2, 8),
+                    child: Text(
+                      'INTERROGATOIRE',
+                      style: TextStyle(
+                        color: PracticeColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .8,
+                      ),
+                    ),
+                  ),
                   _doubleClinicalSection(
-                      '2. ANTÉCÉDENTS PERSONNELS',
+                      'ANTÉCÉDENTS PERSONNELS',
                       'Chirurgicaux',
                       _personalSurgical,
                       'Médicaux',
                       _personalMedical),
                   _doubleClinicalSection(
-                      '3. ANTÉCÉDENTS FAMILIAUX',
+                      'ANTÉCÉDENTS FAMILIAUX',
                       'Chirurgicaux',
                       _familySurgical,
                       'Médicaux',
                       _familyMedical),
-                  _clinicalSection('4. MOTIF DE CONSULTATION *',
+                  _clinicalSection('MOTIF DE CONSULTATION *',
                       _consultationReason, 'Motif de consultation…'),
-                  _clinicalSection('5. HISTOIRE DE LA MALADIE', _illnessHistory,
+                  _clinicalSection('HISTOIRE DE LA MALADIE', _illnessHistory,
                       'Chronologie, symptômes, contexte…'),
-                  _clinicalSection('6. EXAMEN CLINIQUE', _clinicalExam,
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 14, 2, 8),
+                    child: Text(
+                      'EXAMEN ET SYNTHÈSE',
+                      style: TextStyle(
+                        color: PracticeColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .8,
+                      ),
+                    ),
+                  ),
+                  _clinicalSection('EXAMEN CLINIQUE', _clinicalExam,
                       'Constantes, examen général et ciblé…'),
-                  _clinicalSection('7. EXAMENS COMPLÉMENTAIRES', _complementary,
+                  _clinicalSection('EXAMENS COMPLÉMENTAIRES', _complementary,
                       'Biologie, ECG, autres examens…'),
-                  _clinicalSection('8. IMAGERIE — CONCLUSION', _imaging,
+                  _clinicalSection('IMAGERIE — CONCLUSION', _imaging,
                       'Radiographie :\n\nTDM :\n\nÉchographie :\n\nIRM :'),
-                  _clinicalSection('9. BILAN', _assessment,
+                  _clinicalSection('BILAN', _assessment,
                       'Synthèse clinique / diagnostic retenu…'),
-                  _clinicalSection('10. CONDUITE À TENIR', _plan,
+                  _clinicalSection('CONDUITE À TENIR', _plan,
                       'Traitement, surveillance, orientation…'),
                   _formSection(
                     title: 'DÉCISIONS ET SUIVI',
