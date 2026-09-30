@@ -91,53 +91,95 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.brandSoft,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.medical_information_outlined,
-                  color: AppColors.brandBright,
-                ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(15, 15, 11, 15),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.brandDark, AppColors.brand],
               ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Fil des cas cliniques',
-                      style: TextStyle(
-                        color: AppColors.ink,
-                        fontFamily: 'SpaceGrotesk',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.35,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.brand.withOpacity(.20),
+                  blurRadius: 22,
+                  offset: const Offset(0, 9),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.13),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(.18)),
+                  ),
+                  child: const Icon(
+                    Icons.medical_information_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'CAS CLINIQUES',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 18.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .35,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Dossiers anonymisés · raisonnement clinique · 5 QCM par cas',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(.78),
+                          fontSize: 10.5,
+                          height: 1.3,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(13),
+                    onTap: _loading ? null : () => _load(reset: true),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(.12),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(.16),
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white.withOpacity(_loading ? .45 : .95),
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Cas anonymisés · 5 QCM de raisonnement · explication IA après chaque réponse',
-                      style: TextStyle(
-                        color: AppColors.inkSoft,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Actualiser',
-                onPressed: _loading ? null : () => _load(reset: true),
-                icon: Icon(Icons.refresh_rounded, color: AppColors.inkSoft),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           if (_loading && _items.isEmpty)
@@ -328,16 +370,20 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: AppColors.brand.withOpacity(.16)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.card, AppColors.brandSoft.withOpacity(.38)],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.brand.withOpacity(.30)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navy.withOpacity(0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: AppColors.navy.withOpacity(0.13),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -347,7 +393,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.brandSoft,
                   borderRadius: BorderRadius.circular(999),
@@ -510,16 +559,23 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           else ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(15),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.paperAlt,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.brand.withOpacity(.18)),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.brandSoft.withOpacity(.72),
+                    AppColors.card,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.brand.withOpacity(.34)),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.navy.withOpacity(.05),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
+                    color: AppColors.brand.withOpacity(.09),
+                    blurRadius: 16,
+                    offset: const Offset(0, 7),
                   ),
                 ],
               ),
@@ -932,11 +988,18 @@ class _CaseSection extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.fromLTRB(11, 10, 12, 11),
+      padding: const EdgeInsets.fromLTRB(12, 11, 13, 12),
       decoration: BoxDecoration(
-        color: AppColors.paperAlt.withOpacity(.70),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: AppColors.line.withOpacity(.72)),
+        color: AppColors.card.withOpacity(.90),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: AppColors.brand.withOpacity(.14)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withOpacity(.035),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1022,14 +1085,14 @@ class _QcmOption extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: border,
               width: selected || (showCorrection && isCorrect) ? 1.35 : 1,
@@ -1048,8 +1111,8 @@ class _QcmOption extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 34,
+                height: 34,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: foreground.withOpacity(0.10),
