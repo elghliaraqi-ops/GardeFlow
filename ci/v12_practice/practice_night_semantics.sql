@@ -1,5 +1,7 @@
--- Practice guard-date semantics: the planning date is always the guard start date.
--- Example: planning tile 2026-09-29 Nuit means 2026-09-29 20:00 -> 2026-09-30 08:00.
+-- Practice guard-date semantics.
+-- Day and 24H tiles use their start date.
+-- A Nuit tile uses the morning/end date from the official roster:
+-- example tile 2026-09-30 Nuit = 2026-09-29 20:00 -> 2026-09-30 08:00.
 -- Disciplinary emergency guards remain intentionally included: no is_disciplinary
 -- exclusion is applied to Practice streaks, XP, achievements, stats or leaderboard.
 
@@ -32,7 +34,7 @@ begin
   loop
     guard_end := case rec.shift_id
       when 'urg-jour' then rec.date_str::timestamp + interval '20 hours'
-      when 'urg-nuit' then rec.date_str::timestamp + interval '1 day 8 hours'
+      when 'urg-nuit' then rec.date_str::timestamp + interval '8 hours'
       else rec.date_str::timestamp + interval '1 day 8 hours'
     end;
 
