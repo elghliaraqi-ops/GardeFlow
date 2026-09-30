@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/practice_models.dart';
 import 'supabase_backend_service.dart';
+import 'clinical_case_service.dart';
 
 class PracticeSaveResult {
   final PracticeCase value;
@@ -277,7 +278,13 @@ class PracticeService {
           .select()
           .single();
     }
-    return PracticeCase.fromMap(Map<String, dynamic>.from(response as Map));
+    final saved = PracticeCase.fromMap(Map<String, dynamic>.from(response as Map));
+    final savedId = saved.id?.trim() ?? '';
+    if (savedId.isNotEmpty) {
+      ClinicalCaseService.instance.notifyChanged();
+      unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(savedId));
+    }
+    return saved;
   }
 
   Future<void> deleteCase(PracticeCase value) async {
@@ -290,6 +297,7 @@ class PracticeService {
       await _backend.client.from('practice_cases').delete().eq('id', value.id!);
     }
     await _removePending(value.clientId);
+    ClinicalCaseService.instance.notifyChanged();
     _notify();
   }
 
@@ -306,7 +314,12 @@ class PracticeService {
             .eq('client_id', item.clientId)
             .maybeSingle();
         if (existing != null) {
+          final existingId = '${existing['id'] ?? ''}'.trim();
           await _removePending(item.clientId);
+          ClinicalCaseService.instance.notifyChanged();
+          if (existingId.isNotEmpty) {
+            unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(existingId));
+          }
           synced++;
           continue;
         }
@@ -314,8 +327,17 @@ class PracticeService {
           ..['patient_number'] = 0
           ..['is_draft'] = false
           ..['synced_at'] = DateTime.now().toUtc().toIso8601String();
-        await _backend.client.from('practice_cases').insert(payload);
+        final inserted = await _backend.client
+            .from('practice_cases')
+            .insert(payload)
+            .select('id')
+            .single();
+        final insertedId = '${inserted['id'] ?? ''}'.trim();
         await _removePending(item.clientId);
+        ClinicalCaseService.instance.notifyChanged();
+        if (insertedId.isNotEmpty) {
+          unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(insertedId));
+        }
         synced++;
       } catch (_) {
         // Keep the item for the next foreground sync.
