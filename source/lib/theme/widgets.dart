@@ -154,7 +154,8 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-PreferredSizeWidget appBarOf(BuildContext context, String title, {List<Widget>? actions}) {
+PreferredSizeWidget appBarOf(BuildContext context, String title,
+    {List<Widget>? actions}) {
   return AppBar(
     title: Text(title),
     actions: actions,
