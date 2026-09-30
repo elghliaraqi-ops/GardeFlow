@@ -59,7 +59,7 @@ revoke all on public.practice_push_receipts from anon, authenticated;
 
 create or replace function public.clinical_case_upsert_fallback_qcm(
   p_post_id uuid,
-  p_position smallint,
+  p_position integer,
   p_question text,
   p_correct text,
   p_d1 text,
