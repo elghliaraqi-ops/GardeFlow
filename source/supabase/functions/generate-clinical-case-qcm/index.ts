@@ -48,7 +48,18 @@ function scrub(value: unknown, max = 5000): string {
   return x.slice(0, max).trim();
 }
 
-const qcmSchema = {
+const topicEnum = [
+  'motif',
+  'symptome',
+  'examen',
+  'imagerie',
+  'synthese',
+  'prise_en_charge',
+  'orientation',
+  'avis_specialise',
+];
+
+const qcmItemSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['question', 'options', 'correct_index', 'correction', 'topic'],
@@ -62,9 +73,20 @@ const qcmSchema = {
     },
     correct_index: { type: 'integer', minimum: 0, maximum: 3 },
     correction: { type: 'string' },
-    topic: {
-      type: 'string',
-      enum: ['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'],
+    topic: { type: 'string', enum: topicEnum },
+  },
+};
+
+const fiveQcmSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['qcms'],
+  properties: {
+    qcms: {
+      type: 'array',
+      minItems: 5,
+      maxItems: 5,
+      items: qcmItemSchema,
     },
   },
 };
@@ -106,31 +128,60 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const practiceCaseId = String(body?.practice_case_id ?? '').trim();
-    if (!/^[0-9a-f-]{36}$/i.test(practiceCaseId)) {
-      return json({ ok: false, error: 'invalid_case_id' }, 400);
+    const requestedPostId = String(body?.post_id ?? '').trim();
+    if (!practiceCaseId && !requestedPostId) {
+      return json({ ok: false, error: 'case_or_post_required' }, 400);
     }
 
-    const { data: practiceCase, error: caseError } = await adminClient
-      .from('practice_cases')
-      .select('id,user_id,is_draft')
-      .eq('id', practiceCaseId)
-      .maybeSingle();
-    if (caseError || !practiceCase || practiceCase.user_id !== callerId) {
-      return json({ ok: false, error: 'case_not_found' }, 404);
-    }
-    if (practiceCase.is_draft === true) {
-      return json({ ok: false, error: 'draft_case' }, 409);
+    let post: any = null;
+    let resolvedPracticeCaseId = practiceCaseId;
+
+    if (practiceCaseId) {
+      if (!/^[0-9a-f-]{36}$/i.test(practiceCaseId)) {
+        return json({ ok: false, error: 'invalid_case_id' }, 400);
+      }
+      const { data: practiceCase, error: caseError } = await adminClient
+        .from('practice_cases')
+        .select('id,user_id,is_draft')
+        .eq('id', practiceCaseId)
+        .maybeSingle();
+      if (caseError || !practiceCase || practiceCase.user_id !== callerId) {
+        return json({ ok: false, error: 'case_not_found' }, 404);
+      }
+      if (practiceCase.is_draft === true) {
+        return json({ ok: false, error: 'draft_case' }, 409);
+      }
+      const { data, error } = await adminClient
+        .from('clinical_case_posts')
+        .select('id,practice_case_id,author_id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service')
+        .eq('practice_case_id', practiceCaseId)
+        .maybeSingle();
+      if (error || !data) return json({ ok: false, error: 'post_not_ready' }, 409);
+      post = data;
+    } else {
+      if (!/^[0-9a-f-]{36}$/i.test(requestedPostId)) {
+        return json({ ok: false, error: 'invalid_post_id' }, 400);
+      }
+      const { data, error } = await adminClient
+        .from('clinical_case_posts')
+        .select('id,practice_case_id,author_id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service')
+        .eq('id', requestedPostId)
+        .maybeSingle();
+      if (error || !data) return json({ ok: false, error: 'post_not_found' }, 404);
+      post = data;
+      resolvedPracticeCaseId = String(data.practice_case_id ?? '');
     }
 
-    const { data: post, error: postError } = await adminClient
-      .from('clinical_case_posts')
-      .select('id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service')
-      .eq('practice_case_id', practiceCaseId)
-      .maybeSingle();
-    if (postError || !post) return json({ ok: false, error: 'post_not_ready' }, 409);
+    const { data: existingQcms } = await adminClient
+      .from('clinical_case_qcms')
+      .select('id,generation_source')
+      .eq('post_id', post.id);
+    if ((existingQcms ?? []).length === 5 && (existingQcms ?? []).every((q: any) => q.generation_source === 'openai')) {
+      return json({ ok: true, generated: false, source: 'openai', count: 5, post_id: post.id, reason: 'already_ready' });
+    }
 
     if (!openaiKey) {
-      return json({ ok: true, generated: false, source: 'fallback' });
+      return json({ ok: true, generated: false, source: 'fallback', count: (existingQcms ?? []).length, post_id: post.id });
     }
 
     const safeCase = {
@@ -147,26 +198,44 @@ Deno.serve(async (req: Request) => {
       specialist_service: scrub(post.specialist_service, 300),
     };
 
-    const prompt = `Tu crées UN QCM pédagogique de raisonnement clinique à partir d'un cas déjà anonymisé, pour un niveau externat/internat médical.
+    const prompt = `Tu crées EXACTEMENT 5 QCM pédagogiques DISTINCTS de raisonnement clinique à partir d'un cas déjà anonymisé, pour un niveau externat/internat médical.
 
-OBJECTIF :
-Le QCM doit apprendre quelque chose. Il ne doit jamais être une simple question de repérage, de mémoire immédiate ou de copie d'une phrase déjà affichée dans le dossier.
+OBJECTIF GÉNÉRAL
+Les cinq questions doivent transformer ce cas en mini-session d'apprentissage. Elles ne doivent jamais être cinq reformulations de la même question ni demander de recopier une phrase affichée dans le dossier.
 
-RÈGLES IMPÉRATIVES :
-- Les faits concernant CE patient doivent provenir uniquement du cas fourni. N'invente jamais un symptôme, une constante, un résultat biologique, une image, un antécédent ou un traitement administré qui n'est pas documenté.
-- Tu peux utiliser les connaissances médicales standards et établies nécessaires pour raisonner à partir de ces faits.
-- La bonne réponse doit demander AU MOINS UNE ÉTAPE DE RAISONNEMENT clinique : interpréter les données, hiérarchiser un diagnostic différentiel, reconnaître un critère décisif, choisir l'étape suivante la plus pertinente, identifier un signe de gravité, ou relier les constatations à une prise en charge/orientation cohérente.
-- PRIORITÉ, dans cet ordre, aux questions sur : 1) raisonnement diagnostique/différentiel ; 2) critère clinique ou paraclinique décisif ; 3) interprétation d'un examen ; 4) prochaine étape ou prise en charge initiale ; 5) signe de gravité/complication ; 6) orientation ou avis spécialisé.
-- INTERDIT : demander de retrouver mot pour mot une information déjà écrite. Par exemple, ne pose jamais « Quelle conclusion d'imagerie correspond à ce cas ? » si la conclusion d'imagerie est déjà fournie. Ne demande pas non plus « Quel est le diagnostic retenu ? » si le bilan l'affiche explicitement sans qu'un raisonnement soit nécessaire.
-- INTERDIT : faire de la bonne réponse une simple copie ou reformulation triviale d'un champ du dossier.
-- Si une information du cas permet un raisonnement plus intéressant, utilise-la même si elle se trouve dans l'imagerie, le bilan ou la conduite à tenir.
-- Il doit y avoir exactement 4 réponses : une seule meilleure réponse, non ambiguë, et trois distracteurs plausibles de même niveau conceptuel.
-- Évite les distracteurs absurdes, les formulations « toutes les réponses », « aucune des réponses », et les différences de longueur qui révèlent la bonne réponse.
-- La correction doit expliquer brièvement le raisonnement, citer les éléments utiles du cas et, si nécessaire, rappeler le principe médical général. Elle ne doit pas inventer de nouvelles données propres au patient.
-- Évite les posologies et protocoles dépendant du contexte local sauf s'ils sont explicitement documentés dans le cas.
-- Si le dossier est trop pauvre pour un QCM complexe, pose une question d'interprétation à partir des données réellement présentes plutôt que d'inventer des éléments.
+DIVERSITÉ OBLIGATOIRE
+- Produis 5 angles différents et complémentaires.
+- Quand les données le permettent, couvre en priorité :
+  1) raisonnement diagnostique ou diagnostic différentiel ;
+  2) signe/critère clinique ou paraclinique décisif ;
+  3) interprétation d'un examen, d'une biologie ou d'une imagerie ;
+  4) prochaine étape / prise en charge initiale / surveillance ;
+  5) gravité, complication, orientation ou avis spécialisé.
+- Ne répète pas le même concept dans deux questions.
+
+RÈGLES CLINIQUES IMPÉRATIVES
+- Les faits concernant CE patient doivent provenir uniquement du cas fourni. N'invente jamais un symptôme, une constante, une biologie, une image, un antécédent ou un traitement propre au patient qui n'est pas documenté.
+- Tu peux utiliser les connaissances médicales générales, standards et établies nécessaires au raisonnement.
+- Chaque bonne réponse doit demander au moins UNE étape de raisonnement clinique.
+- INTERDIT : « Quelle conclusion d'imagerie correspond à ce cas ? », « Quel diagnostic a été retenu ? », « Quelle prise en charge a été documentée ? » ou toute question dont la réponse est une simple copie d'un champ du dossier.
+- INTERDIT : une bonne réponse qui est seulement une reformulation triviale du texte du dossier.
+- Si le dossier est incomplet, pose une question d'interprétation ou de principe clinique applicable aux données présentes plutôt que d'inventer des données manquantes.
+- Chaque QCM comporte exactement 4 propositions, une seule meilleure réponse, et 3 distracteurs plausibles du même niveau conceptuel.
+- Pas de « toutes les réponses », « aucune des réponses », distracteurs absurdes ou indice de longueur révélant la bonne réponse.
+- Évite les posologies/protocoles dépendants du contexte local sauf s'ils sont explicitement documentés.
+
+EXPLICATION IA OBLIGATOIRE POUR CHAQUE QCM
+- Le champ correction doit être une vraie explication pédagogique, pas seulement « bonne réponse : B ».
+- Elle sera affichée APRÈS CHAQUE réponse, Y COMPRIS lorsque l'utilisateur a répondu juste.
+- Explique pourquoi la meilleure réponse est correcte en reliant le principe médical aux éléments utiles du cas.
+- Explique brièvement pourquoi les principaux distracteurs sont moins appropriés lorsque cela apporte de la valeur.
+- 3 à 6 phrases concises, claires et pédagogiques.
+- N'invente aucune nouvelle donnée propre au patient.
+- Ne dis pas « vous avez raison/tort » : l'explication doit rester valable quel que soit le choix de l'utilisateur.
+
+CONFIDENTIALITÉ
 - Ne réintroduis jamais de nom, téléphone, e-mail, date précise, numéro de dossier, lieu/box, auteur ou autre identifiant.
-- Réponds en français, de façon concise, professionnelle et pédagogiquement utile.
+- Réponds en français.
 
 CAS ANONYMISÉ :
 ${JSON.stringify(safeCase)}`;
@@ -185,9 +254,9 @@ ${JSON.stringify(safeCase)}`;
         text: {
           format: {
             type: 'json_schema',
-            name: 'clinical_case_qcm',
+            name: 'clinical_case_five_qcms',
             strict: true,
-            schema: qcmSchema,
+            schema: fiveQcmSchema,
           },
         },
       }),
@@ -195,40 +264,77 @@ ${JSON.stringify(safeCase)}`;
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error('OpenAI QCM failed', response.status, payload);
-      return json({ ok: true, generated: false, source: 'fallback', reason: 'openai_failed' });
+      console.error('OpenAI 5 QCM failed', response.status, payload);
+      return json({ ok: true, generated: false, source: 'fallback', post_id: post.id, reason: 'openai_failed' });
     }
 
     const generated = parseJsonLoose(extractResponseText(payload));
-    const options = Array.isArray(generated?.options)
-      ? generated.options.map((x: unknown) => scrub(x, 320)).filter(Boolean)
-      : [];
-    const correctIndex = Number(generated?.correct_index);
-    const question = scrub(generated?.question, 800);
-    const correction = scrub(generated?.correction, 3500);
-    const topic = String(generated?.topic ?? '').trim();
-    const allowedTopics = new Set(['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise']);
-
-    if (!question || !correction || options.length !== 4 || new Set(options).size !== 4 || !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3 || !allowedTopics.has(topic)) {
-      return json({ ok: true, generated: false, source: 'fallback', reason: 'invalid_model_output' });
+    const rawQcms = Array.isArray(generated?.qcms) ? generated.qcms : [];
+    if (rawQcms.length !== 5) {
+      return json({ ok: true, generated: false, source: 'fallback', post_id: post.id, reason: 'invalid_qcm_count' });
     }
 
-    const { error: updateError } = await adminClient
-      .from('clinical_case_posts')
-      .update({
-        qcm_question: question,
-        qcm_options: options,
+    const allowedTopics = new Set(topicEnum);
+    const normalized = rawQcms.map((raw: any, index: number) => {
+      const options = Array.isArray(raw?.options)
+        ? raw.options.map((x: unknown) => scrub(x, 420)).filter(Boolean)
+        : [];
+      const correctIndex = Number(raw?.correct_index);
+      const question = scrub(raw?.question, 1000);
+      const correction = scrub(raw?.correction, 4500);
+      const topic = String(raw?.topic ?? '').trim();
+      if (!question || !correction || options.length !== 4 || new Set(options).size !== 4 ||
+          !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3 || !allowedTopics.has(topic)) {
+        throw new Error(`invalid_qcm_${index + 1}`);
+      }
+      return {
+        post_id: post.id,
+        position: index + 1,
+        question,
+        options,
         correct_index: correctIndex,
         correction,
-        question_topic: topic,
+        topic,
+        generation_source: 'openai',
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    if (new Set(normalized.map((q: any) => q.question.toLowerCase())).size !== 5) {
+      return json({ ok: true, generated: false, source: 'fallback', post_id: post.id, reason: 'duplicate_questions' });
+    }
+
+    // Mettre d'abord à jour les champs historiques du post. Le trigger SQL
+    // resynchronise alors les fallbacks et invalide les anciennes réponses ;
+    // les cinq upserts IA suivants deviennent la version pédagogique finale.
+    const first = normalized[0];
+    const { error: legacyUpdateError } = await adminClient
+      .from('clinical_case_posts')
+      .update({
+        qcm_question: first.question,
+        qcm_options: first.options,
+        correct_index: first.correct_index,
+        correction: first.correction,
+        question_topic: first.topic,
         generation_source: 'openai',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', post.id)
-      .eq('practice_case_id', practiceCaseId);
-    if (updateError) throw updateError;
+      .eq('id', post.id);
+    if (legacyUpdateError) throw legacyUpdateError;
 
-    return json({ ok: true, generated: true, source: 'openai' });
+    const { error: qcmUpsertError } = await adminClient
+      .from('clinical_case_qcms')
+      .upsert(normalized, { onConflict: 'post_id,position' });
+    if (qcmUpsertError) throw qcmUpsertError;
+
+    return json({
+      ok: true,
+      generated: true,
+      source: 'openai',
+      count: 5,
+      post_id: post.id,
+      practice_case_id: resolvedPracticeCaseId,
+    });
   } catch (error) {
     console.error(error);
     return json({ ok: false, error: 'generation_failed' }, 500);
