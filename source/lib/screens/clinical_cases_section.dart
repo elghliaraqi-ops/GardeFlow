@@ -68,8 +68,10 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() =>
-          _error = 'Le fil des cas cliniques est momentanément indisponible.');
+      setState(
+        () =>
+            _error = 'Le fil des cas cliniques est momentanément indisponible.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -97,8 +99,10 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                   color: AppColors.brandSoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.medical_information_outlined,
-                    color: AppColors.brandBright),
+                child: Icon(
+                  Icons.medical_information_outlined,
+                  color: AppColors.brandBright,
+                ),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -149,8 +153,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
             const _InfoCard(
               icon: Icons.school_outlined,
               title: 'Aucun cas publié pour le moment',
-              body:
-                  'Les patients validés dans Practice apparaîtront ici automatiquement sous forme anonymisée avec 5 QCM pédagogiques.',
+              body: 'Les patients validés dans Practice apparaîtront ici automatiquement sous forme anonymisée avec 5 QCM pédagogiques.',
             )
           else ...[
             for (var i = 0; i < _items.length; i++) ...[
@@ -170,7 +173,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                         )
                       : const Icon(Icons.expand_more_rounded),
                   label: Text(
-                      _loadingMore ? 'Chargement…' : 'Afficher plus de cas'),
+                    _loadingMore ? 'Chargement…' : 'Afficher plus de cas',
+                  ),
                 ),
               ),
             ],
@@ -234,15 +238,18 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   @override
   void didUpdateWidget(covariant _ClinicalCaseCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final changed = widget.post.id != oldWidget.post.id ||
+    final changed =
+        widget.post.id != oldWidget.post.id ||
         widget.post.qcms.length != oldWidget.post.qcms.length ||
         widget.post.qcms
-                .map((q) =>
-                    '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .map(
+                  (q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}',
+                )
                 .join('|') !=
             oldWidget.post.qcms
-                .map((q) =>
-                    '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .map(
+                  (q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}',
+                )
                 .join('|');
     if (changed) _syncQcms(resetIndex: widget.post.id != oldWidget.post.id);
   }
@@ -250,9 +257,17 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   void _syncQcms({required bool resetIndex}) {
     final available = List<ClinicalCaseQcm>.from(widget.post.qcms)
       ..sort((a, b) => a.position.compareTo(b.position));
-    final aiReady = available.length == 5 &&
-        available.every((qcm) => qcm.generationSource == 'openai');
-    _qcms = aiReady ? available : <ClinicalCaseQcm>[];
+    final valid = available
+        .where(
+          (qcm) =>
+              qcm.id.trim().isNotEmpty &&
+              qcm.question.trim().isNotEmpty &&
+              qcm.options.length >= 2,
+        )
+        .toList(growable: false);
+    _qcms = valid.length >= 5
+        ? valid.take(5).toList(growable: false)
+        : <ClinicalCaseQcm>[];
     if (_qcms.isEmpty) {
       _currentQcm = 0;
       return;
@@ -480,7 +495,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Les 5 QCM et leurs explications IA sont en préparation…',
+                      'Les QCM de ce cas sont en cours de préparation…',
                       style: TextStyle(
                         color: AppColors.inkSoft,
                         fontWeight: FontWeight.w700,
@@ -549,17 +564,20 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                     ),
                   ),
                   const SizedBox(height: 11),
-                  for (var index = 0;
-                      index < current.options.length;
-                      index++) ...[
+                  for (
+                    var index = 0;
+                    index < current.options.length;
+                    index++
+                  ) ...[
                     _QcmOption(
                       index: index,
                       label: current.options[index],
                       selected: current.mySelectedIndex == index,
                       showCorrection: answered,
                       isCorrect: current.correctIndex == index,
-                      onTap:
-                          answered || _submitting ? null : () => _answer(index),
+                      onTap: answered || _submitting
+                          ? null
+                          : () => _answer(index),
                     ),
                     if (index != current.options.length - 1)
                       const SizedBox(height: 7),
@@ -606,8 +624,9 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                         Text(
                           correct ? 'Bonne réponse' : 'À revoir',
                           style: TextStyle(
-                            color:
-                                correct ? AppColors.success : AppColors.danger,
+                            color: correct
+                                ? AppColors.success
+                                : AppColors.danger,
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
                           ),
@@ -671,10 +690,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                             color: q.myIsCorrect == true
                                 ? AppColors.success
                                 : q.answered
-                                    ? AppColors.danger
-                                    : active
-                                        ? AppColors.brandBright
-                                        : AppColors.line,
+                                ? AppColors.danger
+                                : active
+                                ? AppColors.brandBright
+                                : AppColors.line,
                             borderRadius: BorderRadius.circular(99),
                           ),
                         ),
@@ -684,8 +703,9 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                 ),
                 IconButton(
                   tooltip: 'QCM suivant',
-                  onPressed:
-                      _currentQcm < _qcms.length - 1 ? () => _moveQcm(1) : null,
+                  onPressed: _currentQcm < _qcms.length - 1
+                      ? () => _moveQcm(1)
+                      : null,
                   icon: const Icon(Icons.chevron_right_rounded),
                 ),
               ],
@@ -707,15 +727,15 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   }
 
   static bool _hasExtraDetails(ClinicalCasePost post) => <String>[
-        post.history,
-        post.clinicalExam,
-        post.complementaryExams,
-        post.imagingConclusion,
-        post.assessment,
-        post.plan,
-        post.disposition,
-        post.specialistService ?? '',
-      ].any((value) => value.trim().isNotEmpty);
+    post.history,
+    post.clinicalExam,
+    post.complementaryExams,
+    post.imagingConclusion,
+    post.assessment,
+    post.plan,
+    post.disposition,
+    post.specialistService ?? '',
+  ].any((value) => value.trim().isNotEmpty);
 }
 
 class _CaseSection extends StatelessWidget {
@@ -865,8 +885,11 @@ class _QcmOption extends StatelessWidget {
               if (showCorrection && isCorrect)
                 Padding(
                   padding: const EdgeInsets.only(left: 6, top: 2),
-                  child: Icon(Icons.check_circle_rounded,
-                      color: AppColors.success, size: 18),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.success,
+                    size: 18,
+                  ),
                 ),
             ],
           ),
@@ -926,19 +949,21 @@ class _InfoCard extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: AppColors.ink,
-                fontSize: 13,
-                fontWeight: FontWeight.w900),
+              color: AppColors.ink,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 5),
           Text(
             body,
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: AppColors.inkSoft,
-                fontSize: 11,
-                height: 1.35,
-                fontWeight: FontWeight.w600),
+              color: AppColors.inkSoft,
+              fontSize: 11,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 9),
