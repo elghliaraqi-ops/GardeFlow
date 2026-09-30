@@ -40,7 +40,7 @@ jobs:
           if ! git diff --quiet; then
             git config user.name 'GardeFlow CI'
             git config user.email 'actions@users.noreply.github.com'
-            git add source/lib/screens/home_screen.dart source/lib/services/practice_service.dart
+            git add source/lib/screens/home_screen.dart source/lib/services/practice_service.dart source/lib/screens/clinical_cases_section.dart
             git commit -m 'feat(clinical-cases): integrate home feed and Practice publishing'
             git push origin HEAD:feature-clinical-cases-feed
           fi
