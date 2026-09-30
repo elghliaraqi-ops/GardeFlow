@@ -82,7 +82,6 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      key: widget.verticalFeedKey,
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,6 +198,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
               ],
             ),
           ),
+          SizedBox(key: widget.verticalFeedKey, height: 0),
         ],
       ),
     );
