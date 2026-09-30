@@ -6,9 +6,12 @@ const bundleId = 'com.huim6.gardeflow';
 const deploymentTarget = '13.0';
 
 String ensurePlistString(String source, String key, String value) {
-  final pattern = RegExp('<key>${RegExp.escape(key)}</key>\\s*<string>[^<]*</string>');
+  final pattern = RegExp(
+    '<key>${RegExp.escape(key)}</key>\\s*<string>[^<]*</string>',
+  );
   final replacement = '<key>$key</key>\n\t<string>$value</string>';
-  if (pattern.hasMatch(source)) return source.replaceFirst(pattern, replacement);
+  if (pattern.hasMatch(source))
+    return source.replaceFirst(pattern, replacement);
   return source.replaceFirst('</dict>', '\t$replacement\n</dict>');
 }
 
@@ -40,7 +43,13 @@ void copyDirectory(Directory source, Directory target) {
   }
 }
 
-String addResourceToPbx(String pbx, String fileName, String fileType, String buildId, String fileId) {
+String addResourceToPbx(
+  String pbx,
+  String fileName,
+  String fileType,
+  String buildId,
+  String fileId,
+) {
   if (pbx.contains('/* $fileName */')) return pbx;
 
   final buildMarker = '/* Begin PBXBuildFile section */';
@@ -58,31 +67,40 @@ String addResourceToPbx(String pbx, String fileName, String fileType, String bui
   );
 
   final runnerGroup = RegExp(
-    r'(\/\* Runner \*\/ = \{\s*isa = PBXGroup;\s*children = \()'
+    r'(\/\* Runner \*\/ = \{\s*isa = PBXGroup;\s*children = \()',
   );
   if (!runnerGroup.hasMatch(pbx)) {
     throw StateError('Groupe Runner introuvable dans project.pbxproj.');
   }
-  pbx = pbx.replaceFirstMapped(runnerGroup, (m) => '${m.group(1)}\n\t\t\t\t$fileId /* $fileName */,');
+  pbx = pbx.replaceFirstMapped(
+    runnerGroup,
+    (m) => '${m.group(1)}\n\t\t\t\t$fileId /* $fileName */,',
+  );
 
   final runnerTarget = RegExp(
-    r'\/\* Runner \*\/ = \{\s*isa = PBXNativeTarget;[\s\S]*?buildPhases = \(([\s\S]*?)\);'
+    r'\/\* Runner \*\/ = \{\s*isa = PBXNativeTarget;[\s\S]*?buildPhases = \(([\s\S]*?)\);',
   ).firstMatch(pbx);
   if (runnerTarget == null) {
     throw StateError('Target Runner introuvable dans project.pbxproj.');
   }
-  final resourceRef = RegExp(r'([A-F0-9]{24}) \/\* Resources \*\/').firstMatch(runnerTarget.group(1)!);
+  final resourceRef = RegExp(r'([A-F0-9]{24}) \/\* Resources \*\/')
+      .firstMatch(runnerTarget.group(1)!);
   if (resourceRef == null) {
     throw StateError('Référence Resources du target Runner introuvable.');
   }
   final resourceId = resourceRef.group(1)!;
   final resources = RegExp(
-    '(${RegExp.escape(resourceId)}' + r' \/\* Resources \*\/ = \{\s*isa = PBXResourcesBuildPhase;[\s\S]*?files = \()'
+    '(${RegExp.escape(resourceId)}' + r' \/\* Resources \*\/ = \{\s*isa = PBXResourcesBuildPhase;[\s\S]*?files = \()',
   );
   if (!resources.hasMatch(pbx)) {
-    throw StateError('Phase Resources de Runner introuvable dans project.pbxproj.');
+    throw StateError(
+      'Phase Resources de Runner introuvable dans project.pbxproj.',
+    );
   }
-  pbx = pbx.replaceFirstMapped(resources, (m) => '${m.group(1)}\n\t\t\t\t$buildId /* $fileName in Resources */,');
+  pbx = pbx.replaceFirstMapped(
+    resources,
+    (m) => '${m.group(1)}\n\t\t\t\t$buildId /* $fileName in Resources */,',
+  );
   return pbx;
 }
 
@@ -96,14 +114,13 @@ void configure(Directory root) {
 
   var pbx = pbxFile.readAsStringSync();
   // Keep test target identifiers distinct while assigning the production bundle id.
-  pbx = pbx.replaceAllMapped(
-    RegExp(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);'),
-    (m) {
-      final current = m.group(1)!.trim();
-      final suffix = current.contains('RunnerTests') ? '.RunnerTests' : '';
-      return 'PRODUCT_BUNDLE_IDENTIFIER = $bundleId$suffix;';
-    },
-  );
+  pbx = pbx.replaceAllMapped(RegExp(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);'), (
+    m,
+  ) {
+    final current = m.group(1)!.trim();
+    final suffix = current.contains('RunnerTests') ? '.RunnerTests' : '';
+    return 'PRODUCT_BUNDLE_IDENTIFIER = $bundleId$suffix;';
+  });
   pbx = pbx.replaceAllMapped(
     RegExp(r'IPHONEOS_DEPLOYMENT_TARGET = [^;]+;'),
     (_) => 'IPHONEOS_DEPLOYMENT_TARGET = $deploymentTarget;',
@@ -126,6 +143,16 @@ void configure(Directory root) {
     info,
     'NSPhotoLibraryAddUsageDescription',
     'GardeFlow peut enregistrer un document ou une image que vous choisissez explicitement.',
+  );
+  info = ensurePlistString(
+    info,
+    'NSMicrophoneUsageDescription',
+    'GardeFlow utilise le microphone uniquement lorsque vous activez la dictée vocale d’une observation clinique.',
+  );
+  info = ensurePlistString(
+    info,
+    'NSSpeechRecognitionUsageDescription',
+    'GardeFlow utilise la reconnaissance vocale pour transcrire, à votre demande, votre dictée dans les champs cliniques.',
   );
   info = ensureBackgroundModes(info);
   infoFile.writeAsStringSync(info);
@@ -204,9 +231,13 @@ void configure(Directory root) {
     podfile.writeAsStringSync(pods);
   }
 
-  stdout.writeln('iOS configuré : GardeFlow / $bundleId / iOS $deploymentTarget+.');
+  stdout.writeln(
+    'iOS configuré : GardeFlow / $bundleId / iOS $deploymentTarget+.',
+  );
   if (!rootFirebase.existsSync()) {
-    stdout.writeln('NOTE : GoogleService-Info.plist absent. L’app compile, mais les push Firebase iOS resteront désactivés jusqu’à son ajout.');
+    stdout.writeln(
+      'NOTE : GoogleService-Info.plist absent. L’app compile, mais les push Firebase iOS resteront désactivés jusqu’à son ajout.',
+    );
   }
 }
 
