@@ -6,14 +6,12 @@ on:
     branches:
       - main
       - v12-optimisee
-      - feature-global-ui-refresh-20260930
     paths:
       - '.github/workflows/build-web-v12.yml'
       - 'source/**'
-      - '.github/scripts/apply_practice_ui_patch.py'
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -34,12 +32,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-
-      - name: Apply Practice visual cleanup on feature branch
-        if: github.ref_name == 'feature-global-ui-refresh-20260930'
-        run: python3 .github/scripts/apply_practice_ui_patch.py
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -70,10 +62,6 @@ jobs:
         run: |
           flutter clean
           flutter pub get
-
-      - name: Format refreshed UI
-        if: github.ref_name == 'feature-global-ui-refresh-20260930'
-        run: dart format source/lib/theme/app_theme.dart source/lib/theme/widgets.dart source/lib/screens/practice_screen.dart
 
       - name: Run tests
         working-directory: ${{ env.PROJECT_DIR }}
@@ -117,20 +105,6 @@ jobs:
           grep -Fq 'main.dart.js?build=${buildId}' build/web/flutter_bootstrap.js
           grep -qx "$BUILD_ID" build/web/build-id.txt
           touch build/web/.nojekyll
-
-      - name: Commit validated UI source
-        if: github.ref_name == 'feature-global-ui-refresh-20260930'
-        shell: bash
-        run: |
-          if git diff --quiet -- source/lib/theme source/lib/screens/practice_screen.dart; then
-            echo 'No UI source changes to commit.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add source/lib/theme/app_theme.dart source/lib/theme/widgets.dart source/lib/screens/practice_screen.dart
-          git commit -m 'style: apply validated global and Practice UI refresh'
-          git push origin HEAD:feature-global-ui-refresh-20260930
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
