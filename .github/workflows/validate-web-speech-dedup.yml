@@ -1,0 +1,66 @@
+name: Validate Web speech dedup
+
+on:
+  push:
+    branches:
+      - feature-web-speech-dedup-20260930
+    paths:
+      - '.github/workflows/validate-web-speech-dedup.yml'
+      - '.github/scripts/fix_web_speech_dedup.py'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature-web-speech-dedup-20260930
+          fetch-depth: 0
+
+      - name: Apply guarded speech patch
+        run: python3 .github/scripts/fix_web_speech_dedup.py
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Format source
+        working-directory: source
+        run: dart format lib/screens/practice_screen.dart
+
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run tests
+        working-directory: source
+        run: flutter test
+
+      - name: Analyze Flutter code
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Flutter Web release
+        working-directory: source
+        run: flutter build web --release --base-href /GardeFlow/
+
+      - name: Commit validated speech fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add source/lib/screens/practice_screen.dart
+          if git diff --cached --quiet; then
+            echo 'No source change to commit.'
+          else
+            git commit -m 'fix(practice): prevent duplicated Web speech transcription'
+            git push origin HEAD:feature-web-speech-dedup-20260930
+          fi
