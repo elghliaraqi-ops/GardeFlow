@@ -2669,10 +2669,43 @@ class AppState extends ChangeNotifier {
     return pendingUsers.length + _passwordResetRequests.length;
   }
 
+  List<PlanningEntry> get disciplinaryNotifications {
+    final me = currentUser;
+    if (me == null) return const <PlanningEntry>[];
+    final result = _planning
+        .where(
+          (e) =>
+              e.isDisciplinary &&
+              (e.ownerId == me.id || e.ownerPhone == me.phone) &&
+              (e.disciplinaryReason?.trim().isNotEmpty ?? false),
+        )
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
+  }
+
+  int get disciplinaryUnreadCount => disciplinaryNotifications
+      .where((e) => !isNotificationDismissed('disciplinary:${e.id}'))
+      .length;
+
+  void markDisciplinaryNotificationsRead() {
+    var changed = false;
+    for (final entry in disciplinaryNotifications) {
+      changed = _dismissedNotificationKeys.add(
+            _scopedNotificationKey('disciplinary:${entry.id}'),
+          ) ||
+          changed;
+    }
+    if (!changed) return;
+    _persist();
+    notifyListeners();
+  }
+
   int get totalBadgeCount =>
       exchangeActionableCount() +
       leaveActionableCount() +
-      accountActionableCount;
+      accountActionableCount +
+      disciplinaryUnreadCount;
 
   final Set<String> _dismissedNotificationKeys = <String>{};
   String _scopedNotificationKey(String key) {
