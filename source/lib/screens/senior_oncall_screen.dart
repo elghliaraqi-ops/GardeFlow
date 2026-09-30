@@ -14,8 +14,13 @@ import 'astreinte_screen.dart';
 
 class SeniorOnCallScreen extends StatefulWidget {
   final bool embedded;
+  final Widget? embeddedHeader;
 
-  const SeniorOnCallScreen({super.key, this.embedded = false});
+  const SeniorOnCallScreen({
+    super.key,
+    this.embedded = false,
+    this.embeddedHeader,
+  });
 
   @override
   State<SeniorOnCallScreen> createState() => _SeniorOnCallScreenState();
@@ -271,45 +276,86 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return ColoredBox(
+        color: AppColors.paper,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.only(bottom: 44),
+            children: [
+              if (widget.embeddedHeader != null) widget.embeddedHeader!,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Astreinte Sénior',
+                        style: TextStyle(
+                          color: AppColors.ink,
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Photos des astreintes',
+                      onPressed: _openPhotos,
+                      icon: const Icon(Icons.photo_library_rounded, size: 20),
+                      color: AppColors.brand,
+                    ),
+                    IconButton(
+                      tooltip: 'Calendrier du mois',
+                      onPressed: _loading ? null : _openMonthCalendar,
+                      icon: const Icon(Icons.calendar_month_rounded, size: 20),
+                      color: AppColors.brand,
+                    ),
+                    IconButton(
+                      tooltip: 'Actualiser',
+                      onPressed: _loading ? null : _load,
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      color: AppColors.brand,
+                    ),
+                  ],
+                ),
+              ),
+              _SeniorWeekSelector(
+                start: _weekStart,
+                end: _weekEnd,
+                onPrevious: _loading ? null : () => _changeWeek(-1),
+                onNext: _loading ? null : () => _changeWeek(1),
+              ),
+              _SeniorDaySelector(
+                weekStart: _weekStart,
+                selectedIndex: _selectedDayIndex,
+                onSelected: (i) => setState(() => _selectedDayIndex = i),
+              ),
+              _SeniorHospitalFilter(
+                selectedHospital: _activeHospital,
+                onChanged: _selectHospital,
+              ),
+              _SeniorServiceFilter(
+                services: _availableServices,
+                value: _selectedService,
+                onChanged: (value) {
+                  if (value != null) setState(() => _selectedService = value);
+                },
+              ),
+              const SizedBox(height: 4),
+              _buildEmbeddedContent(),
+            ],
+          ),
+        ),
+      );
+    }
+
     final body = Column(
       children: [
-        if (widget.embedded)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 8, 2),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Astreinte Sénior',
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontFamily: 'SpaceGrotesk',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Photos des astreintes',
-                  onPressed: _openPhotos,
-                  icon: const Icon(Icons.photo_library_rounded, size: 20),
-                  color: AppColors.brand,
-                ),
-                IconButton(
-                  tooltip: 'Calendrier du mois',
-                  onPressed: _loading ? null : _openMonthCalendar,
-                  icon: const Icon(Icons.calendar_month_rounded, size: 20),
-                  color: AppColors.brand,
-                ),
-                IconButton(
-                  tooltip: 'Actualiser',
-                  onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh_rounded, size: 20),
-                  color: AppColors.brand,
-                ),
-              ],
-            ),
-          ),
         _SeniorWeekSelector(
           start: _weekStart,
           end: _weekEnd,
@@ -337,10 +383,6 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
       ],
     );
 
-    if (widget.embedded) {
-      return ColoredBox(color: AppColors.paper, child: body);
-    }
-
     return Scaffold(
       backgroundColor: AppColors.paper,
       appBar: AppBar(
@@ -364,6 +406,89 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
         ],
       ),
       body: body,
+    );
+  }
+
+  Widget _buildEmbeddedContent() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 54),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(22, 28, 22, 20),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 44,
+              color: AppColors.danger,
+            ),
+            const SizedBox(height: 12),
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final rows = _visibleRows;
+    if (rows.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 46, 24, 22),
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_available_outlined,
+              size: 50,
+              color: AppColors.inkFaint,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Aucune astreinte sénior le ${DateFormat('d MMMM yyyy', 'fr_FR').format(_selectedDay)}.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.inkSoft),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final grouped = <String, List<_SeniorOnCallRow>>{};
+    for (final row in rows) {
+      grouped.putIfAbsent(row.service, () => []).add(row);
+    }
+    final services = grouped.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final isAdmin =
+        context.watch<AppState>().currentUser?.role == UserRole.admin;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        0,
+      ),
+      child: Column(
+        children: [
+          for (final service in services)
+            _SeniorServiceCard(
+              service: service,
+              rows: grouped[service]!,
+              canAddContact: isAdmin,
+              savingContacts: _savingContacts,
+              onAddContact: _addContact,
+            ),
+        ],
+      ),
     );
   }
 

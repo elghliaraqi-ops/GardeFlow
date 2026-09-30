@@ -18,8 +18,13 @@ import '../theme/widgets.dart';
 /// navigable jour par jour et une liste permet de filtrer les services.
 class JuniorOnCallScreen extends StatefulWidget {
   final bool embedded;
+  final Widget? embeddedHeader;
 
-  const JuniorOnCallScreen({super.key, this.embedded = false});
+  const JuniorOnCallScreen({
+    super.key,
+    this.embedded = false,
+    this.embeddedHeader,
+  });
 
   @override
   State<JuniorOnCallScreen> createState() => _JuniorOnCallScreenState();
@@ -284,41 +289,85 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (widget.embedded) {
+      return ColoredBox(
+        color: theme.scaffoldBackgroundColor,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.only(bottom: 44),
+            children: [
+              if (widget.embeddedHeader != null) widget.embeddedHeader!,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 10, 2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Astreinte Junior',
+                        style: TextStyle(
+                          color: AppColors.ink,
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Calendrier du mois',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _loading ? null : _openMonthCalendar,
+                      icon: const Icon(Icons.calendar_month_rounded, size: 20),
+                      color: AppColors.brand,
+                    ),
+                    IconButton(
+                      tooltip: 'Actualiser',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _loading ? null : _load,
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      color: AppColors.brand,
+                    ),
+                  ],
+                ),
+              ),
+              _WeekSelector(
+                start: _weekStart,
+                end: _weekEnd,
+                onPrevious: _loading ? null : () => _changeWeek(-1),
+                onNext: _loading ? null : () => _changeWeek(1),
+              ),
+              _DaySelector(
+                weekStart: _weekStart,
+                selectedIndex: _selectedDayIndex,
+                onSelected: _selectDay,
+              ),
+              _HospitalFilter(
+                selectedHospital: _activeHospital,
+                onChanged: _selectHospital,
+              ),
+              _ServiceFilter(
+                services: _availableServices,
+                value: _selectedService,
+                allValue: _allServices,
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _selectedService = value);
+                },
+              ),
+              const SizedBox(height: 4),
+              _buildEmbeddedContent(),
+            ],
+          ),
+        ),
+      );
+    }
+
     final body = Column(
       children: [
-        if (widget.embedded)
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 2, 10, 2),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Astreinte Junior',
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontFamily: 'SpaceGrotesk',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Calendrier du mois',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _loading ? null : _openMonthCalendar,
-                  icon: Icon(Icons.calendar_month_rounded, size: 20),
-                  color: AppColors.brand,
-                ),
-                IconButton(
-                  tooltip: 'Actualiser',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _loading ? null : _load,
-                  icon: Icon(Icons.refresh_rounded, size: 20),
-                  color: AppColors.brand,
-                ),
-              ],
-            ),
-          ),
         _WeekSelector(
           start: _weekStart,
           end: _weekEnd,
@@ -348,10 +397,6 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
       ],
     );
 
-    if (widget.embedded) {
-      return ColoredBox(color: theme.scaffoldBackgroundColor, child: body);
-    }
-
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -360,16 +405,87 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
           IconButton(
             tooltip: 'Calendrier du mois',
             onPressed: _loading ? null : _openMonthCalendar,
-            icon: Icon(Icons.calendar_month_rounded),
+            icon: const Icon(Icons.calendar_month_rounded),
           ),
           IconButton(
             tooltip: 'Actualiser',
             onPressed: _loading ? null : _load,
-            icon: Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: body,
+    );
+  }
+
+  Widget _buildEmbeddedContent() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 54),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(22, 28, 22, 20),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              size: 44,
+              color: AppColors.danger,
+            ),
+            const SizedBox(height: 12),
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final rows = _visibleRows;
+    if (rows.isEmpty) {
+      final day = DateFormat('EEEE d MMMM', 'fr_FR').format(_selectedDay);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 46, 24, 22),
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_available_outlined,
+              size: 50,
+              color: AppColors.inkFaint,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Aucune garde ou astreinte Junior $day
+à ${_juniorHospitalLabel(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.inkSoft,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final groups = _groupRowsByServiceForDay(rows);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        0,
+      ),
+      child: Column(
+        children: [for (final group in groups) _ServiceDayCard(group: group)],
+      ),
     );
   }
 
