@@ -80,8 +80,30 @@ jobs:
             --base-href "/GardeFlow/" \
             --build-name "$APP_VERSION" \
             --build-number "$BUILD_NUMBER"
+
+          BUILD_ID="${GITHUB_SHA:0:12}"
+          python3 - "$BUILD_ID" <<'PY'
+          from pathlib import Path
+          import sys
+
+          build_id = sys.argv[1]
+          for relative in ('build/web/index.html', 'build/web/flutter_bootstrap.js'):
+              path = Path(relative)
+              text = path.read_text(encoding='utf-8')
+              marker = '__GARDEFLOW_BUILD_ID__'
+              if marker not in text:
+                  raise SystemExit(f'Missing cache-bust marker in {relative}')
+              path.write_text(text.replace(marker, build_id), encoding='utf-8')
+
+          Path('build/web/build-id.txt').write_text(build_id + '\n', encoding='utf-8')
+          PY
+
           test -f build/web/index.html
           test -f build/web/main.dart.js
+          test -f build/web/flutter_bootstrap.js
+          grep -q "flutter_bootstrap.js?build=$BUILD_ID" build/web/index.html
+          grep -q "main.dart.js?build=\\${buildId}" build/web/flutter_bootstrap.js
+          grep -qx "$BUILD_ID" build/web/build-id.txt
           touch build/web/.nojekyll
 
       - name: Upload web artifact
