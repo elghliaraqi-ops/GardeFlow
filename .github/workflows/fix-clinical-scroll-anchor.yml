@@ -1,0 +1,122 @@
+name: Fix clinical cases scroll anchor
+
+on:
+  push:
+    branches:
+      - fix-clinical-scroll-anchor-20260930
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply deterministic scroll fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          home = Path('source/lib/screens/home_screen.dart')
+          text = home.read_text(encoding='utf-8')
+          old = """              onTap: () async {
+                if (scrollController.hasClients) {
+                  await scrollController.animateTo(
+                    scrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 560),
+                    curve: Curves.easeOutCubic,
+                  );
+                }
+                await Future<void>.delayed(const Duration(milliseconds: 40));
+                final targetContext = clinicalCasesFeedKey.currentContext;
+                if (targetContext == null) return;
+                await Scrollable.ensureVisible(
+                  targetContext,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: 0.02,
+                );
+              },
+"""
+          new = """              onTap: () {
+                final targetContext = clinicalCasesFeedKey.currentContext;
+                if (targetContext == null) return;
+                Scrollable.ensureVisible(
+                  targetContext,
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeOutCubic,
+                  alignment: 0.03,
+                );
+              },
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+              home.write_text(text, encoding='utf-8')
+          elif new not in text:
+              raise SystemExit('Expected clinical scroll handler not found')
+
+          cases = Path('source/lib/screens/clinical_cases_section.dart')
+          text = cases.read_text(encoding='utf-8')
+          top_old = """    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),
+"""
+          top_new = """    return Container(
+      key: widget.verticalFeedKey,
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),
+"""
+          if top_old in text:
+              text = text.replace(top_old, top_new, 1)
+          elif top_new not in text:
+              raise SystemExit('Expected clinical cases container not found')
+          bottom = "          SizedBox(key: widget.verticalFeedKey, height: 0),\n"
+          text = text.replace(bottom, '', 1)
+          cases.write_text(text, encoding='utf-8')
+
+      - name: Commit patch once
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Patch already applied"
+          else
+            git config user.name "elghliaraqi-ops"
+            git config user.email "elghliaraqi@gmail.com"
+            git add source/lib/screens/home_screen.dart source/lib/screens/clinical_cases_section.dart
+            git commit -m "Fix clinical cases shortcut scroll [scroll-fix-applied]"
+            git push origin HEAD:fix-clinical-scroll-anchor-20260930
+            exit 0
+          fi
+
+      - name: Verify scroll implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -A20 "Cas cliniques plus bas" source/lib/screens/home_screen.dart | grep -q "maxScrollExtent"
+          grep -q "key: widget.verticalFeedKey" source/lib/screens/clinical_cases_section.dart
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run tests
+        working-directory: source
+        run: flutter test
+
+      - name: Analyze
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Web release
+        working-directory: source
+        run: flutter build web --release --base-href "/GardeFlow/"
