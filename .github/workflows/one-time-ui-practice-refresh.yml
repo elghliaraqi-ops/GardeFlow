@@ -19,6 +19,23 @@ jobs:
           ref: ui/practice-clinical-qcm-refresh-20260930
           fetch-depth: 0
 
+      - name: Diagnose visual anchors
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('source/lib/screens/clinical_cases_section.dart').read_text()
+          anchors = {
+            'case-card': "      padding: const EdgeInsets.all(15),\n      decoration: BoxDecoration(\n        color: AppColors.card,\n        borderRadius: BorderRadius.circular(22),",
+            'case-badge': "                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),\n                decoration: BoxDecoration(\n                  color: AppColors.brandSoft,",
+            'qcm-panel': "              padding: const EdgeInsets.all(13),\n              decoration: BoxDecoration(\n                color: AppColors.paperAlt,\n                borderRadius: BorderRadius.circular(17),",
+            'question': "                    style: TextStyle(\n                      color: AppColors.ink,\n                      fontSize: 13.5,",
+            'correction': "                padding: const EdgeInsets.all(13),\n                decoration: BoxDecoration(\n                  color: (correct ? AppColors.success : AppColors.danger)",
+          }
+          for name, anchor in anchors.items():
+              print(name, s.count(anchor))
+          PY
+
       - name: Apply UI-only visual patch
         run: python3 .github/scripts/one_time_ui_practice_refresh.py
 
