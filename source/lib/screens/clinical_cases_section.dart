@@ -96,7 +96,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                   color: AppColors.brandSoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.clinical_notes_rounded, color: AppColors.brandBright),
+                child: Icon(Icons.medical_information_outlined, color: AppColors.brandBright),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -314,9 +314,9 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           ),
           if (_expanded) ...[
             _CaseSection(icon: Icons.history_edu_rounded, label: 'Histoire / antécédents', value: post.history),
-            _CaseSection(icon: Icons.stethoscope, label: 'Examen clinique', value: post.clinicalExam),
+            _CaseSection(icon: Icons.health_and_safety_outlined, label: 'Examen clinique', value: post.clinicalExam),
             _CaseSection(icon: Icons.biotech_outlined, label: 'Examens complémentaires', value: post.complementaryExams),
-            _CaseSection(icon: Icons.radiology_outlined, label: 'Imagerie', value: post.imagingConclusion),
+            _CaseSection(icon: Icons.image_search_outlined, label: 'Imagerie', value: post.imagingConclusion),
             _CaseSection(icon: Icons.psychology_alt_outlined, label: 'Synthèse', value: post.assessment),
             _CaseSection(icon: Icons.medical_services_outlined, label: 'Prise en charge documentée', value: post.plan),
             if (post.disposition.trim().isNotEmpty)
