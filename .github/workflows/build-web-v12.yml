@@ -6,7 +6,6 @@ on:
     branches:
       - main
       - v12-optimisee
-      - fix-practice-qcm-scroll-guard-20260930
     paths:
       - '.github/workflows/build-web-v12.yml'
       - 'source/**'
