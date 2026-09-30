@@ -1090,10 +1090,58 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   final stt.SpeechToText _speech = stt.SpeechToText();
   TextEditingController? _dictatingController;
   String? _dictatingLabel;
-  String _dictationBaseText = '';
   bool _speechReady = false;
   bool _speechInitializing = false;
   String? _speechLocaleId;
+  Timer? _speechRestartTimer;
+  bool _dictationRequested = false;
+  bool _speechStarting = false;
+  int _speechSession = 0;
+  int _consecutiveSpeechErrors = 0;
+
+  static const List<String> _medicalSpeechHints = <String>[
+    'douleur abdominale',
+    'épigastre',
+    'hypochondre droit',
+    'hypochondre gauche',
+    'fosse iliaque droite',
+    'fosse iliaque gauche',
+    'point de McBurney',
+    'défense abdominale',
+    'contracture abdominale',
+    'nausées',
+    'vomissements',
+    'diarrhée',
+    'constipation',
+    'dyspnée',
+    'dysurie',
+    'hématurie',
+    'hématémèse',
+    'méléna',
+    'tachycardie',
+    'hypotension',
+    'hypertension',
+    'saturation',
+    'auscultation',
+    'appendicite',
+    'cholécystite',
+    'pancréatite',
+    'péritonite',
+    'occlusion intestinale',
+    'scanner abdominal',
+    'échographie abdominale',
+    'TDM',
+    'IRM',
+    'ECG',
+    'CRP',
+    'leucocytes',
+    'hémoglobine',
+    'créatinine',
+    'natrémie',
+    'kaliémie',
+    'troponine',
+    'conduite à tenir',
+  ];
   final _age = TextEditingController();
   final _location = TextEditingController();
   final _chiefComplaint = TextEditingController();
@@ -1165,6 +1213,9 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   @override
   void dispose() {
     _autosave?.cancel();
+    _speechRestartTimer?.cancel();
+    _dictationRequested = false;
+    _speechSession++;
     if (_speech.isListening) {
       unawaited(_speech.cancel());
     }
@@ -1233,23 +1284,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     if (mounted) setState(() => _speechInitializing = true);
     try {
       final available = await _speech.initialize(
-        onStatus: (_) {
-          if (mounted) setState(() {});
-        },
-        onError: (error) {
-          if (!mounted) return;
-          setState(() {
-            _dictatingController = null;
-            _dictatingLabel = null;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Dictée interrompue : ${error.errorMsg.replaceAll('_', ' ')}',
-              ),
-            ),
-          );
-        },
+        onStatus: _handleSpeechStatus,
+        onError: _handleSpeechError,
+        finalTimeout: const Duration(seconds: 3),
+        options: kIsWeb
+            ? <stt.SpeechConfigOption>[stt.SpeechToText.webDoNotAggregate]
+            : null,
       );
       if (!available) {
         if (mounted) {
@@ -1264,19 +1304,38 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         return false;
       }
 
-      String? french;
       final locales = await _speech.locales();
-      for (final locale in locales) {
-        final id = locale.localeId.toLowerCase().replaceAll('-', '_');
-        if (id == 'fr_fr') {
-          french = locale.localeId;
-          break;
+      final systemLocale = await _speech.systemLocale();
+
+      String normalizedLocale(String value) =>
+          value.toLowerCase().replaceAll('-', '_');
+
+      String? exactLocale(String wanted) {
+        final normalizedWanted = normalizedLocale(wanted);
+        for (final locale in locales) {
+          if (normalizedLocale(locale.localeId) == normalizedWanted) {
+            return locale.localeId;
+          }
         }
-        if (french == null && id.startsWith('fr_')) {
-          french = locale.localeId;
+        return null;
+      }
+
+      String? french;
+      final systemId = systemLocale?.localeId;
+      if (systemId != null && normalizedLocale(systemId).startsWith('fr')) {
+        french = exactLocale(systemId);
+      }
+      french ??= exactLocale('fr_FR');
+      french ??= exactLocale('fr_MA');
+      if (french == null) {
+        for (final locale in locales) {
+          if (normalizedLocale(locale.localeId).startsWith('fr')) {
+            french = locale.localeId;
+            break;
+          }
         }
       }
-      _speechLocaleId = french;
+      _speechLocaleId = french ?? systemId;
       _speechReady = true;
       return true;
     } catch (e) {
@@ -1291,8 +1350,83 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     }
   }
 
+  void _handleSpeechStatus(String status) {
+    if (mounted) setState(() {});
+    if (!_dictationRequested) return;
+    final normalized = status.toLowerCase();
+    if (normalized == stt.SpeechToText.doneStatus.toLowerCase() ||
+        normalized == stt.SpeechToText.notListeningStatus.toLowerCase()) {
+      _scheduleSpeechRestart();
+    }
+  }
+
+  bool _isRecoverableSpeechError(String error) {
+    final normalized = error.toLowerCase();
+    return normalized.contains('no_match') ||
+        normalized.contains('speech_timeout') ||
+        normalized.contains('retry') ||
+        normalized.contains('busy') ||
+        normalized.contains('network_timeout') ||
+        normalized.contains('server_disconnected') ||
+        normalized == 'error_network' ||
+        normalized == 'error_server';
+  }
+
+  String _friendlySpeechError(String error) {
+    final normalized = error.toLowerCase();
+    if (normalized.contains('permission')) {
+      return 'Microphone non autorisé. Activez l’accès au micro pour GardeFlow dans les réglages de l’appareil.';
+    }
+    if (normalized.contains('language_not_supported') ||
+        normalized.contains('language_unavailable')) {
+      return 'La reconnaissance vocale française n’est pas disponible sur cet appareil. Installez ou activez le français dans les réglages de reconnaissance vocale.';
+    }
+    if (normalized.contains('recognizer_disabled')) {
+      return 'La reconnaissance vocale est désactivée sur cet appareil.';
+    }
+    if (normalized.contains('too_many_requests')) {
+      return 'Le service de reconnaissance vocale reçoit trop de requêtes. Réessayez dans quelques instants.';
+    }
+    if (normalized.contains('network')) {
+      return 'La reconnaissance vocale a perdu la connexion. Vérifiez le réseau puis relancez le micro.';
+    }
+    return 'Dictée interrompue : ${error.replaceAll('_', ' ')}';
+  }
+
+  void _handleSpeechError(dynamic error) {
+    final message = error.errorMsg?.toString() ?? error.toString();
+    if (_dictationRequested && _isRecoverableSpeechError(message)) {
+      _consecutiveSpeechErrors++;
+      if (_consecutiveSpeechErrors <= 4) {
+        if (_speech.isListening) unawaited(_speech.cancel());
+        final delay = Duration(
+          milliseconds: 350 + ((_consecutiveSpeechErrors - 1) * 250),
+        );
+        _scheduleSpeechRestart(delay: delay);
+        return;
+      }
+    }
+
+    _dictationRequested = false;
+    _speechRestartTimer?.cancel();
+    _speechSession++;
+    if (!mounted) return;
+    setState(() {
+      _dictatingController = null;
+      _dictatingLabel = null;
+    });
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(_friendlySpeechError(message))));
+  }
+
   String _normalizeSpeechTranscript(String raw) {
-    final cleaned = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final cleaned = raw
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAllMapped(
+          RegExp(r'\s+([,.;:!?…])'),
+          (match) => match.group(1)!,
+        );
     if (!kIsWeb || cleaned.isEmpty) return cleaned;
 
     String keyOf(String token) => token.toLowerCase().replaceAll(
@@ -1300,27 +1434,14 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       '',
     );
 
-    var tokens = cleaned.split(' ');
-
-    // Chrome/Web Speech peut répéter le même mot dans un résultat final.
-    // On ne déduplique ce comportement que sur le Web afin de ne pas toucher
-    // aux moteurs natifs Android/iOS.
-    final singleDeduped = <String>[];
-    for (final token in tokens) {
-      if (singleDeduped.isNotEmpty &&
-          keyOf(singleDeduped.last).isNotEmpty &&
-          keyOf(singleDeduped.last) == keyOf(token)) {
-        continue;
-      }
-      singleDeduped.add(token);
-    }
-    tokens = singleDeduped;
-
-    // Certains navigateurs répètent un segment entier (2 à 12 mots). On
-    // supprime uniquement les blocs immédiatement adjacents et identiques.
+    // Le mode webDoNotAggregate évite le principal bug de doublons de Chrome
+    // Android. On conserve seulement une protection prudente contre la
+    // répétition immédiate d’un bloc entier, sans supprimer les vrais mots
+    // répétés (« très très », « non non », etc.).
+    final tokens = cleaned.split(' ');
     var maxBlock = tokens.length ~/ 2;
-    if (maxBlock > 12) maxBlock = 12;
-    for (var block = maxBlock; block >= 2; block--) {
+    if (maxBlock > 16) maxBlock = 16;
+    for (var block = maxBlock; block >= 3; block--) {
       var index = 0;
       while (index + (block * 2) <= tokens.length) {
         var identicalBlocks = true;
@@ -1342,75 +1463,181 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     return tokens.join(' ').trim();
   }
 
-  Future<void> _toggleDictation(
+  String _combineSpeechSegments(String committed, String incoming) {
+    final current = committed.trim();
+    final next = incoming.trim();
+    if (current.isEmpty) return next;
+    if (next.isEmpty) return current;
+
+    final currentKey = current.toLowerCase();
+    final nextKey = next.toLowerCase();
+    if (nextKey.startsWith('$currentKey ')) return next;
+    return '$current $next';
+  }
+
+  void _scheduleSpeechRestart({
+    Duration delay = const Duration(milliseconds: 450),
+  }) {
+    if (!_dictationRequested || !mounted) return;
+    final controller = _dictatingController;
+    final label = _dictatingLabel;
+    if (controller == null || label == null) return;
+
+    _speechRestartTimer?.cancel();
+    _speechRestartTimer = Timer(delay, () {
+      if (!mounted ||
+          !_dictationRequested ||
+          !identical(_dictatingController, controller)) {
+        return;
+      }
+      unawaited(_startSpeechSession(controller, label));
+    });
+  }
+
+  Future<void> _startSpeechSession(
     TextEditingController controller,
     String label,
   ) async {
-    if (_speechInitializing) return;
+    if (!mounted ||
+        !_dictationRequested ||
+        !identical(_dictatingController, controller) ||
+        _speechStarting ||
+        _speech.isListening) {
+      return;
+    }
 
-    if (identical(_dictatingController, controller) && _speech.isListening) {
-      await _speech.stop();
-      if (mounted) {
+    _speechRestartTimer?.cancel();
+    _speechStarting = true;
+    final session = ++_speechSession;
+    final sessionBase = controller.text.trimRight();
+    var committedSpeech = '';
+    String? lastFinalChunk;
+    DateTime? lastFinalAt;
+
+    try {
+      final started = await _speech.listen(
+        onResult: (result) {
+          if (!mounted ||
+              !_dictationRequested ||
+              session != _speechSession ||
+              !identical(_dictatingController, controller)) {
+            return;
+          }
+
+          final words = _normalizeSpeechTranscript(result.recognizedWords);
+          if (words.isEmpty) return;
+          _consecutiveSpeechErrors = 0;
+          _speech.changePauseFor(Duration(seconds: kIsWeb ? 5 : 7));
+
+          var speechForDisplay = words;
+          if (result.finalResult) {
+            final now = DateTime.now();
+            final rapidDuplicate =
+                lastFinalChunk != null &&
+                lastFinalChunk!.toLowerCase() == words.toLowerCase() &&
+                lastFinalAt != null &&
+                now.difference(lastFinalAt!).inMilliseconds < 1200;
+            if (!rapidDuplicate) {
+              committedSpeech = _combineSpeechSegments(committedSpeech, words);
+              lastFinalChunk = words;
+              lastFinalAt = now;
+            }
+            speechForDisplay = committedSpeech;
+          } else if (committedSpeech.isNotEmpty) {
+            speechForDisplay = _combineSpeechSegments(committedSpeech, words);
+          }
+
+          if (speechForDisplay.isEmpty) return;
+          final separator = sessionBase.isEmpty ? '' : ' ';
+          final nextText = '$sessionBase$separator$speechForDisplay'
+              .trimRight();
+          controller.value = TextEditingValue(
+            text: nextText,
+            selection: TextSelection.collapsed(offset: nextText.length),
+          );
+          setState(() {});
+        },
+        listenOptions: stt.SpeechListenOptions(
+          localeId: _speechLocaleId,
+          listenFor: const Duration(minutes: 3),
+          pauseFor: Duration(seconds: kIsWeb ? 7 : 10),
+          partialResults: true,
+          cancelOnError: false,
+          onDevice: false,
+          listenMode: stt.ListenMode.dictation,
+          autoPunctuation: true,
+          enableHapticFeedback: false,
+          contextualPhrases: _medicalSpeechHints,
+        ),
+      );
+      if (started == false && _dictationRequested) {
+        _scheduleSpeechRestart();
+      }
+    } catch (e) {
+      if (!mounted ||
+          !_dictationRequested ||
+          session != _speechSession ||
+          !identical(_dictatingController, controller)) {
+        return;
+      }
+      _consecutiveSpeechErrors++;
+      if (_consecutiveSpeechErrors <= 4) {
+        _scheduleSpeechRestart(
+          delay: Duration(milliseconds: 400 + (_consecutiveSpeechErrors * 250)),
+        );
+      } else {
+        _dictationRequested = false;
         setState(() {
           _dictatingController = null;
           _dictatingLabel = null;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Impossible de relancer la dictée : $e')),
+        );
       }
+    } finally {
+      _speechStarting = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _stopDictation() async {
+    _dictationRequested = false;
+    _speechRestartTimer?.cancel();
+    _speechSession++;
+    if (_speech.isListening) await _speech.stop();
+    if (!mounted) return;
+    setState(() {
+      _dictatingController = null;
+      _dictatingLabel = null;
+    });
+  }
+
+  Future<void> _toggleDictation(
+    TextEditingController controller,
+    String label,
+  ) async {
+    if (_speechInitializing || _speechStarting) return;
+
+    if (identical(_dictatingController, controller) && _dictationRequested) {
+      await _stopDictation();
       return;
     }
 
-    if (_speech.isListening) {
-      await _speech.stop();
+    if (_dictationRequested || _speech.isListening) {
+      await _stopDictation();
     }
     if (!await _ensureSpeechReady()) return;
 
-    _dictationBaseText = controller.text.trimRight();
+    _consecutiveSpeechErrors = 0;
+    _dictationRequested = true;
     if (mounted) {
       setState(() {
         _dictatingController = controller;
         _dictatingLabel = label;
       });
     }
-
-    try {
-      await _speech.listen(
-        localeId: _speechLocaleId,
-        listenFor: const Duration(minutes: 2),
-        pauseFor: Duration(seconds: kIsWeb ? 2 : 4),
-        partialResults: !kIsWeb,
-        cancelOnError: true,
-        listenMode: stt.ListenMode.dictation,
-        onResult: (result) {
-          if (!mounted || !identical(_dictatingController, controller)) return;
-          final words = _normalizeSpeechTranscript(result.recognizedWords);
-          if (words.isEmpty) return;
-          final separator = _dictationBaseText.isEmpty ? '' : ' ';
-          final nextText = '$_dictationBaseText$separator$words';
-          controller.value = TextEditingValue(
-            text: nextText,
-            selection: TextSelection.collapsed(offset: nextText.length),
-          );
-          if (result.finalResult && mounted) {
-            setState(() {
-              _dictatingController = null;
-              _dictatingLabel = null;
-            });
-          } else {
-            setState(() {});
-          }
-        },
-      );
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _dictatingController = null;
-        _dictatingLabel = null;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Impossible de démarrer la dictée : $e')),
-      );
-    }
+    await _startSpeechSession(controller, label);
   }
 
   void _changed() {
@@ -1856,62 +2083,60 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     );
   }
 
-  Widget _formChapterTitle(
-    String title,
-    IconData icon,
-    String subtitle,
-  ) => Padding(
-    padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
-    child: Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: PracticeColors.accent.withOpacity(.12),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: PracticeColors.accent.withOpacity(.18),
+  Widget _formChapterTitle(String title, IconData icon, String subtitle) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: PracticeColors.accent.withOpacity(.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: PracticeColors.accent.withOpacity(.18),
+                ),
+              ),
+              child: Icon(icon, color: PracticeColors.accent, size: 19),
             ),
-          ),
-          child: Icon(icon, color: PracticeColors.accent, size: 19),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: PracticeColors.text,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .75,
-                ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: PracticeColors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .75,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: PracticeColors.textSecondary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: PracticeColors.textSecondary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 
   IconData _formSectionIcon(String title) {
     if (title.contains('IDENTIFICATION')) return Icons.badge_outlined;
     if (title.contains('ANTÉCÉDENTS')) return Icons.history_rounded;
     if (title.contains('MOTIF')) return Icons.chat_bubble_outline_rounded;
     if (title.contains('HISTOIRE')) return Icons.timeline_rounded;
-    if (title.contains('EXAMEN CLINIQUE')) return Icons.medical_services_outlined;
+    if (title.contains('EXAMEN CLINIQUE'))
+      return Icons.medical_services_outlined;
     if (title.contains('COMPLÉMENTAIRES')) return Icons.biotech_outlined;
     if (title.contains('IMAGERIE')) return Icons.image_search_outlined;
     if (title.contains('BILAN')) return Icons.fact_check_outlined;
@@ -2057,7 +2282,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     final active =
         voice &&
         identical(_dictatingController, controller) &&
-        _speech.isListening;
+        _dictationRequested;
+    final activelyListening = active && _speech.isListening;
     return TextFormField(
       controller: controller,
       maxLines: lines,
@@ -2072,7 +2298,9 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       ),
       decoration: _practiceInputDecoration(hint, icon).copyWith(
         helperText: active
-            ? 'Écoute en cours · appuyez de nouveau sur le micro pour arrêter'
+            ? (activelyListening
+                  ? 'Écoute en cours · continuez à parler · touchez le micro pour arrêter'
+                  : 'Dictée active · reprise automatique de l’écoute…')
             : null,
         helperStyle: const TextStyle(
           color: PracticeColors.accent,
@@ -2110,62 +2338,59 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     );
   }
 
-  Widget _yesNo(
-    String label,
-    bool value,
-    ValueChanged<bool> onChanged,
-  ) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-    decoration: BoxDecoration(
-      color: PracticeColors.background.withOpacity(.34),
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: PracticeColors.line.withOpacity(.72)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+  Widget _yesNo(String label, bool value, ValueChanged<bool> onChanged) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        decoration: BoxDecoration(
+          color: PracticeColors.background.withOpacity(.34),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: PracticeColors.line.withOpacity(.72)),
         ),
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: true, label: Text('Oui')),
-            ButtonSegment(value: false, label: Text('Non')),
-          ],
-          selected: <bool>{value},
-          onSelectionChanged: (selection) => onChanged(selection.first),
-          style: ButtonStyle(
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.selected)
-                  ? PracticeColors.background
-                  : PracticeColors.textSecondary,
-            ),
-            backgroundColor: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.selected)
-                  ? PracticeColors.accent
-                  : PracticeColors.elevated,
-            ),
-            side: WidgetStatePropertyAll(
-              BorderSide(color: PracticeColors.line.withOpacity(.85)),
-            ),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('Oui')),
+                ButtonSegment(value: false, label: Text('Non')),
+              ],
+              selected: <bool>{value},
+              onSelectionChanged: (selection) => onChanged(selection.first),
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.selected)
+                      ? PracticeColors.background
+                      : PracticeColors.textSecondary,
+                ),
+                backgroundColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.selected)
+                      ? PracticeColors.accent
+                      : PracticeColors.elevated,
+                ),
+                side: WidgetStatePropertyAll(
+                  BorderSide(color: PracticeColors.line.withOpacity(.85)),
+                ),
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 
   Widget _specialtyDropdown(
     String label,
@@ -3575,9 +3800,7 @@ class _FormHeader extends StatelessWidget {
           decoration: BoxDecoration(
             color: PracticeColors.accent.withOpacity(.12),
             borderRadius: BorderRadius.circular(17),
-            border: Border.all(
-              color: PracticeColors.accent.withOpacity(.26),
-            ),
+            border: Border.all(color: PracticeColors.accent.withOpacity(.26)),
           ),
           child: const Icon(
             Icons.assignment_outlined,
@@ -3610,15 +3833,11 @@ class _FormHeader extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (pending
-                          ? PracticeColors.waiting
-                          : PracticeColors.accent)
-                      .withOpacity(.11),
+                  color:
+                      (pending ? PracticeColors.waiting : PracticeColors.accent)
+                          .withOpacity(.11),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
@@ -3926,33 +4145,19 @@ InputDecoration _practiceInputDecoration(String hint, [IconData? icon]) =>
       ),
       prefixIcon: icon == null
           ? null
-          : Icon(
-              icon,
-              color: PracticeColors.accent.withOpacity(.78),
-              size: 19,
-            ),
+          : Icon(icon, color: PracticeColors.accent.withOpacity(.78), size: 19),
       filled: true,
       fillColor: PracticeColors.background.withOpacity(.58),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 14,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(
-          color: PracticeColors.line.withOpacity(.82),
-        ),
+        borderSide: BorderSide(color: PracticeColors.line.withOpacity(.82)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(
-          color: PracticeColors.accent,
-          width: 1.6,
-        ),
+        borderSide: const BorderSide(color: PracticeColors.accent, width: 1.6),
       ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
     );
 
 Widget _sectionLabel(String label) => Text(
