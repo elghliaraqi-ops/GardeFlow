@@ -1,0 +1,50 @@
+name: One-time clean generated visual branch artifacts
+
+on:
+  push:
+    branches:
+      - style/home-feed-practice-cases-qcm-20261001
+    paths:
+      - '.github/workflows/one-time-clean-home-feed-generated.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v5
+        with:
+          ref: style/home-feed-practice-cases-qcm-20261001
+          fetch-depth: 0
+
+      - name: Remove generated Flutter artifacts accidentally tracked
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -r --ignore-unmatch source/.dart_tool source/build
+          git rm --ignore-unmatch source/.flutter-plugins-dependencies
+          rm -f .github/workflows/one-time-clean-home-feed-generated.yml
+
+      - name: Verify intended diff against main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          mapfile -t source_changed < <(git diff --name-only origin/main...HEAD -- source | grep -vE '^(source/\.dart_tool/|source/build/|source/\.flutter-plugins-dependencies$)' || true)
+          printf '%s\n' "${source_changed[@]}"
+          test "${#source_changed[@]}" -eq 2
+          printf '%s\n' "${source_changed[@]}" | grep -Fxq 'source/lib/screens/clinical_cases_section.dart'
+          printf '%s\n' "${source_changed[@]}" | grep -Fxq 'source/lib/screens/practice_screen.dart'
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: remove generated Flutter build artifacts"
+          git push origin HEAD:style/home-feed-practice-cases-qcm-20261001
