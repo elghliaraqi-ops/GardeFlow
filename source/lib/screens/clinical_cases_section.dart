@@ -248,8 +248,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   }
 
   void _syncQcms({required bool resetIndex}) {
-    _qcms = List<ClinicalCaseQcm>.from(widget.post.qcms)
+    final available = List<ClinicalCaseQcm>.from(widget.post.qcms)
       ..sort((a, b) => a.position.compareTo(b.position));
+    final aiReady = available.length == 5 &&
+        available.every((qcm) => qcm.generationSource == 'openai');
+    _qcms = aiReady ? available : <ClinicalCaseQcm>[];
     if (_qcms.isEmpty) {
       _currentQcm = 0;
       return;
@@ -477,7 +480,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Les 5 QCM de ce cas sont en préparation…',
+                      'Les 5 QCM et leurs explications IA sont en préparation…',
                       style: TextStyle(
                         color: AppColors.inkSoft,
                         fontWeight: FontWeight.w700,

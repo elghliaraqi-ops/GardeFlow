@@ -8,8 +8,6 @@ import 'package:flutter/material.dart';
 import '../config/firebase_config.dart';
 import '../screens/announcements_screen.dart';
 import '../screens/notifications_screen.dart';
-import '../screens/practice_screen.dart';
-import '../state/app_state.dart';
 import 'app_navigation.dart';
 import 'local_storage_service.dart';
 import 'notification_service.dart';
@@ -49,7 +47,7 @@ class PushNotificationService {
   bool _enabled = false;
   bool _navigationReady = false;
   bool _isAdmin = false;
-  AppState? _appState;
+  void Function()? _openPractice;
   String? _pendingKind;
   String? _registeredToken;
   StreamSubscription<String>? _tokenRefreshSub;
@@ -137,10 +135,13 @@ class PushNotificationService {
 
   // Appelé uniquement après l'arrivée sur l'accueil : le splash et la connexion
   // doivent terminer avant d'ouvrir une page à partir d'une notification.
-  void navigationReady({required bool isAdmin, AppState? appState}) {
+  void navigationReady({
+    required bool isAdmin,
+    void Function()? onPractice,
+  }) {
     _navigationReady = true;
     _isAdmin = isAdmin;
-    _appState = appState ?? _appState;
+    _openPractice = onPractice ?? _openPractice;
     final kind = _pendingKind;
     _pendingKind = null;
     if (kind != null) _open(kind);
@@ -151,12 +152,8 @@ class PushNotificationService {
       _pendingKind = kind;
       return;
     }
-    if (kind.startsWith('practice_') && _appState != null) {
-      huimNavigatorKey.currentState!.push(
-        MaterialPageRoute(
-          builder: (_) => PracticeScreen(appState: _appState!),
-        ),
-      );
+    if (kind.startsWith('practice_') && _openPractice != null) {
+      _openPractice!();
       return;
     }
     if (kind == 'announcement_created') {

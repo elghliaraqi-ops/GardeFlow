@@ -64,7 +64,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if (context.mounted && appState.currentUser != null) {
           PushNotificationService.instance.navigationReady(
             isAdmin: appState.currentUser!.role == UserRole.admin,
-            appState: appState,
+            onPractice: () {
+              if (mounted) setState(() => _tab = 2);
+            },
           );
         }
       });
