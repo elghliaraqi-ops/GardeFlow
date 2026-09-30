@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/app_user.dart';
 import '../models/practice_models.dart';
@@ -981,6 +982,13 @@ class PracticeCaseFormScreen extends StatefulWidget {
 class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   final _service = PracticeService.instance;
   final _formKey = GlobalKey<FormState>();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  TextEditingController? _dictatingController;
+  String? _dictatingLabel;
+  String _dictationBaseText = '';
+  bool _speechReady = false;
+  bool _speechInitializing = false;
+  String? _speechLocaleId;
   final _age = TextEditingController();
   final _location = TextEditingController();
   final _chiefComplaint = TextEditingController();
@@ -1051,6 +1059,9 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   @override
   void dispose() {
     _autosave?.cancel();
+    if (_speech.isListening) {
+      unawaited(_speech.cancel());
+    }
     for (final controller in _controllers) {
       controller.dispose();
     }
@@ -1106,6 +1117,141 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     _discharged = value.discharged;
     _hospitalized = value.hospitalized;
     _hospitalizationService = value.hospitalizationService;
+  }
+
+  Future<bool> _ensureSpeechReady() async {
+    if (_speechReady) return true;
+    if (_speechInitializing) return false;
+    if (mounted) setState(() => _speechInitializing = true);
+    try {
+      final available = await _speech.initialize(
+        onStatus: (_) {
+          if (mounted) setState(() {});
+        },
+        onError: (error) {
+          if (!mounted) return;
+          setState(() {
+            _dictatingController = null;
+            _dictatingLabel = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Dictée interrompue : ${error.errorMsg.replaceAll('_', ' ')}',
+              ),
+            ),
+          );
+        },
+      );
+      if (!available) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'La dictée vocale est indisponible. Autorisez le microphone et la reconnaissance vocale, ou utilisez un navigateur compatible.',
+              ),
+            ),
+          );
+        }
+        return false;
+      }
+
+      String? french;
+      final locales = await _speech.locales();
+      for (final locale in locales) {
+        final id = locale.localeId.toLowerCase().replaceAll('-', '_');
+        if (id == 'fr_fr') {
+          french = locale.localeId;
+          break;
+        }
+        if (french == null && id.startsWith('fr_')) {
+          french = locale.localeId;
+        }
+      }
+      _speechLocaleId = french;
+      _speechReady = true;
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Impossible d’activer la dictée vocale : $e')),
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _speechInitializing = false);
+    }
+  }
+
+  Future<void> _toggleDictation(
+    TextEditingController controller,
+    String label,
+  ) async {
+    if (_speechInitializing) return;
+
+    if (identical(_dictatingController, controller) && _speech.isListening) {
+      await _speech.stop();
+      if (mounted) {
+        setState(() {
+          _dictatingController = null;
+          _dictatingLabel = null;
+        });
+      }
+      return;
+    }
+
+    if (_speech.isListening) {
+      await _speech.stop();
+    }
+    if (!await _ensureSpeechReady()) return;
+
+    _dictationBaseText = controller.text.trimRight();
+    if (mounted) {
+      setState(() {
+        _dictatingController = controller;
+        _dictatingLabel = label;
+      });
+    }
+
+    try {
+      await _speech.listen(
+        localeId: _speechLocaleId,
+        listenFor: const Duration(minutes: 2),
+        pauseFor: const Duration(seconds: 4),
+        partialResults: true,
+        cancelOnError: true,
+        listenMode: stt.ListenMode.dictation,
+        onResult: (result) {
+          if (!mounted || !identical(_dictatingController, controller)) return;
+          final words = result.recognizedWords.trim();
+          if (words.isEmpty) return;
+          final separator = _dictationBaseText.isEmpty ? '' : ' ';
+          final nextText = '$_dictationBaseText$separator$words';
+          controller.value = TextEditingValue(
+            text: nextText,
+            selection: TextSelection.collapsed(offset: nextText.length),
+          );
+          if (result.finalResult && mounted) {
+            setState(() {
+              _dictatingController = null;
+              _dictatingLabel = null;
+            });
+          } else {
+            setState(() {});
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dictatingController = null;
+        _dictatingLabel = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible de démarrer la dictée : $e')),
+      );
+    }
   }
 
   void _changed() {
@@ -1274,6 +1420,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                       patientNumber: number,
                       syncLabel: _syncLabel,
                       pending: widget.existing?.pendingSync == true),
+                  const SizedBox(height: 10),
+                  const _PracticeNotice(
+                    icon: Icons.mic_rounded,
+                    text:
+                        'Dictée vocale : touchez le micro d’une rubrique puis dictez. Le texte s’ajoute à ce qui est déjà saisi. GardeFlow ne conserve aucun enregistrement audio.',
+                  ),
                   const SizedBox(height: 16),
                   _formSection(
                     title: 'IDENTIFICATION PSEUDONYMISÉE',
@@ -1326,8 +1478,13 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                         ),
                       ]),
                       const SizedBox(height: 10),
-                      _field(_chiefComplaint, 'Motif principal (facultatif)',
-                          icon: Icons.short_text_rounded),
+                      _field(
+                        _chiefComplaint,
+                        'Motif principal (facultatif)',
+                        icon: Icons.short_text_rounded,
+                        voice: true,
+                        voiceLabel: 'Motif principal',
+                      ),
                     ],
                   ),
                   const Padding(
@@ -1494,7 +1651,15 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
           String title, TextEditingController controller, String hint) =>
       _formSection(
         title: title,
-        children: [_field(controller, hint, lines: 4)],
+        children: [
+          _field(
+            controller,
+            hint,
+            lines: 4,
+            voice: true,
+            voiceLabel: title.replaceAll(' *', ''),
+          ),
+        ],
       );
 
   Widget _doubleClinicalSection(
@@ -1512,7 +1677,13 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                   fontSize: 10,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          _field(first, '$firstLabel…', lines: 2),
+          _field(
+            first,
+            '$firstLabel…',
+            lines: 2,
+            voice: true,
+            voiceLabel: '$title · $firstLabel',
+          ),
           const SizedBox(height: 10),
           Text(secondLabel.toUpperCase(),
               style: const TextStyle(
@@ -1520,20 +1691,75 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                   fontSize: 10,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          _field(second, '$secondLabel…', lines: 2),
+          _field(
+            second,
+            '$secondLabel…',
+            lines: 2,
+            voice: true,
+            voiceLabel: '$title · $secondLabel',
+          ),
         ],
       );
 
-  Widget _field(TextEditingController controller, String hint,
-          {IconData? icon, int lines = 1, TextInputType? keyboardType}) =>
-      TextFormField(
-        controller: controller,
-        maxLines: lines,
-        keyboardType: keyboardType ??
-            (lines > 1 ? TextInputType.multiline : TextInputType.text),
-        style: const TextStyle(color: Colors.white, fontSize: 13),
-        decoration: _practiceInputDecoration(hint, icon),
-      );
+  Widget _field(
+    TextEditingController controller,
+    String hint, {
+    IconData? icon,
+    int lines = 1,
+    TextInputType? keyboardType,
+    bool voice = false,
+    String? voiceLabel,
+  }) {
+    final active = voice &&
+        identical(_dictatingController, controller) &&
+        _speech.isListening;
+    return TextFormField(
+      controller: controller,
+      maxLines: lines,
+      keyboardType: keyboardType ??
+          (lines > 1 ? TextInputType.multiline : TextInputType.text),
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+      decoration: _practiceInputDecoration(hint, icon).copyWith(
+        helperText: active
+            ? 'Écoute en cours · appuyez de nouveau sur le micro pour arrêter'
+            : null,
+        helperStyle: const TextStyle(
+          color: PracticeColors.accent,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
+        suffixIcon: voice
+            ? IconButton(
+                tooltip: active
+                    ? 'Arrêter la dictée'
+                    : 'Dicter ${voiceLabel ?? hint}',
+                onPressed: _speechInitializing
+                    ? null
+                    : () => _toggleDictation(
+                          controller,
+                          voiceLabel ?? hint,
+                        ),
+                icon: _speechInitializing &&
+                        identical(_dictatingController, controller)
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: PracticeColors.accent,
+                        ),
+                      )
+                    : Icon(
+                        active ? Icons.stop_circle_rounded : Icons.mic_rounded,
+                        color: active
+                            ? PracticeColors.hospitalized
+                            : PracticeColors.accent,
+                      ),
+              )
+            : null,
+      ),
+    );
+  }
 
   Widget _yesNo(String label, bool value, ValueChanged<bool> onChanged) => Row(
         children: [
