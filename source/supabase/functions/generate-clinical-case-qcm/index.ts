@@ -147,7 +147,29 @@ Deno.serve(async (req: Request) => {
       specialist_service: scrub(post.specialist_service, 300),
     };
 
-    const prompt = `Tu crées UN QCM pédagogique à partir d'un cas clinique déjà anonymisé.\n\nRègles impératives :\n- Utilise uniquement les informations présentes dans le cas fourni. N'invente aucun diagnostic, examen, traitement, résultat ni recommandation.\n- La question peut porter sur le motif/symptôme, l'examen, l'imagerie, la synthèse, la prise en charge réellement documentée, l'orientation ou l'avis spécialisé.\n- Choisis le point le plus intéressant et réellement documenté dans CE cas.\n- Formule la question comme un exercice de lecture/raisonnement sur le cas documenté, pas comme une recommandation médicale universelle.\n- Il doit y avoir exactement 4 réponses, une seule correcte et trois distracteurs plausibles mais clairement incompatibles avec le cas fourni.\n- La correction explique pourquoi la réponse est correcte en résumant les éléments utiles du cas. Elle doit correspondre au cas lui-même et ne pas ajouter de conduite à tenir extérieure.\n- Ne réintroduis jamais de nom, téléphone, e-mail, date précise, numéro de dossier, lieu/box, auteur ou autre identifiant.\n- Réponds en français, de façon concise et professionnelle.\n\nCAS ANONYMISÉ :\n${JSON.stringify(safeCase)}`;
+    const prompt = `Tu crées UN QCM pédagogique de raisonnement clinique à partir d'un cas déjà anonymisé, pour un niveau externat/internat médical.
+
+OBJECTIF :
+Le QCM doit apprendre quelque chose. Il ne doit jamais être une simple question de repérage, de mémoire immédiate ou de copie d'une phrase déjà affichée dans le dossier.
+
+RÈGLES IMPÉRATIVES :
+- Les faits concernant CE patient doivent provenir uniquement du cas fourni. N'invente jamais un symptôme, une constante, un résultat biologique, une image, un antécédent ou un traitement administré qui n'est pas documenté.
+- Tu peux utiliser les connaissances médicales standards et établies nécessaires pour raisonner à partir de ces faits.
+- La bonne réponse doit demander AU MOINS UNE ÉTAPE DE RAISONNEMENT clinique : interpréter les données, hiérarchiser un diagnostic différentiel, reconnaître un critère décisif, choisir l'étape suivante la plus pertinente, identifier un signe de gravité, ou relier les constatations à une prise en charge/orientation cohérente.
+- PRIORITÉ, dans cet ordre, aux questions sur : 1) raisonnement diagnostique/différentiel ; 2) critère clinique ou paraclinique décisif ; 3) interprétation d'un examen ; 4) prochaine étape ou prise en charge initiale ; 5) signe de gravité/complication ; 6) orientation ou avis spécialisé.
+- INTERDIT : demander de retrouver mot pour mot une information déjà écrite. Par exemple, ne pose jamais « Quelle conclusion d'imagerie correspond à ce cas ? » si la conclusion d'imagerie est déjà fournie. Ne demande pas non plus « Quel est le diagnostic retenu ? » si le bilan l'affiche explicitement sans qu'un raisonnement soit nécessaire.
+- INTERDIT : faire de la bonne réponse une simple copie ou reformulation triviale d'un champ du dossier.
+- Si une information du cas permet un raisonnement plus intéressant, utilise-la même si elle se trouve dans l'imagerie, le bilan ou la conduite à tenir.
+- Il doit y avoir exactement 4 réponses : une seule meilleure réponse, non ambiguë, et trois distracteurs plausibles de même niveau conceptuel.
+- Évite les distracteurs absurdes, les formulations « toutes les réponses », « aucune des réponses », et les différences de longueur qui révèlent la bonne réponse.
+- La correction doit expliquer brièvement le raisonnement, citer les éléments utiles du cas et, si nécessaire, rappeler le principe médical général. Elle ne doit pas inventer de nouvelles données propres au patient.
+- Évite les posologies et protocoles dépendant du contexte local sauf s'ils sont explicitement documentés dans le cas.
+- Si le dossier est trop pauvre pour un QCM complexe, pose une question d'interprétation à partir des données réellement présentes plutôt que d'inventer des éléments.
+- Ne réintroduis jamais de nom, téléphone, e-mail, date précise, numéro de dossier, lieu/box, auteur ou autre identifiant.
+- Réponds en français, de façon concise, professionnelle et pédagogiquement utile.
+
+CAS ANONYMISÉ :
+${JSON.stringify(safeCase)}`;
 
     const model = Deno.env.get('OPENAI_TEXT_MODEL') || Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-5.6';
     const response = await fetch('https://api.openai.com/v1/responses', {
