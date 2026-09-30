@@ -18,64 +18,64 @@ jobs:
           fetch-depth: 0
 
       - name: Apply deterministic scroll fix
-        shell: python
+        shell: bash
         run: |
+          set -euo pipefail
+          python3 - <<'PY'
           from pathlib import Path
+          import re
 
           home = Path('source/lib/screens/home_screen.dart')
           text = home.read_text(encoding='utf-8')
-          old = """              onTap: () async {
-                if (scrollController.hasClients) {
-                  await scrollController.animateTo(
-                    scrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 560),
-                    curve: Curves.easeOutCubic,
-                  );
-                }
-                await Future<void>.delayed(const Duration(milliseconds: 40));
-                final targetContext = clinicalCasesFeedKey.currentContext;
-                if (targetContext == null) return;
-                await Scrollable.ensureVisible(
-                  targetContext,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  alignment: 0.02,
-                );
-              },
-"""
-          new = """              onTap: () {
-                final targetContext = clinicalCasesFeedKey.currentContext;
-                if (targetContext == null) return;
-                Scrollable.ensureVisible(
-                  targetContext,
-                  duration: const Duration(milliseconds: 420),
-                  curve: Curves.easeOutCubic,
-                  alignment: 0.03,
-                );
-              },
-"""
-          if old in text:
-              text = text.replace(old, new, 1)
-              home.write_text(text, encoding='utf-8')
-          elif new not in text:
+          pattern = re.compile(
+              r"              onTap: \(\) async \{\n"
+              r"                if \(scrollController\.hasClients\) \{\n"
+              r"                  await scrollController\.animateTo\(\n"
+              r"                    scrollController\.position\.maxScrollExtent,\n"
+              r"                    duration: const Duration\(milliseconds: 560\),\n"
+              r"                    curve: Curves\.easeOutCubic,\n"
+              r"                  \);\n"
+              r"                \}\n"
+              r"                await Future<void>\.delayed\(const Duration\(milliseconds: 40\)\);\n"
+              r"                final targetContext = clinicalCasesFeedKey\.currentContext;\n"
+              r"                if \(targetContext == null\) return;\n"
+              r"                await Scrollable\.ensureVisible\(\n"
+              r"                  targetContext,\n"
+              r"                  duration: const Duration\(milliseconds: 260\),\n"
+              r"                  curve: Curves\.easeOutCubic,\n"
+              r"                  alignment: 0\.02,\n"
+              r"                \);\n"
+              r"              \},\n"
+          )
+          replacement = (
+              "              onTap: () {\n"
+              "                final targetContext = clinicalCasesFeedKey.currentContext;\n"
+              "                if (targetContext == null) return;\n"
+              "                Scrollable.ensureVisible(\n"
+              "                  targetContext,\n"
+              "                  duration: const Duration(milliseconds: 420),\n"
+              "                  curve: Curves.easeOutCubic,\n"
+              "                  alignment: 0.03,\n"
+              "                );\n"
+              "              },\n"
+          )
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count == 1:
+              home.write_text(updated, encoding='utf-8')
+          elif 'duration: const Duration(milliseconds: 420)' not in text:
               raise SystemExit('Expected clinical scroll handler not found')
 
           cases = Path('source/lib/screens/clinical_cases_section.dart')
           text = cases.read_text(encoding='utf-8')
-          top_old = """    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),
-"""
-          top_new = """    return Container(
-      key: widget.verticalFeedKey,
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),
-"""
+          top_old = "    return Container(\n      padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),\n"
+          top_new = "    return Container(\n      key: widget.verticalFeedKey,\n      padding: const EdgeInsets.fromLTRB(14, 8, 14, 30),\n"
           if top_old in text:
               text = text.replace(top_old, top_new, 1)
           elif top_new not in text:
               raise SystemExit('Expected clinical cases container not found')
-          bottom = "          SizedBox(key: widget.verticalFeedKey, height: 0),\n"
-          text = text.replace(bottom, '', 1)
+          text = text.replace('          SizedBox(key: widget.verticalFeedKey, height: 0),\n', '', 1)
           cases.write_text(text, encoding='utf-8')
+          PY
 
       - name: Commit patch once
         shell: bash
@@ -89,7 +89,6 @@ jobs:
             git add source/lib/screens/home_screen.dart source/lib/screens/clinical_cases_section.dart
             git commit -m "Fix clinical cases shortcut scroll [scroll-fix-applied]"
             git push origin HEAD:fix-clinical-scroll-anchor-20260930
-            exit 0
           fi
 
       - name: Verify scroll implementation
@@ -98,6 +97,7 @@ jobs:
           set -euo pipefail
           ! grep -A20 "Cas cliniques plus bas" source/lib/screens/home_screen.dart | grep -q "maxScrollExtent"
           grep -q "key: widget.verticalFeedKey" source/lib/screens/clinical_cases_section.dart
+          ! grep -q "SizedBox(key: widget.verticalFeedKey" source/lib/screens/clinical_cases_section.dart
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
