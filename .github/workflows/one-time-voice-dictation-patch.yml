@@ -1,0 +1,78 @@
+name: One-time voice dictation patch
+
+on:
+  push:
+    branches:
+      - fix/practice-voice-dictation-20260930
+    paths:
+      - '.github/workflows/one-time-voice-dictation-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v5
+        with:
+          ref: fix/practice-voice-dictation-20260930
+          fetch-depth: 0
+
+      - name: Apply voice dictation patch
+        run: python3 .github/scripts/one_time_voice_dictation_patch.py
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Format modified Dart files
+        working-directory: source
+        run: dart format lib/screens/practice_screen.dart tool/configure_ios.dart
+
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run tests
+        working-directory: source
+        run: flutter test
+
+      - name: Analyze
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build web release
+        working-directory: source
+        run: flutter build web --release --base-href '/GardeFlow/' --build-name '12.0.0' --build-number '300'
+
+      - name: Verify speech configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'webDoNotAggregate' source/lib/screens/practice_screen.dart
+          grep -q 'contextualPhrases: _medicalSpeechHints' source/lib/screens/practice_screen.dart
+          grep -q 'NSSpeechRecognitionUsageDescription' source/tool/configure_ios.dart
+          grep -q 'NSMicrophoneUsageDescription' source/tool/configure_ios.dart
+          grep -q "'RECORD_AUDIO'" source/tool/configure_android.dart
+
+      - name: Remove one-time patch files
+        run: |
+          rm -f .github/scripts/one_time_voice_dictation_patch.py
+          rm -f .github/workflows/one-time-voice-dictation-patch.yml
+
+      - name: Commit validated patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add source/lib/screens/practice_screen.dart source/tool/configure_ios.dart .github/scripts/one_time_voice_dictation_patch.py .github/workflows/one-time-voice-dictation-patch.yml
+          git diff --cached --check
+          git commit -m 'fix: fiabiliser la dictée vocale Practice'
+          git push origin HEAD:fix/practice-voice-dictation-20260930
