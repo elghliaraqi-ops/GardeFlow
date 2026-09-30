@@ -6,6 +6,7 @@ import '../models/app_user.dart';
 import '../models/exchange_request.dart';
 import '../models/leave_request.dart';
 import '../models/password_reset_request.dart';
+import '../models/planning_entry.dart';
 import '../models/reminder_notification.dart';
 import '../models/shift_type.dart';
 import '../state/app_state.dart';
@@ -54,17 +55,27 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final isAdmin = appState.currentUser?.role == UserRole.admin;
+    final disciplinaryUnread = appState.disciplinaryUnreadCount;
+    if (disciplinaryUnread > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.read<AppState>().markDisciplinaryNotificationsRead();
+        }
+      });
+    }
     final accountCount = isAdmin ? appState.accountActionableCount : 0;
     final tabCount = isAdmin ? 4 : 3;
-    var resolvedIndex =
-        initialIndex < 0 ? 0 : (initialIndex >= tabCount ? tabCount - 1 : initialIndex);
+    var resolvedIndex = initialIndex < 0
+        ? 0
+        : (initialIndex >= tabCount ? tabCount - 1 : initialIndex);
 
     // If the bell badge is only an account approval, open that section directly.
     if (isAdmin &&
         initialIndex == 0 &&
         accountCount > 0 &&
         appState.exchangeActionableCount() == 0 &&
-        appState.leaveActionableCount() == 0) {
+        appState.leaveActionableCount() == 0 &&
+        disciplinaryUnread == 0) {
       resolvedIndex = 3;
     }
 
@@ -176,7 +187,7 @@ class NotificationsScreen extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
                 tabs: [
-                  Tab(text: 'Rappels'),
+                  Tab(text: 'Alertes'),
                   Tab(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -189,7 +200,9 @@ class NotificationsScreen extends StatelessWidget {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          accountCount > 0 ? 'Comptes ($accountCount)' : 'Comptes',
+                          accountCount > 0
+                              ? 'Comptes ($accountCount)'
+                              : 'Comptes',
                         ),
                       ),
                     ),
@@ -210,7 +223,6 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 }
-
 
 class _AccountsTab extends StatelessWidget {
   const _AccountsTab();
@@ -268,7 +280,8 @@ class _AccountsTab extends StatelessWidget {
           ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: approve ? AppColors.brandDark : const Color(0xFFB42318),
+              backgroundColor:
+                  approve ? AppColors.brandDark : const Color(0xFFB42318),
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(dialogContext, true),
@@ -290,15 +303,11 @@ class _AccountsTab extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          error ??
-              (approve
-                  ? 'Compte validé.'
-                  : 'Compte refusé / suspendu.'),
+          error ?? (approve ? 'Compte validé.' : 'Compte refusé / suspendu.'),
         ),
       ),
     );
   }
-
 
   Future<void> _openPasswordReset(
     BuildContext context,
@@ -333,8 +342,7 @@ class _AccountsTab extends StatelessWidget {
       ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
     final pending = appState.pendingUsers.toList()
       ..sort(
-        (a, b) =>
-            a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
       );
 
     if (pending.isEmpty && resetRequests.isEmpty) {
@@ -383,7 +391,10 @@ class _AccountsTab extends StatelessWidget {
                           children: [
                             Text(
                               'Mot de passe oublié',
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
                                     color: AppColors.warning,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -413,7 +424,10 @@ class _AccountsTab extends StatelessWidget {
                             SizedBox(height: 4),
                             Text(
                               'Demandé le ${DateFormat('dd/MM/yyyy · HH:mm').format(request.requestedAt.toLocal())}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
                                     color: AppColors.inkFaint,
                                   ),
                             ),
@@ -537,6 +551,7 @@ class _RemindersTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final disciplinary = appState.disciplinaryNotifications;
     final reminders = appState.reminders.toList()
       ..sort((a, b) {
         final aSent = a.status == ReminderStatus.sent;
@@ -547,12 +562,11 @@ class _RemindersTab extends StatelessWidget {
             : a.fireAt.compareTo(b.fireAt);
       });
 
-    if (reminders.isEmpty) {
+    if (reminders.isEmpty && disciplinary.isEmpty) {
       return const _EmptyState(
         icon: Icons.notifications_none_rounded,
         message:
-            'Aucun rappel de garde pour l’instant. Les rappels sont créés '
-            'à partir des gardes des calendriers validés.',
+            'Aucune alerte pour l’instant. Les gardes disciplinaires attribuées et les rappels de garde apparaîtront ici.',
       );
     }
 
@@ -562,9 +576,18 @@ class _RemindersTab extends StatelessWidget {
           child: ListView.separated(
             physics: BouncingScrollPhysics(),
             padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-            itemCount: reminders.length,
+            itemCount: disciplinary.length + reminders.length,
             separatorBuilder: (_, __) => SizedBox(height: 11),
-            itemBuilder: (context, i) => _ReminderCard(reminder: reminders[i]),
+            itemBuilder: (context, i) {
+              if (i < disciplinary.length) {
+                return _DisciplinaryNotificationCard(
+                  entry: disciplinary[i],
+                );
+              }
+              return _ReminderCard(
+                reminder: reminders[i - disciplinary.length],
+              );
+            },
           ),
         ),
         SafeArea(
@@ -590,6 +613,139 @@ class _RemindersTab extends StatelessWidget {
   }
 }
 
+class _DisciplinaryNotificationCard extends StatelessWidget {
+  final PlanningEntry entry;
+
+  const _DisciplinaryNotificationCard({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = DateTime.tryParse(entry.dateStr);
+    final dateLabel = date == null
+        ? entry.dateStr
+        : DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(date);
+    final shift = ShiftCatalog.byId(entry.shiftId);
+    final reason = entry.disciplinaryReason?.trim();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(15, 15, 15, 14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: AppColors.danger.withOpacity(0.34),
+          width: 1.3,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withOpacity(0.055),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 43,
+            height: 43,
+            decoration: BoxDecoration(
+              color: AppColors.danger.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.gavel_rounded,
+              color: AppColors.danger,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Garde disciplinaire attribuée',
+                        style: TextStyle(
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 15,
+                          height: 1.15,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'DISCIPLINAIRE',
+                        style: TextStyle(
+                          color: AppColors.danger,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  '${dateLabel.isEmpty ? entry.dateStr : dateLabel[0].toUpperCase() + dateLabel.substring(1)} · ${shift.label}',
+                  style: TextStyle(
+                    color: AppColors.inkSoft,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withOpacity(0.055),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Motif : ${reason == null || reason.isEmpty ? 'Non renseigné' : reason}',
+                    style: TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Attribuée le ${DateFormat('dd/MM/yyyy · HH:mm', 'fr_FR').format(entry.createdAt.toLocal())}',
+                  style: TextStyle(
+                    color: AppColors.inkFaint,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ReminderCard extends StatelessWidget {
   final ReminderNotification reminder;
 
@@ -604,12 +760,10 @@ class _ReminderCard extends StatelessWidget {
         .where((part) => part.isNotEmpty)
         .toList();
 
-    final guardLabel = parts.length >= 2
-        ? '${parts[0]} · ${parts[1]}'
-        : reminder.label;
-    final reminderLabel = parts.length >= 3
-        ? parts.sublist(2).join(' · ')
-        : 'Rappel de garde';
+    final guardLabel =
+        parts.length >= 2 ? '${parts[0]} · ${parts[1]}' : reminder.label;
+    final reminderLabel =
+        parts.length >= 3 ? parts.sublist(2).join(' · ') : 'Rappel de garde';
 
     final isUrgence = guardLabel.toLowerCase().contains('urgence');
     final accent = sent
@@ -649,9 +803,7 @@ class _ReminderCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              sent
-                  ? Icons.notifications_none_rounded
-                  : Icons.alarm_rounded,
+              sent ? Icons.notifications_none_rounded : Icons.alarm_rounded,
               color: accent,
               size: 22,
             ),
@@ -764,7 +916,12 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 36, color: AppColors.inkFaint),
             SizedBox(height: AppSpace.md),
-            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft)),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.inkSoft)),
           ],
         ),
       ),
@@ -783,7 +940,11 @@ class _ExchangesTab extends StatelessWidget {
 
     final relevant = appState.exchanges.where((e) {
       if (appState.isNotificationDismissed('exchange:${e.id}')) return false;
-      return me.role == UserRole.admin || e.fromId == me.id || e.toId == me.id || e.fromPhone == me.phone || e.toPhone == me.phone;
+      return me.role == UserRole.admin ||
+          e.fromId == me.id ||
+          e.toId == me.id ||
+          e.fromPhone == me.phone ||
+          e.toPhone == me.phone;
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -803,13 +964,29 @@ class _ExchangesTab extends StatelessWidget {
         final shift = ShiftCatalog.byId(ex.shiftId);
         final date = DateTime.parse(ex.dateStr);
         final dateLabel = DateFormat('EEE d MMM', 'fr_FR').format(date);
-        final targetShift = ex.targetShiftId == null ? null : ShiftCatalog.byId(ex.targetShiftId!);
-        final targetDateLabel = ex.targetDateStr == null ? null : DateFormat('EEE d MMM', 'fr_FR').format(DateTime.parse(ex.targetDateStr!));
+        final targetShift = ex.targetShiftId == null
+            ? null
+            : ShiftCatalog.byId(ex.targetShiftId!);
+        final targetDateLabel = ex.targetDateStr == null
+            ? null
+            : DateFormat('EEE d MMM', 'fr_FR')
+                .format(DateTime.parse(ex.targetDateStr!));
         final requestLabel = ex.isTransfer ? 'Transfert' : 'Échange';
 
-        final canRespondAsB = ex.status == ExchangeStatus.pendingB && (ex.toId == me.id || ex.toPhone == me.phone);
-        final canRespondAsAdmin = ex.status == ExchangeStatus.pendingAdmin && me.role == UserRole.admin && ex.fromId != me.id && ex.toId != me.id && ex.fromPhone != me.phone && ex.toPhone != me.phone;
-        final needsOtherAdmin = ex.status == ExchangeStatus.pendingAdmin && me.role == UserRole.admin && (ex.fromId == me.id || ex.toId == me.id || ex.fromPhone == me.phone || ex.toPhone == me.phone);
+        final canRespondAsB = ex.status == ExchangeStatus.pendingB &&
+            (ex.toId == me.id || ex.toPhone == me.phone);
+        final canRespondAsAdmin = ex.status == ExchangeStatus.pendingAdmin &&
+            me.role == UserRole.admin &&
+            ex.fromId != me.id &&
+            ex.toId != me.id &&
+            ex.fromPhone != me.phone &&
+            ex.toPhone != me.phone;
+        final needsOtherAdmin = ex.status == ExchangeStatus.pendingAdmin &&
+            me.role == UserRole.admin &&
+            (ex.fromId == me.id ||
+                ex.toId == me.id ||
+                ex.fromPhone == me.phone ||
+                ex.toPhone == me.phone);
 
         return AppCard(
           padding: EdgeInsets.all(AppSpace.md),
@@ -819,38 +996,54 @@ class _ExchangesTab extends StatelessWidget {
               Row(children: [
                 Pill(
                   text: requestLabel,
-                  icon: ex.isTransfer ? Icons.arrow_forward_rounded : Icons.swap_horiz_rounded,
+                  icon: ex.isTransfer
+                      ? Icons.arrow_forward_rounded
+                      : Icons.swap_horiz_rounded,
                   fontSize: 10,
                 ),
                 SizedBox(width: AppSpace.sm),
-                Expanded(child: Text('${ex.fromName} → ${ex.toName}', style: Theme.of(context).textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
+                Expanded(
+                    child: Text('${ex.fromName} → ${ex.toName}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                        overflow: TextOverflow.ellipsis)),
               ]),
               SizedBox(height: AppSpace.sm),
               if (ex.isTransfer)
-                Text('Garde transférée : $dateLabel · ${shift.label}', style: Theme.of(context).textTheme.bodySmall)
+                Text('Garde transférée : $dateLabel · ${shift.label}',
+                    style: Theme.of(context).textTheme.bodySmall)
               else ...[
-                Text('${ex.fromName} donne : $dateLabel · ${shift.label}', style: Theme.of(context).textTheme.bodySmall),
+                Text('${ex.fromName} donne : $dateLabel · ${shift.label}',
+                    style: Theme.of(context).textTheme.bodySmall),
                 SizedBox(height: 2),
-                Text('${ex.toName} donne : $targetDateLabel · ${targetShift?.label ?? ""}', style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                    '${ex.toName} donne : $targetDateLabel · ${targetShift?.label ?? ""}',
+                    style: Theme.of(context).textTheme.bodySmall),
               ],
-              if (ex.isServiceExchange && ex.status == ExchangeStatus.pendingB) ...[
+              if (ex.isServiceExchange &&
+                  ex.status == ExchangeStatus.pendingB) ...[
                 SizedBox(height: AppSpace.sm),
                 Container(
                   width: double.infinity,
-                  padding: EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.sm),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: AppSpace.sm, vertical: AppSpace.sm),
                   decoration: BoxDecoration(
                     color: AppColors.serviceJour.withOpacity(0.22),
                     borderRadius: AppRadius.smR,
-                    border: Border.all(color: AppColors.catService.withOpacity(0.20)),
+                    border: Border.all(
+                        color: AppColors.catService.withOpacity(0.20)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.flash_on_rounded, size: 16, color: AppColors.catService),
+                      Icon(Icons.flash_on_rounded,
+                          size: 16, color: AppColors.catService),
                       SizedBox(width: AppSpace.xs),
                       Expanded(
                         child: Text(
                           'Échange de gardes Service : l’acceptation applique immédiatement l’échange, sans validation administrateur.',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.inkSoft),
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.inkSoft),
                         ),
                       ),
                     ],
@@ -860,29 +1053,81 @@ class _ExchangesTab extends StatelessWidget {
               SizedBox(height: AppSpace.md),
               if (canRespondAsB)
                 Row(children: [
-                  Expanded(child: _ActionButton(label: 'Accepter', color: AppColors.conge, textColor: AppColors.congeText, onTap: () async { final err = await appState.acceptExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
+                  Expanded(
+                      child: _ActionButton(
+                          label: 'Accepter',
+                          color: AppColors.conge,
+                          textColor: AppColors.congeText,
+                          onTap: () async {
+                            final err = await appState.acceptExchange(ex.id);
+                            if (err != null && context.mounted)
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(SnackBar(content: Text(err)));
+                          })),
                   const SizedBox(width: AppSpace.sm),
-                  Expanded(child: _ActionButton(label: 'Refuser', color: AppColors.urg24h, textColor: AppColors.urg24hText, onTap: () async { final err = await appState.declineExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
+                  Expanded(
+                      child: _ActionButton(
+                          label: 'Refuser',
+                          color: AppColors.urg24h,
+                          textColor: AppColors.urg24hText,
+                          onTap: () async {
+                            final err = await appState.declineExchange(ex.id);
+                            if (err != null && context.mounted)
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(SnackBar(content: Text(err)));
+                          })),
                 ])
               else if (canRespondAsAdmin)
                 Row(children: [
-                  Expanded(child: _ActionButton(label: 'Approuver', color: AppColors.conge, textColor: AppColors.congeText, onTap: () async { final err = await appState.approveExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
+                  Expanded(
+                      child: _ActionButton(
+                          label: 'Approuver',
+                          color: AppColors.conge,
+                          textColor: AppColors.congeText,
+                          onTap: () async {
+                            final err = await appState.approveExchange(ex.id);
+                            if (err != null && context.mounted)
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(SnackBar(content: Text(err)));
+                          })),
                   const SizedBox(width: AppSpace.sm),
-                  Expanded(child: _ActionButton(label: 'Rejeter', color: AppColors.urg24h, textColor: AppColors.urg24hText, onTap: () async { final err = await appState.rejectExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); })),
+                  Expanded(
+                      child: _ActionButton(
+                          label: 'Rejeter',
+                          color: AppColors.urg24h,
+                          textColor: AppColors.urg24hText,
+                          onTap: () async {
+                            final err = await appState.rejectExchange(ex.id);
+                            if (err != null && context.mounted)
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(SnackBar(content: Text(err)));
+                          })),
                 ])
-              else if (ex.status == ExchangeStatus.pendingB && (ex.fromId == me.id || ex.fromPhone == me.phone))
+              else if (ex.status == ExchangeStatus.pendingB &&
+                  (ex.fromId == me.id || ex.fromPhone == me.phone))
                 Row(
                   children: [
-                    Expanded(child: Align(alignment: Alignment.centerLeft, child: _StatusPill(ex: ex))),
+                    Expanded(
+                        child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _StatusPill(ex: ex))),
                     const SizedBox(width: AppSpace.sm),
-                    TextButton(onPressed: () async { final err = await appState.cancelExchange(ex.id); if (err != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err))); }, child: const Text('Annuler')),
+                    TextButton(
+                        onPressed: () async {
+                          final err = await appState.cancelExchange(ex.id);
+                          if (err != null && context.mounted)
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(SnackBar(content: Text(err)));
+                        },
+                        child: const Text('Annuler')),
                   ],
                 )
               else ...[
                 _StatusPill(ex: ex),
                 if (needsOtherAdmin) ...[
                   const SizedBox(height: AppSpace.sm),
-                  Text('Vous participez à cette demande : sa validation doit être effectuée par un autre administrateur.',
+                  Text(
+                      'Vous participez à cette demande : sa validation doit être effectuée par un autre administrateur.',
                       style: Theme.of(context).textTheme.bodySmall),
                 ],
               ],
@@ -894,7 +1139,6 @@ class _ExchangesTab extends StatelessWidget {
   }
 }
 
-
 class _LeavesTab extends StatelessWidget {
   const _LeavesTab();
 
@@ -904,10 +1148,13 @@ class _LeavesTab extends StatelessWidget {
     final me = appState.currentUser;
     if (me == null) return const SizedBox.shrink();
 
-    final relevant = appState.leaveRequests.where((r) =>
-      !appState.isNotificationDismissed('leave:${r.id}') &&
-      (me.role == UserRole.admin || r.ownerId == me.id || r.ownerPhone == me.phone)
-    ).toList()
+    final relevant = appState.leaveRequests
+        .where((r) =>
+            !appState.isNotificationDismissed('leave:${r.id}') &&
+            (me.role == UserRole.admin ||
+                r.ownerId == me.id ||
+                r.ownerPhone == me.phone))
+        .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     if (relevant.isEmpty) {
@@ -941,15 +1188,21 @@ class _AdminLeavesGroupedList extends StatelessWidget {
   Widget build(BuildContext context) {
     final grouped = <String, List<LeaveRequest>>{};
     for (final request in requests) {
-      grouped.putIfAbsent(request.ownerPhone, () => <LeaveRequest>[]).add(request);
+      grouped
+          .putIfAbsent(request.ownerPhone, () => <LeaveRequest>[])
+          .add(request);
     }
 
     final groups = grouped.values.toList()
       ..sort((a, b) {
-        final aPending = a.where((r) => r.status == LeaveRequestStatus.pendingAdmin).length;
-        final bPending = b.where((r) => r.status == LeaveRequestStatus.pendingAdmin).length;
+        final aPending =
+            a.where((r) => r.status == LeaveRequestStatus.pendingAdmin).length;
+        final bPending =
+            b.where((r) => r.status == LeaveRequestStatus.pendingAdmin).length;
         if (aPending != bPending) return bPending.compareTo(aPending);
-        return a.first.ownerName.toLowerCase().compareTo(b.first.ownerName.toLowerCase());
+        return a.first.ownerName
+            .toLowerCase()
+            .compareTo(b.first.ownerName.toLowerCase());
       });
 
     return ListView.separated(
@@ -959,13 +1212,17 @@ class _AdminLeavesGroupedList extends StatelessWidget {
       itemBuilder: (context, index) {
         final doctorRequests = groups[index]
           ..sort((a, b) {
-            final aPending = a.status == LeaveRequestStatus.pendingAdmin ? 0 : 1;
-            final bPending = b.status == LeaveRequestStatus.pendingAdmin ? 0 : 1;
+            final aPending =
+                a.status == LeaveRequestStatus.pendingAdmin ? 0 : 1;
+            final bPending =
+                b.status == LeaveRequestStatus.pendingAdmin ? 0 : 1;
             if (aPending != bPending) return aPending.compareTo(bPending);
             return b.createdAt.compareTo(a.createdAt);
           });
         final doctorName = doctorRequests.first.ownerName;
-        final pendingCount = doctorRequests.where((r) => r.status == LeaveRequestStatus.pendingAdmin).length;
+        final pendingCount = doctorRequests
+            .where((r) => r.status == LeaveRequestStatus.pendingAdmin)
+            .length;
 
         return Container(
           decoration: BoxDecoration(
@@ -979,9 +1236,12 @@ class _AdminLeavesGroupedList extends StatelessWidget {
             initiallyExpanded: pendingCount > 0,
             shape: Border(),
             collapsedShape: Border(),
-            tilePadding: EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.xs),
-            childrenPadding: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
-            title: Text(doctorName, style: Theme.of(context).textTheme.titleMedium),
+            tilePadding: EdgeInsets.symmetric(
+                horizontal: AppSpace.lg, vertical: AppSpace.xs),
+            childrenPadding:
+                EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
+            title: Text(doctorName,
+                style: Theme.of(context).textTheme.titleMedium),
             subtitle: Text(
               '${doctorRequests.length} demande${doctorRequests.length > 1 ? 's' : ''} de congé',
               style: Theme.of(context).textTheme.bodySmall,
@@ -997,7 +1257,8 @@ class _AdminLeavesGroupedList extends StatelessWidget {
             children: [
               for (var i = 0; i < doctorRequests.length; i++) ...[
                 if (i > 0) Divider(height: AppSpace.lg, color: AppColors.line),
-                _LeaveRequestRow(request: doctorRequests[i], showOwnerName: false),
+                _LeaveRequestRow(
+                    request: doctorRequests[i], showOwnerName: false),
               ],
             ],
           ),
@@ -1019,13 +1280,22 @@ class _LeaveRequestRow extends StatelessWidget {
     if (me == null) return const SizedBox.shrink();
 
     final r = request;
-    final startLabel = DateFormat('EEE d MMM yyyy', 'fr_FR').format(DateTime.parse(r.startDateStr));
-    final endLabel = DateFormat('EEE d MMM yyyy', 'fr_FR').format(DateTime.parse(r.endDateStr));
-    final dateLabel = r.isSingleDay ? startLabel : 'Du $startLabel au $endLabel';
+    final startLabel = DateFormat('EEE d MMM yyyy', 'fr_FR')
+        .format(DateTime.parse(r.startDateStr));
+    final endLabel = DateFormat('EEE d MMM yyyy', 'fr_FR')
+        .format(DateTime.parse(r.endDateStr));
+    final dateLabel =
+        r.isSingleDay ? startLabel : 'Du $startLabel au $endLabel';
     final conflicts = appState.leaveConflictingEntries(r);
-    final canReview = me.role == UserRole.admin && r.status == LeaveRequestStatus.pendingAdmin && r.ownerId != me.id && r.ownerPhone != me.phone;
-    final needsOtherAdmin = me.role == UserRole.admin && r.status == LeaveRequestStatus.pendingAdmin && (r.ownerId == me.id || r.ownerPhone == me.phone);
-    final canCancel = (r.ownerId == me.id || r.ownerPhone == me.phone) && r.status == LeaveRequestStatus.pendingAdmin;
+    final canReview = me.role == UserRole.admin &&
+        r.status == LeaveRequestStatus.pendingAdmin &&
+        r.ownerId != me.id &&
+        r.ownerPhone != me.phone;
+    final needsOtherAdmin = me.role == UserRole.admin &&
+        r.status == LeaveRequestStatus.pendingAdmin &&
+        (r.ownerId == me.id || r.ownerPhone == me.phone);
+    final canCancel = (r.ownerId == me.id || r.ownerPhone == me.phone) &&
+        r.status == LeaveRequestStatus.pendingAdmin;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1040,7 +1310,10 @@ class _LeaveRequestRow extends StatelessWidget {
           ),
           if (showOwnerName) ...[
             const SizedBox(width: AppSpace.sm),
-            Expanded(child: Text(r.ownerName, style: Theme.of(context).textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
+            Expanded(
+                child: Text(r.ownerName,
+                    style: Theme.of(context).textTheme.titleSmall,
+                    overflow: TextOverflow.ellipsis)),
           ],
         ]),
         const SizedBox(height: AppSpace.sm),
@@ -1050,14 +1323,19 @@ class _LeaveRequestRow extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpace.sm),
-            decoration: BoxDecoration(color: AppColors.urgJour, borderRadius: AppRadius.smR),
+            decoration: BoxDecoration(
+                color: AppColors.urgJour, borderRadius: AppRadius.smR),
             child: Row(children: [
-              const Icon(Icons.warning_amber_rounded, size: 15, color: AppColors.urgJourText),
+              const Icon(Icons.warning_amber_rounded,
+                  size: 15, color: AppColors.urgJourText),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   '${conflicts.length} garde${conflicts.length > 1 ? 's' : ''} à couvrir avant approbation : ${conflicts.map((e) => DateFormat('dd/MM', 'fr_FR').format(DateTime.parse(e.dateStr))).join(', ')}',
-                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.urgJourText),
+                  style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.urgJourText),
                 ),
               ),
             ]),
@@ -1065,41 +1343,55 @@ class _LeaveRequestRow extends StatelessWidget {
         ],
         if (needsOtherAdmin) ...[
           const SizedBox(height: AppSpace.sm),
-          Text('Votre propre congé doit être validé par un autre administrateur.', style: Theme.of(context).textTheme.bodySmall),
+          Text(
+              'Votre propre congé doit être validé par un autre administrateur.',
+              style: Theme.of(context).textTheme.bodySmall),
         ],
         const SizedBox(height: AppSpace.md),
         if (canReview)
           Row(children: [
-            Expanded(child: _ActionButton(
-              label: 'Approuver', color: AppColors.conge, textColor: AppColors.congeText,
+            Expanded(
+                child: _ActionButton(
+              label: 'Approuver',
+              color: AppColors.conge,
+              textColor: AppColors.congeText,
               onTap: () async {
                 final err = await appState.reviewLeave(r.id, true);
                 if (err != null && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(err)));
                 }
               },
             )),
             const SizedBox(width: AppSpace.sm),
-            Expanded(child: _ActionButton(
-              label: 'Refuser', color: AppColors.urg24h, textColor: AppColors.urg24hText,
+            Expanded(
+                child: _ActionButton(
+              label: 'Refuser',
+              color: AppColors.urg24h,
+              textColor: AppColors.urg24hText,
               onTap: () async {
                 final err = await appState.reviewLeave(r.id, false);
                 if (err != null && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(err)));
                 }
               },
             )),
           ])
         else
           Row(children: [
-            Expanded(child: Align(alignment: Alignment.centerLeft, child: _LeaveStatusPill(request: r))),
+            Expanded(
+                child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _LeaveStatusPill(request: r))),
             if (canCancel) ...[
               const SizedBox(width: AppSpace.sm),
               TextButton(
                 onPressed: () async {
                   final err = await appState.cancelLeave(r.id);
                   if (err != null && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text(err)));
                   }
                 },
                 child: const Text('Annuler'),
@@ -1122,13 +1414,25 @@ class _LeaveStatusPill extends StatelessWidget {
     late Color fg;
     switch (request.status) {
       case LeaveRequestStatus.pendingAdmin:
-        text = 'En attente de l’admin'; bg = AppColors.serviceJour; fg = AppColors.serviceJourText; break;
+        text = 'En attente de l’admin';
+        bg = AppColors.serviceJour;
+        fg = AppColors.serviceJourText;
+        break;
       case LeaveRequestStatus.approved:
-        text = 'Congé approuvé'; bg = AppColors.conge; fg = AppColors.congeText; break;
+        text = 'Congé approuvé';
+        bg = AppColors.conge;
+        fg = AppColors.congeText;
+        break;
       case LeaveRequestStatus.rejectedAdmin:
-        text = 'Congé refusé'; bg = AppColors.urg24h; fg = AppColors.urg24hText; break;
+        text = 'Congé refusé';
+        bg = AppColors.urg24h;
+        fg = AppColors.urg24hText;
+        break;
       case LeaveRequestStatus.cancelled:
-        text = 'Annulé'; bg = AppColors.paperAlt; fg = AppColors.inkSoft; break;
+        text = 'Annulé';
+        bg = AppColors.paperAlt;
+        fg = AppColors.inkSoft;
+        break;
     }
     return Pill(text: text, background: bg, foreground: fg, fontSize: 10.5);
   }
@@ -1139,7 +1443,11 @@ class _ActionButton extends StatelessWidget {
   final Color color;
   final Color textColor;
   final VoidCallback onTap;
-  const _ActionButton({required this.label, required this.color, required this.textColor, required this.onTap});
+  const _ActionButton(
+      {required this.label,
+      required this.color,
+      required this.textColor,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1152,7 +1460,8 @@ class _ActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.smR),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+      child: Text(label,
+          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -1169,27 +1478,33 @@ class _StatusPill extends StatelessWidget {
     switch (ex.status) {
       case ExchangeStatus.pendingB:
         text = 'En attente de ${ex.toName}';
-        bg = AppColors.serviceJour; fg = AppColors.serviceJourText;
+        bg = AppColors.serviceJour;
+        fg = AppColors.serviceJourText;
         break;
       case ExchangeStatus.pendingAdmin:
         text = 'En attente de l\u2019admin';
-        bg = AppColors.serviceJour; fg = AppColors.serviceJourText;
+        bg = AppColors.serviceJour;
+        fg = AppColors.serviceJourText;
         break;
       case ExchangeStatus.approved:
         text = ex.isServiceExchange ? 'Accepté · appliqué' : 'Approuvé';
-        bg = AppColors.conge; fg = AppColors.congeText;
+        bg = AppColors.conge;
+        fg = AppColors.congeText;
         break;
       case ExchangeStatus.declinedB:
         text = 'Refusé par ${ex.toName}';
-        bg = AppColors.urg24h; fg = AppColors.urg24hText;
+        bg = AppColors.urg24h;
+        fg = AppColors.urg24hText;
         break;
       case ExchangeStatus.rejectedAdmin:
         text = 'Rejeté par l\u2019admin';
-        bg = AppColors.urg24h; fg = AppColors.urg24hText;
+        bg = AppColors.urg24h;
+        fg = AppColors.urg24hText;
         break;
       case ExchangeStatus.cancelled:
         text = 'Annulé';
-        bg = AppColors.paperAlt; fg = AppColors.inkSoft;
+        bg = AppColors.paperAlt;
+        fg = AppColors.inkSoft;
         break;
     }
     return Pill(text: text, background: bg, foreground: fg, fontSize: 10.5);

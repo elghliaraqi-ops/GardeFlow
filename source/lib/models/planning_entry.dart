@@ -7,6 +7,7 @@ class PlanningEntry {
   String ownerName;
   String? leaveRequestId;
   bool isDisciplinary;
+  String? disciplinaryReason;
   final DateTime createdAt;
 
   PlanningEntry({
@@ -18,6 +19,7 @@ class PlanningEntry {
     required this.ownerName,
     this.leaveRequestId,
     this.isDisciplinary = false,
+    this.disciplinaryReason,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -30,6 +32,7 @@ class PlanningEntry {
         'ownerName': ownerName,
         'leaveRequestId': leaveRequestId,
         'isDisciplinary': isDisciplinary,
+        'disciplinaryReason': disciplinaryReason,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -37,11 +40,13 @@ class PlanningEntry {
         id: j['id'] as String,
         dateStr: j['dateStr'] as String,
         shiftId: j['shiftId'] as String,
-        ownerId: (j['ownerId'] as String?) ?? (j['ownerPhone'] as String? ?? ''),
+        ownerId:
+            (j['ownerId'] as String?) ?? (j['ownerPhone'] as String? ?? ''),
         ownerPhone: j['ownerPhone'] as String,
         ownerName: j['ownerName'] as String,
         leaveRequestId: j['leaveRequestId'] as String?,
         isDisciplinary: j['isDisciplinary'] as bool? ?? false,
+        disciplinaryReason: j['disciplinaryReason'] as String?,
         createdAt: DateTime.parse(j['createdAt'] as String),
       );
 }

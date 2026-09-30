@@ -60,12 +60,33 @@ class _AdminDisciplinaryAssignmentScreenState
   String _normalize(String value) {
     var s = value.toLowerCase();
     const replacements = <String, String>{
-      'à': 'a', 'á': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a',
-      'ç': 'c', 'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
-      'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i', 'ñ': 'n',
-      'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
-      'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
-      '’': ' ', "'": ' ', '-': ' ',
+      'à': 'a',
+      'á': 'a',
+      'â': 'a',
+      'ä': 'a',
+      'ã': 'a',
+      'ç': 'c',
+      'è': 'e',
+      'é': 'e',
+      'ê': 'e',
+      'ë': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'î': 'i',
+      'ï': 'i',
+      'ñ': 'n',
+      'ò': 'o',
+      'ó': 'o',
+      'ô': 'o',
+      'ö': 'o',
+      'õ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'û': 'u',
+      'ü': 'u',
+      '’': ' ',
+      "'": ' ',
+      '-': ' ',
     };
     for (final e in replacements.entries) {
       s = s.replaceAll(e.key, e.value);
@@ -73,8 +94,7 @@ class _AdminDisciplinaryAssignmentScreenState
     return s.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  String _dateKey(DateTime date) =>
-      DateFormat('yyyy-MM-dd').format(date);
+  String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
   Future<void> _pickDate(int index) async {
     final current = _drafts[index].date;
@@ -123,10 +143,18 @@ class _AdminDisciplinaryAssignmentScreenState
     }
 
     final doctor = state.users
-        .where((u) => u.id == _doctorId && u.accountStatus == AccountStatus.active)
+        .where(
+            (u) => u.id == _doctorId && u.accountStatus == AccountStatus.active)
         .firstOrNull;
     if (doctor == null) {
       setState(() => _error = 'Sélectionnez un médecin.');
+      return;
+    }
+
+    final reason = _reasonController.text.trim();
+    if (reason.length < 3) {
+      setState(() => _error =
+          'Indiquez le motif de la garde disciplinaire. Il sera communiqué au médecin.');
       return;
     }
 
@@ -134,7 +162,8 @@ class _AdminDisciplinaryAssignmentScreenState
     for (final draft in _drafts) {
       final key = _dateKey(draft.date);
       if (!dates.add(key)) {
-        setState(() => _error = 'Une même date ne peut être ajoutée qu’une seule fois.');
+        setState(() =>
+            _error = 'Une même date ne peut être ajoutée qu’une seule fois.');
         return;
       }
     }
@@ -155,7 +184,7 @@ class _AdminDisciplinaryAssignmentScreenState
                     'shift_id': d.shiftId,
                   })
               .toList(growable: false),
-          'p_reason': _reasonController.text.trim(),
+          'p_reason': reason,
         },
       );
 
@@ -237,7 +266,8 @@ class _AdminDisciplinaryAssignmentScreenState
     final allDoctors = state.users
         .where((u) => u.accountStatus == AccountStatus.active)
         .toList()
-      ..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+      ..sort((a, b) =>
+          a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
     final q = _normalize(_doctorSearch);
     final doctors = q.isEmpty
         ? allDoctors
@@ -300,7 +330,7 @@ class _AdminDisciplinaryAssignmentScreenState
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          'La garde disciplinaire est immédiatement ajoutée au calendrier du médecin. Elle ne peut pas être supprimée, transférée ou échangée par le médecin.',
+                          'La garde disciplinaire est immédiatement ajoutée au calendrier du médecin. Une notification PUSH lui est envoyée avec le motif, qui reste également visible dans la cloche de GardeFlow.',
                           style: TextStyle(
                             color: AppColors.inkSoft,
                             fontSize: 11.5,
@@ -386,7 +416,8 @@ class _AdminDisciplinaryAssignmentScreenState
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: _submitting || _drafts.length >= 31 ? null : _addDraft,
+                  onPressed:
+                      _submitting || _drafts.length >= 31 ? null : _addDraft,
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: const Text('Ajouter'),
                 ),
@@ -420,8 +451,9 @@ class _AdminDisciplinaryAssignmentScreenState
               maxLines: 4,
               maxLength: 300,
               decoration: const InputDecoration(
-                labelText: 'Motif administratif (facultatif)',
-                hintText: 'Visible dans le journal des actions administrateur',
+                labelText: 'Motif de la garde disciplinaire',
+                hintText:
+                    'Obligatoire · envoyé au médecin par notification PUSH',
                 prefixIcon: Icon(Icons.notes_rounded),
               ),
             ),
