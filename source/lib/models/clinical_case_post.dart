@@ -18,6 +18,8 @@ class ClinicalCasePost {
   final String topic;
   final String generationSource;
   final DateTime? publishedAt;
+  final int? mySelectedIndex;
+  final bool? myIsCorrect;
 
   const ClinicalCasePost({
     required this.id,
@@ -39,6 +41,8 @@ class ClinicalCasePost {
     required this.topic,
     required this.generationSource,
     this.publishedAt,
+    this.mySelectedIndex,
+    this.myIsCorrect,
   });
 
   factory ClinicalCasePost.fromMap(Map<String, dynamic> map) {
@@ -67,6 +71,8 @@ class ClinicalCasePost {
       topic: '${map['question_topic'] ?? 'cas_clinique'}'.trim(),
       generationSource: '${map['generation_source'] ?? 'fallback'}'.trim(),
       publishedAt: DateTime.tryParse('${map['published_at'] ?? ''}')?.toLocal(),
+      mySelectedIndex: int.tryParse('${map['my_selected_index'] ?? ''}'),
+      myIsCorrect: map['my_is_correct'] is bool ? map['my_is_correct'] as bool : null,
     );
   }
 

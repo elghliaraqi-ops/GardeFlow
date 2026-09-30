@@ -5,8 +5,11 @@ import 'package:intl/intl.dart';
 
 import '../models/app_user.dart';
 import '../models/practice_models.dart';
+import '../models/qcm_models.dart';
 import '../services/practice_service.dart';
+import '../services/clinical_case_service.dart';
 import '../state/app_state.dart';
+import 'practice_qcm_screen.dart';
 
 abstract final class PracticeColors {
   static const background = Color(0xFF062E20);
@@ -58,6 +61,7 @@ class PracticeScreen extends StatefulWidget {
 
 class _PracticeScreenState extends State<PracticeScreen> {
   final _service = PracticeService.instance;
+  final _qcmService = ClinicalCaseService.instance;
   bool _loading = true;
   PracticeStats _guard = const PracticeStats();
   PracticeStats _month = const PracticeStats();
@@ -65,6 +69,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   PracticeStats _all = const PracticeStats();
   PracticePreferences _prefs = const PracticePreferences();
   PracticeRanks _ranks = const PracticeRanks();
+  QcmRanks _qcmMonth = const QcmRanks();
   List<PracticeAchievement> _achievements = const [];
   List<int> _monthly = List<int>.filled(12, 0);
   String? _error;
@@ -80,12 +85,14 @@ class _PracticeScreenState extends State<PracticeScreen> {
   void initState() {
     super.initState();
     _service.revision.addListener(_onRevision);
+    _qcmService.revision.addListener(_onRevision);
     _load();
   }
 
   @override
   void dispose() {
     _service.revision.removeListener(_onRevision);
+    _qcmService.revision.removeListener(_onRevision);
     super.dispose();
   }
 
@@ -109,6 +116,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         _service.ranks(period: 'month'),
         _service.achievements(),
         _service.monthlyCounts(year: DateTime.now().year),
+        _qcmService.qcmRanks(period: 'month'),
       ]);
       if (!mounted) return;
       setState(() {
@@ -120,6 +128,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         _ranks = results[5] as PracticeRanks;
         _achievements = results[6] as List<PracticeAchievement>;
         _monthly = results[7] as List<int>;
+        _qcmMonth = results[8] as QcmRanks;
         _loading = false;
         _error = null;
       });
@@ -212,29 +221,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Transformez vos gardes en progression clinique.',
-                style: TextStyle(color: PracticeColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+                'Gardes, cas documentés et apprentissage en un seul espace.',
+                style: TextStyle(color: PracticeColors.textSecondary, fontSize: 13.5, fontWeight: FontWeight.w600),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
-              const SizedBox(height: 22),
-              _sectionLabel('MES STATISTIQUES'),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(child: _StatCard(value: '${_guard.patients}', label: 'Cette garde', loading: _loading)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _StatCard(value: '${_month.patients}', label: 'Ce mois', loading: _loading)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _StatCard(value: '${_year.patients}', label: 'Cette année', loading: _loading)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _LevelCard(level: level, xp: _all.xp, streak: _all.streak),
-              const SizedBox(height: 18),
-              _sectionLabel('GARDE ACTUELLE'),
+              const SizedBox(height: 20),
+              _sectionLabel('GARDE EN COURS'),
               const SizedBox(height: 10),
               if (guard == null)
                 _NoGuardCard(
@@ -255,10 +250,37 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                   onEditGoal: _editGoal,
                 ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
+              _sectionLabel('VUE D’ENSEMBLE'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: _StatCard(value: '${_month.patients}', label: 'Ce mois', loading: _loading)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _StatCard(value: '${_year.patients}', label: 'Cette année', loading: _loading)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _StatCard(value: '${_all.patients}', label: 'Total', loading: _loading)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _LevelCard(level: level, xp: _all.xp, streak: _all.streak),
+              const SizedBox(height: 22),
+              _sectionLabel('APPRENTISSAGE QCM'),
+              const SizedBox(height: 10),
+              _QcmPracticeCard(
+                stats: _qcmMonth,
+                loading: _loading,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PracticeQcmScreen()),
+                ),
+              ),
+              const SizedBox(height: 22),
+              _sectionLabel('PROGRESSION'),
+              const SizedBox(height: 10),
               _PracticeActionTile(
                 icon: Icons.emoji_events_rounded,
-                title: 'Classement',
+                title: 'Classement Practice',
                 subtitle: _rankSubtitle(_ranks),
                 onTap: () => Navigator.push(
                   context,
@@ -282,9 +304,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 subtitle: '${_year.patients} patients documentés cette année',
                 onTap: () => _showProgression(context),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               _EncouragementCard(text: _encouragement(guard)),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
+              _sectionLabel('PRÉFÉRENCES'),
+              const SizedBox(height: 10),
               _LeaderboardPreferenceCard(
                 value: _prefs.leaderboardOptIn,
                 onChanged: (value) async {
@@ -295,9 +319,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
               const SizedBox(height: 15),
               const Text(
-                'Practice valorise votre activité documentée. Le classement ne mesure pas la qualité des soins.',
+                'Les classements Practice et QCM reflètent uniquement l’activité documentée et les exercices pédagogiques. Ils ne mesurent pas la compétence clinique ni la qualité des soins.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: PracticeColors.textSecondary, fontSize: 11, height: 1.4, fontWeight: FontWeight.w600),
+                style: TextStyle(color: PracticeColors.textSecondary, fontSize: 10.5, height: 1.4, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -359,6 +383,105 @@ class _PracticeScreenState extends State<PracticeScreen> {
       ),
     );
   }
+}
+
+class _QcmPracticeCard extends StatelessWidget {
+  final QcmRanks stats;
+  final bool loading;
+  final VoidCallback onTap;
+
+  const _QcmPracticeCard({required this.stats, required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final rankText = !stats.leaderboardOptIn
+        ? 'Classement désactivé'
+        : stats.promotionRank != null
+            ? '${stats.promotionRank}e dans votre promo'
+            : stats.globalRank != null
+                ? '${stats.globalRank}e toutes promotions'
+                : 'Classement après votre première réponse';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: PracticeColors.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: PracticeColors.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(color: PracticeColors.elevated, borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.quiz_rounded, color: PracticeColors.accent),
+                  ),
+                  const SizedBox(width: 11),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('QCM des cas cliniques', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
+                        SizedBox(height: 2),
+                        Text('Statistiques du mois et classement QCM', style: TextStyle(color: PracticeColors.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: PracticeColors.textSecondary),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: _QcmMiniMetric(value: loading ? '—' : '${stats.answered}', label: 'Répondus')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _QcmMiniMetric(value: loading ? '—' : '${stats.correct}', label: 'Corrects')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _QcmMiniMetric(value: loading ? '—' : '${stats.accuracy.toStringAsFixed(0)}%', label: 'Réussite')),
+                ],
+              ),
+              const SizedBox(height: 11),
+              Row(
+                children: [
+                  const Icon(Icons.emoji_events_outlined, size: 17, color: PracticeColors.accent),
+                  const SizedBox(width: 7),
+                  Expanded(child: Text(rankText, style: const TextStyle(color: PracticeColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w800))),
+                  const Text('Voir le classement', style: TextStyle(color: PracticeColors.accent, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QcmMiniMetric extends StatelessWidget {
+  final String value;
+  final String label;
+  const _QcmMiniMetric({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: BoxDecoration(color: PracticeColors.background.withOpacity(0.34), borderRadius: BorderRadius.circular(13)),
+        child: Column(
+          children: [
+            Text(value, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(color: PracticeColors.textSecondary, fontSize: 9.5, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      );
 }
 
 class PracticeGuardScreen extends StatefulWidget {
