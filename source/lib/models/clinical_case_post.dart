@@ -45,8 +45,7 @@ class ClinicalCaseQcm {
           : int.tryParse('${map['correct_index']}'),
       correction: '${map['correction'] ?? ''}'.trim(),
       topic: '${map['topic'] ?? 'cas_clinique'}'.trim(),
-      generationSource:
-          '${map['generation_source'] ?? 'fallback'}'.trim(),
+      generationSource: '${map['generation_source'] ?? 'fallback'}'.trim(),
       mySelectedIndex: map['my_selected_index'] == null
           ? null
           : int.tryParse('${map['my_selected_index']}'),
@@ -161,7 +160,9 @@ class ClinicalCasePost {
 
     // Une ancienne base/ancienne fonction RPC peut ne pas encore renvoyer qcms.
     // Dans ce cas l'application reste utilisable avec le QCM historique.
-    if (parsedQcms.isEmpty && legacyQuestion.isNotEmpty && options.length == 4) {
+    if (parsedQcms.isEmpty &&
+        legacyQuestion.isNotEmpty &&
+        options.length == 4) {
       parsedQcms.add(
         ClinicalCaseQcm(
           id: '${map['id'] ?? ''}',

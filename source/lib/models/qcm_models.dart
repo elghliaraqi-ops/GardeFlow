@@ -19,11 +19,11 @@ class QcmAttemptResult {
     this.caseCorrect = 0,
   });
 
-  factory QcmAttemptResult.fromMap(Map<String, dynamic> map) => QcmAttemptResult(
+  factory QcmAttemptResult.fromMap(Map<String, dynamic> map) =>
+      QcmAttemptResult(
         selectedIndex: int.tryParse('${map['selected_index'] ?? 0}') ?? 0,
         isCorrect: map['is_correct'] == true,
-        answeredAt:
-            DateTime.tryParse('${map['answered_at'] ?? ''}')?.toLocal(),
+        answeredAt: DateTime.tryParse('${map['answered_at'] ?? ''}')?.toLocal(),
         correctIndex: map['correct_index'] == null
             ? null
             : int.tryParse('${map['correct_index']}'),

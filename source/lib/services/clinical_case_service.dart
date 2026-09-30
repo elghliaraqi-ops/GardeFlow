@@ -223,10 +223,12 @@ class ClinicalCaseService {
   ) async {
     final postId = result.postId?.trim() ?? '';
     if (postId.isNotEmpty && result.caseAnswered >= 5) {
-      await _triggerPush('practice_qcm_complete', postId);
-      if (result.caseCorrect >= 5) {
-        await _triggerPush('practice_qcm_perfect', postId);
-      }
+      await _triggerPush(
+        result.caseCorrect >= 5
+            ? 'practice_qcm_perfect'
+            : 'practice_qcm_complete',
+        postId,
+      );
     }
 
     final afterXp = await _practiceXp();
@@ -245,7 +247,8 @@ class ClinicalCaseService {
               DateTime.tryParse('${raw['unlocked_at'] ?? ''}')?.toLocal();
           final key = '${raw['key'] ?? ''}'.trim();
           if (key.isEmpty || unlockedAt == null) continue;
-          if (unlockedAt.isAfter(startedAt.subtract(const Duration(seconds: 5)))) {
+          if (unlockedAt
+              .isAfter(startedAt.subtract(const Duration(seconds: 5)))) {
             await _triggerPush('practice_achievement_unlocked', key);
           }
         }

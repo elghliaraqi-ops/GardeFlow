@@ -25,7 +25,8 @@ class PracticeService {
 
   SupabaseBackendService get _backend => SupabaseBackendService.instance;
 
-  String? get _authUserId => _backend.enabled ? _backend.client.auth.currentUser?.id : null;
+  String? get _authUserId =>
+      _backend.enabled ? _backend.client.auth.currentUser?.id : null;
 
   void _notify() => revision.value = revision.value + 1;
 
@@ -44,7 +45,8 @@ class PracticeService {
       );
       final rows = response is List ? response : const <dynamic>[];
       if (rows.isNotEmpty && rows.first is Map) {
-        remote = PracticeStats.fromMap(Map<String, dynamic>.from(rows.first as Map));
+        remote =
+            PracticeStats.fromMap(Map<String, dynamic>.from(rows.first as Map));
       }
     }
     return _mergePendingStats(remote, scope: scope, guardId: guardId);
@@ -114,10 +116,12 @@ class PracticeService {
     String period = 'month',
     int? promotion,
   }) async {
-    if (!_backend.enabled || _authUserId == null) return const <PracticeRankEntry>[];
+    if (!_backend.enabled || _authUserId == null)
+      return const <PracticeRankEntry>[];
     final params = <String, dynamic>{'p_period': period};
     if (promotion != null) params['p_promotion'] = promotion;
-    final response = await _backend.client.rpc('practice_leaderboard', params: params);
+    final response =
+        await _backend.client.rpc('practice_leaderboard', params: params);
     if (response is! List) return const <PracticeRankEntry>[];
     return response
         .whereType<Map>()
@@ -126,12 +130,14 @@ class PracticeService {
   }
 
   Future<List<PracticeAchievement>> achievements() async {
-    if (!_backend.enabled || _authUserId == null) return const <PracticeAchievement>[];
+    if (!_backend.enabled || _authUserId == null)
+      return const <PracticeAchievement>[];
     final response = await _backend.client.rpc('practice_my_achievements');
     if (response is! List) return const <PracticeAchievement>[];
     return response
         .whereType<Map>()
-        .map((row) => PracticeAchievement.fromMap(Map<String, dynamic>.from(row)))
+        .map((row) =>
+            PracticeAchievement.fromMap(Map<String, dynamic>.from(row)))
         .toList(growable: false);
   }
 
@@ -154,7 +160,8 @@ class PracticeService {
       if (item.patientNumber > maxNumber) maxNumber = item.patientNumber;
     }
     try {
-      final remote = await fetchCases(guardId: guard.id, limit: 1000, includePending: false);
+      final remote = await fetchCases(
+          guardId: guard.id, limit: 1000, includePending: false);
       for (final item in remote) {
         if (item.patientNumber > maxNumber) maxNumber = item.patientNumber;
       }
@@ -173,13 +180,23 @@ class PracticeService {
     final uid = _authUserId;
     final remote = <PracticeCase>[];
     if (_backend.enabled && uid != null) {
-      dynamic query = _backend.client.from('practice_cases').select().eq('user_id', uid).eq('is_draft', false);
+      dynamic query = _backend.client
+          .from('practice_cases')
+          .select()
+          .eq('user_id', uid)
+          .eq('is_draft', false);
       if (guardId != null) query = query.eq('guard_id', guardId);
       if (scope == 'month' || scope == 'year') {
         final now = DateTime.now();
-        final start = scope == 'month' ? DateTime(now.year, now.month) : DateTime(now.year);
-        final end = scope == 'month' ? DateTime(now.year, now.month + 1) : DateTime(now.year + 1);
-        query = query.gte('guard_date', _dateKey(start)).lt('guard_date', _dateKey(end));
+        final start = scope == 'month'
+            ? DateTime(now.year, now.month)
+            : DateTime(now.year);
+        final end = scope == 'month'
+            ? DateTime(now.year, now.month + 1)
+            : DateTime(now.year + 1);
+        query = query
+            .gte('guard_date', _dateKey(start))
+            .lt('guard_date', _dateKey(end));
       }
       if (status != null) {
         switch (status) {
@@ -204,9 +221,8 @@ class PracticeService {
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
       if (response is List) {
-        remote.addAll(response
-            .whereType<Map>()
-            .map((row) => PracticeCase.fromMap(Map<String, dynamic>.from(row))));
+        remote.addAll(response.whereType<Map>().map(
+            (row) => PracticeCase.fromMap(Map<String, dynamic>.from(row))));
       }
     }
 
@@ -218,7 +234,8 @@ class PracticeService {
         final date = DateTime.tryParse(item.guardDate);
         if (date == null) return false;
         final now = DateTime.now();
-        if (scope == 'month' && (date.year != now.year || date.month != now.month)) return false;
+        if (scope == 'month' &&
+            (date.year != now.year || date.month != now.month)) return false;
         if (scope == 'year' && date.year != now.year) return false;
       }
       switch (status) {
@@ -245,7 +262,8 @@ class PracticeService {
   Future<PracticeSaveResult> saveValidated(PracticeCase value) async {
     final normalized = value.copyWith(isDraft: false, pendingSync: false);
     if (!normalized.isValid) {
-      throw StateError('Le motif de consultation et au moins une section clinique sont obligatoires.');
+      throw StateError(
+          'Le motif de consultation et au moins une section clinique sont obligatoires.');
     }
     if (_backend.enabled && _authUserId != null) {
       try {
@@ -264,12 +282,25 @@ class PracticeService {
   }
 
   Future<PracticeCase> _saveRemote(PracticeCase value) async {
+    final isNew = value.id == null || value.id!.isEmpty;
+    final activityStartedAt = DateTime.now();
+    PracticeStats? beforeAll;
+    if (isNew) {
+      try {
+        beforeAll = await summary(scope: 'all');
+      } catch (_) {}
+    }
+
     final payload = value.toMap(includeId: false)
       ..['is_draft'] = false
       ..['synced_at'] = DateTime.now().toUtc().toIso8601String();
     dynamic response;
-    if (value.id == null || value.id!.isEmpty) {
-      response = await _backend.client.from('practice_cases').insert(payload).select().single();
+    if (isNew) {
+      response = await _backend.client
+          .from('practice_cases')
+          .insert(payload)
+          .select()
+          .single();
     } else {
       response = await _backend.client
           .from('practice_cases')
@@ -278,13 +309,68 @@ class PracticeService {
           .select()
           .single();
     }
-    final saved = PracticeCase.fromMap(Map<String, dynamic>.from(response as Map));
+    final saved =
+        PracticeCase.fromMap(Map<String, dynamic>.from(response as Map));
     final savedId = saved.id?.trim() ?? '';
     if (savedId.isNotEmpty) {
       ClinicalCaseService.instance.notifyChanged();
       unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(savedId));
+      if (isNew) {
+        unawaited(_notifyAfterNewCase(saved, beforeAll, activityStartedAt));
+      }
     }
     return saved;
+  }
+
+  Future<void> _notifyAfterNewCase(
+    PracticeCase saved,
+    PracticeStats? beforeAll,
+    DateTime activityStartedAt,
+  ) async {
+    final savedId = saved.id?.trim() ?? '';
+    if (savedId.isEmpty || !_backend.enabled || _authUserId == null) return;
+
+    await _triggerPracticePush('practice_case_created', savedId);
+    await _triggerPracticePush('practice_goal_reached', saved.guardId);
+    await _triggerPracticePush('practice_case_milestone', savedId);
+
+    try {
+      final afterAll = await summary(scope: 'all');
+      if (beforeAll != null) {
+        if (practiceLevelForXp(afterAll.xp).number >
+            practiceLevelForXp(beforeAll.xp).number) {
+          await _triggerPracticePush('practice_level_up', savedId);
+        }
+        if (afterAll.streak > beforeAll.streak && afterAll.streak >= 3) {
+          await _triggerPracticePush('practice_streak', savedId);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final rows = await achievements();
+      for (final achievement in rows) {
+        final unlockedAt = achievement.unlockedAt;
+        if (unlockedAt == null) continue;
+        if (unlockedAt.isAfter(
+          activityStartedAt.subtract(const Duration(seconds: 5)),
+        )) {
+          await _triggerPracticePush(
+            'practice_achievement_unlocked',
+            achievement.key,
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _triggerPracticePush(String kind, String resourceId) async {
+    try {
+      await _backend.triggerPush(kind, resourceId);
+    } catch (_) {
+      // La notification est best-effort et ne doit jamais transformer un
+      // enregistrement clinique réussi en erreur visible pour l'utilisateur.
+    }
   }
 
   Future<void> deleteCase(PracticeCase value) async {
@@ -318,7 +404,8 @@ class PracticeService {
           await _removePending(item.clientId);
           ClinicalCaseService.instance.notifyChanged();
           if (existingId.isNotEmpty) {
-            unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(existingId));
+            unawaited(ClinicalCaseService.instance
+                .enrichQcmForPracticeCase(existingId));
           }
           synced++;
           continue;
@@ -336,7 +423,16 @@ class PracticeService {
         await _removePending(item.clientId);
         ClinicalCaseService.instance.notifyChanged();
         if (insertedId.isNotEmpty) {
-          unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(insertedId));
+          final syncedCase = item.copyWith(id: insertedId, pendingSync: false);
+          unawaited(ClinicalCaseService.instance
+              .enrichQcmForPracticeCase(insertedId));
+          unawaited(
+            _notifyAfterNewCase(
+              syncedCase,
+              null,
+              DateTime.now(),
+            ),
+          );
         }
         synced++;
       } catch (_) {
@@ -358,7 +454,8 @@ class PracticeService {
       if (decoded is! List) return const <PracticeCase>[];
       return decoded
           .whereType<Map>()
-          .map((row) => PracticeCase.fromMap(Map<String, dynamic>.from(row), pendingSync: true))
+          .map((row) => PracticeCase.fromMap(Map<String, dynamic>.from(row),
+              pendingSync: true))
           .toList(growable: false);
     } catch (_) {
       return const <PracticeCase>[];
@@ -385,7 +482,9 @@ class PracticeService {
     final uid = _authUserId;
     if (uid == null) return;
     final prefs = await SharedPreferences.getInstance();
-    final items = (await pendingCases()).where((item) => item.clientId != clientId).toList();
+    final items = (await pendingCases())
+        .where((item) => item.clientId != clientId)
+        .toList();
     await prefs.setString(
       '$_pendingKeyPrefix$uid',
       jsonEncode(items.map((item) => item.toMap()).toList()),
@@ -409,7 +508,8 @@ class PracticeService {
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is Map) return PracticeCase.fromMap(Map<String, dynamic>.from(decoded));
+      if (decoded is Map)
+        return PracticeCase.fromMap(Map<String, dynamic>.from(decoded));
     } catch (_) {}
     return null;
   }
@@ -433,7 +533,8 @@ class PracticeService {
       if (item.isDraft || !item.isValid) return false;
       if (scope == 'guard') return guardId != null && item.guardId == guardId;
       final date = DateTime.tryParse(item.guardDate);
-      if (scope == 'month') return date != null && date.year == now.year && date.month == now.month;
+      if (scope == 'month')
+        return date != null && date.year == now.year && date.month == now.month;
       if (scope == 'year') return date != null && date.year == now.year;
       return true;
     }).toList();
@@ -442,11 +543,16 @@ class PracticeService {
     return PracticeStats(
       patients: base.patients + applicable.length,
       waiting: base.waiting + applicable.where((e) => e.waiting).length,
-      discharged: base.discharged + applicable.where((e) => e.discharged).length,
-      hospitalized: base.hospitalized + applicable.where((e) => e.hospitalized).length,
-      specialistOpinions: base.specialistOpinions + applicable.where((e) => e.specialistOpinionRequested).length,
-      prescriptions: base.prescriptions + applicable.where((e) => e.prescriptionDone).length,
-      completeObservations: base.completeObservations + applicable.where((e) => e.isComplete).length,
+      discharged:
+          base.discharged + applicable.where((e) => e.discharged).length,
+      hospitalized:
+          base.hospitalized + applicable.where((e) => e.hospitalized).length,
+      specialistOpinions: base.specialistOpinions +
+          applicable.where((e) => e.specialistOpinionRequested).length,
+      prescriptions: base.prescriptions +
+          applicable.where((e) => e.prescriptionDone).length,
+      completeObservations: base.completeObservations +
+          applicable.where((e) => e.isComplete).length,
       guardsCount: base.guardsCount + guardIds.length,
       averagePerGuard: base.averagePerGuard,
       bestGuard: base.bestGuard,
@@ -458,5 +564,6 @@ class PracticeService {
   static String _dateKey(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  static String _draftKey(String userId, String guardId) => '$_draftKeyPrefix${userId}_$guardId';
+  static String _draftKey(String userId, String guardId) =>
+      '$_draftKeyPrefix${userId}_$guardId';
 }
