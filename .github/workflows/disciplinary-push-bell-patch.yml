@@ -1,0 +1,67 @@
+name: Disciplinary Push + Bell Patch
+
+on:
+  push:
+    branches:
+      - feature-disciplinary-push-bell-20260930
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature-disciplinary-push-bell-20260930
+          fetch-depth: 0
+
+      - name: Apply patch
+        run: python3 .github/scripts/apply_disciplinary_push_bell.py
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Format changed Dart files
+        working-directory: source
+        run: dart format lib/models/planning_entry.dart lib/services/supabase_backend_service.dart lib/state/app_state.dart lib/screens/admin_disciplinary_assignment_screen.dart lib/screens/notifications_screen.dart
+
+      - name: Analyze
+        working-directory: source
+        run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        working-directory: source
+        run: flutter test
+
+      - name: Keep canonical lockfile unchanged
+        if: always()
+        run: git checkout -- source/pubspec.lock || true
+
+      - name: Commit validated patch
+        run: |
+          rm -f .github/scripts/apply_disciplinary_push_bell.py
+          rm -f .github/workflows/disciplinary-push-bell-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/lib/models/planning_entry.dart \
+                  source/lib/services/supabase_backend_service.dart \
+                  source/lib/state/app_state.dart \
+                  source/lib/screens/admin_disciplinary_assignment_screen.dart \
+                  source/lib/screens/notifications_screen.dart \
+                  source/supabase/patch_v12_0_1_disciplinary_push_bell.sql \
+                  .github/scripts/apply_disciplinary_push_bell.py \
+                  .github/workflows/disciplinary-push-bell-patch.yml
+          git commit -m "feat: notify disciplinary guard assignments" || exit 0
+          git push origin HEAD:feature-disciplinary-push-bell-20260930
