@@ -1,0 +1,1082 @@
+from pathlib import Path
+import subprocess
+
+
+def replace_exact(path, old, new, count=1):
+    p = Path(path)
+    s = p.read_text()
+    found = s.count(old)
+    if found < count:
+        raise SystemExit(f'{path}: expected at least {count} occurrences, found {found}')
+    s = s.replace(old, new, count)
+    p.write_text(s)
+
+
+def replace_between(path, start, end, replacement):
+    p = Path(path)
+    s = p.read_text()
+    a = s.find(start)
+    if a < 0:
+        raise SystemExit(f'{path}: start marker not found: {start}')
+    b = s.find(end, a)
+    if b < 0:
+        raise SystemExit(f'{path}: end marker not found: {end}')
+    s = s[:a] + replacement.rstrip() + '\n\n' + s[b:]
+    p.write_text(s)
+
+
+practice = 'source/lib/screens/practice_screen.dart'
+
+replace_exact(
+    practice,
+    """                  const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 6, 2, 8),
+                    child: Text(
+                      'INTERROGATOIRE',
+                      style: TextStyle(
+                        color: PracticeColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .8,
+                      ),
+                    ),
+                  ),""",
+    """                  _formChapterTitle(
+                    'INTERROGATOIRE',
+                    Icons.forum_outlined,
+                    'Antécédents et histoire de la maladie',
+                  ),""",
+)
+
+replace_exact(
+    practice,
+    """                  const Padding(
+                    padding: EdgeInsets.fromLTRB(2, 14, 2, 8),
+                    child: Text(
+                      'EXAMEN ET SYNTHÈSE',
+                      style: TextStyle(
+                        color: PracticeColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .8,
+                      ),
+                    ),
+                  ),""",
+    """                  _formChapterTitle(
+                    'EXAMEN ET SYNTHÈSE',
+                    Icons.stethoscope_rounded,
+                    'Examen, explorations et prise en charge',
+                  ),""",
+)
+
+replace_between(
+    practice,
+    '  Widget _formSection({',
+    '  Widget _clinicalSection(',
+    '''  Widget _formChapterTitle(
+    String title,
+    IconData icon,
+    String subtitle,
+  ) => Padding(
+    padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+    child: Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: PracticeColors.accent.withOpacity(.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: PracticeColors.accent.withOpacity(.18),
+            ),
+          ),
+          child: Icon(icon, color: PracticeColors.accent, size: 19),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .75,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  IconData _formSectionIcon(String title) {
+    if (title.contains('IDENTIFICATION')) return Icons.badge_outlined;
+    if (title.contains('ANTÉCÉDENTS')) return Icons.history_rounded;
+    if (title.contains('MOTIF')) return Icons.chat_bubble_outline_rounded;
+    if (title.contains('HISTOIRE')) return Icons.timeline_rounded;
+    if (title.contains('EXAMEN CLINIQUE')) return Icons.stethoscope_rounded;
+    if (title.contains('COMPLÉMENTAIRES')) return Icons.biotech_outlined;
+    if (title.contains('IMAGERIE')) return Icons.image_search_outlined;
+    if (title.contains('BILAN')) return Icons.fact_check_outlined;
+    if (title.contains('CONDUITE')) return Icons.route_outlined;
+    if (title.contains('DÉCISIONS')) return Icons.task_alt_rounded;
+    return Icons.description_outlined;
+  }
+
+  Widget _formSection({
+    required String title,
+    required List<Widget> children,
+  }) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          PracticeColors.surface,
+          PracticeColors.elevated.withOpacity(.70),
+        ],
+      ),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: PracticeColors.line.withOpacity(.86)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.10),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: PracticeColors.accent.withOpacity(.12),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                _formSectionIcon(title),
+                color: PracticeColors.accent,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .65,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 13),
+        ...children,
+      ],
+    ),
+  );''',
+)
+
+replace_between(
+    practice,
+    '  Widget _yesNo(String label, bool value, ValueChanged<bool> onChanged) => Row(',
+    '  Widget _specialtyDropdown(',
+    '''  Widget _yesNo(
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+    decoration: BoxDecoration(
+      color: PracticeColors.background.withOpacity(.34),
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: PracticeColors.line.withOpacity(.72)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: true, label: Text('Oui')),
+            ButtonSegment(value: false, label: Text('Non')),
+          ],
+          selected: <bool>{value},
+          onSelectionChanged: (selection) => onChanged(selection.first),
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? PracticeColors.background
+                  : PracticeColors.textSecondary,
+            ),
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? PracticeColors.accent
+                  : PracticeColors.elevated,
+            ),
+            side: WidgetStatePropertyAll(
+              BorderSide(color: PracticeColors.line.withOpacity(.85)),
+            ),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );''',
+)
+
+replace_between(
+    practice,
+    'class _FormHeader extends StatelessWidget {',
+    'class _EncouragementCard extends StatelessWidget {',
+    '''class _FormHeader extends StatelessWidget {
+  final String patientNumber;
+  final String syncLabel;
+  final bool pending;
+  const _FormHeader({
+    required this.patientNumber,
+    required this.syncLabel,
+    required this.pending,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [PracticeColors.elevated, PracticeColors.surface],
+      ),
+      borderRadius: BorderRadius.circular(23),
+      border: Border.all(color: PracticeColors.line),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.14),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: PracticeColors.accent.withOpacity(.12),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(
+              color: PracticeColors.accent.withOpacity(.26),
+            ),
+          ),
+          child: const Icon(
+            Icons.clinical_notes_outlined,
+            color: PracticeColors.accent,
+            size: 25,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'OBSERVATION CLINIQUE',
+                style: TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .9,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                'Patient #$patientNumber',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: (pending
+                          ? PracticeColors.waiting
+                          : PracticeColors.accent)
+                      .withOpacity(.11),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  pending ? 'À synchroniser' : syncLabel,
+                  style: TextStyle(
+                    color: pending
+                        ? PracticeColors.waiting
+                        : PracticeColors.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: PracticeColors.background.withOpacity(.55),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.shield_outlined,
+            color: PracticeColors.textSecondary,
+            size: 19,
+          ),
+        ),
+      ],
+    ),
+  );
+}''',
+)
+
+replace_between(
+    practice,
+    'InputDecoration _practiceInputDecoration(String hint, [IconData? icon]) =>',
+    'Widget _sectionLabel(String label) =>',
+    '''InputDecoration _practiceInputDecoration(String hint, [IconData? icon]) =>
+    InputDecoration(
+      hintText: hint,
+      labelText: null,
+      hintStyle: const TextStyle(
+        color: PracticeColors.textSecondary,
+        fontSize: 12.2,
+        fontWeight: FontWeight.w600,
+      ),
+      prefixIcon: icon == null
+          ? null
+          : Icon(
+              icon,
+              color: PracticeColors.accent.withOpacity(.78),
+              size: 19,
+            ),
+      filled: true,
+      fillColor: PracticeColors.background.withOpacity(.58),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 14,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: PracticeColors.line.withOpacity(.82),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(
+          color: PracticeColors.accent,
+          width: 1.6,
+        ),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );''',
+)
+
+replace_exact(
+    practice,
+    "      style: const TextStyle(color: Colors.white, fontSize: 13),",
+    """      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 13.5,
+        height: 1.36,
+        fontWeight: FontWeight.w600,
+      ),""",
+    1,
+)
+
+replace_exact(
+    practice,
+    """                      minimumSize: const Size.fromHeight(52),
+                    ),""",
+    """                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),""",
+    1,
+)
+replace_exact(
+    practice,
+    """                      minimumSize: const Size.fromHeight(50),
+                    ),""",
+    """                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),""",
+    1,
+)
+
+clinical = 'source/lib/screens/clinical_cases_section.dart'
+
+replace_exact(
+    clinical,
+    """      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.line),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),""",
+    """      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.brand.withOpacity(.16)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withOpacity(0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),""",
+    1,
+)
+
+replace_exact(
+    clinical,
+    """                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.brandSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),""",
+    """                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: AppColors.brandSoft,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.brand.withOpacity(.16)),
+                ),""",
+    1,
+)
+
+replace_between(
+    clinical,
+    'class _CaseSection extends StatelessWidget {',
+    'class _QcmOption extends StatelessWidget {',
+    '''class _CaseSection extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool alwaysShow;
+
+  const _CaseSection({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.alwaysShow = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!alwaysShow && value.trim().isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.fromLTRB(11, 10, 12, 11),
+      decoration: BoxDecoration(
+        color: AppColors.paperAlt.withOpacity(.70),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: AppColors.line.withOpacity(.72)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.brandSoft,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 17, color: AppColors.brandBright),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: AppColors.brandBright,
+                    fontSize: 8.8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.68,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value.trim().isEmpty ? 'Non renseigné' : value.trim(),
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 12.2,
+                    height: 1.45,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}''',
+)
+
+replace_between(
+    clinical,
+    'class _QcmOption extends StatelessWidget {',
+    'class _LoadingCard extends StatelessWidget {',
+    '''class _QcmOption extends StatelessWidget {
+  final int index;
+  final String label;
+  final bool selected;
+  final bool showCorrection;
+  final bool isCorrect;
+  final VoidCallback? onTap;
+
+  const _QcmOption({
+    required this.index,
+    required this.label,
+    required this.selected,
+    required this.showCorrection,
+    required this.isCorrect,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color border = AppColors.line;
+    Color background = AppColors.card;
+    Color foreground = AppColors.ink;
+    if (showCorrection && isCorrect) {
+      border = AppColors.success;
+      background = AppColors.success.withOpacity(0.10);
+      foreground = AppColors.success;
+    } else if (showCorrection && selected && !isCorrect) {
+      border = AppColors.danger;
+      background = AppColors.danger.withOpacity(0.09);
+      foreground = AppColors.danger;
+    } else if (selected) {
+      border = AppColors.brand;
+      background = AppColors.brandSoft;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: border,
+              width: selected || (showCorrection && isCorrect) ? 1.35 : 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: border.withOpacity(.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: foreground.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: foreground.withOpacity(.18)),
+                ),
+                child: Text(
+                  String.fromCharCode(65 + index),
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 11.8,
+                      height: 1.42,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              if (showCorrection && isCorrect)
+                Padding(
+                  padding: const EdgeInsets.only(left: 7, top: 4),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.success,
+                    size: 19,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}''',
+)
+
+replace_exact(
+    clinical,
+    """              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: AppColors.paperAlt,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(color: AppColors.line),
+              ),""",
+    """              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: AppColors.paperAlt,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.brand.withOpacity(.18)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.navy.withOpacity(.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),""",
+    1,
+)
+
+replace_exact(
+    clinical,
+    """                    style: TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 13.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w900,
+                    ),""",
+    """                    style: TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 14.5,
+                      height: 1.42,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.08,
+                    ),""",
+    1,
+)
+
+replace_exact(
+    clinical,
+    """                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: (correct ? AppColors.success : AppColors.danger)
+                      .withOpacity(0.11),
+                  borderRadius: BorderRadius.circular(17),""",
+    """                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: (correct ? AppColors.success : AppColors.danger)
+                      .withOpacity(0.09),
+                  borderRadius: BorderRadius.circular(20),""",
+    1,
+)
+
+qcm = 'source/lib/screens/practice_qcm_screen.dart'
+
+replace_exact(
+    qcm,
+    "        title: const Text('QCM · Practice', style: TextStyle(fontWeight: FontWeight.w900)),\n      ),",
+    """        title: const Text(
+          'QCM · Practice',
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.2),
+        ),
+        centerTitle: false,
+      ),""",
+    1,
+)
+
+replace_exact(
+    qcm,
+    """            const Text(
+              'Vos statistiques QCM',
+              style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Réponses aux cas cliniques publiés dans le fil d’accueil.',
+              style: TextStyle(color: _secondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),""",
+    """            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_surface, _elevated],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: _line),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: _accent.withOpacity(.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _accent.withOpacity(.22)),
+                    ),
+                    child: const Icon(Icons.quiz_rounded, color: _accent, size: 25),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Vos statistiques QCM',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -.35,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Votre progression sur les cas cliniques du fil d’accueil.',
+                          style: TextStyle(
+                            color: _secondary,
+                            fontSize: 11.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),""",
+    1,
+)
+
+replace_between(
+    qcm,
+    'class _Metric extends StatelessWidget {',
+    'class _Segment extends StatelessWidget {',
+    '''class _Metric extends StatelessWidget {
+  final String value;
+  final String label;
+  const _Metric({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          _PracticeQcmScreenState._surface,
+          _PracticeQcmScreenState._elevated,
+        ],
+      ),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: _PracticeQcmScreenState._line),
+    ),
+    child: Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: _PracticeQcmScreenState._secondary,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
+}''',
+)
+
+replace_between(
+    qcm,
+    'class _Segment extends StatelessWidget {',
+    'class _RankRow extends StatelessWidget {',
+    '''class _Segment extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _Segment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected
+        ? _PracticeQcmScreenState._elevated
+        : _PracticeQcmScreenState._surface,
+    borderRadius: BorderRadius.circular(15),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: selected
+                ? _PracticeQcmScreenState._accent
+                : _PracticeQcmScreenState._line,
+            width: selected ? 1.3 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: _PracticeQcmScreenState._accent.withOpacity(.07),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: selected
+                ? Colors.white
+                : _PracticeQcmScreenState._secondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    ),
+  );
+}''',
+)
+
+replace_between(
+    qcm,
+    'class _RankRow extends StatelessWidget {',
+    'class _Empty extends StatelessWidget {',
+    '''class _RankRow extends StatelessWidget {
+  final QcmLeaderboardEntry entry;
+  const _RankRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final medal = entry.rank == 1
+        ? '🥇'
+        : entry.rank == 2
+            ? '🥈'
+            : entry.rank == 3
+                ? '🥉'
+                : null;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: _PracticeQcmScreenState._surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: entry.rank <= 3
+              ? _PracticeQcmScreenState._accent.withOpacity(.40)
+              : _PracticeQcmScreenState._line,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _PracticeQcmScreenState._elevated,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              medal ?? '${entry.rank}',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: medal == null ? 13 : 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${entry.correct} correctes / ${entry.answered} · ${entry.accuracy.toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: _PracticeQcmScreenState._secondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (entry.promotionNumber != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+              decoration: BoxDecoration(
+                color: _PracticeQcmScreenState._accent.withOpacity(.10),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                'P${entry.promotionNumber}',
+                style: const TextStyle(
+                  color: _PracticeQcmScreenState._accent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}''',
+)
+
+replace_exact(
+    qcm,
+    """                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: _line),""",
+    """                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _line),""",
+    1,
+)
+
+allowed = {practice, clinical, qcm}
+out = subprocess.check_output(['git', 'diff', '--name-only'], text=True)
+changed = [line.strip() for line in out.splitlines() if line.strip()]
+unexpected = [p for p in changed if p not in allowed]
+if unexpected:
+    raise SystemExit(f'Unexpected files changed: {unexpected}')
+if set(changed) != allowed:
+    raise SystemExit(f'Expected exactly {sorted(allowed)}, got {sorted(changed)}')
+
+for path in changed:
+    text = Path(path).read_text()
+    if path.endswith('.dart') and text.count('{') != text.count('}'):
+        raise SystemExit(f'Brace count mismatch in {path}')
+
+print('UI-only patch prepared:', ', '.join(changed))
