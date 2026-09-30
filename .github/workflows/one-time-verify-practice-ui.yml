@@ -1,0 +1,42 @@
+name: One-time verify Practice UI refresh
+
+on:
+  push:
+    branches:
+      - ui/practice-clinical-qcm-refresh-20260930
+    paths:
+      - .github/workflows/one-time-verify-practice-ui.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Analyze Flutter code
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Flutter Web release
+        run: flutter build web --release --base-href "/GardeFlow/" --build-name "12.0.0" --build-number "300"
