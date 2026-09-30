@@ -20,6 +20,9 @@ jobs:
       - name: Apply Astreintes layout update
         run: python3 ci/astreintes_scroll_directory_patch.py
 
+      - name: Fix Junior empty-state line break
+        run: python3 ci/astreintes_scroll_fix_escape.py
+
       - name: Verify intended layout
         shell: bash
         run: |
