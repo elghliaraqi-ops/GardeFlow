@@ -2,17 +2,35 @@ class QcmAttemptResult {
   final int selectedIndex;
   final bool isCorrect;
   final DateTime? answeredAt;
+  final int? correctIndex;
+  final String correction;
+  final String? postId;
+  final int caseAnswered;
+  final int caseCorrect;
 
   const QcmAttemptResult({
     required this.selectedIndex,
     required this.isCorrect,
     this.answeredAt,
+    this.correctIndex,
+    this.correction = '',
+    this.postId,
+    this.caseAnswered = 0,
+    this.caseCorrect = 0,
   });
 
   factory QcmAttemptResult.fromMap(Map<String, dynamic> map) => QcmAttemptResult(
         selectedIndex: int.tryParse('${map['selected_index'] ?? 0}') ?? 0,
         isCorrect: map['is_correct'] == true,
-        answeredAt: DateTime.tryParse('${map['answered_at'] ?? ''}')?.toLocal(),
+        answeredAt:
+            DateTime.tryParse('${map['answered_at'] ?? ''}')?.toLocal(),
+        correctIndex: map['correct_index'] == null
+            ? null
+            : int.tryParse('${map['correct_index']}'),
+        correction: '${map['correction'] ?? ''}'.trim(),
+        postId: map['post_id']?.toString(),
+        caseAnswered: int.tryParse('${map['case_answered'] ?? 0}') ?? 0,
+        caseCorrect: int.tryParse('${map['case_correct'] ?? 0}') ?? 0,
       );
 }
 
@@ -76,7 +94,8 @@ class QcmLeaderboardEntry {
     required this.accuracy,
   });
 
-  factory QcmLeaderboardEntry.fromMap(Map<String, dynamic> map) => QcmLeaderboardEntry(
+  factory QcmLeaderboardEntry.fromMap(Map<String, dynamic> map) =>
+      QcmLeaderboardEntry(
         rank: int.tryParse('${map['rank'] ?? 0}') ?? 0,
         userId: '${map['user_id'] ?? ''}',
         displayName: '${map['display_name'] ?? 'Médecin'}'.trim(),
