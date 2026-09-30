@@ -33,6 +33,7 @@ import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'senior_oncall_screen.dart';
 import 'daily_news_section.dart';
+import 'clinical_cases_section.dart';
 
 /// Coque principale V11.6.18.
 ///
@@ -48,6 +49,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
   final GlobalKey _newsFeedKey = GlobalKey();
+  final GlobalKey _clinicalCasesFeedKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _DashboardView(
                     appState: appState,
                     newsFeedKey: _newsFeedKey,
+                    clinicalCasesFeedKey: _clinicalCasesFeedKey,
                     onOpenPlanning: () => setState(() => _tab = 1),
                     onOpenDirectory: () => setState(() => _tab = 2),
                     onOpenProfile: () => Navigator.push(
@@ -621,6 +624,7 @@ class _AstreinteFeatureCard extends StatelessWidget {
 class _DashboardView extends StatelessWidget {
   final AppState appState;
   final GlobalKey newsFeedKey;
+  final GlobalKey clinicalCasesFeedKey;
   final VoidCallback onOpenPlanning;
   final VoidCallback onOpenDirectory;
   final VoidCallback onOpenProfile;
@@ -628,6 +632,7 @@ class _DashboardView extends StatelessWidget {
   const _DashboardView({
     required this.appState,
     required this.newsFeedKey,
+    required this.clinicalCasesFeedKey,
     required this.onOpenPlanning,
     required this.onOpenDirectory,
     required this.onOpenProfile,
@@ -879,7 +884,12 @@ class _DashboardView extends StatelessWidget {
         _NextGuardCard(entry: next, onTap: onOpenPlanning),
         SizedBox(height: 14),
         Center(
-          child: Material(
+          child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                Material(
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(999),
@@ -922,9 +932,56 @@ class _DashboardView extends StatelessWidget {
               ),
             ),
           ),
+                Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                final targetContext = clinicalCasesFeedKey.currentContext;
+                if (targetContext == null) return;
+                Scrollable.ensureVisible(
+                  targetContext,
+                  duration: const Duration(milliseconds: 520),
+                  curve: Curves.easeOutCubic,
+                  alignment: 0.04,
+                );
+              },
+              child: Ink(
+                padding: EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.brandBright, width: 1.2),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Cas cliniques plus bas',
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.brandBright,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+              ],
+            ),
         ),
         SizedBox(height: 14),
         DailyNewsSection(verticalFeedKey: newsFeedKey),
+        SizedBox(height: 18),
+        ClinicalCasesSection(verticalFeedKey: clinicalCasesFeedKey),
       ],
     );
   }
