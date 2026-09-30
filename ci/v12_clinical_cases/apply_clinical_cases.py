@@ -71,8 +71,8 @@ home = replace_once(
 )
 home = replace_once(
     home,
-    '          DailyNewsSection(verticalFeedKey: newsFeedKey),',
-    '          DailyNewsSection(verticalFeedKey: newsFeedKey),\n          SizedBox(height: 18),\n          ClinicalCasesSection(verticalFeedKey: clinicalCasesFeedKey),',
+    '        DailyNewsSection(verticalFeedKey: newsFeedKey),',
+    '        DailyNewsSection(verticalFeedKey: newsFeedKey),\n        SizedBox(height: 18),\n        ClinicalCasesSection(verticalFeedKey: clinicalCasesFeedKey),',
     'clinical feed bottom placement',
 )
 
