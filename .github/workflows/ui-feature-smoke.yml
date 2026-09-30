@@ -1,0 +1,13 @@
+name: UI feature smoke
+
+on:
+  push:
+    branches:
+      - feature-global-ui-refresh-20260930
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "UI feature branch workflow is valid"
