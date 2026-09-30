@@ -27,8 +27,7 @@ Future<void> huimBackgroundMessage(RemoteMessage message) async {
   if (activeUserId == null || activeUserId != recipientId) return;
 
   final title = message.data['title']?.toString() ?? 'GardeFlow';
-  final body =
-      message.data['body']?.toString() ?? 'Nouvelle notification';
+  final body = message.data['body']?.toString() ?? 'Nouvelle notification';
   final kind = message.data['kind']?.toString() ?? '';
 
   await NotificationService.instance.init();
@@ -48,27 +47,35 @@ class PushNotificationService {
   bool _enabled = false;
   bool _navigationReady = false;
   bool _isAdmin = false;
+  void Function()? _openPractice;
   String? _pendingKind;
   String? _registeredToken;
   StreamSubscription<String>? _tokenRefreshSub;
   Future<void> _operations = Future<void>.value();
 
   bool get initialized => _initialized;
-  bool get _android => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _android =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   bool get _ios => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   bool get _nativePush => _android || _ios;
-  String get _platform => kIsWeb ? 'web' : _ios ? 'ios' : 'android';
+  String get _platform => kIsWeb
+      ? 'web'
+      : _ios
+          ? 'ios'
+          : 'android';
 
   bool _belongsToCurrentUser(RemoteMessage message) {
     final recipientId = message.data['recipientId']?.toString();
     if (recipientId == null || recipientId.isEmpty) return false;
-    return SupabaseBackendService.instance.client.auth.currentUser?.id == recipientId;
+    return SupabaseBackendService.instance.client.auth.currentUser?.id ==
+        recipientId;
   }
 
   Future<void> initializeFirebase() async {
     if (_initialized || (!kIsWeb && !_nativePush)) return;
     try {
-      await Firebase.initializeApp(options: kIsWeb ? HuimFirebaseConfig.webOptions : null);
+      await Firebase.initializeApp(
+          options: kIsWeb ? HuimFirebaseConfig.webOptions : null);
       if (_nativePush) {
         FirebaseMessaging.onBackgroundMessage(huimBackgroundMessage);
         NotificationService.instance.onPushTap = _open;
@@ -76,7 +83,8 @@ class PushNotificationService {
         if (pending != null) _pendingKind = pending;
       }
       if (_ios) {
-        await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+        await FirebaseMessaging.instance
+            .setForegroundNotificationPresentationOptions(
           alert: false,
           badge: false,
           sound: false,
@@ -84,16 +92,22 @@ class PushNotificationService {
       }
       FirebaseMessaging.onMessage.listen((message) async {
         if (!_enabled || !_belongsToCurrentUser(message)) return;
-        final title = message.data['title']?.toString() ?? message.notification?.title ?? 'GardeFlow';
-        final body = message.data['body']?.toString() ?? message.notification?.body ?? 'Nouvelle notification';
+        final title = message.data['title']?.toString() ??
+            message.notification?.title ??
+            'GardeFlow';
+        final body = message.data['body']?.toString() ??
+            message.notification?.body ??
+            'Nouvelle notification';
         final kind = message.data['kind']?.toString() ?? '';
         try {
           if (_nativePush) {
-            await NotificationService.instance.showPush(title: title, body: body, kind: kind);
+            await NotificationService.instance
+                .showPush(title: title, body: body, kind: kind);
           } else {
             huimMessengerKey.currentState?.showSnackBar(SnackBar(
               content: Text('$title — $body'),
-              action: SnackBarAction(label: 'Voir', onPressed: () => _open(kind)),
+              action:
+                  SnackBarAction(label: 'Voir', onPressed: () => _open(kind)),
             ));
           }
         } catch (e) {
@@ -113,16 +127,21 @@ class PushNotificationService {
       _initialized = true;
       status.value = 'Notifications prêtes à être activées';
     } catch (e) {
-      status.value = 'Firebase indisponible : vérifier la configuration Firebase de cet appareil';
+      status.value =
+          'Firebase indisponible : vérifier la configuration Firebase de cet appareil';
       debugPrint('Initialisation Firebase impossible: $e');
     }
   }
 
   // Appelé uniquement après l'arrivée sur l'accueil : le splash et la connexion
   // doivent terminer avant d'ouvrir une page à partir d'une notification.
-  void navigationReady({required bool isAdmin}) {
+  void navigationReady({
+    required bool isAdmin,
+    void Function()? onPractice,
+  }) {
     _navigationReady = true;
     _isAdmin = isAdmin;
+    _openPractice = onPractice ?? _openPractice;
     final kind = _pendingKind;
     _pendingKind = null;
     if (kind != null) _open(kind);
@@ -131,6 +150,10 @@ class PushNotificationService {
   void _open(String kind) {
     if (!_navigationReady || huimNavigatorKey.currentState == null) {
       _pendingKind = kind;
+      return;
+    }
+    if (kind.startsWith('practice_') && _openPractice != null) {
+      _openPractice!();
       return;
     }
     if (kind == 'announcement_created') {
@@ -189,11 +212,13 @@ class PushNotificationService {
       if (userId == null) return;
       final deviceId = await LocalStorageService.loadOrCreatePushDeviceId();
       await LocalStorageService.savePushActiveUserId(userId);
-      final settings = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+      final settings = await FirebaseMessaging.instance
+          .requestPermission(alert: true, badge: true, sound: true);
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         await LocalStorageService.savePushEnabled(false);
-        status.value = 'Autorisation refusée : activer les notifications dans les réglages du téléphone';
+        status.value =
+            'Autorisation refusée : activer les notifications dans les réglages du téléphone';
         return;
       }
       final token = await _getToken();
@@ -204,17 +229,23 @@ class PushNotificationService {
             : 'Aucun token reçu. Vérifier Internet et Google Play Services.';
         return;
       }
-      await backend.registerPushDevice(token, platform: _platform, deviceId: deviceId);
+      await backend.registerPushDevice(token,
+          platform: _platform, deviceId: deviceId);
       await LocalStorageService.savePushEnabled(true);
       _registeredToken = token;
       status.value = 'Notifications push activées sur cet appareil';
       await _tokenRefreshSub?.cancel();
-      _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+      _tokenRefreshSub =
+          FirebaseMessaging.instance.onTokenRefresh.listen((token) {
         unawaited(_enqueue(() async {
-          if (!_enabled || backend.client.auth.currentUser?.id != userId) return;
+          if (!_enabled || backend.client.auth.currentUser?.id != userId)
+            return;
           final previousToken = _registeredToken;
-          await backend.registerPushDevice(token, platform: _platform, deviceId: deviceId);
-          if (previousToken != null && previousToken.isNotEmpty && previousToken != token) {
+          await backend.registerPushDevice(token,
+              platform: _platform, deviceId: deviceId);
+          if (previousToken != null &&
+              previousToken.isNotEmpty &&
+              previousToken != token) {
             try {
               await backend.unregisterPushToken(previousToken);
             } catch (e) {
@@ -225,7 +256,8 @@ class PushNotificationService {
           status.value = 'Notifications push activées sur cet appareil';
         }));
       }, onError: (Object e) {
-        status.value = 'Renouvellement des notifications impossible. Réessayer.';
+        status.value =
+            'Renouvellement des notifications impossible. Réessayer.';
       });
     });
   }
@@ -242,7 +274,9 @@ class PushNotificationService {
       try {
         final token = _registeredToken ?? await _getToken();
         final backend = SupabaseBackendService.instance;
-        if (token != null && backend.enabled && backend.client.auth.currentUser != null) {
+        if (token != null &&
+            backend.enabled &&
+            backend.client.auth.currentUser != null) {
           await backend.unregisterPushToken(token);
         }
       } finally {

@@ -21,8 +21,10 @@ class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
-  final ValueNotifier<String> reminderStatus = ValueNotifier<String>('Initialisation des rappels…');
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
+  final ValueNotifier<String> reminderStatus =
+      ValueNotifier<String>('Initialisation des rappels…');
 
   bool _initialized = false;
   bool _initializing = false;
@@ -31,11 +33,13 @@ class NotificationService {
   String? pendingPushKind;
 
   static const pushChannelId = 'huim6_push';
+  static const practiceChannelId = 'gardeflow_practice_v1';
   static const _standardReminderChannel = 'gardeflow_guard_standard_v3';
   static const _urgentReminderChannel = 'gardeflow_guard_urgent_v3';
   static const _silentReminderChannel = 'gardeflow_guard_silent_v3';
 
-  bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> init() async {
     if (_initialized || _initializing) return;
@@ -56,7 +60,8 @@ class NotificationService {
         requestBadgePermission: false,
         requestSoundPermission: false,
       );
-      const settings = InitializationSettings(android: androidInit, iOS: iosInit);
+      const settings =
+          InitializationSettings(android: androidInit, iOS: iosInit);
 
       await _plugin.initialize(
         settings,
@@ -76,22 +81,37 @@ class NotificationService {
       try {
         final launch = await _plugin.getNotificationAppLaunchDetails();
         final payload = launch?.notificationResponse?.payload;
-        if (launch?.didNotificationLaunchApp == true && payload != null && payload.startsWith('push:')) {
+        if (launch?.didNotificationLaunchApp == true &&
+            payload != null &&
+            payload.startsWith('push:')) {
           pendingPushKind = payload.substring(5);
         }
       } catch (e) {
         debugPrint('Lecture du lancement par notification ignorée: $e');
       }
 
-      final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       if (android != null) {
-        await android.createNotificationChannel(const AndroidNotificationChannel(
+        await android
+            .createNotificationChannel(const AndroidNotificationChannel(
           pushChannelId,
           'Échanges et congés',
           description: 'Demandes, validations et événements du planning',
           importance: Importance.high,
         ));
-        await android.createNotificationChannel(const AndroidNotificationChannel(
+        await android
+            .createNotificationChannel(const AndroidNotificationChannel(
+          practiceChannelId,
+          'Practice',
+          description:
+              'Cas cliniques, progression, succès et encouragements de garde',
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
+        ));
+        await android
+            .createNotificationChannel(const AndroidNotificationChannel(
           _standardReminderChannel,
           'Rappels de garde · Standard',
           description: 'Rappels sonores avant les gardes validées',
@@ -99,7 +119,8 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
         ));
-        await android.createNotificationChannel(const AndroidNotificationChannel(
+        await android
+            .createNotificationChannel(const AndroidNotificationChannel(
           _urgentReminderChannel,
           'Rappels de garde · Urgent',
           description: 'Rappels prioritaires avant les gardes validées',
@@ -107,7 +128,8 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
         ));
-        await android.createNotificationChannel(const AndroidNotificationChannel(
+        await android
+            .createNotificationChannel(const AndroidNotificationChannel(
           _silentReminderChannel,
           'Rappels de garde · Silencieux',
           description: 'Rappels visuels sans son',
@@ -146,33 +168,89 @@ class NotificationService {
     return _initialized;
   }
 
-  Future<void> showPush({required String title, required String body, required String kind}) async {
+  Future<void> showPush({
+    required String title,
+    required String body,
+    required String kind,
+  }) async {
     if (kIsWeb) return;
     if (!await _ensureInitialized()) return;
     try {
+      final practice = kind.startsWith('practice_');
+      final details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          practice ? practiceChannelId : pushChannelId,
+          practice ? 'Practice' : 'Échanges et congés',
+          channelDescription: practice
+              ? 'Cas cliniques, progression, succès et encouragements de garde'
+              : 'Demandes, validations et événements du planning',
+          icon: 'ic_stat_huim6',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      );
       await _plugin.show(
         (DateTime.now().microsecondsSinceEpoch & 0x3fffffff) | 0x40000000,
         title,
         body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            pushChannelId,
-            'Échanges et congés',
-            channelDescription: 'Demandes, validations et événements du planning',
-            icon: 'ic_stat_huim6',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        ),
+        details,
         payload: 'push:$kind',
       );
     } catch (e) {
       debugPrint('Notification push locale ignorée: $e');
+    }
+  }
+
+  Future<void> schedulePracticeMoment({
+    required String ownerPhone,
+    required String guardId,
+    required String kind,
+    required String title,
+    required String body,
+    required DateTime fireAt,
+  }) async {
+    if (kIsWeb || !fireAt.isAfter(DateTime.now())) return;
+    if (!await _ensureInitialized()) return;
+    final id = _idFor(ownerPhone, 'practice:$guardId:$kind');
+    final scheduled = _moroccoTime(fireAt);
+    final details = NotificationDetails(
+      android: const AndroidNotificationDetails(
+        practiceChannelId,
+        'Practice',
+        channelDescription:
+            'Cas cliniques, progression, succès et encouragements de garde',
+        icon: 'ic_stat_huim6',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        visibility: NotificationVisibility.public,
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduled,
+        details,
+        payload: 'push:$kind',
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('Programmation Practice ignorée: $e');
     }
   }
 
@@ -188,10 +266,12 @@ class NotificationService {
 
     try {
       await _plugin
-          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(alert: true, badge: true, sound: true);
 
-      final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
 
       if (_isAndroid && android != null) {
@@ -208,14 +288,16 @@ class NotificationService {
       }
     } catch (e) {
       debugPrint('Demande d’autorisation de notification ignorée: $e');
-      reminderStatus.value = 'Vérifiez l’autorisation Notifications dans Android';
+      reminderStatus.value =
+          'Vérifiez l’autorisation Notifications dans Android';
     }
   }
 
   Future<bool?> canScheduleExactAlarms() async {
     if (!_isAndroid) return null;
     if (!await _ensureInitialized()) return false;
-    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     try {
       _canScheduleExact = await android?.canScheduleExactNotifications();
     } catch (_) {
@@ -238,7 +320,8 @@ class NotificationService {
       return true;
     }
 
-    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return false;
     try {
       var exact = await android.canScheduleExactNotifications() ?? false;
@@ -258,7 +341,8 @@ class NotificationService {
       return exact;
     } catch (e) {
       debugPrint('Préparation du mode alarme impossible: $e');
-      reminderStatus.value = 'Alarme non prête · vérifiez les autorisations Android';
+      reminderStatus.value =
+          'Alarme non prête · vérifiez les autorisations Android';
       return false;
     }
   }
@@ -292,7 +376,8 @@ class NotificationService {
       android: AndroidNotificationDetails(
         channelId,
         channelName,
-        channelDescription: 'Rappel avant le début d’une garde dont le calendrier est validé',
+        channelDescription:
+            'Rappel avant le début d’une garde dont le calendrier est validé',
         icon: 'ic_stat_huim6',
         importance: urgent ? Importance.max : Importance.high,
         priority: urgent ? Priority.max : Priority.high,
@@ -305,7 +390,8 @@ class NotificationService {
         presentAlert: true,
         presentBadge: true,
         presentSound: !silent,
-        interruptionLevel: urgent ? InterruptionLevel.timeSensitive : InterruptionLevel.active,
+        interruptionLevel:
+            urgent ? InterruptionLevel.timeSensitive : InterruptionLevel.active,
       ),
     );
   }
@@ -318,7 +404,8 @@ class NotificationService {
     if (soundMode == 'alarm') {
       final ready = await prepareAlarmModePermissions();
       if (_isAndroid && !ready) return;
-      final scheduled = await AlarmRingService.instance.ringTestNow(vibration: vibration);
+      final scheduled =
+          await AlarmRingService.instance.ringTestNow(vibration: vibration);
       reminderStatus.value = scheduled
           ? 'Test alarme envoyé · sonnerie longue'
           : 'Test alarme impossible · vérifiez les autorisations';
@@ -339,7 +426,8 @@ class NotificationService {
           : 'Test sonore envoyé';
     } catch (e) {
       debugPrint('Test de rappel ignoré: $e');
-      reminderStatus.value = 'Test impossible · vérifiez les notifications Android';
+      reminderStatus.value =
+          'Test impossible · vérifiez les notifications Android';
     }
   }
 
@@ -369,7 +457,8 @@ class NotificationService {
       if (_isAndroid) {
         final exact = await canScheduleExactAlarms();
         if (exact != true) {
-          reminderStatus.value = 'Alarme non programmée · autorisez « Alarmes et rappels » dans Android';
+          reminderStatus.value =
+              'Alarme non programmée · autorisez « Alarmes et rappels » dans Android';
           return;
         }
       }
@@ -382,13 +471,15 @@ class NotificationService {
         fireAt: fireAt,
         vibration: vibration,
       );
-      if (!scheduled) reminderStatus.value = 'Une alarme n’a pas pu être programmée';
+      if (!scheduled)
+        reminderStatus.value = 'Une alarme n’a pas pu être programmée';
       return;
     }
 
     if (!await _ensureInitialized()) return;
 
-    final details = _reminderDetails(soundMode: soundMode, vibration: vibration);
+    final details =
+        _reminderDetails(soundMode: soundMode, vibration: vibration);
     final id = _idFor(ownerPhone, notificationKey);
     final scheduled = _moroccoTime(fireAt);
     final payload = 'guard:$ownerPhone:$dateStr:$notificationKey';
@@ -415,10 +506,12 @@ class NotificationService {
 
     try {
       await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
-      if (_isAndroid) reminderStatus.value = 'Rappels programmés · mode compatible Android';
+      if (_isAndroid)
+        reminderStatus.value = 'Rappels programmés · mode compatible Android';
     } catch (e) {
       debugPrint('Impossible de programmer le rappel: $e');
-      reminderStatus.value = 'Programmation impossible · réessayez dans Réglages';
+      reminderStatus.value =
+          'Programmation impossible · réessayez dans Réglages';
     }
   }
 
@@ -454,7 +547,10 @@ class NotificationService {
       final pending = await _plugin.pendingNotificationRequests();
       for (final item in pending) {
         final payload = item.payload ?? '';
-        if (!payload.startsWith('guard:')) continue;
+        if (!payload.startsWith('guard:') &&
+            !payload.startsWith('push:practice_guard_')) {
+          continue;
+        }
         try {
           await _plugin.cancel(item.id);
         } catch (e) {

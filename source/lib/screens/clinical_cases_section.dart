@@ -68,7 +68,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Le fil des cas cliniques est momentanément indisponible.');
+      setState(() =>
+          _error = 'Le fil des cas cliniques est momentanément indisponible.');
     } finally {
       if (mounted) {
         setState(() {
@@ -96,7 +97,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                   color: AppColors.brandSoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.medical_information_outlined, color: AppColors.brandBright),
+                child: Icon(Icons.medical_information_outlined,
+                    color: AppColors.brandBright),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -115,7 +117,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Cas anonymisés · QCM pédagogique · correction après réponse',
+                      'Cas anonymisés · 5 QCM de raisonnement · explication IA après chaque réponse',
                       style: TextStyle(
                         color: AppColors.inkSoft,
                         fontSize: 11,
@@ -147,7 +149,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
             const _InfoCard(
               icon: Icons.school_outlined,
               title: 'Aucun cas publié pour le moment',
-              body: 'Les patients validés dans Practice apparaîtront ici automatiquement sous forme anonymisée avec un QCM.',
+              body:
+                  'Les patients validés dans Practice apparaîtront ici automatiquement sous forme anonymisée avec 5 QCM pédagogiques.',
             )
           else ...[
             for (var i = 0; i < _items.length; i++) ...[
@@ -166,7 +169,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.expand_more_rounded),
-                  label: Text(_loadingMore ? 'Chargement…' : 'Afficher plus de cas'),
+                  label: Text(
+                      _loadingMore ? 'Chargement…' : 'Afficher plus de cas'),
                 ),
               ),
             ],
@@ -216,44 +220,95 @@ class _ClinicalCaseCard extends StatefulWidget {
 }
 
 class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
-  int? _selected;
   bool _expanded = false;
   bool _submitting = false;
+  int _currentQcm = 0;
+  List<ClinicalCaseQcm> _qcms = <ClinicalCaseQcm>[];
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.post.mySelectedIndex;
+    _syncQcms(resetIndex: true);
   }
 
   @override
   void didUpdateWidget(covariant _ClinicalCaseCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.post.id != oldWidget.post.id || widget.post.mySelectedIndex != oldWidget.post.mySelectedIndex) {
-      _selected = widget.post.mySelectedIndex;
+    final changed = widget.post.id != oldWidget.post.id ||
+        widget.post.qcms.length != oldWidget.post.qcms.length ||
+        widget.post.qcms
+                .map((q) =>
+                    '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .join('|') !=
+            oldWidget.post.qcms
+                .map((q) =>
+                    '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .join('|');
+    if (changed) _syncQcms(resetIndex: widget.post.id != oldWidget.post.id);
+  }
+
+  void _syncQcms({required bool resetIndex}) {
+    final available = List<ClinicalCaseQcm>.from(widget.post.qcms)
+      ..sort((a, b) => a.position.compareTo(b.position));
+    final aiReady = available.length == 5 &&
+        available.every((qcm) => qcm.generationSource == 'openai');
+    _qcms = aiReady ? available : <ClinicalCaseQcm>[];
+    if (_qcms.isEmpty) {
+      _currentQcm = 0;
+      return;
+    }
+    if (resetIndex || _currentQcm >= _qcms.length) {
+      final firstUnanswered = _qcms.indexWhere((q) => !q.answered);
+      _currentQcm = firstUnanswered >= 0 ? firstUnanswered : 0;
     }
   }
 
   Future<void> _answer(int index) async {
-    if (_selected != null || _submitting) return;
+    if (_qcms.isEmpty || _submitting) return;
+    final qcm = _qcms[_currentQcm];
+    if (qcm.answered) return;
     setState(() => _submitting = true);
     try {
-      final result = await ClinicalCaseService.instance.submitAnswer(postId: widget.post.id, selectedIndex: index);
+      final result = await ClinicalCaseService.instance.submitQcmAnswer(
+        qcmId: qcm.id,
+        selectedIndex: index,
+      );
       if (!mounted) return;
-      setState(() => _selected = result.selectedIndex);
+      setState(() {
+        _qcms[_currentQcm] = qcm.copyWith(
+          correctIndex: result.correctIndex,
+          correction: result.correction,
+          mySelectedIndex: result.selectedIndex,
+          myIsCorrect: result.isCorrect,
+          answeredAt: result.answeredAt,
+        );
+      });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d’enregistrer cette réponse QCM.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible d’enregistrer cette réponse QCM.'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
+  void _moveQcm(int delta) {
+    if (_qcms.isEmpty) return;
+    final next = (_currentQcm + delta).clamp(0, _qcms.length - 1);
+    if (next != _currentQcm) setState(() => _currentQcm = next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
-    final answered = _selected != null;
-    final correct = answered && _selected == post.correctIndex;
+    final answeredCount = _qcms.where((q) => q.answered).length;
+    final correctCount = _qcms.where((q) => q.myIsCorrect == true).length;
+    final current = _qcms.isEmpty ? null : _qcms[_currentQcm];
+    final answered = current?.answered == true;
+    final correct = current?.myIsCorrect == true;
 
     return Container(
       width: double.infinity,
@@ -315,7 +370,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      post.generationSource == 'openai'
+                      _qcms.any((q) => q.generationSource == 'openai')
                           ? Icons.auto_awesome_rounded
                           : Icons.quiz_outlined,
                       size: 12,
@@ -323,7 +378,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      post.topicLabel,
+                      _qcms.length >= 5 ? '5 QCM' : 'QCM',
                       style: TextStyle(
                         color: AppColors.inkSoft,
                         fontSize: 9,
@@ -343,90 +398,106 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
             alwaysShow: true,
           ),
           if (_expanded) ...[
-            _CaseSection(icon: Icons.history_edu_rounded, label: 'Histoire / antécédents', value: post.history),
-            _CaseSection(icon: Icons.health_and_safety_outlined, label: 'Examen clinique', value: post.clinicalExam),
-            _CaseSection(icon: Icons.biotech_outlined, label: 'Examens complémentaires', value: post.complementaryExams),
-            _CaseSection(icon: Icons.image_search_outlined, label: 'Imagerie', value: post.imagingConclusion),
-            _CaseSection(icon: Icons.psychology_alt_outlined, label: 'Synthèse', value: post.assessment),
-            _CaseSection(icon: Icons.medical_services_outlined, label: 'Prise en charge documentée', value: post.plan),
+            _CaseSection(
+              icon: Icons.history_edu_rounded,
+              label: 'Histoire / antécédents',
+              value: post.history,
+            ),
+            _CaseSection(
+              icon: Icons.health_and_safety_outlined,
+              label: 'Examen clinique',
+              value: post.clinicalExam,
+            ),
+            _CaseSection(
+              icon: Icons.biotech_outlined,
+              label: 'Examens complémentaires',
+              value: post.complementaryExams,
+            ),
+            _CaseSection(
+              icon: Icons.image_search_outlined,
+              label: 'Imagerie',
+              value: post.imagingConclusion,
+            ),
+            _CaseSection(
+              icon: Icons.psychology_alt_outlined,
+              label: 'Synthèse',
+              value: post.assessment,
+            ),
+            _CaseSection(
+              icon: Icons.medical_services_outlined,
+              label: 'Prise en charge documentée',
+              value: post.plan,
+            ),
             if (post.disposition.trim().isNotEmpty)
-              _CaseSection(icon: Icons.alt_route_rounded, label: 'Orientation', value: post.disposition),
+              _CaseSection(
+                icon: Icons.alt_route_rounded,
+                label: 'Orientation',
+                value: post.disposition,
+              ),
             if ((post.specialistService ?? '').trim().isNotEmpty)
-              _CaseSection(icon: Icons.groups_2_outlined, label: 'Avis spécialisé', value: post.specialistService!),
+              _CaseSection(
+                icon: Icons.groups_2_outlined,
+                label: 'Avis spécialisé',
+                value: post.specialistService!,
+              ),
           ],
           if (_hasExtraDetails(post))
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: () => setState(() => _expanded = !_expanded),
-                icon: Icon(_expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18),
-                label: Text(_expanded ? 'Réduire le cas' : 'Voir le cas complet'),
+                icon: Icon(
+                  _expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _expanded ? 'Réduire le cas' : 'Voir le cas complet',
+                ),
               ),
             ),
           const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(13),
-            decoration: BoxDecoration(
-              color: AppColors.paperAlt,
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(color: AppColors.line),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.quiz_rounded, color: AppColors.brandBright, size: 19),
-                    const SizedBox(width: 7),
-                    Text(
-                      'QUESTION QCM',
+          if (current == null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.paperAlt,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(color: AppColors.line),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.brandBright,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Les 5 QCM et leurs explications IA sont en préparation…',
                       style: TextStyle(
-                        color: AppColors.brandBright,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.7,
+                        color: AppColors.inkSoft,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  post.question,
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 13.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w900,
                   ),
-                ),
-                const SizedBox(height: 11),
-                for (var index = 0; index < post.options.length; index++) ...[
-                  _QcmOption(
-                    index: index,
-                    label: post.options[index],
-                    selected: _selected == index,
-                    showCorrection: answered,
-                    isCorrect: index == post.correctIndex,
-                    onTap: answered || _submitting ? null : () => _answer(index),
-                  ),
-                  if (index != post.options.length - 1) const SizedBox(height: 7),
                 ],
-              ],
-            ),
-          ),
-          if (answered) ...[
-            const SizedBox(height: 11),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
+              ),
+            )
+          else ...[
+            Container(
               width: double.infinity,
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: (correct ? AppColors.success : AppColors.danger).withOpacity(0.11),
+                color: AppColors.paperAlt,
                 borderRadius: BorderRadius.circular(17),
-                border: Border.all(
-                  color: (correct ? AppColors.success : AppColors.danger).withOpacity(0.45),
-                ),
+                border: Border.all(color: AppColors.line),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,41 +505,199 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   Row(
                     children: [
                       Icon(
-                        correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                        color: correct ? AppColors.success : AppColors.danger,
-                        size: 20,
+                        Icons.quiz_rounded,
+                        color: AppColors.brandBright,
+                        size: 19,
                       ),
                       const SizedBox(width: 7),
                       Text(
-                        correct ? 'Bonne réponse' : 'À revoir',
+                        'QCM ${_currentQcm + 1} / ${_qcms.length}',
                         style: TextStyle(
-                          color: correct ? AppColors.success : AppColors.danger,
-                          fontSize: 12,
+                          color: AppColors.brandBright,
+                          fontSize: 10,
                           fontWeight: FontWeight.w900,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (current.generationSource == 'openai') ...[
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          color: AppColors.brandBright,
+                          size: 13,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        current.topicLabel,
+                        style: TextStyle(
+                          color: AppColors.inkSoft,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Correction du cas',
+                    current.question,
                     style: TextStyle(
                       color: AppColors.ink,
-                      fontSize: 12.5,
+                      fontSize: 13.5,
+                      height: 1.35,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    post.correction,
-                    style: TextStyle(
-                      color: AppColors.inkSoft,
-                      fontSize: 11.5,
-                      height: 1.42,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(height: 11),
+                  for (var index = 0;
+                      index < current.options.length;
+                      index++) ...[
+                    _QcmOption(
+                      index: index,
+                      label: current.options[index],
+                      selected: current.mySelectedIndex == index,
+                      showCorrection: answered,
+                      isCorrect: current.correctIndex == index,
+                      onTap:
+                          answered || _submitting ? null : () => _answer(index),
                     ),
-                  ),
+                    if (index != current.options.length - 1)
+                      const SizedBox(height: 7),
+                  ],
+                  if (_submitting) ...[
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(
+                      minHeight: 2,
+                      color: AppColors.brandBright,
+                      backgroundColor: AppColors.line,
+                    ),
+                  ],
                 ],
+              ),
+            ),
+            if (answered) ...[
+              const SizedBox(height: 11),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: (correct ? AppColors.success : AppColors.danger)
+                      .withOpacity(0.11),
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: (correct ? AppColors.success : AppColors.danger)
+                        .withOpacity(0.45),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          correct
+                              ? Icons.check_circle_rounded
+                              : Icons.cancel_rounded,
+                          color: correct ? AppColors.success : AppColors.danger,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          correct ? 'Bonne réponse' : 'À revoir',
+                          style: TextStyle(
+                            color:
+                                correct ? AppColors.success : AppColors.danger,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          color: AppColors.brandBright,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'EXPLICATION IA',
+                          style: TextStyle(
+                            color: AppColors.brandBright,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      current.correction.trim().isEmpty
+                          ? 'Explication pédagogique en préparation.'
+                          : current.correction,
+                      style: TextStyle(
+                        color: AppColors.inkSoft,
+                        fontSize: 11.5,
+                        height: 1.46,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'QCM précédent',
+                  onPressed: _currentQcm > 0 ? () => _moveQcm(-1) : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(_qcms.length, (index) {
+                      final q = _qcms[index];
+                      final active = index == _currentQcm;
+                      return GestureDetector(
+                        onTap: () => setState(() => _currentQcm = index),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: active ? 22 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: q.myIsCorrect == true
+                                ? AppColors.success
+                                : q.answered
+                                    ? AppColors.danger
+                                    : active
+                                        ? AppColors.brandBright
+                                        : AppColors.line,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'QCM suivant',
+                  onPressed:
+                      _currentQcm < _qcms.length - 1 ? () => _moveQcm(1) : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+              ],
+            ),
+            Center(
+              child: Text(
+                '$answeredCount / ${_qcms.length} répondus · $correctCount justes',
+                style: TextStyle(
+                  color: AppColors.inkSoft,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -636,7 +865,8 @@ class _QcmOption extends StatelessWidget {
               if (showCorrection && isCorrect)
                 Padding(
                   padding: const EdgeInsets.only(left: 6, top: 2),
-                  child: Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
+                  child: Icon(Icons.check_circle_rounded,
+                      color: AppColors.success, size: 18),
                 ),
             ],
           ),
@@ -695,13 +925,20 @@ class _InfoCard extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.ink, fontSize: 13, fontWeight: FontWeight.w900),
+            style: TextStyle(
+                color: AppColors.ink,
+                fontSize: 13,
+                fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 5),
           Text(
             body,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.inkSoft, fontSize: 11, height: 1.35, fontWeight: FontWeight.w600),
+            style: TextStyle(
+                color: AppColors.inkSoft,
+                fontSize: 11,
+                height: 1.35,
+                fontWeight: FontWeight.w600),
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 9),
