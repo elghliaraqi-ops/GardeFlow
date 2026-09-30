@@ -947,22 +947,14 @@ class _DashboardView extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(999),
-              onTap: () async {
-                if (scrollController.hasClients) {
-                  await scrollController.animateTo(
-                    scrollController.position.maxScrollExtent,
-                    duration: const Duration(milliseconds: 560),
-                    curve: Curves.easeOutCubic,
-                  );
-                }
-                await Future<void>.delayed(const Duration(milliseconds: 40));
+              onTap: () {
                 final targetContext = clinicalCasesFeedKey.currentContext;
                 if (targetContext == null) return;
-                await Scrollable.ensureVisible(
+                Scrollable.ensureVisible(
                   targetContext,
-                  duration: const Duration(milliseconds: 260),
+                  duration: const Duration(milliseconds: 420),
                   curve: Curves.easeOutCubic,
-                  alignment: 0.02,
+                  alignment: 0.03,
                 );
               },
               child: Ink(
