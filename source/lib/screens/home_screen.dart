@@ -733,11 +733,13 @@ class _DashboardView extends StatelessWidget {
         ? const [Color(0xFF071426), Color(0xFF123D70)]
         : const [Color(0xFF55C2FF), Color(0xFF087FE8)];
 
-    return ListView(
+    return SingleChildScrollView(
       controller: scrollController,
-      physics: BouncingScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(18, 22, 18, 32),
-      children: [
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         Container(
           width: double.infinity,
           padding: EdgeInsets.fromLTRB(22, 24, 22, 22),
@@ -993,7 +995,8 @@ class _DashboardView extends StatelessWidget {
         DailyNewsSection(verticalFeedKey: newsFeedKey),
         SizedBox(height: 18),
         ClinicalCasesSection(verticalFeedKey: clinicalCasesFeedKey),
-      ],
+        ],
+      ),
     );
   }
 }
