@@ -26,7 +26,7 @@ class AppCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.card,
         borderRadius: BorderRadius.circular(radius),
-        border: border ?? Border.all(color: AppColors.line),
+        border: border,
         boxShadow: shadow ?? AppShadow.low,
       ),
       child: child,
@@ -59,16 +59,20 @@ class SoftIconButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
           width: size,
           height: size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: background ?? AppColors.brandSoft,
+            color: background ?? AppColors.paperAlt,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Color(0xFFD7E7F8)),
           ),
-          child: Icon(icon, size: size * 0.48, color: foreground ?? AppColors.brand),
+          child: Icon(
+            icon,
+            size: size * 0.48,
+            color: foreground ?? AppColors.inkSoft,
+          ),
         ),
       ),
     );
@@ -94,20 +98,28 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fg = foreground ?? AppColors.inkSoft;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: background ?? AppColors.brandSoft,
+        color: background ?? AppColors.paperAlt,
         borderRadius: AppRadius.pillR,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: fontSize + 3, color: foreground),
-            SizedBox(width: 5),
+            Icon(icon, size: fontSize + 3, color: fg),
+            const SizedBox(width: 5),
           ],
-          Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w800, color: foreground)),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
         ],
       ),
     );
@@ -125,7 +137,16 @@ class SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpace.sm),
       child: Row(
         children: [
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.titleMedium)),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.inkSoft,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.75,
+                  ),
+            ),
+          ),
           if (trailing != null) trailing!,
         ],
       ),
@@ -133,14 +154,11 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-PreferredSizeWidget appBarOf(BuildContext context, String title, {List<Widget>? actions}) {
+PreferredSizeWidget appBarOf(BuildContext context, String title,
+    {List<Widget>? actions}) {
   return AppBar(
     title: Text(title),
     actions: actions,
-    bottom: PreferredSize(
-      preferredSize: Size.fromHeight(1),
-      child: Divider(height: 1, color: AppColors.line),
-    ),
   );
 }
 
@@ -152,14 +170,14 @@ class GardeFlowTitle extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GardeFlowLogo(size: 34),
-          SizedBox(width: 10),
+          const GardeFlowLogo(size: 34),
+          const SizedBox(width: 10),
           Flexible(
             child: Text(
               section,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w900,
                     color: AppColors.ink,
                   ),
@@ -189,7 +207,11 @@ class GardeFlowLogo extends StatelessWidget {
 class BlueHero extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  const BlueHero({super.key, required this.child, this.padding = const EdgeInsets.all(20)});
+  const BlueHero({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -198,7 +220,10 @@ class BlueHero extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D74E6), AppColors.brandDark],
+            colors: [
+              AppColors.info.withOpacity(0.92),
+              AppColors.brandDark,
+            ],
           ),
           borderRadius: AppRadius.xlR,
           boxShadow: AppShadow.mid,
