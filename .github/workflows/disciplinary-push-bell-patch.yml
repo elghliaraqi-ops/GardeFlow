@@ -22,6 +22,22 @@ jobs:
       - name: Apply patch
         run: python3 .github/scripts/apply_disciplinary_push_bell.py
 
+      - name: Normalize dynamic-color widgets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('source/lib/screens/notifications_screen.dart')
+          text = path.read_text(encoding='utf-8')
+          start = text.index('class _DisciplinaryNotificationCard')
+          end = text.index('class _ReminderCard', start)
+          block = text[start:end]
+          block = block.replace('child: const Icon(', 'child: Icon(')
+          block = block.replace('const Expanded(', 'Expanded(')
+          block = block.replace('child: const Text(', 'child: Text(')
+          block = block.replace('style: const TextStyle(', 'style: TextStyle(')
+          path.write_text(text[:start] + block + text[end:], encoding='utf-8')
+          PY
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
