@@ -1,3 +1,21 @@
+class QcmAttemptResult {
+  final int selectedIndex;
+  final bool isCorrect;
+  final DateTime? answeredAt;
+
+  const QcmAttemptResult({
+    required this.selectedIndex,
+    required this.isCorrect,
+    this.answeredAt,
+  });
+
+  factory QcmAttemptResult.fromMap(Map<String, dynamic> map) => QcmAttemptResult(
+        selectedIndex: int.tryParse('${map['selected_index'] ?? 0}') ?? 0,
+        isCorrect: map['is_correct'] == true,
+        answeredAt: DateTime.tryParse('${map['answered_at'] ?? ''}')?.toLocal(),
+      );
+}
+
 class QcmStats {
   final int answered;
   final int correct;
