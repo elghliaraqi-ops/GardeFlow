@@ -1,0 +1,12 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [],
+    "linking_enabled": true
+  },
+  "out_dir_shared": "/home/runner/work/GardeFlow/GardeFlow/source/.dart_tool/hooks_runner/shared/pdfium_dart/build/",
+  "out_file": "/home/runner/work/GardeFlow/GardeFlow/source/.dart_tool/hooks_runner/pdfium_dart/6782ff62a0/output.json",
+  "package_name": "pdfium_dart",
+  "package_root": "/home/runner/.pub-cache/hosted/pub.dev/pdfium_dart-0.2.5/",
+  "user_defines": {}
+}

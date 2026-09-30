@@ -2084,23 +2084,37 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   }
 
   Widget _formChapterTitle(String title, IconData icon, String subtitle) =>
-      Padding(
-        padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+      Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(0, 14, 0, 11),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              PracticeColors.accent.withOpacity(.16),
+              PracticeColors.elevated.withOpacity(.52),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: PracticeColors.accent.withOpacity(.22)),
+        ),
         child: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: PracticeColors.accent.withOpacity(.12),
-                borderRadius: BorderRadius.circular(12),
+                color: PracticeColors.accent.withOpacity(.16),
+                borderRadius: BorderRadius.circular(13),
                 border: Border.all(
-                  color: PracticeColors.accent.withOpacity(.18),
+                  color: PracticeColors.accent.withOpacity(.24),
                 ),
               ),
-              child: Icon(icon, color: PracticeColors.accent, size: 19),
+              child: Icon(icon, color: PracticeColors.accent, size: 20),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2109,18 +2123,18 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                     title,
                     style: const TextStyle(
                       color: PracticeColors.text,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: .75,
+                      letterSpacing: .85,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     subtitle,
                     style: const TextStyle(
                       color: PracticeColors.textSecondary,
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -2149,24 +2163,24 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     required String title,
     required List<Widget> children,
   }) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(15),
+    margin: const EdgeInsets.only(bottom: 14),
+    padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
     decoration: BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
           PracticeColors.surface,
-          PracticeColors.elevated.withOpacity(.70),
+          PracticeColors.elevated.withOpacity(.86),
         ],
       ),
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: PracticeColors.line.withOpacity(.86)),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: PracticeColors.accent.withOpacity(.20)),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(.10),
-          blurRadius: 14,
-          offset: const Offset(0, 6),
+          color: Colors.black.withOpacity(.16),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
       ],
     ),
@@ -2176,10 +2190,19 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         Row(
           children: [
             Container(
+              width: 4,
+              height: 34,
+              decoration: BoxDecoration(
+                color: PracticeColors.accent,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            const SizedBox(width: 9),
+            Container(
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: PracticeColors.accent.withOpacity(.12),
+                color: PracticeColors.accent.withOpacity(.14),
                 borderRadius: BorderRadius.circular(11),
               ),
               child: Icon(
@@ -2194,15 +2217,15 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                 title,
                 style: const TextStyle(
                   color: PracticeColors.text,
-                  fontSize: 11.5,
+                  fontSize: 11.8,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: .65,
+                  letterSpacing: .72,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 13),
+        const SizedBox(height: 14),
         ...children,
       ],
     ),
@@ -2800,119 +2823,288 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
     final guard = _guard;
     final showRank = _ranks.leaderboardOptIn;
     if (guard == null && !showRank) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (guard != null)
-            InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PracticeGuardScreen(
-                    appState: widget.appState,
-                    guard: guard,
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.11),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(.20)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.10),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: PracticeColors.accent.withOpacity(.18),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: PracticeColors.accent.withOpacity(.32),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.medical_information_rounded,
+                    color: PracticeColors.accent,
+                    size: 21,
                   ),
                 ),
-              ),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.description_rounded,
-                      color: Colors.white,
-                      size: 17,
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        _stats.patients == 0
-                            ? 'Votre garde vient de commencer. Prêt pour cette garde ?'
-                            : 'Tu as vu ${_stats.patients} malade${_stats.patients > 1 ? 's' : ''} jusqu’à maintenant.',
-                        style: const TextStyle(
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'PRACTICE',
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 13.5,
                           fontWeight: FontWeight.w900,
+                          letterSpacing: .8,
                         ),
                       ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: Colors.white.withOpacity(.75),
-                      size: 19,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (guard != null) ...[
-            const SizedBox(height: 5),
-            Text(
-              '${guard.title} · ${guard.timeLabel}',
-              style: TextStyle(
-                color: Colors.white.withOpacity(.78),
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          if (showRank) ...[
-            const SizedBox(height: 8),
-            InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PracticeLeaderboardScreen(appState: widget.appState),
-                ),
-              ),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: _ranks.hasActivity
-                    ? Row(
-                        children: [
-                          const Icon(
-                            Icons.emoji_events_outlined,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              'Vous êtes classé : ${_ranks.promotionRank == null ? '—' : '${_ranks.promotionRank}e'} dans votre promo · ${_ranks.globalRank == null ? '—' : '${_ranks.globalRank}e'} toutes promos',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: Colors.white.withOpacity(.75),
-                            size: 19,
-                          ),
-                        ],
-                      )
-                    : Text(
-                        'Classement disponible après votre première activité Practice.',
+                      SizedBox(height: 2),
+                      Text(
+                        'Suivi de garde · patients documentés',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(.82),
-                          fontSize: 11.5,
+                          color: Color(0xFFDCEBE4),
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-              ),
+                    ],
+                  ),
+                ),
+                if (guard != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: PracticeColors.accent.withOpacity(.16),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: PracticeColors.accent.withOpacity(.28),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          color: PracticeColors.accent,
+                          size: 7,
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          'GARDE ACTIVE',
+                          style: TextStyle(
+                            color: PracticeColors.accent,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
+            if (guard != null) ...[
+              const SizedBox(height: 12),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PracticeGuardScreen(
+                        appState: widget.appState,
+                        guard: guard,
+                      ),
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(.14)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(.10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.description_rounded,
+                            color: Colors.white,
+                            size: 19,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _stats.patients == 0
+                                    ? 'Votre garde vient de commencer'
+                                    : '${_stats.patients} patient${_stats.patients > 1 ? 's' : ''} documenté${_stats.patients > 1 ? 's' : ''}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${guard.title} · ${guard.timeLabel}',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(.76),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 9),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  _homeStatChip(
+                                    Icons.people_alt_outlined,
+                                    '${_stats.patients} vus',
+                                  ),
+                                  _homeStatChip(
+                                    Icons.hourglass_bottom_rounded,
+                                    '${_stats.waiting} attente',
+                                  ),
+                                  _homeStatChip(
+                                    Icons.logout_rounded,
+                                    '${_stats.discharged} sortants',
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            color: Colors.white.withOpacity(.78),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (showRank) ...[
+              const SizedBox(height: 8),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          PracticeLeaderboardScreen(appState: widget.appState),
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.055),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.emoji_events_outlined,
+                          color: PracticeColors.accent,
+                          size: 17,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _ranks.hasActivity
+                                ? 'Classement : ${_ranks.promotionRank == null ? '—' : '${_ranks.promotionRank}e'} promo · ${_ranks.globalRank == null ? '—' : '${_ranks.globalRank}e'} global'
+                                : 'Classement disponible après votre première activité Practice.',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(.90),
+                              fontSize: 10.8,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white.withOpacity(.66),
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
+
+  Widget _homeStatChip(IconData icon, String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: Colors.black.withOpacity(.12),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: Colors.white.withOpacity(.10)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: PracticeColors.accent, size: 12),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _CurrentGuardCard extends StatelessWidget {

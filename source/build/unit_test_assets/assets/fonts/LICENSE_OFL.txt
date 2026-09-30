@@ -1,0 +1,9 @@
+Fonts bundled in this app:
+
+- Space Grotesk (variable) — SIL Open Font License 1.1
+  Source: https://github.com/google/fonts/tree/main/ofl/spacegrotesk
+- Inter (variable) — SIL Open Font License 1.1
+  Source: https://github.com/google/fonts/tree/main/ofl/inter
+
+Both are free to use, modify, and redistribute under the OFL 1.1.
+Full license text: https://openfontlicense.org
