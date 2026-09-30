@@ -13,7 +13,7 @@ new_once = """def once(text, old, new, label):
     count = text.count(old)
     if count == 1:
         return text.replace(old, new, 1)
-    if label in {'qcm service field', 'qcm listener init', 'qcm listener dispose'}:
+    if label.startswith('qcm '):
         state_idx = text.index('class _PracticeScreenState')
         pos = text.find(old, state_idx)
         if pos >= 0:
