@@ -19,21 +19,24 @@ jobs:
           ref: ui/practice-clinical-qcm-refresh-20260930
           fetch-depth: 0
 
-      - name: Diagnose visual anchors
+      - name: Normalize current visual anchor
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          s = Path('source/lib/screens/clinical_cases_section.dart').read_text()
-          anchors = {
-            'case-card': "      padding: const EdgeInsets.all(15),\n      decoration: BoxDecoration(\n        color: AppColors.card,\n        borderRadius: BorderRadius.circular(22),",
-            'case-badge': "                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),\n                decoration: BoxDecoration(\n                  color: AppColors.brandSoft,",
-            'qcm-panel': "              padding: const EdgeInsets.all(13),\n              decoration: BoxDecoration(\n                color: AppColors.paperAlt,\n                borderRadius: BorderRadius.circular(17),",
-            'question': "                    style: TextStyle(\n                      color: AppColors.ink,\n                      fontSize: 13.5,",
-            'correction': "                padding: const EdgeInsets.all(13),\n                decoration: BoxDecoration(\n                  color: (correct ? AppColors.success : AppColors.danger)",
-          }
-          for name, anchor in anchors.items():
-              print(name, s.count(anchor))
+          p = Path('.github/scripts/one_time_ui_practice_refresh.py')
+          s = p.read_text()
+          s = s.replace(
+              '                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),',
+              '                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),',
+              1,
+          )
+          s = s.replace(
+              '                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),',
+              '                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),',
+              1,
+          )
+          p.write_text(s)
           PY
 
       - name: Apply UI-only visual patch
@@ -48,6 +51,8 @@ jobs:
           grep -Fq "Antécédents et histoire de la maladie" source/lib/screens/practice_screen.dart
           grep -Fq "borderRadius: BorderRadius.circular(26)" source/lib/screens/clinical_cases_section.dart
           grep -Fq "Votre progression sur les cas cliniques" source/lib/screens/practice_qcm_screen.dart
+          changed="$(git diff --name-only -- source/lib/screens)"
+          test "$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l)" -eq 3
           git config user.name 'GardeFlow CI'
           git config user.email 'actions@users.noreply.github.com'
           git add source/lib/screens/practice_screen.dart source/lib/screens/clinical_cases_section.dart source/lib/screens/practice_qcm_screen.dart
