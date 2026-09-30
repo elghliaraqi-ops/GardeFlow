@@ -57,10 +57,10 @@ class PracticeGuard {
     late DateTime end;
     switch (entry.shiftId) {
       case 'urg-nuit':
-        // La date de la garde est toujours sa date de début.
-        // Ex. Nuit du 29/09 = 29/09 20h -> 30/09 08h.
-        start = DateTime(day.year, day.month, day.day, 20);
-        end = DateTime(day.year, day.month, day.day + 1, 8);
+        // Convention du planning officiel : la tuile Nuit porte la date du
+        // matin où la garde se termine. Ex. tuile 30/09 = 29/09 20h -> 30/09 08h.
+        start = DateTime(day.year, day.month, day.day - 1, 20);
+        end = DateTime(day.year, day.month, day.day, 8);
         break;
       case 'urg-24h':
         start = DateTime(day.year, day.month, day.day, 8);
