@@ -1691,17 +1691,10 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                       ),
                     ],
                   ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(2, 6, 2, 8),
-                    child: Text(
-                      'INTERROGATOIRE',
-                      style: TextStyle(
-                        color: PracticeColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .8,
-                      ),
-                    ),
+                  _formChapterTitle(
+                    'INTERROGATOIRE',
+                    Icons.forum_outlined,
+                    'Antécédents et histoire de la maladie',
                   ),
                   _doubleClinicalSection(
                     'ANTÉCÉDENTS PERSONNELS',
@@ -1727,17 +1720,10 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                     _illnessHistory,
                     'Chronologie, symptômes, contexte…',
                   ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(2, 14, 2, 8),
-                    child: Text(
-                      'EXAMEN ET SYNTHÈSE',
-                      style: TextStyle(
-                        color: PracticeColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .8,
-                      ),
-                    ),
+                  _formChapterTitle(
+                    'EXAMEN ET SYNTHÈSE',
+                    Icons.medical_services_outlined,
+                    'Examen, explorations et prise en charge',
                   ),
                   _clinicalSection(
                     'EXAMEN CLINIQUE',
@@ -1829,7 +1815,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                     style: FilledButton.styleFrom(
                       backgroundColor: PracticeColors.accent,
                       foregroundColor: PracticeColors.background,
-                      minimumSize: const Size.fromHeight(52),
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
                     ),
                     icon: _saving
                         ? const SizedBox(
@@ -1849,7 +1839,10 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: PracticeColors.accent,
                       side: const BorderSide(color: PracticeColors.accent),
-                      minimumSize: const Size.fromHeight(50),
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                     icon: const Icon(Icons.add_circle_outline_rounded),
                     label: const Text(
@@ -1863,30 +1856,128 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     );
   }
 
+  Widget _formChapterTitle(
+    String title,
+    IconData icon,
+    String subtitle,
+  ) => Padding(
+    padding: const EdgeInsets.fromLTRB(2, 10, 2, 10),
+    child: Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: PracticeColors.accent.withOpacity(.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: PracticeColors.accent.withOpacity(.18),
+            ),
+          ),
+          child: Icon(icon, color: PracticeColors.accent, size: 19),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .75,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  IconData _formSectionIcon(String title) {
+    if (title.contains('IDENTIFICATION')) return Icons.badge_outlined;
+    if (title.contains('ANTÉCÉDENTS')) return Icons.history_rounded;
+    if (title.contains('MOTIF')) return Icons.chat_bubble_outline_rounded;
+    if (title.contains('HISTOIRE')) return Icons.timeline_rounded;
+    if (title.contains('EXAMEN CLINIQUE')) return Icons.medical_services_outlined;
+    if (title.contains('COMPLÉMENTAIRES')) return Icons.biotech_outlined;
+    if (title.contains('IMAGERIE')) return Icons.image_search_outlined;
+    if (title.contains('BILAN')) return Icons.fact_check_outlined;
+    if (title.contains('CONDUITE')) return Icons.route_outlined;
+    if (title.contains('DÉCISIONS')) return Icons.task_alt_rounded;
+    return Icons.description_outlined;
+  }
+
   Widget _formSection({
     required String title,
     required List<Widget> children,
   }) => Container(
     margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(14),
+    padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
-      color: PracticeColors.surface,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: PracticeColors.line),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          PracticeColors.surface,
+          PracticeColors.elevated.withOpacity(.70),
+        ],
+      ),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: PracticeColors.line.withOpacity(.86)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.10),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: PracticeColors.accent,
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-            letterSpacing: .7,
-          ),
+        Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: PracticeColors.accent.withOpacity(.12),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                _formSectionIcon(title),
+                color: PracticeColors.accent,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .65,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 13),
         ...children,
       ],
     ),
@@ -1973,7 +2064,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       keyboardType:
           keyboardType ??
           (lines > 1 ? TextInputType.multiline : TextInputType.text),
-      style: const TextStyle(color: Colors.white, fontSize: 13),
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 13.5,
+        height: 1.36,
+        fontWeight: FontWeight.w600,
+      ),
       decoration: _practiceInputDecoration(hint, icon).copyWith(
         helperText: active
             ? 'Écoute en cours · appuyez de nouveau sur le micro pour arrêter'
@@ -2014,42 +2110,61 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     );
   }
 
-  Widget _yesNo(String label, bool value, ValueChanged<bool> onChanged) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
+  Widget _yesNo(
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+    decoration: BoxDecoration(
+      color: PracticeColors.background.withOpacity(.34),
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: PracticeColors.line.withOpacity(.72)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
-      ),
-      SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment(value: true, label: Text('Oui')),
-          ButtonSegment(value: false, label: Text('Non')),
-        ],
-        selected: <bool>{value},
-        onSelectionChanged: (selection) => onChanged(selection.first),
-        style: ButtonStyle(
-          visualDensity: VisualDensity.compact,
-          foregroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? PracticeColors.background
-                : PracticeColors.textSecondary,
-          ),
-          backgroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? PracticeColors.accent
-                : PracticeColors.background,
-          ),
-          side: const WidgetStatePropertyAll(
-            BorderSide(color: PracticeColors.line),
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: true, label: Text('Oui')),
+            ButtonSegment(value: false, label: Text('Non')),
+          ],
+          selected: <bool>{value},
+          onSelectionChanged: (selection) => onChanged(selection.first),
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? PracticeColors.background
+                  : PracticeColors.textSecondary,
+            ),
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? PracticeColors.accent
+                  : PracticeColors.elevated,
+            ),
+            side: WidgetStatePropertyAll(
+              BorderSide(color: PracticeColors.line.withOpacity(.85)),
+            ),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 
   Widget _specialtyDropdown(
@@ -3432,55 +3547,107 @@ class _FormHeader extends StatelessWidget {
     required this.syncLabel,
     required this.pending,
   });
+
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(15),
+    padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: PracticeColors.elevated,
-      borderRadius: BorderRadius.circular(19),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [PracticeColors.elevated, PracticeColors.surface],
+      ),
+      borderRadius: BorderRadius.circular(23),
+      border: Border.all(color: PracticeColors.line),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.14),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
     ),
     child: Row(
       children: [
         Container(
-          width: 46,
-          height: 46,
+          width: 52,
+          height: 52,
           decoration: BoxDecoration(
-            color: PracticeColors.background,
-            borderRadius: BorderRadius.circular(15),
+            color: PracticeColors.accent.withOpacity(.12),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(
+              color: PracticeColors.accent.withOpacity(.26),
+            ),
           ),
           child: const Icon(
-            Icons.person_outline_rounded,
+            Icons.assignment_outlined,
             color: PracticeColors.accent,
+            size: 25,
           ),
         ),
-        const SizedBox(width: 11),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                'OBSERVATION CLINIQUE',
+                style: TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .9,
+                ),
+              ),
+              const SizedBox(height: 3),
               Text(
                 'Patient #$patientNumber',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: 19,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                pending ? 'À synchroniser' : syncLabel,
-                style: TextStyle(
-                  color: pending
-                      ? PracticeColors.waiting
-                      : PracticeColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: (pending
+                          ? PracticeColors.waiting
+                          : PracticeColors.accent)
+                      .withOpacity(.11),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  pending ? 'À synchroniser' : syncLabel,
+                  style: TextStyle(
+                    color: pending
+                        ? PracticeColors.waiting
+                        : PracticeColors.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        const Icon(Icons.shield_outlined, color: PracticeColors.textSecondary),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: PracticeColors.background.withOpacity(.55),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.shield_outlined,
+            color: PracticeColors.textSecondary,
+            size: 19,
+          ),
+        ),
       ],
     ),
   );
@@ -3754,23 +3921,38 @@ InputDecoration _practiceInputDecoration(String hint, [IconData? icon]) =>
       labelText: null,
       hintStyle: const TextStyle(
         color: PracticeColors.textSecondary,
-        fontSize: 12,
+        fontSize: 12.2,
+        fontWeight: FontWeight.w600,
       ),
       prefixIcon: icon == null
           ? null
-          : Icon(icon, color: PracticeColors.textSecondary, size: 19),
+          : Icon(
+              icon,
+              color: PracticeColors.accent.withOpacity(.78),
+              size: 19,
+            ),
       filled: true,
-      fillColor: PracticeColors.background.withOpacity(.72),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      fillColor: PracticeColors.background.withOpacity(.58),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 14,
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: PracticeColors.line),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: PracticeColors.line.withOpacity(.82),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: PracticeColors.accent, width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(
+          color: PracticeColors.accent,
+          width: 1.6,
+        ),
       ),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
     );
 
 Widget _sectionLabel(String label) => Text(
