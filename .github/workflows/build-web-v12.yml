@@ -102,8 +102,8 @@ jobs:
           test -f build/web/index.html
           test -f build/web/main.dart.js
           test -f build/web/flutter_bootstrap.js
-          grep -q "flutter_bootstrap.js?build=$BUILD_ID" build/web/index.html
-          grep -q "main.dart.js?build=\\${buildId}" build/web/flutter_bootstrap.js
+          grep -Fq "flutter_bootstrap.js?build=$BUILD_ID" build/web/index.html
+          grep -Fq 'main.dart.js?build=${buildId}' build/web/flutter_bootstrap.js
           grep -qx "$BUILD_ID" build/web/build-id.txt
           touch build/web/.nojekyll
 
