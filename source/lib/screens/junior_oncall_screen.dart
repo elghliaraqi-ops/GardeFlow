@@ -462,8 +462,7 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
             ),
             const SizedBox(height: 14),
             Text(
-              'Aucune garde ou astreinte Junior $day
-à ${_juniorHospitalLabel(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
+              'Aucune garde ou astreinte Junior $day\nà ${_juniorHospitalLabel(_activeHospital)}${_selectedService == _allServices ? '' : ' · $_selectedService'}.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.inkSoft,
