@@ -1,0 +1,88 @@
+name: Validate Practice guideline QCMs
+
+on:
+  push:
+    branches:
+      - feature-practice-guideline-qcm-20260930
+    paths:
+      - '.github/workflows/validate-guideline-qcm.yml'
+      - '.github/scripts/apply_guideline_qcm_ui.py'
+      - 'source/supabase/functions/generate-clinical-case-qcm/index.ts'
+      - 'ci/v12_practice/practice_guideline_qcm_refresh.sql'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: guideline-qcm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v5
+        with:
+          ref: feature-practice-guideline-qcm-20260930
+          fetch-depth: 0
+
+      - name: Apply guarded source UI patch
+        run: python3 .github/scripts/apply_guideline_qcm_ui.py
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Format Dart source
+        run: dart format source/lib/screens/clinical_cases_section.dart
+
+      - name: Install Flutter dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run Flutter tests
+        working-directory: source
+        run: flutter test
+
+      - name: Analyze Flutter code
+        working-directory: source
+        run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Flutter Web release
+        working-directory: source
+        run: flutter build web --release --base-href "/GardeFlow/"
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check QCM Edge Function
+        run: deno check source/supabase/functions/generate-clinical-case-qcm/index.ts
+
+      - name: Validate refresh migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "update public.clinical_case_qcms" ci/v12_practice/practice_guideline_qcm_refresh.sql
+          grep -Fq "generation_source = 'fallback'" ci/v12_practice/practice_guideline_qcm_refresh.sql
+          ! grep -Fq "delete from public.clinical_case_qcm_answers" ci/v12_practice/practice_guideline_qcm_refresh.sql
+
+      - name: Commit validated UI patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- source/lib/screens/clinical_cases_section.dart; then
+            echo "UI patch already committed."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add source/lib/screens/clinical_cases_section.dart
+          git commit -m 'feat(practice): show clickable course and guideline sources'
+          git push origin HEAD:feature-practice-guideline-qcm-20260930
