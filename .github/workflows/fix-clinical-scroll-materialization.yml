@@ -1,0 +1,92 @@
+name: Fix clinical scroll materialization
+
+on:
+  push:
+    branches:
+      - fix-clinical-scroll-materialization-20260930
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply dashboard scroll fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('source/lib/screens/home_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old_start = """    return ListView(\n      controller: scrollController,\n      physics: BouncingScrollPhysics(),\n      padding: EdgeInsets.fromLTRB(18, 22, 18, 32),\n      children: [\n"""
+          new_start = """    return SingleChildScrollView(\n      controller: scrollController,\n      physics: const BouncingScrollPhysics(),\n      padding: const EdgeInsets.fromLTRB(18, 22, 18, 32),\n      child: Column(\n        crossAxisAlignment: CrossAxisAlignment.stretch,\n        children: [\n"""
+
+          if old_start in text:
+              text = text.replace(old_start, new_start, 1)
+          elif new_start not in text:
+              raise SystemExit('Dashboard scroll container start not found')
+
+          old_end = """        SizedBox(height: 18),\n        ClinicalCasesSection(verticalFeedKey: clinicalCasesFeedKey),\n      ],\n    );\n  }\n}\n\nclass _MonthlyGuardChip"""
+          new_end = """        SizedBox(height: 18),\n        ClinicalCasesSection(verticalFeedKey: clinicalCasesFeedKey),\n        ],\n      ),\n    );\n  }\n}\n\nclass _MonthlyGuardChip"""
+
+          if old_end in text:
+              text = text.replace(old_end, new_end, 1)
+          elif new_end not in text:
+              raise SystemExit('Dashboard scroll container end not found')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "return SingleChildScrollView(" source/lib/screens/home_screen.dart
+          grep -q "crossAxisAlignment: CrossAxisAlignment.stretch" source/lib/screens/home_screen.dart
+          grep -q "final targetContext = clinicalCasesFeedKey.currentContext" source/lib/screens/home_screen.dart
+          ! grep -A20 "Cas cliniques plus bas" source/lib/screens/home_screen.dart | grep -q "maxScrollExtent"
+
+      - name: Commit patch once
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Patch already applied"
+          else
+            git config user.name "elghliaraqi-ops"
+            git config user.email "elghliaraqi@gmail.com"
+            git add source/lib/screens/home_screen.dart
+            git commit -m "Keep clinical cases anchor mounted for direct scrolling [clinical-scroll-mounted]"
+            git push origin HEAD:fix-clinical-scroll-materialization-20260930
+          fi
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run tests
+        working-directory: source
+        run: flutter test
+
+      - name: Analyze
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Web release
+        working-directory: source
+        run: flutter build web --release --base-href "/GardeFlow/"
