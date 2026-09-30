@@ -328,16 +328,16 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.brand.withOpacity(.16)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navy.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: AppColors.navy.withOpacity(0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -347,10 +347,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
                   color: AppColors.brandSoft,
                   borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.brand.withOpacity(.16)),
                 ),
                 child: Text(
                   'CAS #${widget.number.toString().padLeft(2, '0')}',
@@ -509,11 +510,18 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           else ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(13),
+              padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
                 color: AppColors.paperAlt,
-                borderRadius: BorderRadius.circular(17),
-                border: Border.all(color: AppColors.line),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.brand.withOpacity(.18)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.navy.withOpacity(.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,9 +567,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                     current.question,
                     style: TextStyle(
                       color: AppColors.ink,
-                      fontSize: 13.5,
-                      height: 1.35,
+                      fontSize: 14.5,
+                      height: 1.42,
                       fontWeight: FontWeight.w900,
+                      letterSpacing: -0.08,
                     ),
                   ),
                   const SizedBox(height: 11),
@@ -599,11 +608,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
                 width: double.infinity,
-                padding: const EdgeInsets.all(13),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: (correct ? AppColors.success : AppColors.danger)
-                      .withOpacity(0.11),
-                  borderRadius: BorderRadius.circular(17),
+                      .withOpacity(0.09),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: (correct ? AppColors.success : AppColors.danger)
                         .withOpacity(0.45),
@@ -920,21 +929,28 @@ class _CaseSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!alwaysShow && value.trim().isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.fromLTRB(11, 10, 12, 11),
+      decoration: BoxDecoration(
+        color: AppColors.paperAlt.withOpacity(.70),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: AppColors.line.withOpacity(.72)),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              color: AppColors.paperAlt,
-              borderRadius: BorderRadius.circular(9),
+              color: AppColors.brandSoft,
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, size: 15, color: AppColors.inkSoft),
+            child: Icon(icon, size: 17, color: AppColors.brandBright),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -942,19 +958,19 @@ class _CaseSection extends StatelessWidget {
                 Text(
                   label.toUpperCase(),
                   style: TextStyle(
-                    color: AppColors.inkFaint,
-                    fontSize: 8.5,
+                    color: AppColors.brandBright,
+                    fontSize: 8.8,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 0.65,
+                    letterSpacing: 0.68,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   value.trim().isEmpty ? 'Non renseigné' : value.trim(),
                   style: TextStyle(
                     color: AppColors.ink,
-                    fontSize: 11.5,
-                    height: 1.38,
+                    fontSize: 12.2,
+                    height: 1.45,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -991,11 +1007,11 @@ class _QcmOption extends StatelessWidget {
     Color foreground = AppColors.ink;
     if (showCorrection && isCorrect) {
       border = AppColors.success;
-      background = AppColors.success.withOpacity(0.11);
+      background = AppColors.success.withOpacity(0.10);
       foreground = AppColors.success;
     } else if (showCorrection && selected && !isCorrect) {
       border = AppColors.danger;
-      background = AppColors.danger.withOpacity(0.10);
+      background = AppColors.danger.withOpacity(0.09);
       foreground = AppColors.danger;
     } else if (selected) {
       border = AppColors.brand;
@@ -1006,55 +1022,71 @@ class _QcmOption extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: border,
+              width: selected || (showCorrection && isCorrect) ? 1.35 : 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: border.withOpacity(.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 25,
-                height: 25,
+                width: 30,
+                height: 30,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: foreground.withOpacity(0.10),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: foreground.withOpacity(.18)),
                 ),
                 child: Text(
                   String.fromCharCode(65 + index),
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 11,
-                    height: 1.35,
-                    fontWeight: FontWeight.w700,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 11.8,
+                      height: 1.42,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
               if (showCorrection && isCorrect)
                 Padding(
-                  padding: const EdgeInsets.only(left: 6, top: 2),
+                  padding: const EdgeInsets.only(left: 7, top: 4),
                   child: Icon(
                     Icons.check_circle_rounded,
                     color: AppColors.success,
-                    size: 18,
+                    size: 19,
                   ),
                 ),
             ],

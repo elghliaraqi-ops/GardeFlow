@@ -72,7 +72,11 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
         backgroundColor: _bg,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('QCM · Practice', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text(
+          'QCM · Practice',
+          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.2),
+        ),
+        centerTitle: false,
       ),
       body: RefreshIndicator(
         color: _accent,
@@ -80,14 +84,59 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
           children: [
-            const Text(
-              'Vos statistiques QCM',
-              style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Réponses aux cas cliniques publiés dans le fil d’accueil.',
-              style: TextStyle(color: _secondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_surface, _elevated],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: _line),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: _accent.withOpacity(.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _accent.withOpacity(.22)),
+                    ),
+                    child: const Icon(Icons.quiz_rounded, color: _accent, size: 25),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Vos statistiques QCM',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -.35,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Votre progression sur les cas cliniques du fil d’accueil.',
+                          style: TextStyle(
+                            color: _secondary,
+                            fontSize: 11.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -104,7 +153,7 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: _surface,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: _line),
               ),
               child: Row(
@@ -184,46 +233,98 @@ class _Metric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: _PracticeQcmScreenState._surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _PracticeQcmScreenState._line),
+    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          _PracticeQcmScreenState._surface,
+          _PracticeQcmScreenState._elevated,
+        ],
+      ),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: _PracticeQcmScreenState._line),
+    ),
+    child: Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        child: Column(
-          children: [
-            Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text(label, style: const TextStyle(color: _PracticeQcmScreenState._secondary, fontSize: 10.5, fontWeight: FontWeight.w700)),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: _PracticeQcmScreenState._secondary,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _Segment extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _Segment({required this.label, required this.selected, required this.onTap});
+  const _Segment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => Material(
-        color: selected ? _PracticeQcmScreenState._elevated : _PracticeQcmScreenState._surface,
-        borderRadius: BorderRadius.circular(13),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(13),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: selected ? _PracticeQcmScreenState._accent : _PracticeQcmScreenState._line),
-            ),
-            alignment: Alignment.center,
-            child: Text(label, textAlign: TextAlign.center, style: TextStyle(color: selected ? Colors.white : _PracticeQcmScreenState._secondary, fontSize: 11, fontWeight: FontWeight.w900)),
+    color: selected
+        ? _PracticeQcmScreenState._elevated
+        : _PracticeQcmScreenState._surface,
+    borderRadius: BorderRadius.circular(15),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: selected
+                ? _PracticeQcmScreenState._accent
+                : _PracticeQcmScreenState._line,
+            width: selected ? 1.3 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: _PracticeQcmScreenState._accent.withOpacity(.07),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: selected
+                ? Colors.white
+                : _PracticeQcmScreenState._secondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _RankRow extends StatelessWidget {
@@ -231,40 +332,91 @@ class _RankRow extends StatelessWidget {
   const _RankRow({required this.entry});
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: _PracticeQcmScreenState._surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _PracticeQcmScreenState._line),
+  Widget build(BuildContext context) {
+    final medal = entry.rank == 1
+        ? '🥇'
+        : entry.rank == 2
+            ? '🥈'
+            : entry.rank == 3
+                ? '🥉'
+                : null;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: _PracticeQcmScreenState._surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: entry.rank <= 3
+              ? _PracticeQcmScreenState._accent.withOpacity(.40)
+              : _PracticeQcmScreenState._line,
         ),
-        child: Row(
-          children: [
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _PracticeQcmScreenState._elevated,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              medal ?? '${entry.rank}',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: medal == null ? 13 : 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${entry.correct} correctes / ${entry.answered} · ${entry.accuracy.toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: _PracticeQcmScreenState._secondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (entry.promotionNumber != null)
             Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
               decoration: BoxDecoration(
-                color: _PracticeQcmScreenState._elevated,
-                borderRadius: BorderRadius.circular(11),
+                color: _PracticeQcmScreenState._accent.withOpacity(.10),
+                borderRadius: BorderRadius.circular(99),
               ),
-              child: Text('${entry.rank}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(entry.displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900)),
-                  Text('${entry.correct} correctes / ${entry.answered} · ${entry.accuracy.toStringAsFixed(0)}%', style: const TextStyle(color: _PracticeQcmScreenState._secondary, fontSize: 10.5, fontWeight: FontWeight.w700)),
-                ],
+              child: Text(
+                'P${entry.promotionNumber}',
+                style: const TextStyle(
+                  color: _PracticeQcmScreenState._accent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
-            if (entry.promotionNumber != null)
-              Text('P${entry.promotionNumber}', style: const TextStyle(color: _PracticeQcmScreenState._accent, fontSize: 10.5, fontWeight: FontWeight.w900)),
-          ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 }
 
 class _Empty extends StatelessWidget {
