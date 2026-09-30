@@ -94,6 +94,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => NotificationsScreen()),
               ),
+              onDirectory: _tab == 3
+                  ? () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => DirectoryScreen()),
+                    )
+                  : null,
               onAccount: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => ProfileScreen()),
@@ -153,12 +159,14 @@ class _GlobalTopBar extends StatelessWidget {
   final String title;
   final AppState appState;
   final VoidCallback onNotifications;
+  final VoidCallback? onDirectory;
   final VoidCallback onAccount;
 
   const _GlobalTopBar({
     required this.title,
     required this.appState,
     required this.onNotifications,
+    this.onDirectory,
     required this.onAccount,
   });
 
@@ -200,6 +208,34 @@ class _GlobalTopBar extends StatelessWidget {
               ),
             ),
           ),
+          if (onDirectory != null) ...[
+            Tooltip(
+              message: 'Annuaire',
+              child: Material(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(13),
+                child: InkWell(
+                  onTap: onDirectory,
+                  borderRadius: BorderRadius.circular(13),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.line),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(
+                      Icons.contacts_rounded,
+                      color: AppColors.brand,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 9),
+          ],
           Stack(
             clipBehavior: Clip.none,
             children: [
@@ -307,84 +343,33 @@ class _AstreintesHubView extends StatefulWidget {
 class _AstreintesHubViewState extends State<_AstreintesHubView> {
   bool _showSenior = false;
 
+  Widget _scrollingModeSwitch() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      child: _AstreinteModeSwitch(
+        showSenior: _showSenior,
+        onChanged: (senior) {
+          if (senior == _showSenior) return;
+          setState(() => _showSenior = senior);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: AppColors.paper,
-      child: Column(
+      child: IndexedStack(
+        index: _showSenior ? 0 : 1,
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(14, 10, 14, 8),
-            child: _AstreinteModeSwitch(
-              showSenior: _showSenior,
-              onChanged: (senior) {
-                if (senior == _showSenior) return;
-                setState(() => _showSenior = senior);
-              },
-            ),
+          SeniorOnCallScreen(
+            embedded: true,
+            embeddedHeader: _scrollingModeSwitch(),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => DirectoryScreen()),
-                ),
-                borderRadius: BorderRadius.circular(16),
-                child: Ink(
-                  height: 46,
-                  padding: EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.line),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 31,
-                        height: 31,
-                        decoration: BoxDecoration(
-                          color: AppColors.brandSoft,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.contacts_rounded,
-                          size: 18,
-                          color: AppColors.brand,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Ouvrir l’annuaire',
-                          style: TextStyle(
-                            color: AppColors.ink,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.inkSoft,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: IndexedStack(
-              index: _showSenior ? 0 : 1,
-              children: const [
-                SeniorOnCallScreen(embedded: true),
-                JuniorOnCallScreen(embedded: true),
-              ],
-            ),
+          JuniorOnCallScreen(
+            embedded: true,
+            embeddedHeader: _scrollingModeSwitch(),
           ),
         ],
       ),
