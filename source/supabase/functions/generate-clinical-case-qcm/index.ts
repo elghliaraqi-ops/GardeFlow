@@ -27,7 +27,9 @@ function extractResponseText(payload: any): string {
 function parseJsonLoose(raw: string): any {
   const text = raw.trim();
   if (!text) throw new Error('empty_model_output');
-  try { return JSON.parse(text); } catch (_) {}
+  try {
+    return JSON.parse(text);
+  } catch (_) {}
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return JSON.parse(fenced[1]);
   const start = text.indexOf('{');
@@ -48,6 +50,51 @@ function scrub(value: unknown, max = 5000): string {
   return x.slice(0, max).trim();
 }
 
+function canonicalUrl(value: unknown): string {
+  try {
+    const url = new URL(String(value ?? '').trim());
+    url.hash = '';
+    url.search = '';
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    return `${url.protocol}//${url.hostname.toLowerCase()}${path}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+type WebSource = { title: string; url: string };
+
+function extractWebSources(payload: any): WebSource[] {
+  const byUrl = new Map<string, WebSource>();
+  const add = (title: unknown, url: unknown) => {
+    const rawUrl = String(url ?? '').trim();
+    const key = canonicalUrl(rawUrl);
+    if (!key || !rawUrl.startsWith('http')) return;
+    if (!byUrl.has(key)) {
+      byUrl.set(key, { title: scrub(title, 500), url: rawUrl });
+    }
+  };
+
+  for (const item of payload?.output ?? []) {
+    if (item?.type === 'web_search_call') {
+      for (const source of item?.action?.sources ?? []) {
+        add(source?.title, source?.url);
+      }
+    }
+    for (const content of item?.content ?? []) {
+      for (const annotation of content?.annotations ?? []) {
+        if (annotation?.type === 'url_citation') {
+          add(
+            annotation?.title ?? annotation?.url_citation?.title,
+            annotation?.url ?? annotation?.url_citation?.url,
+          );
+        }
+      }
+    }
+  }
+  return [...byUrl.values()];
+}
+
 const topicEnum = [
   'motif',
   'symptome',
@@ -59,11 +106,43 @@ const topicEnum = [
   'avis_specialise',
 ];
 
+const axisEnum = [
+  'cours_fondamental',
+  'diagnostic',
+  'explorations',
+  'prise_en_charge',
+  'recommandations',
+];
+
+const sourceKindEnum = ['recommandation', 'consensus', 'revue', 'cours'];
+
+const referenceSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'organization', 'year', 'url', 'kind'],
+  properties: {
+    title: { type: 'string' },
+    organization: { type: 'string' },
+    year: { type: 'string' },
+    url: { type: 'string' },
+    kind: { type: 'string', enum: sourceKindEnum },
+  },
+};
+
 const qcmItemSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['question', 'options', 'correct_index', 'correction', 'topic'],
+  required: [
+    'axis',
+    'question',
+    'options',
+    'correct_index',
+    'correction',
+    'topic',
+    'references',
+  ],
   properties: {
+    axis: { type: 'string', enum: axisEnum },
     question: { type: 'string' },
     options: {
       type: 'array',
@@ -74,6 +153,12 @@ const qcmItemSchema = {
     correct_index: { type: 'integer', minimum: 0, maximum: 3 },
     correction: { type: 'string' },
     topic: { type: 'string', enum: topicEnum },
+    references: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 3,
+      items: referenceSchema,
+    },
   },
 };
 
@@ -90,6 +175,22 @@ const fiveQcmSchema = {
     },
   },
 };
+
+function formatCorrection(
+  correction: string,
+  references: Array<{
+    title: string;
+    organization: string;
+    year: string;
+    url: string;
+    kind: string;
+  }>,
+): string {
+  const lines = references.map((ref) =>
+    `${ref.kind}|||${ref.title}|||${ref.organization}|||${ref.year}|||${ref.url}`
+  );
+  return `${correction}\n\n§SOURCES§\n${lines.join('\n')}`.slice(0, 9000);
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -176,12 +277,28 @@ Deno.serve(async (req: Request) => {
       .from('clinical_case_qcms')
       .select('id,generation_source')
       .eq('post_id', post.id);
-    if ((existingQcms ?? []).length === 5 && (existingQcms ?? []).every((q: any) => q.generation_source === 'openai')) {
-      return json({ ok: true, generated: false, source: 'openai', count: 5, post_id: post.id, reason: 'already_ready' });
+    if (
+      (existingQcms ?? []).length === 5 &&
+      (existingQcms ?? []).every((q: any) => q.generation_source === 'openai')
+    ) {
+      return json({
+        ok: true,
+        generated: false,
+        source: 'openai',
+        count: 5,
+        post_id: post.id,
+        reason: 'already_ready',
+      });
     }
 
     if (!openaiKey) {
-      return json({ ok: true, generated: false, source: 'fallback', count: (existingQcms ?? []).length, post_id: post.id });
+      return json({
+        ok: true,
+        generated: false,
+        source: 'fallback',
+        count: (existingQcms ?? []).length,
+        post_id: post.id,
+      });
     }
 
     const safeCase = {
@@ -198,49 +315,62 @@ Deno.serve(async (req: Request) => {
       specialist_service: scrub(post.specialist_service, 300),
     };
 
-    const prompt = `Tu crées EXACTEMENT 5 QCM pédagogiques DISTINCTS de raisonnement clinique à partir d'un cas déjà anonymisé, pour un niveau externat/internat médical.
+    const prompt = `Tu es responsable pédagogique d'un enseignement d'externat/internat médical.
 
-OBJECTIF GÉNÉRAL
-Les cinq questions doivent transformer ce cas en mini-session d'apprentissage. Elles ne doivent jamais être cinq reformulations de la même question ni demander de recopier une phrase affichée dans le dossier.
+DATE DE RÉFÉRENCE : 30 septembre 2026.
 
-DIVERSITÉ OBLIGATOIRE
-- Produis 5 angles différents et complémentaires.
-- Quand les données le permettent, couvre en priorité :
-  1) raisonnement diagnostique ou diagnostic différentiel ;
-  2) signe/critère clinique ou paraclinique décisif ;
-  3) interprétation d'un examen, d'une biologie ou d'une imagerie ;
-  4) prochaine étape / prise en charge initiale / surveillance ;
-  5) gravité, complication, orientation ou avis spécialisé.
-- Ne répète pas le même concept dans deux questions.
+Tu reçois un cas clinique anonymisé UNIQUEMENT pour identifier le thème médical à enseigner. Tu dois ensuite effectuer une RECHERCHE WEB ACTUELLE et créer EXACTEMENT 5 QCM de cours et de recommandations. Le cas n'est PAS la source des réponses.
 
-RÈGLES CLINIQUES IMPÉRATIVES
-- Les faits concernant CE patient doivent provenir uniquement du cas fourni. N'invente jamais un symptôme, une constante, une biologie, une image, un antécédent ou un traitement propre au patient qui n'est pas documenté.
-- Tu peux utiliser les connaissances médicales générales, standards et établies nécessaires au raisonnement.
-- Chaque bonne réponse doit demander au moins UNE étape de raisonnement clinique.
-- INTERDIT : « Quelle conclusion d'imagerie correspond à ce cas ? », « Quel diagnostic a été retenu ? », « Quelle prise en charge a été documentée ? » ou toute question dont la réponse est une simple copie d'un champ du dossier.
-- INTERDIT : une bonne réponse qui est seulement une reformulation triviale du texte du dossier.
-- Si le dossier est incomplet, pose une question d'interprétation ou de principe clinique applicable aux données présentes plutôt que d'inventer des données manquantes.
-- Chaque QCM comporte exactement 4 propositions, une seule meilleure réponse, et 3 distracteurs plausibles du même niveau conceptuel.
-- Pas de « toutes les réponses », « aucune des réponses », distracteurs absurdes ou indice de longueur révélant la bonne réponse.
-- Évite les posologies/protocoles dépendants du contexte local sauf s'ils sont explicitement documentés.
+OBJECTIF
+Transformer le diagnostic/thème suggéré par le cas en une mini-session de cours. Les questions doivent apprendre la pathologie, les critères diagnostiques, les explorations, la prise en charge et les recommandations récentes. Elles ne doivent pas demander de relire ou de restituer ce qui est déjà écrit dans le cas.
 
-EXPLICATION IA OBLIGATOIRE POUR CHAQUE QCM
-- Le champ correction doit être une vraie explication pédagogique, pas seulement « bonne réponse : B ».
-- Elle sera affichée APRÈS CHAQUE réponse, Y COMPRIS lorsque l'utilisateur a répondu juste.
-- Explique pourquoi la meilleure réponse est correcte en reliant le principe médical aux éléments utiles du cas.
-- Explique brièvement pourquoi les principaux distracteurs sont moins appropriés lorsque cela apporte de la valeur.
-- 3 à 6 phrases concises, claires et pédagogiques.
-- N'invente aucune nouvelle donnée propre au patient.
-- Ne dis pas « vous avez raison/tort » : l'explication doit rester valable quel que soit le choix de l'utilisateur.
+RECHERCHE WEB OBLIGATOIRE
+- Utilise la recherche web avant de rédiger les QCM.
+- Pour les recommandations, identifie la version la plus récente disponible à la date de référence.
+- Priorité absolue aux sources de premier niveau : sociétés savantes officielles, autorités sanitaires nationales/internationales, OMS, NICE, HAS, CDC, agences publiques, recommandations/consensus publiés par les collèges et sociétés de spécialité.
+- En seconde intention seulement : revue de synthèse évaluée par les pairs, PubMed/NCBI, article de référence ou ressource pédagogique institutionnelle.
+- N'utilise pas de blogs, sites commerciaux, forums, Wikipédia ou contenus grand public comme source d'une recommandation.
+- Si plusieurs recommandations reconnues divergent, ne les fusionne pas artificiellement : précise l'organisation et l'année dans la question ou la correction.
+- Pour chaque QCM, cite 1 à 3 sources réellement consultées. L'URL retournée doit être l'URL exacte d'une source visitée pendant la recherche.
+
+LES 5 AXES SONT OBLIGATOIRES, UN SEUL PAR QCM, DANS CET ORDRE
+1. cours_fondamental : physiopathologie, définition, classification ou notion fondamentale utile ;
+2. diagnostic : critères diagnostiques, diagnostic différentiel, score ou signe clé ;
+3. explorations : indications/interprétation de biologie, imagerie ou autre examen ;
+4. prise_en_charge : traitement, surveillance, complication ou stratégie pratique ;
+5. recommandations : point important d'une recommandation récente, changement de pratique ou conduite actuellement recommandée.
+
+RÈGLE CENTRALE
+Le cas clinique sert seulement d'ANCRAGE THÉMATIQUE. Ne pose pas « quel est le diagnostic de ce patient ? », « quelle est sa conclusion d'imagerie ? », « quelle conduite a été faite ? » ou toute question dont la réponse se trouve telle quelle dans le dossier. Une question peut utiliser une courte vignette générique si cela améliore le raisonnement, mais elle ne doit pas inventer de nouvelles données présentées comme appartenant au patient fourni.
+
+QUALITÉ DES QCM
+- Niveau externat/internat, utile en garde et pour la formation continue.
+- Exactement 4 propositions, une seule meilleure réponse.
+- Trois distracteurs plausibles, de même niveau conceptuel.
+- Pas de « toutes les réponses », « aucune des réponses », distracteurs absurdes ou indices de longueur.
+- Privilégie les points discriminants et réellement enseignables plutôt que les détails anecdotiques.
+- Évite les posologies ultra-spécifiques si elles varient selon protocole local ; si une posologie fait partie d'une recommandation internationale stable et essentielle, nomme la source.
+- Ne présente jamais une recommandation ancienne comme « actuelle » lorsqu'une version plus récente existe.
+
+EXPLICATION PÉDAGOGIQUE OBLIGATOIRE
+- 3 à 6 phrases concises par QCM.
+- Explique le principe du cours et pourquoi la bonne réponse est la meilleure.
+- Explique brièvement les principaux distracteurs lorsque c'est utile.
+- Lorsque la question dépend d'une recommandation, cite explicitement l'organisation et l'année dans le texte de la correction.
+- Ne dis pas « vous avez raison/tort » : l'explication doit être valable quelle que soit la réponse choisie.
 
 CONFIDENTIALITÉ
-- Ne réintroduis jamais de nom, téléphone, e-mail, date précise, numéro de dossier, lieu/box, auteur ou autre identifiant.
+- Aucun identifiant patient.
+- Les faits propres au patient ne peuvent venir que du cas fourni et ne doivent pas être extrapolés.
 - Réponds en français.
 
-CAS ANONYMISÉ :
+CAS ANONYMISÉ — ANCRAGE THÉMATIQUE UNIQUEMENT :
 ${JSON.stringify(safeCase)}`;
 
-    const model = Deno.env.get('OPENAI_TEXT_MODEL') || Deno.env.get('OPENAI_VISION_MODEL') || 'gpt-5.6';
+    const model =
+      Deno.env.get('OPENAI_TEXT_MODEL') ||
+      Deno.env.get('OPENAI_VISION_MODEL') ||
+      'gpt-5.6';
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -250,11 +380,14 @@ ${JSON.stringify(safeCase)}`;
       body: JSON.stringify({
         model,
         store: false,
+        tools: [{ type: 'web_search' }],
+        tool_choice: 'required',
+        include: ['web_search_call.action.sources'],
         input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
         text: {
           format: {
             type: 'json_schema',
-            name: 'clinical_case_five_qcms',
+            name: 'clinical_case_course_guideline_qcms',
             strict: true,
             schema: fiveQcmSchema,
           },
@@ -264,50 +397,126 @@ ${JSON.stringify(safeCase)}`;
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error('OpenAI 5 QCM failed', response.status, payload);
-      return json({ ok: true, generated: false, source: 'fallback', post_id: post.id, reason: 'openai_failed' });
+      console.error('OpenAI guideline QCM failed', response.status, payload);
+      return json({
+        ok: true,
+        generated: false,
+        source: 'fallback',
+        post_id: post.id,
+        reason: 'openai_failed',
+      });
     }
+
+    const webSources = extractWebSources(payload);
+    if (webSources.length === 0) {
+      console.error('OpenAI guideline QCM returned no verifiable web source');
+      return json({
+        ok: true,
+        generated: false,
+        source: 'fallback',
+        post_id: post.id,
+        reason: 'missing_web_sources',
+      });
+    }
+    const consultedUrls = new Set(webSources.map((source) => canonicalUrl(source.url)));
 
     const generated = parseJsonLoose(extractResponseText(payload));
     const rawQcms = Array.isArray(generated?.qcms) ? generated.qcms : [];
     if (rawQcms.length !== 5) {
-      return json({ ok: true, generated: false, source: 'fallback', post_id: post.id, reason: 'invalid_qcm_count' });
+      return json({
+        ok: true,
+        generated: false,
+        source: 'fallback',
+        post_id: post.id,
+        reason: 'invalid_qcm_count',
+      });
     }
 
     const allowedTopics = new Set(topicEnum);
+    const allowedAxes = new Set(axisEnum);
+    const allowedKinds = new Set(sourceKindEnum);
     const normalized = rawQcms.map((raw: any, index: number) => {
       const options = Array.isArray(raw?.options)
         ? raw.options.map((x: unknown) => scrub(x, 420)).filter(Boolean)
         : [];
       const correctIndex = Number(raw?.correct_index);
-      const question = scrub(raw?.question, 1000);
-      const correction = scrub(raw?.correction, 4500);
+      const question = scrub(raw?.question, 1200);
+      const rawCorrection = scrub(raw?.correction, 5500);
       const topic = String(raw?.topic ?? '').trim();
-      if (!question || !correction || options.length !== 4 || new Set(options).size !== 4 ||
-          !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3 || !allowedTopics.has(topic)) {
+      const axis = String(raw?.axis ?? '').trim();
+      const rawReferences = Array.isArray(raw?.references) ? raw.references : [];
+      const references = rawReferences
+        .map((ref: any) => ({
+          title: scrub(ref?.title, 600),
+          organization: scrub(ref?.organization, 300),
+          year: scrub(ref?.year, 40),
+          url: String(ref?.url ?? '').trim(),
+          kind: String(ref?.kind ?? '').trim(),
+        }))
+        .filter((ref: any) =>
+          ref.title &&
+          ref.organization &&
+          ref.year &&
+          ref.url.startsWith('http') &&
+          allowedKinds.has(ref.kind) &&
+          consultedUrls.has(canonicalUrl(ref.url))
+        );
+
+      if (
+        !question ||
+        !rawCorrection ||
+        options.length !== 4 ||
+        new Set(options).size !== 4 ||
+        !Number.isInteger(correctIndex) ||
+        correctIndex < 0 ||
+        correctIndex > 3 ||
+        !allowedTopics.has(topic) ||
+        !allowedAxes.has(axis) ||
+        references.length < 1
+      ) {
         throw new Error(`invalid_qcm_${index + 1}`);
       }
+
       return {
+        axis,
         post_id: post.id,
         position: index + 1,
         question,
         options,
         correct_index: correctIndex,
-        correction,
+        correction: formatCorrection(rawCorrection, references.slice(0, 3)),
         topic,
         generation_source: 'openai',
         updated_at: new Date().toISOString(),
       };
     });
 
+    const actualAxes = normalized.map((q: any) => q.axis);
+    if (actualAxes.some((axis: string, index: number) => axis !== axisEnum[index])) {
+      return json({
+        ok: true,
+        generated: false,
+        source: 'fallback',
+        post_id: post.id,
+        reason: 'invalid_axis_order',
+      });
+    }
     if (new Set(normalized.map((q: any) => q.question.toLowerCase())).size !== 5) {
-      return json({ ok: true, generated: false, source: 'fallback', post_id: post.id, reason: 'duplicate_questions' });
+      return json({
+        ok: true,
+        generated: false,
+        source: 'fallback',
+        post_id: post.id,
+        reason: 'duplicate_questions',
+      });
     }
 
-    // Mettre d'abord à jour les champs historiques du post. Le trigger SQL
-    // resynchronise alors les fallbacks et invalide les anciennes réponses ;
-    // les cinq upserts IA suivants deviennent la version pédagogique finale.
-    const first = normalized[0];
+    const persisted = normalized.map(({ axis: _axis, ...qcm }: any) => qcm);
+
+    // Compatibilité descendante : le QCM n°1 reste disponible dans les champs
+    // historiques du post. Le trigger resynchronise les fallbacks avant les cinq
+    // upserts finaux et invalide les réponses à l'ancien jeu de questions.
+    const first = persisted[0];
     const { error: legacyUpdateError } = await adminClient
       .from('clinical_case_posts')
       .update({
@@ -324,14 +533,16 @@ ${JSON.stringify(safeCase)}`;
 
     const { error: qcmUpsertError } = await adminClient
       .from('clinical_case_qcms')
-      .upsert(normalized, { onConflict: 'post_id,position' });
+      .upsert(persisted, { onConflict: 'post_id,position' });
     if (qcmUpsertError) throw qcmUpsertError;
 
     return json({
       ok: true,
       generated: true,
       source: 'openai',
+      source_mode: 'live_web_guidelines',
       count: 5,
+      web_sources: webSources.length,
       post_id: post.id,
       practice_case_id: resolvedPracticeCaseId,
     });
