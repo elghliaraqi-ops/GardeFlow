@@ -1,0 +1,78 @@
+name: Validate Clinical Cases Feed
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature-clinical-cases-feed
+    paths:
+      - '.github/workflows/clinical-cases-ci.yml'
+      - 'ci/v12_clinical_cases/**'
+      - 'source/lib/models/clinical_case_post.dart'
+      - 'source/lib/services/clinical_case_service.dart'
+      - 'source/lib/screens/clinical_cases_section.dart'
+      - 'source/test/clinical_case_post_test.dart'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clinical-cases-feed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v5
+        with:
+          ref: feature-clinical-cases-feed
+          fetch-depth: 0
+
+      - name: Apply guarded integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/v12_clinical_cases/apply_clinical_cases.py
+          git diff --check
+          if ! git diff --quiet; then
+            git config user.name 'GardeFlow CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add source/lib/screens/home_screen.dart source/lib/services/practice_service.dart
+            git commit -m 'feat(clinical-cases): integrate home feed and Practice publishing'
+            git push origin HEAD:feature-clinical-cases-feed
+          fi
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run clinical cases tests
+        working-directory: source
+        run: flutter test test/clinical_case_post_test.dart test/practice_models_test.dart
+
+      - name: Analyze affected Flutter code
+        working-directory: source
+        run: flutter analyze lib/models/clinical_case_post.dart lib/services/clinical_case_service.dart lib/screens/clinical_cases_section.dart lib/services/practice_service.dart lib/screens/home_screen.dart test/clinical_case_post_test.dart --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Flutter Web release
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --enable-web
+          if [ ! -f web/index.html ]; then
+            flutter create --no-pub --platforms=web --project-name huim6_planning .
+          fi
+          flutter build web --release --base-href "/GardeFlow/"
+          test -f build/web/index.html
+          test -f build/web/main.dart.js
