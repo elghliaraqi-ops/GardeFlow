@@ -15,6 +15,7 @@ import '../models/shift_type.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../widgets/profile_avatar.dart';
 import 'audit_screen.dart';
 import 'notifications_screen.dart';
 import '../theme/screen_decor.dart';
@@ -1041,17 +1042,13 @@ class _DoctorHeader extends StatelessWidget {
         padding: EdgeInsets.all(AppSpace.md),
         child: Row(
           children: [
-            CircleAvatar(
+            ProfileAvatar(
+              profileId: doctor.id,
+              initials: doctor.initials,
+              isJunior: doctor.grade == MedicalGrade.junior,
               radius: 21,
               backgroundColor: AppColors.paperAlt,
-              child: Text(
-                _initials(doctor.fullName),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.ink,
-                ),
-              ),
+              foregroundColor: AppColors.ink,
             ),
             SizedBox(width: AppSpace.md),
             Expanded(

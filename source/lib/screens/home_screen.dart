@@ -16,6 +16,7 @@ import '../services/push_notification_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../widgets/profile_avatar.dart';
 import 'admin_screen.dart';
 import 'announcements_screen.dart';
 import 'astreinte_screen.dart';
@@ -173,9 +174,6 @@ class _GlobalTopBar extends StatelessWidget {
     if (user == null) return const SizedBox.shrink();
 
     final badge = appState.totalBadgeCount;
-    final rawInitial = user.nom.trim();
-    final initial =
-        rawInitial.isEmpty ? 'D' : rawInitial.substring(0, 1).toUpperCase();
 
     return Container(
       height: 58,
@@ -310,14 +308,13 @@ class _GlobalTopBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Text(
-                    initial,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'SpaceGrotesk',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: ProfileAvatar(
+                    profileId: user.id,
+                    initials: user.initials,
+                    isJunior: user.grade == MedicalGrade.junior,
+                    radius: 18,
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ),
