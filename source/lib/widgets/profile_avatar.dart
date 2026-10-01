@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../data/profile_avatars.dart';
 import '../services/profile_avatar_service.dart';
@@ -16,12 +15,14 @@ class ProfileAvatarArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SvgPicture.string(
-      option.svgMarkup,
+    return Image.asset(
+      option.assetPath,
       fit: fit,
       width: double.infinity,
       height: double.infinity,
-      clipBehavior: Clip.antiAlias,
+      filterQuality: FilterQuality.high,
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }
