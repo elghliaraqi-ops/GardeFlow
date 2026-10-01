@@ -1,9 +1,10 @@
 name: Lighten home hero
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - style/lighten-home-hero-20261001
+    paths:
+      - '.github/workflows/lighten-home-hero.yml'
 
 permissions:
   contents: write
@@ -11,22 +12,29 @@ permissions:
 jobs:
   patch-and-validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: subosito/flutter-action@v2
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.5'
           channel: stable
-      - name: Simplifier la carte d'accueil
-        shell: python
+          cache: true
+
+      - name: Simplifier la carte accueil
+        shell: bash
         run: |
+          set -euo pipefail
+          python3 <<'PY'
           from pathlib import Path
           import re
 
           path = Path('source/lib/screens/home_screen.dart')
-          text = path.read_text()
+          text = path.read_text(encoding='utf-8')
 
           old = """                    PracticeHomeSummary(appState: appState, user: me),
                     SizedBox(height: 12),
@@ -44,7 +52,7 @@ jobs:
           new_date = """                            '$dateLabel · $timeLabel',
 """
           if old_date not in text:
-              raise SystemExit('Texte date/heure introuvable')
+              raise SystemExit('Texte date heure introuvable')
           text = text.replace(old_date, new_date, 1)
 
           pattern = re.compile(r"""                    SizedBox\(height: 17\),\n                    Container\(\n.*?_MonthlyGuardChip\(\n                                label: 'Service',\n                                value: serviceMonthlyCount,\n                              \),\n                            \],\n                          \),\n                        \],\n                      \),\n                    \),\n""", re.S)
@@ -112,23 +120,36 @@ jobs:
               raise SystemExit('Point insertion Practice hors hero introuvable')
           text = text.replace(old_after, new_after, 1)
 
-          path.write_text(text)
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Commit visual change
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add source/lib/screens/home_screen.dart
           git commit -m "style: alléger la carte principale de l'accueil"
           git push
+
       - name: Install dependencies
         working-directory: source
         run: flutter pub get
+
       - name: Run tests
         working-directory: source
         run: flutter test
+
       - name: Analyze Flutter code
         working-directory: source
         run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
       - name: Build Flutter Web release
         working-directory: source
-        run: flutter build web --release --base-href "/GardeFlow/" --build-name "12.0.0" --build-number "301"
+        shell: bash
+        run: |
+          flutter build web --release \
+            --base-href "/GardeFlow/" \
+            --build-name "12.0.0" \
+            --build-number "300"
