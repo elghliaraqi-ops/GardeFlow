@@ -1,5 +1,7 @@
 enum UserRole { medecin, admin }
+
 enum MedicalGrade { junior, senior }
+
 enum AccountStatus { pending, active, suspended }
 
 class AppUser {
@@ -15,6 +17,7 @@ class AppUser {
   final int? promotionNumber;
   final UserRole role;
   final AccountStatus accountStatus;
+  final String appearanceTheme;
 
   AppUser({
     required this.id,
@@ -29,7 +32,42 @@ class AppUser {
     this.promotionNumber,
     this.role = UserRole.medecin,
     this.accountStatus = AccountStatus.active,
+    this.appearanceTheme = 'black',
   });
+
+  AppUser copyWith({
+    String? nom,
+    String? prenom,
+    String? phone,
+    String? passwordHash,
+    String? passwordSalt,
+    String? service,
+    MedicalGrade? grade,
+    String? hospital,
+    int? promotionNumber,
+    bool clearPromotionNumber = false,
+    UserRole? role,
+    AccountStatus? accountStatus,
+    String? appearanceTheme,
+  }) {
+    return AppUser(
+      id: id,
+      nom: nom ?? this.nom,
+      prenom: prenom ?? this.prenom,
+      phone: phone ?? this.phone,
+      passwordHash: passwordHash ?? this.passwordHash,
+      passwordSalt: passwordSalt ?? this.passwordSalt,
+      service: service ?? this.service,
+      grade: grade ?? this.grade,
+      hospital: hospital ?? this.hospital,
+      promotionNumber: clearPromotionNumber
+          ? null
+          : (promotionNumber ?? this.promotionNumber),
+      role: role ?? this.role,
+      accountStatus: accountStatus ?? this.accountStatus,
+      appearanceTheme: appearanceTheme ?? this.appearanceTheme,
+    );
+  }
 
   String get fullName => '$prenom $nom';
   String get initials {
@@ -40,23 +78,25 @@ class AppUser {
     if (last.isNotEmpty) values.add(last[0].toUpperCase());
     return values.isEmpty ? '?' : values.join();
   }
+
   String get gradeLabel => grade == MedicalGrade.senior ? 'Senior' : 'Junior';
   String get roleLabel => role == UserRole.admin ? 'Administrateur' : 'Médecin';
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'nom': nom,
-        'prenom': prenom,
-        'phone': phone,
-        'passwordHash': passwordHash,
-        'passwordSalt': passwordSalt,
-        'service': service,
-        'grade': grade.name,
-        'hospital': hospital,
-        'promotionNumber': promotionNumber,
-        'role': role.name,
-        'accountStatus': accountStatus.name,
-      };
+    'id': id,
+    'nom': nom,
+    'prenom': prenom,
+    'phone': phone,
+    'passwordHash': passwordHash,
+    'passwordSalt': passwordSalt,
+    'service': service,
+    'grade': grade.name,
+    'hospital': hospital,
+    'promotionNumber': promotionNumber,
+    'role': role.name,
+    'accountStatus': accountStatus.name,
+    'appearanceTheme': appearanceTheme,
+  };
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     final legacyFonction = (json['fonction'] as String?)?.toLowerCase();
@@ -64,6 +104,13 @@ class AppUser {
     final grade = rawGrade == 'senior' || legacyFonction == 'senior'
         ? MedicalGrade.senior
         : MedicalGrade.junior;
+    final rawAppearance =
+        (json['appearanceTheme'] as String?) ??
+        (json['appearance_theme'] as String?);
+    const allowedAppearance = <String>{'green', 'red', 'white', 'black'};
+    final appearanceTheme = allowedAppearance.contains(rawAppearance)
+        ? rawAppearance!
+        : 'black';
     return AppUser(
       id: (json['id'] as String?) ?? (json['phone'] as String? ?? ''),
       nom: json['nom'] as String,
@@ -74,10 +121,14 @@ class AppUser {
       service: json['service'] as String,
       grade: grade,
       hospital: json['hospital'] as String,
-      promotionNumber: (json['promotionNumber'] as num?)?.toInt() ??
+      promotionNumber:
+          (json['promotionNumber'] as num?)?.toInt() ??
           (json['promotion_number'] as num?)?.toInt(),
       role: UserRole.values.byName((json['role'] as String?) ?? 'medecin'),
-      accountStatus: AccountStatus.values.byName((json['accountStatus'] as String?) ?? 'active'),
+      accountStatus: AccountStatus.values.byName(
+        (json['accountStatus'] as String?) ?? 'active',
+      ),
+      appearanceTheme: appearanceTheme,
     );
   }
 }

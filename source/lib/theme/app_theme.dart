@@ -9,11 +9,11 @@ import 'package:flutter/services.dart';
 class AppColors {
   AppColors._();
 
-  static String _appearanceTheme = 'green';
+  static String _appearanceTheme = 'black';
 
   static void setAppearanceTheme(String value) {
     const allowed = <String>{'green', 'red', 'white', 'black'};
-    _appearanceTheme = allowed.contains(value) ? value : 'green';
+    _appearanceTheme = allowed.contains(value) ? value : 'black';
   }
 
   static String get appearanceTheme => _appearanceTheme;
@@ -179,28 +179,16 @@ class AppShadow {
       : const Color(0xFF173127).withOpacity(0.07);
 
   static List<BoxShadow> get low => [
-        BoxShadow(
-          color: _shadowColor,
-          blurRadius: 16,
-          offset: const Offset(0, 6),
-        ),
-      ];
+    BoxShadow(color: _shadowColor, blurRadius: 16, offset: const Offset(0, 6)),
+  ];
 
   static List<BoxShadow> get mid => [
-        BoxShadow(
-          color: _shadowColor,
-          blurRadius: 28,
-          offset: const Offset(0, 12),
-        ),
-      ];
+    BoxShadow(color: _shadowColor, blurRadius: 28, offset: const Offset(0, 12)),
+  ];
 
   static List<BoxShadow> get high => [
-        BoxShadow(
-          color: _shadowColor,
-          blurRadius: 40,
-          offset: const Offset(0, 18),
-        ),
-      ];
+    BoxShadow(color: _shadowColor, blurRadius: 40, offset: const Offset(0, 18)),
+  ];
 }
 
 class AppTheme {
@@ -211,23 +199,24 @@ class AppTheme {
 
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.brand,
-      brightness: brightness,
-      primary: AppColors.brand,
-      secondary: AppColors.cyan,
-      surface: AppColors.card,
-      error: AppColors.danger,
-    ).copyWith(
-      surfaceContainerLowest: AppColors.paper,
-      surfaceContainerLow: AppColors.paperAlt,
-      surfaceContainer: AppColors.card,
-      surfaceContainerHigh: AppColors.surfaceRaised,
-      outline: AppColors.line,
-      outlineVariant: AppColors.line.withOpacity(0.70),
-      onSurface: AppColors.ink,
-      onSurfaceVariant: AppColors.inkSoft,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.brand,
+          brightness: brightness,
+          primary: AppColors.brand,
+          secondary: AppColors.cyan,
+          surface: AppColors.card,
+          error: AppColors.danger,
+        ).copyWith(
+          surfaceContainerLowest: AppColors.paper,
+          surfaceContainerLow: AppColors.paperAlt,
+          surfaceContainer: AppColors.card,
+          surfaceContainerHigh: AppColors.surfaceRaised,
+          outline: AppColors.line,
+          outlineVariant: AppColors.line.withOpacity(0.70),
+          onSurface: AppColors.ink,
+          onSurfaceVariant: AppColors.inkSoft,
+        );
 
     final base = ThemeData(
       useMaterial3: true,
@@ -247,65 +236,88 @@ class AppTheme {
 
     final textTheme = base.textTheme.copyWith(
       displayLarge: displayBase.copyWith(
-          fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.7),
+        fontSize: 32,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.7,
+      ),
       displayMedium: displayBase.copyWith(
-          fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.5,
+      ),
       displaySmall: displayBase.copyWith(
-          fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3),
-      headlineSmall:
-          displayBase.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
-      titleLarge:
-          displayBase.copyWith(fontSize: 18.5, fontWeight: FontWeight.w700),
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.3,
+      ),
+      headlineSmall: displayBase.copyWith(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+      ),
+      titleLarge: displayBase.copyWith(
+        fontSize: 18.5,
+        fontWeight: FontWeight.w700,
+      ),
       titleMedium: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 15.5,
-          fontWeight: FontWeight.w800,
-          color: AppColors.ink),
+        fontFamily: 'Inter',
+        fontSize: 15.5,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+      ),
       titleSmall: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13.5,
-          fontWeight: FontWeight.w800,
-          color: AppColors.ink),
+        fontFamily: 'Inter',
+        fontSize: 13.5,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+      ),
       bodyLarge: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-          color: AppColors.ink,
-          height: 1.45),
+        fontFamily: 'Inter',
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+        color: AppColors.ink,
+        height: 1.45,
+      ),
       bodyMedium: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13.5,
-          fontWeight: FontWeight.w500,
-          color: AppColors.ink,
-          height: 1.42),
+        fontFamily: 'Inter',
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
+        color: AppColors.ink,
+        height: 1.42,
+      ),
       bodySmall: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 11.8,
-          fontWeight: FontWeight.w500,
-          color: AppColors.inkSoft,
-          height: 1.4),
+        fontFamily: 'Inter',
+        fontSize: 11.8,
+        fontWeight: FontWeight.w500,
+        color: AppColors.inkSoft,
+        height: 1.4,
+      ),
       labelLarge: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13.5,
-          fontWeight: FontWeight.w800,
-          color: AppColors.ink),
+        fontFamily: 'Inter',
+        fontSize: 13.5,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+      ),
       labelMedium: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-          color: AppColors.inkSoft),
+        fontFamily: 'Inter',
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        color: AppColors.inkSoft,
+      ),
       labelSmall: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          color: AppColors.inkSoft,
-          letterSpacing: 0.2),
+        fontFamily: 'Inter',
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        color: AppColors.inkSoft,
+        letterSpacing: 0.2,
+      ),
     );
 
     final enabledInput = OutlineInputBorder(
       borderRadius: AppRadius.mdR,
-      borderSide:
-          BorderSide(color: AppColors.line.withOpacity(0.78), width: 0.9),
+      borderSide: BorderSide(
+        color: AppColors.line.withOpacity(0.78),
+        width: 0.9,
+      ),
     );
 
     return base.copyWith(
@@ -325,11 +337,12 @@ class AppTheme {
         systemOverlayStyle:
             (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
                 .copyWith(
-          statusBarColor: Colors.transparent,
-          systemNavigationBarColor: AppColors.paperAlt,
-          systemNavigationBarIconBrightness:
-              isDark ? Brightness.light : Brightness.dark,
-        ),
+                  statusBarColor: Colors.transparent,
+                  systemNavigationBarColor: AppColors.paperAlt,
+                  systemNavigationBarIconBrightness: isDark
+                      ? Brightness.light
+                      : Brightness.dark,
+                ),
       ),
       cardTheme: CardThemeData(
         color: AppColors.card,
@@ -346,16 +359,26 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.paperAlt,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        hintStyle:
-            TextStyle(color: AppColors.inkFaint, fontWeight: FontWeight.w500),
-        labelStyle:
-            TextStyle(color: AppColors.inkSoft, fontWeight: FontWeight.w700),
-        helperStyle:
-            TextStyle(color: AppColors.inkFaint, fontWeight: FontWeight.w500),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 15,
+        ),
+        hintStyle: TextStyle(
+          color: AppColors.inkFaint,
+          fontWeight: FontWeight.w500,
+        ),
+        labelStyle: TextStyle(
+          color: AppColors.inkSoft,
+          fontWeight: FontWeight.w700,
+        ),
+        helperStyle: TextStyle(
+          color: AppColors.inkFaint,
+          fontWeight: FontWeight.w500,
+        ),
         floatingLabelStyle: TextStyle(
-            color: AppColors.brandBright, fontWeight: FontWeight.w800),
+          color: AppColors.brandBright,
+          fontWeight: FontWeight.w800,
+        ),
         border: enabledInput,
         enabledBorder: enabledInput,
         focusedBorder: OutlineInputBorder(
@@ -382,7 +405,10 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
           textStyle: const TextStyle(
-              fontFamily: 'Inter', fontWeight: FontWeight.w900, fontSize: 14),
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -395,7 +421,10 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
           textStyle: const TextStyle(
-              fontFamily: 'Inter', fontWeight: FontWeight.w900, fontSize: 13.5),
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w900,
+            fontSize: 13.5,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -406,7 +435,10 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
           textStyle: const TextStyle(
-              fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13.5),
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w800,
+            fontSize: 13.5,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -415,7 +447,10 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.smR),
           textStyle: const TextStyle(
-              fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13.5),
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w800,
+            fontSize: 13.5,
+          ),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -424,8 +459,9 @@ class AppTheme {
           foregroundColor: AppColors.inkSoft,
           hoverColor: AppColors.brandSoft,
           highlightColor: AppColors.brandSoft,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       chipTheme: ChipThemeData(
@@ -433,15 +469,17 @@ class AppTheme {
         selectedColor: AppColors.brandSoft,
         disabledColor: AppColors.paperAlt.withOpacity(0.55),
         labelStyle: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w800,
-            fontSize: 11.5,
-            color: AppColors.inkSoft),
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w800,
+          fontSize: 11.5,
+          color: AppColors.inkSoft,
+        ),
         secondaryLabelStyle: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w900,
-            fontSize: 11.5,
-            color: AppColors.brandBright),
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w900,
+          fontSize: 11.5,
+          color: AppColors.brandBright,
+        ),
         checkmarkColor: AppColors.brandBright,
         side: BorderSide(color: AppColors.line.withOpacity(0.58), width: 0.7),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.pillR),
@@ -462,14 +500,17 @@ class AppTheme {
         showDragHandle: true,
         dragHandleColor: AppColors.line,
         shape: RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.surfaceRaised,
-        contentTextStyle:
-            TextStyle(color: AppColors.ink, fontWeight: FontWeight.w700),
+        contentTextStyle: TextStyle(
+          color: AppColors.ink,
+          fontWeight: FontWeight.w700,
+        ),
         actionTextColor: AppColors.brandBright,
         behavior: SnackBarBehavior.floating,
         elevation: 0,
@@ -512,10 +553,14 @@ class AppTheme {
         unselectedItemColor: AppColors.inkSoft,
         elevation: 0,
         type: BottomNavigationBarType.fixed,
-        selectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w900, fontSize: 10.5),
-        unselectedLabelStyle:
-            const TextStyle(fontWeight: FontWeight.w700, fontSize: 10.5),
+        selectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 10.5,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 10.5,
+        ),
       ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
@@ -570,7 +615,10 @@ class AppTheme {
           borderRadius: AppRadius.smR,
         ),
         textStyle: TextStyle(
-            color: AppColors.ink, fontSize: 11.5, fontWeight: FontWeight.w700),
+          color: AppColors.ink,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
