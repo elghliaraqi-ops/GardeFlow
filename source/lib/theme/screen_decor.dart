@@ -33,7 +33,7 @@ extension ScreenDecorSceneVisuals on ScreenDecorScene {
       case ScreenDecorScene.onCall:
         return AppColors.urg24h;
       case ScreenDecorScene.practice:
-        return AppColors.cyan;
+        return const Color(0xFF8B6CFF);
       case ScreenDecorScene.news:
         return AppColors.violet;
       case ScreenDecorScene.directory:
@@ -60,7 +60,7 @@ extension ScreenDecorSceneVisuals on ScreenDecorScene {
       case ScreenDecorScene.onCall:
         return Icons.emergency_rounded;
       case ScreenDecorScene.practice:
-        return Icons.medical_services_rounded;
+        return Icons.sports_esports_rounded;
       case ScreenDecorScene.news:
         return Icons.newspaper_rounded;
       case ScreenDecorScene.directory:
@@ -93,7 +93,7 @@ extension ScreenDecorSceneVisuals on ScreenDecorScene {
       case ScreenDecorScene.onCall:
         return Icons.monitor_heart_rounded;
       case ScreenDecorScene.practice:
-        return Icons.medical_information_rounded;
+        return Icons.emoji_events_rounded;
       case ScreenDecorScene.news:
         return Icons.auto_awesome_rounded;
       case ScreenDecorScene.directory:
@@ -164,11 +164,17 @@ class ScreenDecorBackdrop extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  accent.withOpacity(dark ? .13 : .09),
-                  Colors.transparent,
-                  accent.withOpacity(dark ? .055 : .035),
-                ],
+                colors: scene == ScreenDecorScene.practice
+                    ? [
+                        const Color(0xFF8B6CFF).withOpacity(dark ? .20 : .14),
+                        const Color(0xFF3295FF).withOpacity(dark ? .08 : .055),
+                        const Color(0xFF22D985).withOpacity(dark ? .10 : .06),
+                      ]
+                    : [
+                        accent.withOpacity(dark ? .13 : .09),
+                        Colors.transparent,
+                        accent.withOpacity(dark ? .055 : .035),
+                      ],
                 stops: const [0, .52, 1],
               ),
             ),
@@ -224,6 +230,35 @@ class ScreenDecorBackdrop extends StatelessWidget {
                   color: accent.withOpacity(dark ? .08 : .055),
                 ),
               ),
+              if (scene == ScreenDecorScene.practice) ...[
+                Positioned(
+                  top: 172,
+                  right: 18,
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 38,
+                    color: const Color(0xFFFFD166).withOpacity(.10),
+                  ),
+                ),
+                Positioned(
+                  bottom: 178,
+                  right: 26,
+                  child: Icon(
+                    Icons.bolt_rounded,
+                    size: 48,
+                    color: const Color(0xFF5BE7B0).withOpacity(.08),
+                  ),
+                ),
+                Positioned(
+                  bottom: 280,
+                  left: 18,
+                  child: Icon(
+                    Icons.workspace_premium_rounded,
+                    size: 44,
+                    color: const Color(0xFFFF6FAE).withOpacity(.07),
+                  ),
+                ),
+              ],
               if (scene.showLogo)
                 Positioned(
                   right: 18,

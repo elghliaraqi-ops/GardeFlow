@@ -15,13 +15,17 @@ import 'practice_qcm_screen.dart';
 import '../theme/screen_decor.dart';
 
 abstract final class PracticeColors {
-  static const background = Color(0xFF071F18);
-  static const surface = Color(0xFF0E3025);
-  static const elevated = Color(0xFF14392C);
-  static const accent = Color(0xFF22D985);
-  static const text = Color(0xFFF4F8F6);
-  static const textSecondary = Color(0xFFB6CAC0);
-  static const line = Color(0xFF1B4A38);
+  static const background = Color(0xFF071526);
+  static const surface = Color(0xFF10243A);
+  static const elevated = Color(0xFF17314E);
+  static const accent = Color(0xFF5BE7B0);
+  static const gamePurple = Color(0xFF8B6CFF);
+  static const gameBlue = Color(0xFF3295FF);
+  static const gameGold = Color(0xFFFFD166);
+  static const gamePink = Color(0xFFFF6FAE);
+  static const text = Color(0xFFF5F8FF);
+  static const textSecondary = Color(0xFFB9CBE0);
+  static const line = Color(0xFF244B68);
   static const waiting = Color(0xFFF2AD45);
   static const specialist = Color(0xFF5AA8FF);
   static const discharged = Color(0xFF2BC878);
@@ -237,7 +241,14 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
               const SizedBox(height: 20),
-              _sectionLabel('GARDE EN COURS'),
+              _PracticeGameHeader(
+                level: level,
+                xp: _all.xp,
+                streak: _all.streak,
+                unlocked: unlocked,
+              ),
+              const SizedBox(height: 22),
+              _sectionLabel('MISSION EN COURS'),
               const SizedBox(height: 10),
               if (guard == null)
                 _NoGuardCard(
@@ -267,7 +278,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   onEditGoal: _editGoal,
                 ),
               const SizedBox(height: 22),
-              _sectionLabel('VUE D’ENSEMBLE'),
+              _sectionLabel('STATS DE PARTIE'),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -299,7 +310,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const SizedBox(height: 12),
               _LevelCard(level: level, xp: _all.xp, streak: _all.streak),
               const SizedBox(height: 22),
-              _sectionLabel('APPRENTISSAGE QCM'),
+              _sectionLabel('DÉFIS QCM'),
               const SizedBox(height: 10),
               _QcmPracticeCard(
                 stats: _qcmMonth,
@@ -310,7 +321,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ),
               ),
               const SizedBox(height: 22),
-              _sectionLabel('PROGRESSION'),
+              _sectionLabel('LEADERBOARD & SUCCÈS'),
               const SizedBox(height: 10),
               _PracticeActionTile(
                 icon: Icons.emoji_events_rounded,
@@ -348,7 +359,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const SizedBox(height: 16),
               _EncouragementCard(text: _encouragement(guard)),
               const SizedBox(height: 22),
-              _sectionLabel('PRÉFÉRENCES'),
+              _sectionLabel('RÉGLAGES DU PROFIL'),
               const SizedBox(height: 10),
               _LeaderboardPreferenceCard(
                 value: _prefs.leaderboardOptIn,
@@ -477,6 +488,185 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 }
 
+
+class _PracticeGameHeader extends StatelessWidget {
+  final PracticeLevel level;
+  final int xp;
+  final int streak;
+  final int unlocked;
+
+  const _PracticeGameHeader({
+    required this.level,
+    required this.xp,
+    required this.streak,
+    required this.unlocked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 17, 16, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF6B50E8), Color(0xFF226FC6), Color(0xFF0B8F76)],
+          stops: [0, .55, 1],
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withOpacity(.18)),
+        boxShadow: [
+          BoxShadow(
+            color: PracticeColors.gamePurple.withOpacity(.24),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -12,
+            top: -18,
+            child: Icon(
+              Icons.sports_esports_rounded,
+              size: 104,
+              color: Colors.white.withOpacity(.10),
+            ),
+          ),
+          Positioned(
+            right: 72,
+            bottom: -12,
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 42,
+              color: PracticeColors.gameGold.withOpacity(.20),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.14),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.white.withOpacity(.18)),
+                    ),
+                    child: const Icon(
+                      Icons.sports_esports_rounded,
+                      color: PracticeColors.gameGold,
+                      size: 25,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PRACTICE ARENA',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .8,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Documente · apprends · gagne de l’XP',
+                          style: TextStyle(
+                            color: Color(0xFFE9F2FF),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.bolt_rounded,
+                    color: PracticeColors.gameGold,
+                    size: 25,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              Wrap(
+                spacing: 7,
+                runSpacing: 7,
+                children: [
+                  _PracticeGameBadge(
+                    icon: Icons.military_tech_rounded,
+                    label: 'Niveau ${level.number}',
+                    color: PracticeColors.gameGold,
+                  ),
+                  _PracticeGameBadge(
+                    icon: Icons.bolt_rounded,
+                    label: '$xp XP',
+                    color: PracticeColors.accent,
+                  ),
+                  _PracticeGameBadge(
+                    icon: Icons.local_fire_department_rounded,
+                    label: 'Série $streak',
+                    color: PracticeColors.gamePink,
+                  ),
+                  _PracticeGameBadge(
+                    icon: Icons.workspace_premium_rounded,
+                    label: '$unlocked succès',
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PracticeGameBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _PracticeGameBadge({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(.15),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withOpacity(.34)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
 class _QcmPracticeCard extends StatelessWidget {
   final QcmRanks stats;
   final bool loading;
@@ -505,9 +695,26 @@ class _QcmPracticeCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: PracticeColors.surface,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                PracticeColors.gamePurple.withOpacity(.30),
+                PracticeColors.surface,
+                PracticeColors.gameBlue.withOpacity(.16),
+              ],
+            ),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: PracticeColors.line),
+            border: Border.all(
+              color: PracticeColors.gamePurple.withOpacity(.44),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: PracticeColors.gamePurple.withOpacity(.16),
+                blurRadius: 24,
+                offset: Offset(0, 10),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -532,7 +739,7 @@ class _QcmPracticeCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'QCM des cas cliniques',
+                          'Défi QCM · cas cliniques',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 15,
@@ -2832,14 +3039,28 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.11),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(.20)),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF6E56E8),
+              Color(0xFF247FD5),
+              Color(0xFF13A982),
+            ],
+            stops: [0, .54, 1],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(.28)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.10),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
+              color: PracticeColors.gamePurple.withOpacity(.30),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+            BoxShadow(
+              color: PracticeColors.gameBlue.withOpacity(.12),
+              blurRadius: 42,
+              spreadRadius: 2,
             ),
           ],
         ),
@@ -2852,16 +3073,23 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: PracticeColors.accent.withOpacity(.18),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        PracticeColors.gameGold.withOpacity(.30),
+                        Colors.white.withOpacity(.12),
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(13),
                     border: Border.all(
-                      color: PracticeColors.accent.withOpacity(.32),
+                      color: PracticeColors.gameGold.withOpacity(.60),
                     ),
                   ),
                   child: const Icon(
-                    Icons.medical_information_rounded,
-                    color: PracticeColors.accent,
-                    size: 21,
+                    Icons.sports_esports_rounded,
+                    color: PracticeColors.gameGold,
+                    size: 22,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -2880,7 +3108,7 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Suivi de garde · patients documentés',
+                        'MODE JEU · progression clinique',
                         style: TextStyle(
                           color: Color(0xFFDCEBE4),
                           fontSize: 10.5,
@@ -3051,7 +3279,7 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
                       children: [
                         const Icon(
                           Icons.emoji_events_outlined,
-                          color: PracticeColors.accent,
+                          color: PracticeColors.gameGold,
                           size: 17,
                         ),
                         const SizedBox(width: 8),
@@ -3094,7 +3322,7 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: PracticeColors.accent, size: 12),
+        Icon(icon, color: PracticeColors.gameGold, size: 12),
         const SizedBox(width: 4),
         Text(
           label,
@@ -3131,9 +3359,24 @@ class _CurrentGuardCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: PracticeColors.surface,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            PracticeColors.gameBlue.withOpacity(.24),
+            PracticeColors.surface,
+            PracticeColors.gamePurple.withOpacity(.13),
+          ],
+        ),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: PracticeColors.line),
+        border: Border.all(color: PracticeColors.gameBlue.withOpacity(.38)),
+        boxShadow: [
+          BoxShadow(
+            color: PracticeColors.gameBlue.withOpacity(.10),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3150,7 +3393,7 @@ class _CurrentGuardCard extends StatelessWidget {
               ),
               const SizedBox(width: 7),
               const Text(
-                'EN COURS',
+                'MISSION ACTIVE',
                 style: TextStyle(
                   color: PracticeColors.accent,
                   fontSize: 10,
@@ -3345,9 +3588,24 @@ class _LevelCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
-      color: PracticeColors.surface,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          PracticeColors.gamePurple.withOpacity(.26),
+          PracticeColors.surface,
+          PracticeColors.gameBlue.withOpacity(.12),
+        ],
+      ),
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: PracticeColors.line),
+      border: Border.all(color: PracticeColors.gamePurple.withOpacity(.40)),
+      boxShadow: [
+        BoxShadow(
+          color: PracticeColors.gamePurple.withOpacity(.11),
+          blurRadius: 18,
+          offset: Offset(0, 8),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3395,7 +3653,7 @@ class _LevelCard extends StatelessWidget {
           child: LinearProgressIndicator(
             value: level.progressFor(xp),
             minHeight: 8,
-            color: PracticeColors.accent,
+            color: PracticeColors.gameGold,
             backgroundColor: PracticeColors.background,
           ),
         ),
@@ -3427,9 +3685,23 @@ class _StatCard extends StatelessWidget {
     height: 90,
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: PracticeColors.surface,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          PracticeColors.gameBlue.withOpacity(.18),
+          PracticeColors.surface,
+        ],
+      ),
       borderRadius: BorderRadius.circular(17),
-      border: Border.all(color: PracticeColors.line),
+      border: Border.all(color: PracticeColors.gameBlue.withOpacity(.28)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(.10),
+          blurRadius: 12,
+          offset: Offset(0, 6),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3479,9 +3751,16 @@ class _PracticeActionTile extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: PracticeColors.surface,
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              PracticeColors.gamePurple.withOpacity(.15),
+              PracticeColors.surface,
+            ],
+          ),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: PracticeColors.line),
+          border: Border.all(color: PracticeColors.gamePurple.withOpacity(.24)),
         ),
         child: Row(
           children: [
