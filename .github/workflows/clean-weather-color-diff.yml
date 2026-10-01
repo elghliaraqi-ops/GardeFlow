@@ -1,0 +1,180 @@
+name: Clean weather color diff
+
+on:
+  push:
+    branches:
+      - style/color-weather-icons-20261001
+
+permissions:
+  contents: write
+
+jobs:
+  clean-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: style/color-weather-icons-20261001
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Repartir du fichier main et appliquer uniquement les couleurs météo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout origin/main -- source/lib/screens/home_screen.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('source/lib/screens/home_screen.dart')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          simple = re.compile(
+              r"child: Icon\(\n"
+              r"(?P<i>\s+)isNight \? Icons\.nightlight_round : Icons\.wb_sunny_rounded,\n"
+              r"(?P=i)size: 104,\n"
+              r"(?P=i)color: Colors\.white\.withOpacity\(0\.12\),\n"
+              r"\s+\),"
+          )
+
+          def simple_repl(m):
+              i = m.group('i')
+              return (
+                  "child: SizedBox(\n"
+                  f"{i}width: 112,\n"
+                  f"{i}height: 104,\n"
+                  f"{i}child: Stack(\n"
+                  f"{i}  clipBehavior: Clip.none,\n"
+                  f"{i}  children: [\n"
+                  f"{i}    Icon(\n"
+                  f"{i}      isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,\n"
+                  f"{i}      size: 104,\n"
+                  f"{i}      color: isNight\n"
+                  f"{i}          ? const Color(0xFFFFF1B8).withOpacity(0.92)\n"
+                  f"{i}          : const Color(0xFFFFD54F).withOpacity(0.94),\n"
+                  f"{i}    ),\n"
+                  f"{i}    Positioned(\n"
+                  f"{i}      right: -8,\n"
+                  f"{i}      bottom: 7,\n"
+                  f"{i}      child: Icon(\n"
+                  f"{i}        Icons.cloud_rounded,\n"
+                  f"{i}        size: 44,\n"
+                  f"{i}        color: const Color(0xFFE7F5FF).withOpacity(0.84),\n"
+                  f"{i}      ),\n"
+                  f"{i}    ),\n"
+                  f"{i}    Positioned(\n"
+                  f"{i}      right: 24,\n"
+                  f"{i}      bottom: -1,\n"
+                  f"{i}      child: Icon(\n"
+                  f"{i}        Icons.cloud_rounded,\n"
+                  f"{i}        size: 28,\n"
+                  f"{i}        color: const Color(0xFFB9DDF4).withOpacity(0.72),\n"
+                  f"{i}      ),\n"
+                  f"{i}    ),\n"
+                  f"{i}  ],\n"
+                  f"{i}),\n"
+                  f"{i[:-2]}),"
+              )
+
+          text, simple_count = simple.subn(simple_repl, text)
+
+          h24 = re.compile(
+              r"child: Icon\(\n"
+              r"(?P<i>\s+)is24h\n"
+              r"(?P=i)    \? Icons\.brightness_6_rounded\n"
+              r"(?P=i)    : isNight\n"
+              r"(?P=i)        \? Icons\.nightlight_round\n"
+              r"(?P=i)        : Icons\.wb_sunny_rounded,\n"
+              r"(?P=i)size: 102,\n"
+              r"(?P=i)color: Colors\.white\.withOpacity\(0\.12\),\n"
+              r"\s+\),"
+          )
+
+          def h24_repl(m):
+              i = m.group('i')
+              return (
+                  "child: SizedBox(\n"
+                  f"{i}width: 110,\n"
+                  f"{i}height: 102,\n"
+                  f"{i}child: Stack(\n"
+                  f"{i}  clipBehavior: Clip.none,\n"
+                  f"{i}  children: [\n"
+                  f"{i}    Icon(\n"
+                  f"{i}      is24h\n"
+                  f"{i}          ? Icons.brightness_6_rounded\n"
+                  f"{i}          : isNight\n"
+                  f"{i}              ? Icons.nightlight_round\n"
+                  f"{i}              : Icons.wb_sunny_rounded,\n"
+                  f"{i}      size: 102,\n"
+                  f"{i}      color: is24h\n"
+                  f"{i}          ? const Color(0xFFBFE4FF).withOpacity(0.88)\n"
+                  f"{i}          : isNight\n"
+                  f"{i}              ? const Color(0xFFFFF1B8).withOpacity(0.92)\n"
+                  f"{i}              : const Color(0xFFFFD54F).withOpacity(0.94),\n"
+                  f"{i}    ),\n"
+                  f"{i}    Positioned(\n"
+                  f"{i}      right: -8,\n"
+                  f"{i}      bottom: 6,\n"
+                  f"{i}      child: Icon(\n"
+                  f"{i}        Icons.cloud_rounded,\n"
+                  f"{i}        size: 42,\n"
+                  f"{i}        color: const Color(0xFFE7F5FF).withOpacity(0.82),\n"
+                  f"{i}      ),\n"
+                  f"{i}    ),\n"
+                  f"{i}  ],\n"
+                  f"{i}),\n"
+                  f"{i[:-2]}),"
+              )
+
+          text, h24_count = h24.subn(h24_repl, text)
+
+          text, main_count = re.subn(
+              r"child: Icon\(mainIcon, color: Colors\.white, size: 31\),",
+              "child: Icon(\n"
+              "                          mainIcon,\n"
+              "                          color: is24h\n"
+              "                              ? const Color(0xFFBFE4FF)\n"
+              "                              : isNight\n"
+              "                                  ? const Color(0xFFFFF1B8)\n"
+              "                                  : const Color(0xFFFFD54F),\n"
+              "                          size: 31,\n"
+              "                        ),",
+              text,
+          )
+
+          if simple_count != 1 or h24_count != 1 or main_count != 1:
+              raise SystemExit(f'Occurrences inattendues simple={simple_count} h24={h24_count} main={main_count}')
+          if text == original:
+              raise SystemExit('Aucun changement applique')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --stat origin/main -- source/lib/screens/home_screen.dart
+
+      - name: Valider sans reformater le fichier
+        working-directory: source
+        run: |
+          flutter pub get
+          flutter test
+          flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+          flutter build web --release --base-href "/GardeFlow/" --build-name "12.0.0" --build-number "300"
+
+      - name: Nettoyer et committer le diff minimal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- source/pubspec.lock || true
+          rm -f .github/workflows/clean-weather-color-diff.yml
+          git add source/lib/screens/home_screen.dart .github/workflows/clean-weather-color-diff.yml
+          git config user.name "gardeflow-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "style: réduire le diff météo aux icônes colorées"
+          git push origin HEAD:style/color-weather-icons-20261001
