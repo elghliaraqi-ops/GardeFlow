@@ -69,7 +69,7 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
   void _loadIfNeeded() {
     if (!widget.isJunior || widget.profileId.trim().isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ProfileAvatarService.instance.ensureLoaded();
+      ProfileAvatarService.instance.ensureLoaded().catchError((_) {});
     });
   }
 
