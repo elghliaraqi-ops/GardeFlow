@@ -11,7 +11,7 @@ on:
       - 'source/**'
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -20,6 +20,81 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  generate-practice-ui:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify generation request
+        id: request
+        shell: bash
+        run: |
+          if [ -f .github/scripts/move_cases_and_game_qcm.py ] && [ -f .github/scripts/move_cases_trigger.txt ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Flutter
+        if: steps.request.outputs.enabled == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply Practice/cases/QCM changes
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git switch -C generated/practice-cases-qcm-20261001
+          python .github/scripts/move_cases_and_game_qcm.py
+          git diff --check
+
+      - name: Install dependencies
+        if: steps.request.outputs.enabled == 'true'
+        working-directory: source
+        run: flutter pub get
+
+      - name: Run tests
+        if: steps.request.outputs.enabled == 'true'
+        working-directory: source
+        run: flutter test
+
+      - name: Analyze Flutter code
+        if: steps.request.outputs.enabled == 'true'
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Flutter Web release
+        if: steps.request.outputs.enabled == 'true'
+        working-directory: source
+        run: flutter build web --release --base-href "/GardeFlow/" --build-name "12.0.0" --build-number "301"
+
+      - name: Commit and push validated source branch
+        if: steps.request.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- source/pubspec.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            source/lib/screens/home_screen.dart \
+            source/lib/screens/practice_screen.dart \
+            source/lib/screens/practice_qcm_screen.dart \
+            source/lib/screens/clinical_cases_section.dart \
+            source/lib/screens/clinical_cases_screen.dart
+          git diff --cached --check
+          git commit -m "feat: déplacer les cas cliniques dans Practice et gamifier les QCM"
+          git push --force origin generated/practice-cases-qcm-20261001
+
   build-web:
     runs-on: ubuntu-latest
     timeout-minutes: 45
