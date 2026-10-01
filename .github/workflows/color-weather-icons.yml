@@ -34,18 +34,16 @@ jobs:
           text = path.read_text(encoding='utf-8')
           original = text
 
-          # Grand décor jour/nuit : soleil ou lune coloré + deux nuages colorés.
-          pattern_simple = re.compile(
+          simple = re.compile(
               r"child: Icon\(\n"
-              r"(?P<indent>\s+)isNight \? Icons\.nightlight_round : Icons\.wb_sunny_rounded,\n"
-              r"(?P=indent)size: 104,\n"
-              r"(?P=indent)color: Colors\.white\.withOpacity\(0\.12\),\n"
-              r"(?P=indent[:-2])\),"
+              r"(?P<i>\s+)isNight \? Icons\.nightlight_round : Icons\.wb_sunny_rounded,\n"
+              r"(?P=i)size: 104,\n"
+              r"(?P=i)color: Colors\.white\.withOpacity\(0\.12\),\n"
+              r"\s+\),"
           )
 
-          def repl_simple(match):
-              i = match.group('indent')
-              base = i[:-2]
+          def simple_repl(m):
+              i = m.group('i')
               return (
                   "child: SizedBox(\n"
                   f"{i}width: 112,\n"
@@ -80,27 +78,25 @@ jobs:
                   f"{i}    ),\n"
                   f"{i}  ],\n"
                   f"{i}),\n"
-                  f"{base}),"
+                  f"{i[:-2]}),"
               )
 
-          text, simple_count = pattern_simple.subn(repl_simple, text)
+          text, simple_count = simple.subn(simple_repl, text)
 
-          # Décor des cartes JOUR/NUIT/24H : couleur adaptée + nuages colorés.
-          pattern_24h = re.compile(
+          h24 = re.compile(
               r"child: Icon\(\n"
-              r"(?P<indent>\s+)is24h\n"
-              r"(?P=indent)    \? Icons\.brightness_6_rounded\n"
-              r"(?P=indent)    : isNight\n"
-              r"(?P=indent)        \? Icons\.nightlight_round\n"
-              r"(?P=indent)        : Icons\.wb_sunny_rounded,\n"
-              r"(?P=indent)size: 102,\n"
-              r"(?P=indent)color: Colors\.white\.withOpacity\(0\.12\),\n"
-              r"(?P=indent[:-2])\),"
+              r"(?P<i>\s+)is24h\n"
+              r"(?P=i)    \? Icons\.brightness_6_rounded\n"
+              r"(?P=i)    : isNight\n"
+              r"(?P=i)        \? Icons\.nightlight_round\n"
+              r"(?P=i)        : Icons\.wb_sunny_rounded,\n"
+              r"(?P=i)size: 102,\n"
+              r"(?P=i)color: Colors\.white\.withOpacity\(0\.12\),\n"
+              r"\s+\),"
           )
 
-          def repl_24h(match):
-              i = match.group('indent')
-              base = i[:-2]
+          def h24_repl(m):
+              i = m.group('i')
               return (
                   "child: SizedBox(\n"
                   f"{i}width: 110,\n"
@@ -132,12 +128,11 @@ jobs:
                   f"{i}    ),\n"
                   f"{i}  ],\n"
                   f"{i}),\n"
-                  f"{base}),"
+                  f"{i[:-2]}),"
               )
 
-          text, h24_count = pattern_24h.subn(repl_24h, text)
+          text, h24_count = h24.subn(h24_repl, text)
 
-          # Icône principale des cartes de garde : soleil/lune/24h également colorée.
           text, main_count = re.subn(
               r"child: Icon\(mainIcon, color: Colors\.white, size: 31\),",
               "child: Icon(\n"
@@ -185,7 +180,7 @@ jobs:
           rm -f .github/workflows/color-weather-icons.yml
           git add source/lib/screens/home_screen.dart .github/workflows/color-weather-icons.yml
           CHANGED="$(git diff --cached --name-only)"
-          echo "$CHANGED"
+          printf '%s\n' "$CHANGED"
           test "$CHANGED" = $'.github/workflows/color-weather-icons.yml\nsource/lib/screens/home_screen.dart' || \
           test "$CHANGED" = $'source/lib/screens/home_screen.dart\n.github/workflows/color-weather-icons.yml'
           git config user.name "gardeflow-ci"
