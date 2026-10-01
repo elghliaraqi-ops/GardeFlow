@@ -2,11 +2,17 @@ class ProfileAvatarOption {
   final String key;
   final String label;
   final String assetPath;
+  final double circleScale;
+  final double circleOffsetX;
+  final double circleOffsetY;
 
   const ProfileAvatarOption({
     required this.key,
     required this.label,
     required this.assetPath,
+    this.circleScale = 1.0,
+    this.circleOffsetX = 0.0,
+    this.circleOffsetY = 0.0,
   });
 }
 
@@ -15,6 +21,9 @@ const List<ProfileAvatarOption> kProfileAvatarOptions = [
     key: 'avatar_1',
     label: 'Avatar 1',
     assetPath: 'assets/avatars/gamer_doctor_m_01.webp',
+    circleScale: 1.04,
+    circleOffsetX: -0.10,
+    circleOffsetY: 0.06,
   ),
   ProfileAvatarOption(
     key: 'avatar_2',
