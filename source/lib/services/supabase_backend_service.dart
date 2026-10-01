@@ -254,14 +254,25 @@ class SupabaseBackendService {
     return _profileToUser(Map<String, dynamic>.from(row));
   }
 
+  Future<void> setMyAppearanceTheme(String value) async {
+    const allowed = <String>{'green', 'red', 'white', 'black'};
+    if (!allowed.contains(value)) {
+      throw ArgumentError('Thème d’apparence invalide.');
+    }
+    if (client.auth.currentUser == null) {
+      throw StateError('Session Supabase absente.');
+    }
+    await client.rpc('set_my_appearance_theme', params: {'p_theme': value});
+  }
+
   Future<List<AppUser>> fetchVisibleProfiles() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('profiles')
           .select(
-            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number',
+            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,appearance_theme',
           )
           .order('prenom')
           .order('nom')
@@ -321,8 +332,9 @@ class SupabaseBackendService {
 
   Future<int> adminAddInternshipPromotion() async {
     final result = await client.rpc('admin_add_internship_promotion');
-    final value =
-        result is num ? result.toInt() : int.tryParse(result?.toString() ?? '');
+    final value = result is num
+        ? result.toInt()
+        : int.tryParse(result?.toString() ?? '');
     if (value == null || value < 1) {
       throw StateError('La nouvelle promotion n’a pas pu être créée.');
     }
@@ -387,14 +399,17 @@ class SupabaseBackendService {
     required String hospital,
     String? service,
   }) async {
-    await client.from('directory_contacts').update({
-      'category': categoryId,
-      'name': name.trim(),
-      'phone': phone.trim(),
-      'hospital': hospital,
-      'service': (service ?? '').trim().isEmpty ? null : service!.trim(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', id);
+    await client
+        .from('directory_contacts')
+        .update({
+          'category': categoryId,
+          'name': name.trim(),
+          'phone': phone.trim(),
+          'hospital': hospital,
+          'service': (service ?? '').trim().isEmpty ? null : service!.trim(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id);
   }
 
   Future<void> deleteManualDirectoryContact(String id) async {
@@ -402,11 +417,13 @@ class SupabaseBackendService {
   }
 
   AppUser _profileToUser(Map<String, dynamic> j) {
-    final rawGrade = (j['medical_grade'] as String?) ??
+    final rawGrade =
+        (j['medical_grade'] as String?) ??
         (j['fonction'] as String?) ??
         'junior';
-    final grade =
-        rawGrade == 'senior' ? MedicalGrade.senior : MedicalGrade.junior;
+    final grade = rawGrade == 'senior'
+        ? MedicalGrade.senior
+        : MedicalGrade.junior;
     final rawStatus = (j['account_status'] as String?) ?? 'active';
     return AppUser(
       id: j['id'] as String,
@@ -419,6 +436,15 @@ class SupabaseBackendService {
       grade: grade,
       hospital: j['hospital'] as String,
       promotionNumber: (j['promotion_number'] as num?)?.toInt(),
+      appearanceTheme:
+          const <String>{
+            'green',
+            'red',
+            'white',
+            'black',
+          }.contains(j['appearance_theme']?.toString())
+          ? j['appearance_theme'].toString()
+          : 'black',
       role: UserRole.values.byName((j['role'] as String?) ?? 'medecin'),
       accountStatus: AccountStatus.values.byName(rawStatus),
     );
@@ -427,7 +453,7 @@ class SupabaseBackendService {
   Future<List<PlanningEntry>> fetchPlanning() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('planning_entries')
           .select(
@@ -551,7 +577,7 @@ class SupabaseBackendService {
   Future<List<PlanningMonth>> fetchPlanningMonths() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('planning_months')
           .select(
@@ -588,7 +614,7 @@ class SupabaseBackendService {
   Future<List<ExchangeRequest>> fetchExchanges() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('exchange_requests')
           .select(
@@ -626,7 +652,7 @@ class SupabaseBackendService {
   Future<List<LeaveRequest>> fetchLeaveRequests() async {
     const pageSize = 500;
     final allRows = <dynamic>[];
-    for (var offset = 0;; offset += pageSize) {
+    for (var offset = 0; ; offset += pageSize) {
       final rows = await client
           .from('leave_requests')
           .select(
@@ -864,15 +890,17 @@ class SupabaseBackendService {
     final hospitalSlot = hospital == kHospitalBouskoura
         ? 'hm6_bouskoura'
         : hospital == kHospitalRabat
-            ? 'hm6_rabat'
-            : 'hck_casa';
+        ? 'hm6_rabat'
+        : 'hck_casa';
     final ext = _safeExtension(
       fileName,
       fallback: _extensionForMime(mimeType, fallback: 'jpg'),
     );
     final path =
         'astreinte/$hospitalSlot/${uid}_${DateTime.now().microsecondsSinceEpoch}.$ext';
-    await client.storage.from(sharedBucket).uploadBinary(
+    await client.storage
+        .from(sharedBucket)
+        .uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(contentType: mimeType, upsert: false),
@@ -905,7 +933,9 @@ class SupabaseBackendService {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
     final path = 'official/$slot.pdf';
-    await client.storage.from(sharedBucket).uploadBinary(
+    await client.storage
+        .from(sharedBucket)
+        .uploadBinary(
           path,
           bytes,
           fileOptions: const FileOptions(
