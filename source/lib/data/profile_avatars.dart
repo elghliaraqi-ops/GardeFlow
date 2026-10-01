@@ -50,3 +50,8 @@ ProfileAvatarOption? profileAvatarByKey(String? key) {
   }
   return null;
 }
+
+bool isProfileAvatarKeyAllowed(String? key) {
+  if (key == null || key.trim().isEmpty) return true;
+  return profileAvatarByKey(key) != null;
+}
