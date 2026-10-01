@@ -809,7 +809,6 @@ class _DashboardView extends StatelessWidget {
                         letterSpacing: -0.7,
                       ),
                     ),
-                    PracticeHomeSummary(appState: appState, user: me),
                     SizedBox(height: 12),
                     Row(
                       children: [
@@ -823,7 +822,7 @@ class _DashboardView extends StatelessWidget {
                         SizedBox(width: 7),
                         Expanded(
                           child: Text(
-                            'On est le $dateLabel, il est $timeLabel',
+                            '$dateLabel · $timeLabel',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.90),
                               fontSize: 13.5,
@@ -834,52 +833,46 @@ class _DashboardView extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: 17),
+                    SizedBox(height: 14),
                     Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                      padding: EdgeInsets.symmetric(horizontal: 13, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.13),
                         borderRadius: BorderRadius.circular(14),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.14)),
+                        border: Border.all(color: Colors.white.withOpacity(0.14)),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.calendar_month_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              SizedBox(width: 7),
-                              Text(
-                                '$monthlyCount garde${monthlyCount > 1 ? 's' : ''} au total ce mois',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
+                          Icon(
+                            Icons.calendar_month_rounded,
+                            color: Colors.white,
+                            size: 18,
                           ),
-                          SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              _MonthlyGuardChip(
-                                label: 'Urgences',
-                                value: urgenceMonthlyCount,
+                          SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              '$monthlyCount garde${monthlyCount > 1 ? 's' : ''} ce mois',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w900,
                               ),
-                              _MonthlyGuardChip(
-                                label: 'Service',
-                                value: serviceMonthlyCount,
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Urg. $urgenceMonthlyCount · Serv. $serviceMonthlyCount',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.90),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
@@ -889,7 +882,8 @@ class _DashboardView extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(height: 24),
+          PracticeHomeSummary(appState: appState, user: me),
+          SizedBox(height: 20),
           Text(
             'Prochaine garde à venir',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
