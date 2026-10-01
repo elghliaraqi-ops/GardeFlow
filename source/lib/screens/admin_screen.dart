@@ -17,6 +17,7 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'audit_screen.dart';
 import 'notifications_screen.dart';
+import '../theme/screen_decor.dart';
 
 const String _kAllHospitals = '__all_hospitals__';
 
@@ -100,7 +101,7 @@ class _AdminScreenState extends State<AdminScreen> {
             _visibleMonth.month,
           );
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.admin, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Gestion des gardes'),

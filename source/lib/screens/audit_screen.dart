@@ -5,6 +5,7 @@ import '../models/audit_event.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class AuditScreen extends StatefulWidget {
   const AuditScreen({super.key});
@@ -61,7 +62,7 @@ class _AuditScreenState extends State<AuditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.audit, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Journal des actions'),

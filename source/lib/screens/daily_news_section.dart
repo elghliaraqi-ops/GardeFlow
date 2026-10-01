@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/screen_decor.dart';
 
 class DailyNewsSection extends StatefulWidget {
   final Key? verticalFeedKey;
@@ -411,58 +412,47 @@ class _DailyNewsSectionState extends State<DailyNewsSection> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 39,
-                  height: 39,
-                  decoration: BoxDecoration(
-                    color: AppColors.brandSoft,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Icon(
-                    Icons.newspaper_rounded,
-                    color: AppColors.brand,
-                    size: 21,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Actualités du jour',
-                    style: TextStyle(
-                      fontFamily: 'SpaceGrotesk',
-                      color: AppColors.ink,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.35,
+            DecorSectionBanner(
+              scene: ScreenDecorScene.news,
+              title: 'ACTUALITÉS DU JOUR',
+              subtitle: 'La vie des hôpitaux, de l’UM6SS et de l’AMI UM6',
+              icon: Icons.newspaper_rounded,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_isAdmin) ...[
+                    DecorIconAction(
+                      icon: Icons.add_rounded,
+                      tooltip: 'Publier une actualité',
+                      onTap: _showPublishSheet,
                     ),
-                  ),
-                ),
-                if (_isAdmin)
-                  IconButton(
-                    onPressed: _showPublishSheet,
-                    tooltip: 'Publier une actualité',
-                    icon: const Icon(Icons.add_circle_outline_rounded),
-                  ),
-                IconButton(
-                  onPressed:
-                      snapshot.connectionState == ConnectionState.waiting ||
-                          _refreshing
-                      ? null
-                      : _reload,
-                  tooltip: _refreshing
-                      ? 'Actualisation…'
-                      : 'Actualiser les actualités',
-                  icon: _refreshing
-                      ? const SizedBox(
+                    const SizedBox(width: 6),
+                  ],
+                  if (_refreshing)
+                    const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Center(
+                        child: SizedBox(
                           width: 19,
                           height: 19,
-                          child: CircularProgressIndicator(strokeWidth: 2.2),
-                        )
-                      : const Icon(Icons.refresh_rounded),
-                ),
-              ],
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    DecorIconAction(
+                      icon: Icons.refresh_rounded,
+                      tooltip: 'Actualiser les actualités',
+                      onTap: snapshot.connectionState == ConnectionState.waiting
+                          ? null
+                          : _reload,
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 13),
             if (snapshot.connectionState == ConnectionState.waiting &&

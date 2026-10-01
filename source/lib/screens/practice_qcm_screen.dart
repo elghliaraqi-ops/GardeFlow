@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/qcm_models.dart';
 import '../services/clinical_case_service.dart';
+import '../theme/screen_decor.dart';
 
 class PracticeQcmScreen extends StatefulWidget {
   const PracticeQcmScreen({super.key});
@@ -66,7 +67,7 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
   @override
   Widget build(BuildContext context) {
     final rank = _promotionOnly ? _ranks.promotionRank : _ranks.globalRank;
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.practice, 
       backgroundColor: _bg,
       appBar: AppBar(
         backgroundColor: _bg,

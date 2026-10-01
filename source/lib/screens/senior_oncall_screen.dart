@@ -11,6 +11,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'astreinte_screen.dart';
+import '../theme/screen_decor.dart';
 
 class SeniorOnCallScreen extends StatefulWidget {
   final bool embedded;
@@ -277,8 +278,9 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.embedded) {
-      return ColoredBox(
-        color: AppColors.paper,
+      return ScreenDecorBackdrop(
+        scene: ScreenDecorScene.onCall,
+        baseColor: AppColors.paper,
         child: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
@@ -383,7 +385,7 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
       ],
     );
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.onCall, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Astreintes Séniors'),

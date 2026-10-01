@@ -6,6 +6,7 @@ import '../services/notification_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool reminderFocus;
@@ -295,7 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final delays = [...appState.reminderDelays]
       ..sort((a, b) => b.compareTo(a));
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.settings, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Rappels de garde'),

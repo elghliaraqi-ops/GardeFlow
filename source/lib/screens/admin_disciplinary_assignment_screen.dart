@@ -8,6 +8,7 @@ import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class AdminDisciplinaryAssignmentScreen extends StatefulWidget {
   final String? initialDoctorId;
@@ -256,7 +257,7 @@ class _AdminDisciplinaryAssignmentScreenState
     final state = context.watch<AppState>();
     final me = state.currentUser;
     if (me?.role != UserRole.admin) {
-      return Scaffold(
+      return DecorScaffold(scene: ScreenDecorScene.admin, 
         backgroundColor: AppColors.paper,
         appBar: AppBar(title: const Text('Gardes disciplinaires')),
         body: const Center(child: Text('Accès administrateur requis.')),
@@ -282,7 +283,7 @@ class _AdminDisciplinaryAssignmentScreenState
         ? null
         : allDoctors.where((u) => u.id == _doctorId).firstOrNull;
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.admin, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         backgroundColor: AppColors.paper,

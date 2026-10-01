@@ -8,6 +8,7 @@ import '../models/directory_contact.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 const String _kAllHospitals = 'all';
 const String _kAllCategories = 'all';
@@ -292,7 +293,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       );
     }
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.directory, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(title: GardeFlowTitle('Annuaire')),
       floatingActionButton: isAdmin

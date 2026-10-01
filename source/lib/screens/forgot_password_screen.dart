@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 
 import '../services/supabase_backend_service.dart';
 import '../widgets/brand_identity.dart';
+import '../theme/screen_decor.dart';
 
 Color get _recoveryGreen => AppColors.brand;
 Color get _recoveryGreenDark => AppColors.brandDark;
@@ -86,7 +87,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.auth, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         backgroundColor: AppColors.paper,

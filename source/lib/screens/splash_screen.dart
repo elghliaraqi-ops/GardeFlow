@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'auth_screen.dart';
 import 'home_screen.dart';
+import '../theme/screen_decor.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -40,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: _goNext,
-      child: Scaffold(
+      child: DecorScaffold(scene: ScreenDecorScene.splash, 
         backgroundColor: AppColors.paper,
         body: Stack(
           fit: StackFit.expand,

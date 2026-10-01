@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class ApplicationSettingsScreen extends StatelessWidget {
   const ApplicationSettingsScreen({super.key});
@@ -28,7 +29,7 @@ class ApplicationSettingsScreen extends StatelessWidget {
       );
     }
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.settings, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Réglages de l’application'),

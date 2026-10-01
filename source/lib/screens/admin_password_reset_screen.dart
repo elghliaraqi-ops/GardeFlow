@@ -4,6 +4,7 @@ import '../models/app_user.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class AdminPasswordResetScreen extends StatefulWidget {
   final String? initialUserId;
@@ -434,7 +435,7 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
   @override
   Widget build(BuildContext context) {
     final rows = _filtered;
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.admin, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(title: GardeFlowTitle('Gestion des comptes')),
       body: SafeArea(

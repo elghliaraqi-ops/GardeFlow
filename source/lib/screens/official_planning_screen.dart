@@ -15,6 +15,7 @@ import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class OfficialPlanningScreen extends StatefulWidget {
   const OfficialPlanningScreen({super.key});
@@ -404,7 +405,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
   Widget build(BuildContext context) {
     final currentUser = context.watch<AppState>().currentUser;
     final isAdmin = currentUser?.role == UserRole.admin;
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.planning, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Planning de Garde Officiel'),
@@ -876,7 +877,7 @@ class _OfficialPdfViewerScreenState extends State<_OfficialPdfViewerScreen> {
             ? 'Aucun résultat'
             : '${(currentIndex ?? 0) + 1}/$matchCount';
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.planning, 
       backgroundColor: const Color(0xFF202226),
       appBar: AppBar(
         titleSpacing: 8,
