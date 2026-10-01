@@ -86,12 +86,24 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
         final key = ProfileAvatarService.instance.avatarKeyFor(widget.profileId);
         final option = profileAvatarByKey(key);
         if (option == null) return _initialsAvatar();
+
+        final size = widget.radius * 2;
         return SizedBox.square(
-          dimension: widget.radius * 2,
+          dimension: size,
           child: ClipOval(
             child: ColoredBox(
               color: widget.backgroundColor,
-              child: ProfileAvatarArtwork(option: option, fit: widget.fit),
+              child: Transform.translate(
+                offset: Offset(
+                  widget.radius * option.circleOffsetX,
+                  widget.radius * option.circleOffsetY,
+                ),
+                child: Transform.scale(
+                  scale: option.circleScale,
+                  alignment: Alignment.center,
+                  child: ProfileAvatarArtwork(option: option, fit: widget.fit),
+                ),
+              ),
             ),
           ),
         );
