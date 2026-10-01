@@ -377,7 +377,9 @@ class DecorScaffold extends StatelessWidget {
       baseColor: backgroundColor ?? AppColors.paper,
       child: Scaffold(
         appBar: appBar,
-        body: body,
+        body: body == null
+            ? null
+            : _DecorForeground(scene: scene, child: body!),
         floatingActionButton: floatingActionButton,
         floatingActionButtonLocation: floatingActionButtonLocation,
         floatingActionButtonAnimator: floatingActionButtonAnimator,
@@ -401,6 +403,55 @@ class DecorScaffold extends StatelessWidget {
         endDrawerEnableOpenDragGesture: endDrawerEnableOpenDragGesture,
         restorationId: restorationId,
       ),
+    );
+  }
+}
+
+class _DecorForeground extends StatelessWidget {
+  final ScreenDecorScene scene;
+  final Widget child;
+
+  const _DecorForeground({required this.scene, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = scene.accent;
+    final dark = AppColors.isDarkMode;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        IgnorePointer(
+          child: Stack(
+            children: [
+              Positioned(
+                right: -26,
+                top: 18,
+                child: Transform.rotate(
+                  angle: -.13,
+                  child: Icon(
+                    scene.primaryIcon,
+                    size: 112,
+                    color: accent.withOpacity(dark ? .045 : .032),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: -18,
+                bottom: 54,
+                child: Transform.rotate(
+                  angle: .15,
+                  child: Icon(
+                    scene.secondaryIcon,
+                    size: 82,
+                    color: accent.withOpacity(dark ? .034 : .026),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

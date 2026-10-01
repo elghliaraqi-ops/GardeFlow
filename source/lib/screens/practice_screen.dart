@@ -218,8 +218,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
     final guard = _currentGuard;
     final level = practiceLevelForXp(_all.xp);
     final unlocked = _achievements.where((a) => a.unlocked).length;
-    return ColoredBox(
-      color: PracticeColors.background,
+    return ScreenDecorBackdrop(
+      scene: ScreenDecorScene.practice,
+      baseColor: PracticeColors.background,
       child: SafeArea(
         top: false,
         child: RefreshIndicator(

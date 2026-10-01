@@ -292,8 +292,9 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
     final theme = Theme.of(context);
 
     if (widget.embedded) {
-      return ColoredBox(
-        color: theme.scaffoldBackgroundColor,
+      return ScreenDecorBackdrop(
+        scene: ScreenDecorScene.onCall,
+        baseColor: theme.scaffoldBackgroundColor,
         child: RefreshIndicator(
           onRefresh: _load,
           child: ListView(

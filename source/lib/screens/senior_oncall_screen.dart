@@ -278,8 +278,9 @@ class _SeniorOnCallScreenState extends State<SeniorOnCallScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.embedded) {
-      return ColoredBox(
-        color: AppColors.paper,
+      return ScreenDecorBackdrop(
+        scene: ScreenDecorScene.onCall,
+        baseColor: AppColors.paper,
         child: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
