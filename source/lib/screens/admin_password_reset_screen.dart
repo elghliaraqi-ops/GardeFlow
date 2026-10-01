@@ -4,6 +4,7 @@ import '../models/app_user.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../widgets/profile_avatar.dart';
 import '../theme/screen_decor.dart';
 
 class AdminPasswordResetScreen extends StatefulWidget {
@@ -547,19 +548,13 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
                           return AppCard(
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: CircleAvatar(
+                              leading: ProfileAvatar(
+                                profileId: profile.id,
+                                initials: profile.initials,
+                                isJunior: profile.grade == MedicalGrade.junior,
+                                radius: 20,
                                 backgroundColor: AppColors.paperAlt,
-                                child: Text(
-                                  profile.fullName.isEmpty
-                                      ? '?'
-                                      : profile.fullName
-                                            .trim()[0]
-                                            .toUpperCase(),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.ink,
-                                  ),
-                                ),
+                                foregroundColor: AppColors.ink,
                               ),
                               title: Text(
                                 profile.fullName,
