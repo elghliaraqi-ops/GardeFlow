@@ -1,0 +1,689 @@
+name: Apply Practice Hub Refactor
+
+on:
+  push:
+    branches:
+      - ux/practice-hub-v12
+    paths:
+      - .github/workflows/apply-practice-hub.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-practice:
+    if: github.event.head_commit.message == 'chore: stage practice hub refactor'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ux/practice-hub-v12
+          fetch-depth: 0
+
+      - name: Apply Practice hub redesign
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('source/lib/screens/practice_screen.dart')
+          text = path.read_text(encoding='utf-8')
+
+          state_start = text.index('class _PracticeScreenState extends State<PracticeScreen> {')
+          build_start = text.index('  @override\n  Widget build(BuildContext context) {', state_start)
+          rank_start = text.index('  String _rankSubtitle', build_start)
+
+          new_build = r'''  @override
+  Widget build(BuildContext context) {
+    final guard = _currentGuard;
+    final level = practiceLevelForXp(_all.xp);
+    final unlocked = _achievements.where((a) => a.unlocked).length;
+    final rankLabel = !_ranks.leaderboardOptIn
+        ? 'Désactivé'
+        : _ranks.promotionRank != null
+            ? '#${_ranks.promotionRank} promo'
+            : 'Ouvrir';
+
+    return ScreenDecorBackdrop(
+      scene: ScreenDecorScene.practice,
+      baseColor: PracticeColors.background,
+      child: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          color: PracticeColors.accent,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
+            children: [
+              _PracticeGameHeader(
+                level: level,
+                xp: _all.xp,
+                streak: _all.streak,
+                unlocked: unlocked,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
+              ],
+              const SizedBox(height: 18),
+              const _PracticeHubSectionHeader(
+                icon: Icons.emergency_rounded,
+                title: 'Mission de garde',
+                subtitle: 'Accès rapide au suivi des patients pendant la garde',
+              ),
+              const SizedBox(height: 9),
+              if (guard == null)
+                _NoGuardCard(
+                  onHistory: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          PracticeGuardScreen(appState: widget.appState),
+                    ),
+                  ),
+                )
+              else
+                _CurrentGuardCard(
+                  guard: guard,
+                  stats: _guard,
+                  goal: _prefs.guardGoal,
+                  onNewCase: _newCase,
+                  onOpenGuard: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PracticeGuardScreen(
+                        appState: widget.appState,
+                        guard: guard,
+                      ),
+                    ),
+                  ),
+                  onEditGoal: _editGoal,
+                ),
+              const SizedBox(height: 9),
+              _EncouragementCard(text: _encouragement(guard)),
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.sports_esports_rounded,
+                title: 'S’entraîner',
+                subtitle: 'Cas cliniques et QCM accessibles sans détour',
+              ),
+              const SizedBox(height: 9),
+              _PracticeHubTrainingGrid(
+                casesCard: _ClinicalCasesGameCard(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ClinicalCasesScreen(),
+                    ),
+                  ),
+                ),
+                qcmCard: _QcmPracticeCard(
+                  stats: _qcmMonth,
+                  loading: _loading,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PracticeQcmScreen(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.insights_rounded,
+                title: 'Progression',
+                subtitle: 'Les chiffres utiles regroupés au même endroit',
+              ),
+              const SizedBox(height: 9),
+              _PracticeHubProgressPanel(
+                month: _month,
+                year: _year,
+                all: _all,
+                level: level,
+                loading: _loading,
+              ),
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.account_circle_rounded,
+                title: 'Mon profil Practice',
+                subtitle: 'Classement, succès et progression annuelle',
+              ),
+              const SizedBox(height: 9),
+              _PracticeHubQuickActions(
+                rankLabel: rankLabel,
+                achievementLabel: '$unlocked/${_achievements.length}',
+                yearLabel: '${_year.patients} patients',
+                onLeaderboard: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PracticeLeaderboardScreen(appState: widget.appState),
+                  ),
+                ),
+                onAchievements: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PracticeAchievementsScreen(appState: widget.appState),
+                  ),
+                ),
+                onProgression: () => _showProgression(context),
+              ),
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.tune_rounded,
+                title: 'Préférences',
+                subtitle: 'Réglages du profil et visibilité au classement',
+              ),
+              const SizedBox(height: 9),
+              _LeaderboardPreferenceCard(
+                value: _prefs.leaderboardOptIn,
+                onChanged: (value) async {
+                  setState(
+                    () => _prefs = PracticePreferences(
+                      leaderboardOptIn: value,
+                      guardGoal: _prefs.guardGoal,
+                    ),
+                  );
+                  await _service.savePreferences(
+                    leaderboardOptIn: value,
+                    guardGoal: _prefs.guardGoal,
+                  );
+                  await _load(silent: true);
+                },
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Les classements Practice et QCM reflètent uniquement l’activité documentée et les exercices pédagogiques. Ils ne mesurent pas la compétence clinique ni la qualité des soins.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 10.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+'''
+
+          text = text[:build_start] + new_build + text[rank_start:]
+
+          header_start = text.index('class _PracticeGameHeader extends StatelessWidget {')
+          badge_start = text.index('class _PracticeGameBadge extends StatelessWidget {', header_start)
+
+          hub_widgets = r'''class _PracticeHubSectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _PracticeHubSectionHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: PracticeColors.accent.withOpacity(.10),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: PracticeColors.accent.withOpacity(.16)),
+          ),
+          child: Icon(icon, color: PracticeColors.accent, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 10.5,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PracticeHubTrainingGrid extends StatelessWidget {
+  final Widget casesCard;
+  final Widget qcmCard;
+
+  const _PracticeHubTrainingGrid({
+    required this.casesCard,
+    required this.qcmCard,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 720) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: casesCard),
+              const SizedBox(width: 10),
+              Expanded(child: qcmCard),
+            ],
+          );
+        }
+        return Column(
+          children: [
+            casesCard,
+            const SizedBox(height: 10),
+            qcmCard,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PracticeHubProgressPanel extends StatelessWidget {
+  final PracticeStats month;
+  final PracticeStats year;
+  final PracticeStats all;
+  final PracticeLevel level;
+  final bool loading;
+
+  const _PracticeHubProgressPanel({
+    required this.month,
+    required this.year,
+    required this.all,
+    required this.level,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: PracticeColors.surface.withOpacity(.86),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: PracticeColors.line.withOpacity(.72)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  value: '${month.patients}',
+                  label: 'Ce mois',
+                  loading: loading,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _StatCard(
+                  value: '${year.patients}',
+                  label: 'Cette année',
+                  loading: loading,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _StatCard(
+                  value: '${all.patients}',
+                  label: 'Total',
+                  loading: loading,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          _LevelCard(level: level, xp: all.xp, streak: all.streak),
+        ],
+      ),
+    );
+  }
+}
+
+class _PracticeHubQuickActions extends StatelessWidget {
+  final String rankLabel;
+  final String achievementLabel;
+  final String yearLabel;
+  final VoidCallback onLeaderboard;
+  final VoidCallback onAchievements;
+  final VoidCallback onProgression;
+
+  const _PracticeHubQuickActions({
+    required this.rankLabel,
+    required this.achievementLabel,
+    required this.yearLabel,
+    required this.onLeaderboard,
+    required this.onAchievements,
+    required this.onProgression,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _PracticeHubAction(
+            icon: Icons.emoji_events_rounded,
+            title: 'Classement',
+            detail: rankLabel,
+            accent: PracticeColors.gameGold,
+            onTap: onLeaderboard,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PracticeHubAction(
+            icon: Icons.workspace_premium_rounded,
+            title: 'Succès',
+            detail: achievementLabel,
+            accent: PracticeColors.gamePurple,
+            onTap: onAchievements,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PracticeHubAction(
+            icon: Icons.insights_rounded,
+            title: 'Année',
+            detail: yearLabel,
+            accent: PracticeColors.gameBlue,
+            onTap: onProgression,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PracticeHubAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String detail;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _PracticeHubAction({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          constraints: const BoxConstraints(minHeight: 102),
+          padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+          decoration: BoxDecoration(
+            color: PracticeColors.surface.withOpacity(.90),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: PracticeColors.line.withOpacity(.72)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: accent, size: 18),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PracticeGameHeader extends StatelessWidget {
+  final PracticeLevel level;
+  final int xp;
+  final int streak;
+  final int unlocked;
+
+  const _PracticeGameHeader({
+    required this.level,
+    required this.xp,
+    required this.streak,
+    required this.unlocked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = level.progressFor(xp);
+    final xpIntoLevel = level.xpIntoLevel(xp);
+    final xpForLevel = level.xpForLevel;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF5D47D8), Color(0xFF1D5AA4), Color(0xFF087B6D)],
+          stops: [0, .58, 1],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(.14)),
+        boxShadow: [
+          BoxShadow(
+            color: PracticeColors.gamePurple.withOpacity(.18),
+            blurRadius: 22,
+            offset: const Offset(0, 9),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -8,
+            top: -14,
+            child: Icon(
+              Icons.sports_esports_rounded,
+              size: 82,
+              color: Colors.white.withOpacity(.07),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 43,
+                    height: 43,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.13),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(.14)),
+                    ),
+                    child: const Icon(
+                      Icons.bolt_rounded,
+                      color: PracticeColors.gameGold,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'PRACTICE',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .8,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Niveau ${level.number} · ${level.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(.83),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$xp XP',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 13),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 7,
+                  backgroundColor: Colors.black.withOpacity(.18),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    PracticeColors.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$xpIntoLevel / $xpForLevel XP vers le prochain niveau',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(.72),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _PracticeGameBadge(
+                    icon: Icons.local_fire_department_rounded,
+                    label: 'Série $streak',
+                    color: PracticeColors.gamePink,
+                  ),
+                  const SizedBox(width: 6),
+                  _PracticeGameBadge(
+                    icon: Icons.workspace_premium_rounded,
+                    label: '$unlocked',
+                    color: PracticeColors.gameGold,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+'''
+
+          text = text[:header_start] + hub_widgets + text[badge_start:]
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify patch scope
+        shell: bash
+        run: |
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "source/lib/screens/practice_screen.dart"
+          ! grep -Eq 'FontWeight\.w(650|750|850)' source/lib/screens/practice_screen.dart
+
+      - name: Commit refactor and remove one-off workflow
+        shell: bash
+        run: |
+          git config user.name "elghliaraqi-ops"
+          git config user.email "elghliaraqi@gmail.com"
+          git add source/lib/screens/practice_screen.dart
+          git rm .github/workflows/apply-practice-hub.yml
+          git commit -m "feat: redesign Practice hub layout"
+          git push origin HEAD:ux/practice-hub-v12
