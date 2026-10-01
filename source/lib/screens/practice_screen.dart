@@ -224,6 +224,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
     final guard = _currentGuard;
     final level = practiceLevelForXp(_all.xp);
     final unlocked = _achievements.where((a) => a.unlocked).length;
+    final rankLabel = !_ranks.leaderboardOptIn
+        ? 'Désactivé'
+        : _ranks.promotionRank != null
+        ? '#${_ranks.promotionRank} promo'
+        : 'Ouvrir';
+
     return ScreenDecorBackdrop(
       scene: ScreenDecorScene.practice,
       baseColor: PracticeColors.background,
@@ -236,22 +242,25 @@ class _PracticeScreenState extends State<PracticeScreen> {
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 34),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
             children: [
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
-              ],
-              const SizedBox(height: 20),
               _PracticeGameHeader(
                 level: level,
                 xp: _all.xp,
                 streak: _all.streak,
                 unlocked: unlocked,
               ),
-              const SizedBox(height: 22),
-              _sectionLabel('MISSION EN COURS'),
-              const SizedBox(height: 10),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
+              ],
+              const SizedBox(height: 18),
+              const _PracticeHubSectionHeader(
+                icon: Icons.emergency_rounded,
+                title: 'Mission de garde',
+                subtitle: 'Accès rapide au suivi des patients pendant la garde',
+              ),
+              const SizedBox(height: 9),
               if (guard == null)
                 _NoGuardCard(
                   onHistory: () => Navigator.push(
@@ -279,99 +288,83 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                   onEditGoal: _editGoal,
                 ),
-              const SizedBox(height: 22),
-              _sectionLabel('STATS DE PARTIE'),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      value: '${_month.patients}',
-                      label: 'Ce mois',
-                      loading: _loading,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _StatCard(
-                      value: '${_year.patients}',
-                      label: 'Cette année',
-                      loading: _loading,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _StatCard(
-                      value: '${_all.patients}',
-                      label: 'Total',
-                      loading: _loading,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 9),
+              _EncouragementCard(text: _encouragement(guard)),
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.sports_esports_rounded,
+                title: 'S’entraîner',
+                subtitle: 'Cas cliniques et QCM accessibles sans détour',
               ),
-              const SizedBox(height: 12),
-              _LevelCard(level: level, xp: _all.xp, streak: _all.streak),
-              const SizedBox(height: 22),
-              _sectionLabel('CAS CLINIQUES'),
-              const SizedBox(height: 10),
-              _ClinicalCasesGameCard(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ClinicalCasesScreen()),
+              const SizedBox(height: 9),
+              _PracticeHubTrainingGrid(
+                casesCard: _ClinicalCasesGameCard(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ClinicalCasesScreen(),
+                    ),
+                  ),
+                ),
+                qcmCard: _QcmPracticeCard(
+                  stats: _qcmMonth,
+                  loading: _loading,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PracticeQcmScreen(),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 22),
-              _sectionLabel('DÉFIS QCM'),
-              const SizedBox(height: 10),
-              _QcmPracticeCard(
-                stats: _qcmMonth,
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.insights_rounded,
+                title: 'Progression',
+                subtitle: 'Les chiffres utiles regroupés au même endroit',
+              ),
+              const SizedBox(height: 9),
+              _PracticeHubProgressPanel(
+                month: _month,
+                year: _year,
+                all: _all,
+                level: level,
                 loading: _loading,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PracticeQcmScreen()),
-                ),
               ),
-              const SizedBox(height: 22),
-              _sectionLabel('LEADERBOARD & SUCCÈS'),
-              const SizedBox(height: 10),
-              _PracticeActionTile(
-                icon: Icons.emoji_events_rounded,
-                title: 'Classement Practice',
-                subtitle: _rankSubtitle(_ranks),
-                onTap: () => Navigator.push(
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.account_circle_rounded,
+                title: 'Mon profil Practice',
+                subtitle: 'Classement, succès et progression annuelle',
+              ),
+              const SizedBox(height: 9),
+              _PracticeHubQuickActions(
+                rankLabel: rankLabel,
+                achievementLabel: '$unlocked/${_achievements.length}',
+                yearLabel: '${_year.patients} patients',
+                onLeaderboard: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) =>
                         PracticeLeaderboardScreen(appState: widget.appState),
                   ),
                 ),
-              ),
-              const SizedBox(height: 9),
-              _PracticeActionTile(
-                icon: Icons.workspace_premium_rounded,
-                title: 'Succès',
-                subtitle:
-                    '$unlocked / ${_achievements.length} succès débloqués',
-                onTap: () => Navigator.push(
+                onAchievements: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) =>
                         PracticeAchievementsScreen(appState: widget.appState),
                   ),
                 ),
+                onProgression: () => _showProgression(context),
+              ),
+              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.tune_rounded,
+                title: 'Préférences',
+                subtitle: 'Réglages du profil et visibilité au classement',
               ),
               const SizedBox(height: 9),
-              _PracticeActionTile(
-                icon: Icons.insights_rounded,
-                title: 'Progression annuelle',
-                subtitle: '${_year.patients} patients documentés cette année',
-                onTap: () => _showProgression(context),
-              ),
-              const SizedBox(height: 16),
-              _EncouragementCard(text: _encouragement(guard)),
-              const SizedBox(height: 22),
-              _sectionLabel('RÉGLAGES DU PROFIL'),
-              const SizedBox(height: 10),
               _LeaderboardPreferenceCard(
                 value: _prefs.leaderboardOptIn,
                 onChanged: (value) async {
@@ -388,7 +381,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   await _load(silent: true);
                 },
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 14),
               const Text(
                 'Les classements Practice et QCM reflètent uniquement l’activité documentée et les exercices pédagogiques. Ils ne mesurent pas la compétence clinique ni la qualité des soins.',
                 textAlign: TextAlign.center,
@@ -499,6 +492,283 @@ class _PracticeScreenState extends State<PracticeScreen> {
   }
 }
 
+class _PracticeHubSectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _PracticeHubSectionHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: PracticeColors.accent.withOpacity(.10),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: PracticeColors.accent.withOpacity(.16)),
+          ),
+          child: Icon(icon, color: PracticeColors.accent, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 10.5,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PracticeHubTrainingGrid extends StatelessWidget {
+  final Widget casesCard;
+  final Widget qcmCard;
+
+  const _PracticeHubTrainingGrid({
+    required this.casesCard,
+    required this.qcmCard,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 720) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: casesCard),
+              const SizedBox(width: 10),
+              Expanded(child: qcmCard),
+            ],
+          );
+        }
+        return Column(
+          children: [casesCard, const SizedBox(height: 10), qcmCard],
+        );
+      },
+    );
+  }
+}
+
+class _PracticeHubProgressPanel extends StatelessWidget {
+  final PracticeStats month;
+  final PracticeStats year;
+  final PracticeStats all;
+  final PracticeLevel level;
+  final bool loading;
+
+  const _PracticeHubProgressPanel({
+    required this.month,
+    required this.year,
+    required this.all,
+    required this.level,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: PracticeColors.surface.withOpacity(.86),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: PracticeColors.line.withOpacity(.72)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  value: '${month.patients}',
+                  label: 'Ce mois',
+                  loading: loading,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _StatCard(
+                  value: '${year.patients}',
+                  label: 'Cette année',
+                  loading: loading,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: _StatCard(
+                  value: '${all.patients}',
+                  label: 'Total',
+                  loading: loading,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          _LevelCard(level: level, xp: all.xp, streak: all.streak),
+        ],
+      ),
+    );
+  }
+}
+
+class _PracticeHubQuickActions extends StatelessWidget {
+  final String rankLabel;
+  final String achievementLabel;
+  final String yearLabel;
+  final VoidCallback onLeaderboard;
+  final VoidCallback onAchievements;
+  final VoidCallback onProgression;
+
+  const _PracticeHubQuickActions({
+    required this.rankLabel,
+    required this.achievementLabel,
+    required this.yearLabel,
+    required this.onLeaderboard,
+    required this.onAchievements,
+    required this.onProgression,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _PracticeHubAction(
+            icon: Icons.emoji_events_rounded,
+            title: 'Classement',
+            detail: rankLabel,
+            accent: PracticeColors.gameGold,
+            onTap: onLeaderboard,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PracticeHubAction(
+            icon: Icons.workspace_premium_rounded,
+            title: 'Succès',
+            detail: achievementLabel,
+            accent: PracticeColors.gamePurple,
+            onTap: onAchievements,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _PracticeHubAction(
+            icon: Icons.insights_rounded,
+            title: 'Année',
+            detail: yearLabel,
+            accent: PracticeColors.gameBlue,
+            onTap: onProgression,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PracticeHubAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String detail;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _PracticeHubAction({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          height: 102,
+          padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+          decoration: BoxDecoration(
+            color: PracticeColors.surface.withOpacity(.90),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: PracticeColors.line.withOpacity(.72)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: accent, size: 18),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: PracticeColors.text,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _PracticeGameHeader extends StatelessWidget {
   final PracticeLevel level;
@@ -515,43 +785,38 @@ class _PracticeGameHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final progress = level.progressFor(xp);
+    final xpIntoLevel = level.xpIntoLevel(xp);
+    final xpForLevel = level.xpForLevel;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 17, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF6B50E8), Color(0xFF226FC6), Color(0xFF0B8F76)],
-          stops: [0, .55, 1],
+          colors: [Color(0xFF5D47D8), Color(0xFF1D5AA4), Color(0xFF087B6D)],
+          stops: [0, .58, 1],
         ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white.withOpacity(.18)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(.14)),
         boxShadow: [
           BoxShadow(
-            color: PracticeColors.gamePurple.withOpacity(.24),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
+            color: PracticeColors.gamePurple.withOpacity(.18),
+            blurRadius: 22,
+            offset: const Offset(0, 9),
           ),
         ],
       ),
       child: Stack(
         children: [
           Positioned(
-            right: -12,
-            top: -18,
+            right: -8,
+            top: -14,
             child: Icon(
               Icons.sports_esports_rounded,
-              size: 104,
-              color: Colors.white.withOpacity(.10),
-            ),
-          ),
-          Positioned(
-            right: 72,
-            bottom: -12,
-            child: Icon(
-              Icons.auto_awesome_rounded,
-              size: 42,
-              color: PracticeColors.gameGold.withOpacity(.20),
+              size: 82,
+              color: Colors.white.withOpacity(.07),
             ),
           ),
           Column(
@@ -560,38 +825,40 @@ class _PracticeGameHeader extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 46,
-                    height: 46,
+                    width: 43,
+                    height: 43,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.14),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.white.withOpacity(.18)),
+                      color: Colors.white.withOpacity(.13),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(.14)),
                     ),
                     child: const Icon(
-                      Icons.sports_esports_rounded,
+                      Icons.bolt_rounded,
                       color: PracticeColors.gameGold,
-                      size: 25,
+                      size: 24,
                     ),
                   ),
-                  const SizedBox(width: 11),
-                  const Expanded(
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'PRACTICE ARENA',
+                        const Text(
+                          'PRACTICE',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 19,
                             fontWeight: FontWeight.w900,
                             letterSpacing: .8,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Documente · apprends · gagne de l’XP',
+                          'Niveau ${level.number} · ${level.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Color(0xFFE9F2FF),
+                            color: Colors.white.withOpacity(.83),
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                           ),
@@ -599,37 +866,64 @@ class _PracticeGameHeader extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.bolt_rounded,
-                    color: PracticeColors.gameGold,
-                    size: 25,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$xp XP',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 15),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
+              const SizedBox(height: 13),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 7,
+                  backgroundColor: Colors.black.withOpacity(.18),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    PracticeColors.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
                 children: [
-                  _PracticeGameBadge(
-                    icon: Icons.military_tech_rounded,
-                    label: 'Niveau ${level.number}',
-                    color: PracticeColors.gameGold,
+                  Expanded(
+                    child: Text(
+                      '$xpIntoLevel / $xpForLevel XP vers le prochain niveau',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(.72),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  _PracticeGameBadge(
-                    icon: Icons.bolt_rounded,
-                    label: '$xp XP',
-                    color: PracticeColors.accent,
-                  ),
+                  const SizedBox(width: 10),
                   _PracticeGameBadge(
                     icon: Icons.local_fire_department_rounded,
                     label: 'Série $streak',
                     color: PracticeColors.gamePink,
                   ),
+                  const SizedBox(width: 6),
                   _PracticeGameBadge(
                     icon: Icons.workspace_premium_rounded,
-                    label: '$unlocked succès',
-                    color: Colors.white,
+                    label: '$unlocked',
+                    color: PracticeColors.gameGold,
                   ),
                 ],
               ),
@@ -654,30 +948,29 @@ class _PracticeGameBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(.15),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withOpacity(.34)),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.black.withOpacity(.15),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withOpacity(.34)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: color),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
-
 
 class _ClinicalCasesGameCard extends StatelessWidget {
   final VoidCallback onTap;
@@ -1166,7 +1459,8 @@ class _PracticeGuardScreenState extends State<PracticeGuardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DecorScaffold(scene: ScreenDecorScene.practice, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.practice,
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -2155,7 +2449,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   @override
   Widget build(BuildContext context) {
     final number = _patientNumber.toString().padLeft(3, '0');
-    return DecorScaffold(scene: ScreenDecorScene.practice, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.practice,
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -2832,7 +3127,8 @@ class _PracticeAchievementsScreenState
   @override
   Widget build(BuildContext context) {
     final level = practiceLevelForXp(_all.xp);
-    return DecorScaffold(scene: ScreenDecorScene.practice, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.practice,
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -2992,7 +3288,8 @@ class _PracticeLeaderboardScreenState extends State<PracticeLeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final me = widget.appState.currentUser;
-    return DecorScaffold(scene: ScreenDecorScene.practice, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.practice,
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -3188,11 +3485,7 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF6E56E8),
-              Color(0xFF247FD5),
-              Color(0xFF13A982),
-            ],
+            colors: [Color(0xFF6E56E8), Color(0xFF247FD5), Color(0xFF13A982)],
             stops: [0, .54, 1],
           ),
           borderRadius: BorderRadius.circular(22),
