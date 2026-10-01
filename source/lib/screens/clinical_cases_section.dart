@@ -5,6 +5,20 @@ import '../models/clinical_case_post.dart';
 import '../services/clinical_case_service.dart';
 import '../theme/app_theme.dart';
 
+abstract final class _PracticeGame {
+  static const bg = Color(0xFF071526);
+  static const surface = Color(0xFF10243A);
+  static const elevated = Color(0xFF17314E);
+  static const purple = Color(0xFF8B6CFF);
+  static const blue = Color(0xFF3295FF);
+  static const gold = Color(0xFFFFD166);
+  static const pink = Color(0xFFFF6FAE);
+  static const mint = Color(0xFF5BE7B0);
+  static const text = Color(0xFFF5F8FF);
+  static const secondary = Color(0xFFB9CBE0);
+  static const line = Color(0xFF244B68);
+}
+
 class ClinicalCasesSection extends StatefulWidget {
   final GlobalKey? verticalFeedKey;
 
@@ -96,17 +110,88 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
     }
   }
 
-  String _specialtyLabel(ClinicalCasePost post) {
-    final raw = (post.specialistService ?? '').trim();
-    if (raw.isEmpty) return 'Autres cas cliniques';
-    final cleaned = raw.replaceAll('_', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (cleaned.isEmpty) return 'Autres cas cliniques';
-    return cleaned
+  String _canonicalService(String raw) {
+    final value = raw
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    if (value.contains('trauma') ||
+        value.contains('orthop') ||
+        value.contains('ostéo-artic') ||
+        value.contains('osteo-artic')) {
+      return 'Traumatologie / Orthopédie';
+    }
+    if (value.contains('chirurgie visc') ||
+        value.contains('viscéral') ||
+        value.contains('visceral')) {
+      return 'Chirurgie Viscérale';
+    }
+    if (value.contains('gyn')) return 'Gynécologie';
+    if (value.contains('radio') || value.contains('imagerie')) {
+      return 'Imagerie Médicale';
+    }
+    if (value.contains('cardio')) return 'Cardiologie';
+    if (value.contains('neuro')) return 'Neurologie';
+    if (value.contains('pédi') || value.contains('pedi')) return 'Pédiatrie';
+    if (value.contains('pneumo')) return 'Pneumologie';
+    if (value.contains('gastro')) return 'Gastro-entérologie';
+    if (value.contains('uro')) return 'Urologie';
+    if (value.contains('néph') || value.contains('neph')) return 'Néphrologie';
+    if (value.contains('réa') || value.contains('rea')) return 'Réanimation';
+    if (value.contains('urgence')) return 'Urgences';
+
+    return value
         .split(' ')
         .map((word) => word.isEmpty
             ? word
             : '${word.substring(0, 1).toUpperCase()}${word.substring(1)}')
         .join(' ');
+  }
+
+  bool _looksLikeTraumaOrtho(ClinicalCasePost post) {
+    final haystack = <String>[
+      post.presentation,
+      post.history,
+      post.clinicalExam,
+      post.complementaryExams,
+      post.imagingConclusion,
+      post.assessment,
+      post.plan,
+      post.disposition,
+      for (final qcm in post.qcms) qcm.question,
+    ].join(' ').toLowerCase();
+
+    const strongTerms = <String>[
+      'entorse',
+      'fracture',
+      'luxation',
+      'traumatologie',
+      'orthopédie',
+      'orthopedie',
+      'ostéo-articulaire',
+      'osteo-articulaire',
+    ];
+    if (strongTerms.any(haystack.contains)) return true;
+
+    const anatomyTerms = <String>[
+      'cheville',
+      'malléole',
+      'malleole',
+      'ligament talo-fibulaire',
+      'ligament tibio-fibulaire',
+      'tendon d’achille',
+      "tendon d'achille",
+    ];
+    return anatomyTerms.any(haystack.contains);
+  }
+
+  String _specialtyLabel(ClinicalCasePost post) {
+    final raw = (post.specialistService ?? '').trim();
+    if (raw.isNotEmpty) return _canonicalService(raw);
+    if (_looksLikeTraumaOrtho(post)) return 'Traumatologie / Orthopédie';
+    return 'Autres cas cliniques';
   }
 
   String _specialtyKey(ClinicalCasePost post) =>
@@ -150,9 +235,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
     });
   }
 
-  void _openCase(String id) {
-    setState(() => _selectedCaseId = id);
-  }
+  void _openCase(String id) => setState(() => _selectedCaseId = id);
 
   void _back() {
     if (_selectedCaseId != null) {
@@ -169,9 +252,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   @override
   Widget build(BuildContext context) {
     final groups = _groupedCases();
-    final selectedGroup = _selectedSpecialtyKey == null
-        ? null
-        : groups[_selectedSpecialtyKey];
+    final selectedGroup =
+        _selectedSpecialtyKey == null ? null : groups[_selectedSpecialtyKey];
     ClinicalCasePost? selectedCase;
     if (_selectedCaseId != null) {
       for (final post in _items) {
@@ -233,19 +315,19 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Cas cliniques par spécialité',
           style: TextStyle(
-            color: AppColors.ink,
+            color: _PracticeGame.text,
             fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 4),
-        Text(
+        const Text(
           'Choisissez une spécialité pour accéder aux dossiers et aux QCM associés.',
           style: TextStyle(
-            color: AppColors.inkSoft,
+            color: _PracticeGame.secondary,
             fontSize: 11.5,
             height: 1.4,
             fontWeight: FontWeight.w600,
@@ -322,29 +404,44 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
         TextField(
           controller: _searchController,
           onChanged: (value) => setState(() => _query = value),
-          style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            color: _PracticeGame.text,
+            fontWeight: FontWeight.w700,
+          ),
+          cursorColor: _PracticeGame.gold,
           decoration: InputDecoration(
             hintText: 'Rechercher un cas dans cette spécialité…',
-            prefixIcon: const Icon(Icons.search_rounded),
+            hintStyle: const TextStyle(color: _PracticeGame.secondary),
+            prefixIcon:
+                const Icon(Icons.search_rounded, color: _PracticeGame.purple),
             suffixIcon: _query.isEmpty
                 ? null
-                : IconButton(
-                    tooltip: 'Effacer',
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _query = '');
-                    },
-                    icon: const Icon(Icons.close_rounded),
+                : Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: _GamingIconButton(
+                      tooltip: 'Effacer',
+                      icon: Icons.close_rounded,
+                      compact: true,
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
                   ),
             filled: true,
-            fillColor: AppColors.card,
+            fillColor: _PracticeGame.surface,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppColors.line),
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: _PracticeGame.line),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: AppColors.line),
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: _PracticeGame.line),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide:
+                  const BorderSide(color: _PracticeGame.purple, width: 1.4),
             ),
           ),
         ),
@@ -413,24 +510,44 @@ class _ClinicalHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 15, 10, 15),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-        boxShadow: AppShadow.low,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _PracticeGame.purple.withOpacity(.26),
+            _PracticeGame.surface,
+            _PracticeGame.blue.withOpacity(.18),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _PracticeGame.purple.withOpacity(.42)),
+        boxShadow: [
+          BoxShadow(
+            color: _PracticeGame.purple.withOpacity(.16),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: AppColors.brandSoft,
-              borderRadius: BorderRadius.circular(14),
+              gradient: LinearGradient(
+                colors: [
+                  _PracticeGame.purple.withOpacity(.30),
+                  _PracticeGame.blue.withOpacity(.20),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: _PracticeGame.gold.withOpacity(.35)),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.medical_information_rounded,
-              color: AppColors.brandBright,
-              size: 24,
+              color: _PracticeGame.gold,
+              size: 25,
             ),
           ),
           const SizedBox(width: 11),
@@ -438,10 +555,10 @@ class _ClinicalHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'CAS CLINIQUES · QCM',
                   style: TextStyle(
-                    color: AppColors.ink,
+                    color: _PracticeGame.text,
                     fontSize: 16.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: .3,
@@ -452,8 +569,8 @@ class _ClinicalHeader extends StatelessWidget {
                   subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.inkSoft,
+                  style: const TextStyle(
+                    color: _PracticeGame.secondary,
                     fontSize: 10.5,
                     height: 1.35,
                     fontWeight: FontWeight.w700,
@@ -462,18 +579,86 @@ class _ClinicalHeader extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
+          _GamingIconButton(
             tooltip: 'Actualiser',
+            icon: Icons.refresh_rounded,
+            loading: loading,
             onPressed: loading ? null : onRefresh,
-            icon: loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GamingIconButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool loading;
+  final bool compact;
+
+  const _GamingIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.loading = false,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 34.0 : 42.0;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(compact ? 11 : 14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: onPressed == null
+                  ? _PracticeGame.surface.withOpacity(.55)
+                  : _PracticeGame.elevated,
+              borderRadius: BorderRadius.circular(compact ? 11 : 14),
+              border: Border.all(
+                color: onPressed == null
+                    ? _PracticeGame.line.withOpacity(.55)
+                    : _PracticeGame.purple.withOpacity(.55),
+              ),
+              boxShadow: onPressed == null
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: _PracticeGame.purple.withOpacity(.10),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+            ),
+            child: loading
+                ? const SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _PracticeGame.gold,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    size: compact ? 18 : 21,
+                    color: onPressed == null
+                        ? _PracticeGame.secondary.withOpacity(.45)
+                        : _PracticeGame.gold,
+                  ),
+          ),
+        ),
       ),
     );
   }
@@ -487,6 +672,9 @@ class _SpecialtyCard extends StatelessWidget {
 
   IconData _iconFor(String label) {
     final value = label.toLowerCase();
+    if (value.contains('trauma') || value.contains('orthop')) {
+      return Icons.healing_rounded;
+    }
     if (value.contains('cardio')) return Icons.favorite_rounded;
     if (value.contains('neuro')) return Icons.psychology_alt_rounded;
     if (value.contains('radio') || value.contains('imagerie')) {
@@ -499,14 +687,10 @@ class _SpecialtyCard extends StatelessWidget {
     }
     if (value.contains('pneumo')) return Icons.air_rounded;
     if (value.contains('gastro')) return Icons.local_hospital_rounded;
-    if (value.contains('uro') ||
-        value.contains('néph') ||
-        value.contains('neph')) {
+    if (value.contains('uro') || value.contains('néph') || value.contains('neph')) {
       return Icons.water_drop_rounded;
     }
-    if (value.contains('urgence') ||
-        value.contains('réa') ||
-        value.contains('rea')) {
+    if (value.contains('urgence') || value.contains('réa') || value.contains('rea')) {
       return Icons.local_hospital_rounded;
     }
     return Icons.folder_rounded;
@@ -518,29 +702,44 @@ class _SpecialtyCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.line),
-            boxShadow: AppShadow.low,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                _PracticeGame.purple.withOpacity(.22),
+                _PracticeGame.surface,
+                _PracticeGame.blue.withOpacity(.12),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: _PracticeGame.purple.withOpacity(.36)),
+            boxShadow: [
+              BoxShadow(
+                color: _PracticeGame.purple.withOpacity(.11),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: AppColors.brandSoft,
+                  color: _PracticeGame.elevated,
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _PracticeGame.gold.withOpacity(.28)),
                 ),
                 child: Icon(
                   _iconFor(group.label),
-                  color: AppColors.brandBright,
-                  size: 21,
+                  color: _PracticeGame.gold,
+                  size: 22,
                 ),
               ),
               const SizedBox(width: 12),
@@ -552,8 +751,8 @@ class _SpecialtyCard extends StatelessWidget {
                       group.label,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.ink,
+                      style: const TextStyle(
+                        color: _PracticeGame.text,
                         fontSize: 13.5,
                         height: 1.25,
                         fontWeight: FontWeight.w900,
@@ -562,8 +761,8 @@ class _SpecialtyCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '${group.cases.length} cas clinique${group.cases.length > 1 ? 's' : ''}',
-                      style: TextStyle(
-                        color: AppColors.inkSoft,
+                      style: const TextStyle(
+                        color: _PracticeGame.secondary,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
                       ),
@@ -571,7 +770,19 @@ class _SpecialtyCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: AppColors.inkSoft),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _PracticeGame.purple.withOpacity(.17),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _PracticeGame.purple.withOpacity(.30)),
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _PracticeGame.gold,
+                ),
+              ),
             ],
           ),
         ),
@@ -603,30 +814,38 @@ class _CaseListTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.line),
+            color: _PracticeGame.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _PracticeGame.line),
+            boxShadow: [
+              BoxShadow(
+                color: _PracticeGame.blue.withOpacity(.07),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 40,
+                height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: AppColors.brandSoft,
+                  color: _PracticeGame.purple.withOpacity(.18),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _PracticeGame.purple.withOpacity(.30)),
                 ),
                 child: Text(
                   number.toString().padLeft(2, '0'),
-                  style: TextStyle(
-                    color: AppColors.brandBright,
+                  style: const TextStyle(
+                    color: _PracticeGame.gold,
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
                   ),
@@ -641,8 +860,8 @@ class _CaseListTile extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.ink,
+                      style: const TextStyle(
+                        color: _PracticeGame.text,
                         fontSize: 12.5,
                         height: 1.35,
                         fontWeight: FontWeight.w800,
@@ -669,7 +888,10 @@ class _CaseListTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 7),
-              Icon(Icons.chevron_right_rounded, color: AppColors.inkSoft),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: _PracticeGame.gold,
+              ),
             ],
           ),
         ),
@@ -689,12 +911,12 @@ class _MetaText extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: AppColors.inkSoft),
+        Icon(icon, size: 13, color: _PracticeGame.secondary),
         const SizedBox(width: 4),
         Text(
           text,
-          style: TextStyle(
-            color: AppColors.inkSoft,
+          style: const TextStyle(
+            color: _PracticeGame.secondary,
             fontSize: 9.8,
             fontWeight: FontWeight.w700,
           ),
@@ -719,20 +941,20 @@ class _BackBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        IconButton(
+        _GamingIconButton(
           tooltip: 'Retour',
+          icon: Icons.arrow_back_rounded,
           onPressed: onBack,
-          icon: const Icon(Icons.arrow_back_rounded),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  color: AppColors.ink,
+                style: const TextStyle(
+                  color: _PracticeGame.text,
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                 ),
@@ -741,8 +963,8 @@ class _BackBar extends StatelessWidget {
                 subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.inkSoft,
+                style: const TextStyle(
+                  color: _PracticeGame.secondary,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -785,12 +1007,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
         widget.post.id != oldWidget.post.id ||
         widget.post.qcms.length != oldWidget.post.qcms.length ||
         widget.post.qcms
-                .map((q) =>
-                    '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .map((q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
                 .join('|') !=
             oldWidget.post.qcms
-                .map((q) =>
-                    '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .map((q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
                 .join('|');
     if (changed) {
       _syncQcms(resetIndex: widget.post.id != oldWidget.post.id);
@@ -926,16 +1146,12 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
         if (_hasExtraDetails(post))
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
+            child: _GamingTextButton(
+              icon: _expanded
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded,
+              label: _expanded ? 'Réduire le dossier' : 'Voir le dossier complet',
               onPressed: () => setState(() => _expanded = !_expanded),
-              icon: Icon(
-                _expanded
-                    ? Icons.expand_less_rounded
-                    : Icons.expand_more_rounded,
-              ),
-              label: Text(
-                _expanded ? 'Réduire le dossier' : 'Voir le dossier complet',
-              ),
             ),
           ),
         const SizedBox(height: 8),
@@ -951,7 +1167,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           ),
           if (answered) ...[
             const SizedBox(height: 10),
-            _AnswerResult(
+            _AnswerFeedback(
               correct: correct,
               expanded: _explanationExpanded[current.id] ?? false,
               correction: current.correction,
@@ -961,17 +1177,24 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               }),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _QcmNavigation(
             qcms: _qcms,
             currentIndex: _currentQcm,
-            answeredCount: answeredCount,
-            correctCount: correctCount,
             onPrevious: _currentQcm > 0 ? () => _moveQcm(-1) : null,
-            onNext: _currentQcm < _qcms.length - 1
-                ? () => _moveQcm(1)
-                : null,
-            onJump: (index) => setState(() => _currentQcm = index),
+            onNext: _currentQcm < _qcms.length - 1 ? () => _moveQcm(1) : null,
+            onSelect: (index) => setState(() => _currentQcm = index),
+          ),
+          const SizedBox(height: 7),
+          Center(
+            child: Text(
+              '$answeredCount / ${_qcms.length} répondus · $correctCount justes',
+              style: const TextStyle(
+                color: _PracticeGame.secondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ],
       ],
@@ -989,6 +1212,55 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
       ].any((value) => value.trim().isNotEmpty);
 }
 
+class _GamingTextButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  const _GamingTextButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: _PracticeGame.purple.withOpacity(.13),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _PracticeGame.purple.withOpacity(.32)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 18, color: _PracticeGame.gold),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: _PracticeGame.text,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CaseIdentity extends StatelessWidget {
   final ClinicalCasePost post;
   final int number;
@@ -997,32 +1269,74 @@ class _CaseIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final specialty = (post.specialistService ?? '').trim();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
+        gradient: LinearGradient(
+          colors: [
+            _PracticeGame.purple.withOpacity(.20),
+            _PracticeGame.surface,
+            _PracticeGame.blue.withOpacity(.12),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _PracticeGame.purple.withOpacity(.34)),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Row(
         children: [
-          _Pill(
-            text: 'CAS ${number.toString().padLeft(2, '0')}',
-            icon: Icons.folder_open_rounded,
-          ),
-          if (specialty.isNotEmpty)
-            _Pill(
-              text: specialty,
-              icon: Icons.local_hospital_outlined,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: _PracticeGame.purple.withOpacity(.16),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: _PracticeGame.purple.withOpacity(.30)),
             ),
-          _Pill(
-            text: post.demographicLabel,
-            icon: Icons.person_outline_rounded,
+            child: Text(
+              'CAS #${number.toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                color: _PracticeGame.gold,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .7,
+              ),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              post.demographicLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _PracticeGame.secondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: _PracticeGame.elevated,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: _PracticeGame.line),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.quiz_rounded, size: 12, color: _PracticeGame.mint),
+                SizedBox(width: 4),
+                Text(
+                  '5 QCM',
+                  style: TextStyle(
+                    color: _PracticeGame.text,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1030,31 +1344,107 @@ class _CaseIdentity extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
-  final String text;
+class _CaseSection extends StatelessWidget {
   final IconData icon;
+  final String label;
+  final String value;
+  final bool alwaysShow;
 
-  const _Pill({required this.text, required this.icon});
+  const _CaseSection({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.alwaysShow = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!alwaysShow && value.trim().isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.fromLTRB(12, 11, 13, 12),
+      decoration: BoxDecoration(
+        color: _PracticeGame.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _PracticeGame.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _PracticeGame.purple.withOpacity(.15),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 17, color: _PracticeGame.mint),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: const TextStyle(
+                    color: _PracticeGame.gold,
+                    fontSize: 8.8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .68,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value.trim().isEmpty ? 'Non renseigné' : value.trim(),
+                  style: const TextStyle(
+                    color: _PracticeGame.text,
+                    fontSize: 12.2,
+                    height: 1.45,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QcmPreparing extends StatelessWidget {
+  const _QcmPreparing();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.brandSoft,
-        borderRadius: BorderRadius.circular(999),
+        color: _PracticeGame.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _PracticeGame.line),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: const Row(
         children: [
-          Icon(icon, size: 13, color: AppColors.brandBright),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: TextStyle(
-              color: AppColors.ink,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _PracticeGame.gold,
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Les QCM de ce cas sont en cours de préparation…',
+              style: TextStyle(
+                color: _PracticeGame.secondary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -1085,68 +1475,88 @@ class _QcmPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-        boxShadow: AppShadow.low,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _PracticeGame.purple.withOpacity(.32),
+            _PracticeGame.elevated,
+            _PracticeGame.blue.withOpacity(.18),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _PracticeGame.purple.withOpacity(.50)),
+        boxShadow: [
+          BoxShadow(
+            color: _PracticeGame.purple.withOpacity(.14),
+            blurRadius: 22,
+            offset: const Offset(0, 9),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              const Icon(Icons.sports_esports_rounded,
+                  color: _PracticeGame.gold, size: 19),
+              const SizedBox(width: 7),
               Text(
-                'QUESTION ${currentIndex + 1} / $total',
-                style: TextStyle(
-                  color: AppColors.brandBright,
+                'DÉFI ${currentIndex + 1} / $total',
+                style: const TextStyle(
+                  color: _PracticeGame.gold,
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: .6,
+                  letterSpacing: .7,
                 ),
               ),
               const Spacer(),
               if (current.generationSource == 'openai') ...[
-                Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 14,
-                  color: AppColors.brandBright,
-                ),
+                const Icon(Icons.auto_awesome_rounded,
+                    color: _PracticeGame.purple, size: 13),
                 const SizedBox(width: 4),
               ],
-              Flexible(
-                child: Text(
-                  current.topicLabel,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.inkSoft,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                  ),
+              Text(
+                current.topicLabel,
+                style: const TextStyle(
+                  color: _PracticeGame.secondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
+              value: total == 0 ? 0 : (currentIndex + 1) / total,
               minHeight: 5,
-              value: (currentIndex + 1) / total,
-              backgroundColor: AppColors.paperAlt,
-              color: AppColors.brand,
+              backgroundColor: _PracticeGame.line,
+              color: _PracticeGame.gold,
             ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            current.question,
-            style: TextStyle(
-              color: AppColors.ink,
-              fontSize: 15,
-              height: 1.42,
-              fontWeight: FontWeight.w900,
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(.13),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(.10)),
+            ),
+            child: Text(
+              current.question,
+              style: const TextStyle(
+                color: _PracticeGame.text,
+                fontSize: 15.2,
+                height: 1.43,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           for (var index = 0; index < current.options.length; index++) ...[
             _QcmOption(
               index: index,
@@ -1156,15 +1566,14 @@ class _QcmPanel extends StatelessWidget {
               isCorrect: current.correctIndex == index,
               onTap: answered || submitting ? null : () => onAnswer(index),
             ),
-            if (index != current.options.length - 1)
-              const SizedBox(height: 8),
+            if (index != current.options.length - 1) const SizedBox(height: 7),
           ],
           if (submitting) ...[
             const SizedBox(height: 10),
-            LinearProgressIndicator(
+            const LinearProgressIndicator(
               minHeight: 2,
-              color: AppColors.brandBright,
-              backgroundColor: AppColors.line,
+              color: _PracticeGame.gold,
+              backgroundColor: _PracticeGame.line,
             ),
           ],
         ],
@@ -1173,13 +1582,119 @@ class _QcmPanel extends StatelessWidget {
   }
 }
 
-class _AnswerResult extends StatelessWidget {
+class _QcmOption extends StatelessWidget {
+  final int index;
+  final String label;
+  final bool selected;
+  final bool showCorrection;
+  final bool isCorrect;
+  final VoidCallback? onTap;
+
+  const _QcmOption({
+    required this.index,
+    required this.label,
+    required this.selected,
+    required this.showCorrection,
+    required this.isCorrect,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color border = _PracticeGame.line;
+    Color background = _PracticeGame.surface;
+    Color foreground = _PracticeGame.text;
+    if (showCorrection && isCorrect) {
+      border = AppColors.success;
+      background = AppColors.success.withOpacity(.10);
+      foreground = AppColors.success;
+    } else if (showCorrection && selected && !isCorrect) {
+      border = AppColors.danger;
+      background = AppColors.danger.withOpacity(.10);
+      foreground = AppColors.danger;
+    } else if (selected) {
+      border = _PracticeGame.purple;
+      background = _PracticeGame.purple.withOpacity(.20);
+      foreground = _PracticeGame.gold;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: border,
+              width: selected || (showCorrection && isCorrect) ? 1.35 : 1,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: foreground.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: foreground.withOpacity(.18)),
+                ),
+                child: Text(
+                  String.fromCharCode(65 + index),
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 12.3,
+                      height: 1.43,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              if (showCorrection && isCorrect)
+                const Padding(
+                  padding: EdgeInsets.only(left: 7, top: 4),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.success,
+                    size: 19,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnswerFeedback extends StatelessWidget {
   final bool correct;
   final bool expanded;
   final String correction;
   final VoidCallback onToggle;
 
-  const _AnswerResult({
+  const _AnswerFeedback({
     required this.correct,
     required this.expanded,
     required this.correction,
@@ -1192,57 +1707,64 @@ class _AnswerResult extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.card,
+        gradient: LinearGradient(
+          colors: [
+            semantic.withOpacity(.14),
+            _PracticeGame.surface,
+            _PracticeGame.purple.withOpacity(.12),
+          ],
+        ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: semantic.withOpacity(.55)),
+        border: Border.all(color: semantic.withOpacity(.48)),
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-            child: Row(
-              children: [
-                Icon(
-                  correct
-                      ? Icons.check_circle_rounded
-                      : Icons.cancel_rounded,
-                  color: semantic,
-                  size: 21,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    correct ? 'Bonne réponse' : 'Réponse incorrecte',
-                    style: TextStyle(
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Icon(
+                      correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
                       color: semantic,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w900,
+                      size: 20,
                     ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: onToggle,
-                  icon: Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 15,
-                    color: AppColors.brandBright,
-                  ),
-                  label: Text(
-                    'Explication IA',
-                    style: TextStyle(
-                      color: AppColors.brandBright,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w900,
+                    const SizedBox(width: 7),
+                    Text(
+                      correct ? 'Bonne réponse' : 'À revoir',
+                      style: TextStyle(
+                        color: semantic,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
+                    const Spacer(),
+                    const Icon(Icons.auto_awesome_rounded,
+                        color: _PracticeGame.gold, size: 15),
+                    const SizedBox(width: 5),
+                    const Text(
+                      'EXPLICATION IA',
+                      style: TextStyle(
+                        color: _PracticeGame.gold,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .5,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Icon(
+                      expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      color: _PracticeGame.gold,
+                    ),
+                  ],
                 ),
-                Icon(
-                  expanded
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  color: AppColors.inkSoft,
-                ),
-              ],
+              ),
             ),
           ),
           AnimatedCrossFade(
@@ -1251,8 +1773,7 @@ class _AnswerResult extends StatelessWidget {
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
             firstChild: const SizedBox(width: double.infinity),
-            secondChild: Container(
-              width: double.infinity,
+            secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: _GuidelineCorrection(correction: correction),
             ),
@@ -1266,92 +1787,70 @@ class _AnswerResult extends StatelessWidget {
 class _QcmNavigation extends StatelessWidget {
   final List<ClinicalCaseQcm> qcms;
   final int currentIndex;
-  final int answeredCount;
-  final int correctCount;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
-  final ValueChanged<int> onJump;
+  final ValueChanged<int> onSelect;
 
   const _QcmNavigation({
     required this.qcms,
     required this.currentIndex,
-    required this.answeredCount,
-    required this.correctCount,
     required this.onPrevious,
     required this.onNext,
-    required this.onJump,
+    required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.paperAlt,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onPrevious,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                  label: const Text('Précédente'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onNext,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                  label: const Text('Suivante'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Row(
+    return Row(
+      children: [
+        _GamingIconButton(
+          tooltip: 'QCM précédent',
+          icon: Icons.chevron_left_rounded,
+          onPressed: onPrevious,
+        ),
+        Expanded(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(qcms.length, (index) {
               final q = qcms[index];
               final active = index == currentIndex;
-              final color = q.myIsCorrect == true
+              final Color color = q.myIsCorrect == true
                   ? AppColors.success
                   : q.answered
                       ? AppColors.danger
                       : active
-                          ? AppColors.brand
-                          : AppColors.line;
+                          ? _PracticeGame.gold
+                          : _PracticeGame.purple;
               return GestureDetector(
-                onTap: () => onJump(index),
+                onTap: () => onSelect(index),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
+                  duration: const Duration(milliseconds: 180),
                   margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: active ? 22 : 8,
-                  height: 8,
+                  width: active ? 22 : 9,
+                  height: 9,
                   decoration: BoxDecoration(
                     color: color,
                     borderRadius: BorderRadius.circular(99),
+                    boxShadow: active
+                        ? [
+                            BoxShadow(
+                              color: color.withOpacity(.24),
+                              blurRadius: 8,
+                            ),
+                          ]
+                        : null,
                   ),
                 ),
               );
             }),
           ),
-          const SizedBox(height: 7),
-          Text(
-            '$answeredCount / ${qcms.length} répondus · $correctCount justes',
-            style: TextStyle(
-              color: AppColors.inkSoft,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
+        ),
+        _GamingIconButton(
+          tooltip: 'QCM suivant',
+          icon: Icons.chevron_right_rounded,
+          onPressed: onNext,
+        ),
+      ],
     );
   }
 }
@@ -1382,10 +1881,7 @@ class _GuidelineCorrection extends StatelessWidget {
     final raw = correction.trim();
     final markerIndex = raw.indexOf(marker);
     if (markerIndex < 0) {
-      return (
-        explanation: raw,
-        references: const <_GuidelineReference>[],
-      );
+      return (explanation: raw, references: const <_GuidelineReference>[]);
     }
 
     final explanation = raw.substring(0, markerIndex).trim();
@@ -1395,8 +1891,7 @@ class _GuidelineCorrection extends StatelessWidget {
       final parts = line.split('|||');
       if (parts.length != 5) continue;
       final uri = Uri.tryParse(parts[4].trim());
-      if (uri == null ||
-          !(uri.scheme == 'https' || uri.scheme == 'http')) {
+      if (uri == null || !(uri.scheme == 'https' || uri.scheme == 'http')) {
         continue;
       }
       references.add(
@@ -1427,61 +1922,114 @@ class _GuidelineCorrection extends StatelessWidget {
     }
   }
 
+  List<Widget> _explanationWidgets(String explanation) {
+    final lines = explanation
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) {
+      return const [
+        Text(
+          'Explication pédagogique en préparation.',
+          style: TextStyle(
+            color: _PracticeGame.secondary,
+            fontSize: 11.8,
+            height: 1.48,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ];
+    }
+
+    return [
+      for (var i = 0; i < lines.length; i++) ...[
+        if (RegExp(r'^(#{1,3}\s+|[A-ZÀ-Ü][A-ZÀ-Ü0-9 /-]{4,}:?$)')
+            .hasMatch(lines[i]))
+          Text(
+            lines[i].replaceFirst(RegExp(r'^#{1,3}\s+'), ''),
+            style: const TextStyle(
+              color: _PracticeGame.gold,
+              fontSize: 11.5,
+              height: 1.35,
+              fontWeight: FontWeight.w900,
+            ),
+          )
+        else if (RegExp(r'^[-•]\s+').hasMatch(lines[i]))
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Icon(Icons.circle, size: 5, color: _PracticeGame.mint),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  lines[i].replaceFirst(RegExp(r'^[-•]\s+'), ''),
+                  style: const TextStyle(
+                    color: _PracticeGame.text,
+                    fontSize: 11.8,
+                    height: 1.48,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          )
+        else
+          Text(
+            lines[i],
+            style: const TextStyle(
+              color: _PracticeGame.text,
+              fontSize: 11.8,
+              height: 1.48,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        if (i != lines.length - 1) const SizedBox(height: 7),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final parsed = _parse();
-    final explanation = parsed.explanation.trim().isEmpty
-        ? 'Explication pédagogique en préparation.'
-        : parsed.explanation;
+    final explanation = parsed.explanation.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.paperAlt,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.line),
+            color: _PracticeGame.elevated.withOpacity(.78),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: _PracticeGame.purple.withOpacity(.24)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 17,
-                    color: AppColors.brandBright,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    'EXPLICATION IA',
-                    style: TextStyle(
-                      color: AppColors.brandBright,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: .55,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _StructuredExplanation(text: explanation),
-            ],
+            children: _explanationWidgets(explanation),
           ),
         ),
         if (parsed.references.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(
-            'SOURCES',
-            style: TextStyle(
-              color: AppColors.inkSoft,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .5,
-            ),
+          const Row(
+            children: [
+              Icon(Icons.menu_book_rounded,
+                  size: 15, color: _PracticeGame.mint),
+              SizedBox(width: 6),
+              Text(
+                'SOURCES DU COURS',
+                style: TextStyle(
+                  color: _PracticeGame.gold,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .55,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 7),
           for (final ref in parsed.references) ...[
@@ -1489,20 +2037,17 @@ class _GuidelineCorrection extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(13),
-                onTap: () => launchUrl(
-                  ref.url,
-                  mode: LaunchMode.externalApplication,
-                ),
+                onTap: () =>
+                    launchUrl(ref.url, mode: LaunchMode.externalApplication),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 11,
-                    vertical: 10,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.paperAlt,
+                    color: _PracticeGame.surface,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: AppColors.line),
+                    border: Border.all(
+                        color: _PracticeGame.purple.withOpacity(.28)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1513,39 +2058,36 @@ class _GuidelineCorrection extends StatelessWidget {
                           children: [
                             Text(
                               '${_kindLabel(ref.kind)} · ${ref.organization} · ${ref.year}',
-                              style: TextStyle(
-                                color: AppColors.brandBright,
+                              style: const TextStyle(
+                                color: _PracticeGame.gold,
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               ref.title,
-                              maxLines: 3,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: AppColors.inkSoft,
+                              style: const TextStyle(
+                                color: _PracticeGame.secondary,
                                 fontSize: 10.5,
-                                height: 1.35,
+                                height: 1.3,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.open_in_new_rounded,
-                        size: 15,
-                        color: AppColors.inkSoft,
-                      ),
+                      const SizedBox(width: 7),
+                      const Icon(Icons.open_in_new_rounded,
+                          size: 15, color: _PracticeGame.gold),
                     ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 6),
           ],
         ],
       ],
@@ -1553,344 +2095,32 @@ class _GuidelineCorrection extends StatelessWidget {
   }
 }
 
-class _StructuredExplanation extends StatelessWidget {
-  final String text;
-
-  const _StructuredExplanation({required this.text});
-
-  bool _looksLikeHeading(String line) {
-    final clean = _cleanMarkdown(line);
-    final lower = clean.toLowerCase();
-    return line.trim().startsWith('#') ||
-        (line.trim().startsWith('**') && line.trim().endsWith('**')) ||
-        lower.startsWith('pourquoi ') ||
-        lower.startsWith('éléments importants') ||
-        lower.startsWith('elements importants') ||
-        lower.startsWith('à retenir') ||
-        lower.startsWith('a retenir') ||
-        lower.startsWith('point clé') ||
-        lower.startsWith('point cle') ||
-        lower.startsWith('réponse correcte') ||
-        lower.startsWith('reponse correcte');
-  }
-
-  String _cleanMarkdown(String value) {
-    var out = value.trim();
-    out = out.replaceFirst(RegExp(r'^#{1,6}\s*'), '');
-    if (out.startsWith('**') &&
-        out.endsWith('**') &&
-        out.length > 4) {
-      out = out.substring(2, out.length - 2).trim();
-    }
-    return out.replaceAll('**', '').trim();
-  }
+class _PrivacyNote extends StatelessWidget {
+  const _PrivacyNote();
 
   @override
   Widget build(BuildContext context) {
-    final normalized = text.replaceAll('\r\n', '\n').trim();
-    if (normalized.isEmpty) return const SizedBox.shrink();
-    final lines = normalized.split('\n');
-    final widgets = <Widget>[];
-    final paragraph = <String>[];
-
-    void flushParagraph() {
-      if (paragraph.isEmpty) return;
-      final value = paragraph.join(' ').trim();
-      if (value.isNotEmpty) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: Text(
-              _cleanMarkdown(value),
-              style: TextStyle(
-                color: AppColors.ink,
-                fontSize: 11.8,
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        );
-      }
-      paragraph.clear();
-    }
-
-    for (final rawLine in lines) {
-      final line = rawLine.trim();
-      if (line.isEmpty) {
-        flushParagraph();
-        continue;
-      }
-      if (_looksLikeHeading(line)) {
-        flushParagraph();
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 6),
-            child: Text(
-              _cleanMarkdown(line),
-              style: TextStyle(
-                color: AppColors.brandBright,
-                fontSize: 11,
-                height: 1.3,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        );
-        continue;
-      }
-      final bullet =
-          RegExp(r'^(?:[-*•]|\d+[.)])\s+(.+)$').firstMatch(line);
-      if (bullet != null) {
-        flushParagraph();
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: AppColors.brandBright,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _cleanMarkdown(bullet.group(1) ?? ''),
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 11.6,
-                      height: 1.45,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-        continue;
-      }
-      paragraph.add(line);
-    }
-    flushParagraph();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: widgets,
-    );
-  }
-}
-
-class _CaseSection extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool alwaysShow;
-
-  const _CaseSection({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.alwaysShow = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!alwaysShow && value.trim().isEmpty) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.fromLTRB(12, 11, 13, 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: AppColors.line),
+        color: _PracticeGame.surface.withOpacity(.88),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _PracticeGame.line),
       ),
-      child: Row(
+      child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: AppColors.brandSoft,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(icon, size: 17, color: AppColors.brandBright),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label.toUpperCase(),
-                  style: TextStyle(
-                    color: AppColors.brandBright,
-                    fontSize: 8.8,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .65,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value.trim().isEmpty ? 'Non renseigné' : value.trim(),
-                  style: TextStyle(
-                    color: AppColors.ink,
-                    fontSize: 12.2,
-                    height: 1.45,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QcmOption extends StatelessWidget {
-  final int index;
-  final String label;
-  final bool selected;
-  final bool showCorrection;
-  final bool isCorrect;
-  final VoidCallback? onTap;
-
-  const _QcmOption({
-    required this.index,
-    required this.label,
-    required this.selected,
-    required this.showCorrection,
-    required this.isCorrect,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Color border = AppColors.line;
-    Color background = AppColors.paperAlt;
-    Color foreground = AppColors.ink;
-    IconData? statusIcon;
-
-    if (showCorrection && isCorrect) {
-      border = AppColors.success;
-      background = AppColors.success.withOpacity(.10);
-      foreground = AppColors.success;
-      statusIcon = Icons.check_circle_rounded;
-    } else if (showCorrection && selected && !isCorrect) {
-      border = AppColors.danger;
-      background = AppColors.danger.withOpacity(.09);
-      foreground = AppColors.danger;
-      statusIcon = Icons.cancel_rounded;
-    } else if (selected) {
-      border = AppColors.brand;
-      background = AppColors.brandSoft;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 56),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: border,
-              width: selected || (showCorrection && isCorrect) ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: foreground.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: foreground.withOpacity(.18)),
-                ),
-                child: Text(
-                  String.fromCharCode(65 + index),
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12.3,
-                    height: 1.42,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (statusIcon != null) ...[
-                const SizedBox(width: 8),
-                Icon(statusIcon, color: foreground, size: 19),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QcmPreparing extends StatelessWidget {
-  const _QcmPreparing();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.paperAlt,
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.brandBright,
-            ),
-          ),
-          const SizedBox(width: 10),
+          Icon(Icons.shield_outlined, size: 17, color: _PracticeGame.mint),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Les QCM de ce cas sont en cours de préparation…',
+              'Les cas sont automatiquement dé-identifiés avant publication. Les QCM ont un objectif pédagogique et ne constituent pas une recommandation clinique individuelle.',
               style: TextStyle(
-                color: AppColors.inkSoft,
-                fontWeight: FontWeight.w700,
+                color: _PracticeGame.secondary,
+                fontSize: 10.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -1910,11 +2140,11 @@ class _LoadingCard extends StatelessWidget {
       width: double.infinity,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: _PracticeGame.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: _PracticeGame.line),
       ),
-      child: CircularProgressIndicator(color: AppColors.brand),
+      child: const CircularProgressIndicator(color: _PracticeGame.gold),
     );
   }
 }
@@ -1940,19 +2170,19 @@ class _InfoCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: _PracticeGame.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: _PracticeGame.line),
       ),
       child: Column(
         children: [
-          Icon(icon, color: AppColors.brandBright, size: 30),
+          Icon(icon, color: _PracticeGame.gold, size: 30),
           const SizedBox(height: 9),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.ink,
+            style: const TextStyle(
+              color: _PracticeGame.text,
               fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
@@ -1961,8 +2191,8 @@ class _InfoCard extends StatelessWidget {
           Text(
             body,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.inkSoft,
+            style: const TextStyle(
+              color: _PracticeGame.secondary,
               fontSize: 11,
               height: 1.35,
               fontWeight: FontWeight.w600,
@@ -1970,47 +2200,12 @@ class _InfoCard extends StatelessWidget {
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: 9),
-            TextButton(onPressed: onAction, child: Text(actionLabel!)),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PrivacyNote extends StatelessWidget {
-  const _PrivacyNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.paperAlt,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.shield_outlined,
-            size: 17,
-            color: AppColors.success,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Les cas sont automatiquement dé-identifiés avant publication. Les QCM ont un objectif pédagogique et ne constituent pas une recommandation clinique individuelle.',
-              style: TextStyle(
-                color: AppColors.inkSoft,
-                fontSize: 10.5,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-              ),
+            _GamingTextButton(
+              icon: Icons.refresh_rounded,
+              label: actionLabel!,
+              onPressed: onAction,
             ),
-          ),
+          ],
         ],
       ),
     );
