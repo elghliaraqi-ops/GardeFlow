@@ -33,6 +33,23 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
     });
   }
 
+  String _friendlyAvatarError(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (raw.contains('junior_only')) {
+      return 'Les avatars GardeFlow sont réservés aux médecins Juniors.';
+    }
+    if (raw.contains('inactive_account')) {
+      return 'Votre compte doit être actif pour modifier votre avatar.';
+    }
+    if (raw.contains('invalid_avatar')) {
+      return 'Cet avatar n’est plus disponible. Choisissez-en un autre.';
+    }
+    if (raw.contains('unauthorized') || raw.contains('jwt')) {
+      return 'Votre session a expiré. Reconnectez-vous puis réessayez.';
+    }
+    return 'Impossible d’enregistrer l’avatar pour le moment. Réessayez dans quelques instants.';
+  }
+
   Future<void> _select(String? key) async {
     if (_saving) return;
     setState(() {
@@ -53,7 +70,7 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = _friendlyAvatarError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
