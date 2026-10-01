@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - .github/scripts/move_cases_and_game_qcm.py
+      - .github/scripts/move_cases_trigger.txt
 
 permissions:
   contents: write
