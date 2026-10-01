@@ -11,6 +11,7 @@ import '../models/qcm_models.dart';
 import '../services/practice_service.dart';
 import '../services/clinical_case_service.dart';
 import '../state/app_state.dart';
+import '../widgets/profile_avatar.dart';
 import 'practice_qcm_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
@@ -4327,17 +4328,13 @@ class _RankRow extends StatelessWidget {
             ),
           ),
         ),
-        CircleAvatar(
+        ProfileAvatar(
+          profileId: entry.userId,
+          initials: _initials(entry.displayName),
+          isJunior: true,
           radius: 17,
           backgroundColor: PracticeColors.background,
-          child: Text(
-            _initials(entry.displayName),
-            style: const TextStyle(
-              color: PracticeColors.accent,
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          foregroundColor: PracticeColors.accent,
         ),
         const SizedBox(width: 10),
         Expanded(

@@ -12,6 +12,7 @@ import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../widgets/profile_avatar.dart';
 import '../theme/screen_decor.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
@@ -593,18 +594,15 @@ class _AnnouncementCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
+              ProfileAvatar(
+                profileId: announcement.authorId,
+                initials: announcement.authorName.trim().isEmpty
+                    ? '?'
+                    : announcement.authorName.trim()[0].toUpperCase(),
+                isJunior: true,
                 radius: 21,
                 backgroundColor: AppColors.brandSoft,
-                child: Text(
-                  announcement.authorName.trim().isEmpty
-                      ? '?'
-                      : announcement.authorName.trim()[0].toUpperCase(),
-                  style: TextStyle(
-                    color: AppColors.brand,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                foregroundColor: AppColors.brand,
               ),
               const SizedBox(width: 11),
               Expanded(
