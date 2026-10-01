@@ -50,8 +50,8 @@ jobs:
         working-directory: source
         run: flutter test
 
-      - name: Remove temporary patch helpers
-        run: rm -f tools/patch_account_theme_v12.py .github/workflows/patch-account-theme-v12.yml
+      - name: Remove temporary patch script
+        run: rm -f tools/patch_account_theme_v12.py
 
       - name: Commit patched implementation
         run: |
