@@ -13,6 +13,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function scrub(value: unknown, max = 5000): string {
+  let x = String(value ?? '').trim();
+  if (!x) return '';
+  x = x.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email masqué]');
+  x = x.replace(/\b\d{4}-\d{2}-\d{2}\b/g, '[date masquée]');
+  x = x.replace(/\b[0-3]?\d[/-][01]?\d(?:[/-]\d{2,4})?\b/g, '[date masquée]');
+  x = x.replace(/\+?\d[\d .()/-]{7,}\d/g, '[numéro masqué]');
+  x = x.replace(
+    /\b(nom|prénom|prenom|ipp|cin|dossier)\b\s*[:=-]\s*[^,;\n]{1,100}/gi,
+    '$1 : [masqué]',
+  );
+  x = x.replace(/\b\d{7,}\b/g, '[identifiant masqué]');
+  return x.slice(0, max).trim();
+}
+
 function extractResponseText(payload: any): string {
   if (typeof payload?.output_text === 'string') return payload.output_text;
   const parts: string[] = [];
@@ -36,18 +51,6 @@ function parseJsonLoose(raw: string): any {
   const end = text.lastIndexOf('}');
   if (start >= 0 && end > start) return JSON.parse(text.slice(start, end + 1));
   throw new Error('invalid_model_json');
-}
-
-function scrub(value: unknown, max = 5000): string {
-  let x = String(value ?? '').trim();
-  if (!x) return '';
-  x = x.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email masqué]');
-  x = x.replace(/\b\d{4}-\d{2}-\d{2}\b/g, '[date masquée]');
-  x = x.replace(/\b[0-3]?\d[/-][01]?\d(?:[/-]\d{2,4})?\b/g, '[date masquée]');
-  x = x.replace(/\+?\d[\d .()/-]{7,}\d/g, '[numéro masqué]');
-  x = x.replace(/\b(nom|prénom|prenom|ipp|cin|dossier)\b\s*[:=-]\s*[^,;\n]{1,100}/gi, '$1 : [masqué]');
-  x = x.replace(/\b\d{7,}\b/g, '[identifiant masqué]');
-  return x.slice(0, max).trim();
 }
 
 function canonicalUrl(value: unknown): string {
@@ -116,6 +119,46 @@ const axisEnum = [
 
 const sourceKindEnum = ['recommandation', 'consensus', 'revue', 'cours'];
 
+const specialtyEnum = [
+  'Cardiologie',
+  'Pneumologie',
+  'Gastro-entérologie',
+  'Chirurgie Viscérale',
+  'Urologie',
+  'Néphrologie',
+  'Neurologie',
+  'Neurochirurgie',
+  'Traumatologie / Orthopédie',
+  'Rhumatologie',
+  'Gynécologie',
+  'Pédiatrie',
+  'ORL',
+  'Ophtalmologie',
+  'Dermatologie',
+  'Endocrinologie - Diabétologie',
+  'Hématologie',
+  'Oncologie',
+  'Infectiologie',
+  'Réanimation',
+  'Anesthésie',
+  'Psychiatrie',
+  'Imagerie Médicale',
+  'Urgences',
+  'Médecine interne',
+  'Autres cas cliniques',
+];
+
+const genericQuestionPatterns = [
+  /dans ce cas(?: clinique)?/i,
+  /document(?:é|ée|és|ées)/i,
+  /effectivement/i,
+  /quelle synthèse clinique a été retenue/i,
+  /quelle prise en charge a été/i,
+  /quelle orientation a été/i,
+  /quel avis spécialisé a été/i,
+  /quel élément .* est .* dans ce cas/i,
+];
+
 const referenceSchema = {
   type: 'object',
   additionalProperties: false,
@@ -165,8 +208,10 @@ const qcmItemSchema = {
 const fiveQcmSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['qcms'],
+  required: ['specialty', 'specialty_confidence', 'qcms'],
   properties: {
+    specialty: { type: 'string', enum: specialtyEnum },
+    specialty_confidence: { type: 'number', minimum: 0, maximum: 1 },
     qcms: {
       type: 'array',
       minItems: 5,
@@ -186,15 +231,17 @@ function formatCorrection(
     kind: string;
   }>,
 ): string {
-  const lines = references.map((ref) =>
-    `${ref.kind}|||${ref.title}|||${ref.organization}|||${ref.year}|||${ref.url}`
+  const lines = references.map(
+    (ref) => `${ref.kind}|||${ref.title}|||${ref.organization}|||${ref.year}|||${ref.url}`,
   );
   return `${correction}\n\n§SOURCES§\n${lines.join('\n')}`.slice(0, 9000);
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
+  if (req.method !== 'POST') {
+    return json({ ok: false, error: 'method_not_allowed' }, 405);
+  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -202,6 +249,7 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     const authorization = req.headers.get('Authorization') ?? '';
+
     if (!supabaseUrl || !anonKey || !serviceRoleKey || !authorization.startsWith('Bearer ')) {
       return json({ ok: false, error: 'unauthorized' }, 401);
     }
@@ -216,7 +264,9 @@ Deno.serve(async (req: Request) => {
 
     const { data: callerData, error: callerError } = await callerClient.auth.getUser();
     const callerId = callerData.user?.id;
-    if (callerError || !callerId) return json({ ok: false, error: 'unauthorized' }, 401);
+    if (callerError || !callerId) {
+      return json({ ok: false, error: 'unauthorized' }, 401);
+    }
 
     const { data: profile } = await adminClient
       .from('profiles')
@@ -230,9 +280,14 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const practiceCaseId = String(body?.practice_case_id ?? '').trim();
     const requestedPostId = String(body?.post_id ?? '').trim();
+    const forceRegenerate = body?.force_regenerate === true;
+
     if (!practiceCaseId && !requestedPostId) {
       return json({ ok: false, error: 'case_or_post_required' }, 400);
     }
+
+    const postSelect =
+      'id,practice_case_id,author_id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service,specialty_classification_source,specialty_classification_confidence';
 
     let post: any = null;
     let resolvedPracticeCaseId = practiceCaseId;
@@ -241,6 +296,7 @@ Deno.serve(async (req: Request) => {
       if (!/^[0-9a-f-]{36}$/i.test(practiceCaseId)) {
         return json({ ok: false, error: 'invalid_case_id' }, 400);
       }
+
       const { data: practiceCase, error: caseError } = await adminClient
         .from('practice_cases')
         .select('id,user_id,is_draft')
@@ -252,23 +308,29 @@ Deno.serve(async (req: Request) => {
       if (practiceCase.is_draft === true) {
         return json({ ok: false, error: 'draft_case' }, 409);
       }
+
       const { data, error } = await adminClient
         .from('clinical_case_posts')
-        .select('id,practice_case_id,author_id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service')
+        .select(postSelect)
         .eq('practice_case_id', practiceCaseId)
         .maybeSingle();
-      if (error || !data) return json({ ok: false, error: 'post_not_ready' }, 409);
+      if (error || !data) {
+        return json({ ok: false, error: 'post_not_ready' }, 409);
+      }
       post = data;
     } else {
       if (!/^[0-9a-f-]{36}$/i.test(requestedPostId)) {
         return json({ ok: false, error: 'invalid_post_id' }, 400);
       }
+
       const { data, error } = await adminClient
         .from('clinical_case_posts')
-        .select('id,practice_case_id,author_id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service')
+        .select(postSelect)
         .eq('id', requestedPostId)
         .maybeSingle();
-      if (error || !data) return json({ ok: false, error: 'post_not_found' }, 404);
+      if (error || !data) {
+        return json({ ok: false, error: 'post_not_found' }, 404);
+      }
       post = data;
       resolvedPracticeCaseId = String(data.practice_case_id ?? '');
     }
@@ -277,7 +339,9 @@ Deno.serve(async (req: Request) => {
       .from('clinical_case_qcms')
       .select('id,generation_source')
       .eq('post_id', post.id);
+
     if (
+      !forceRegenerate &&
       (existingQcms ?? []).length === 5 &&
       (existingQcms ?? []).every((q: any) => q.generation_source === 'openai')
     ) {
@@ -287,18 +351,21 @@ Deno.serve(async (req: Request) => {
         source: 'openai',
         count: 5,
         post_id: post.id,
+        specialty: post.specialist_service,
+        specialty_source: post.specialty_classification_source,
         reason: 'already_ready',
       });
     }
 
     if (!openaiKey) {
       return json({
-        ok: true,
+        ok: false,
         generated: false,
-        source: 'fallback',
+        source: 'none',
         count: (existingQcms ?? []).length,
         post_id: post.id,
-      });
+        reason: 'openai_key_missing',
+      }, 503);
     }
 
     const safeCase = {
@@ -315,62 +382,69 @@ Deno.serve(async (req: Request) => {
       specialist_service: scrub(post.specialist_service, 300),
     };
 
-    const prompt = `Tu es responsable pédagogique d'un enseignement d'externat/internat médical.
+    const specialtiesForPrompt = specialtyEnum.map((value) => `- ${value}`).join('\n');
 
-DATE DE RÉFÉRENCE : 30 septembre 2026.
+    const prompt = `Tu es responsable pédagogique d'un programme de QCM pour externes et internes en médecine.
+DATE DE RÉFÉRENCE : 1 octobre 2026.
 
-Tu reçois un cas clinique anonymisé UNIQUEMENT pour identifier le thème médical à enseigner. Tu dois ensuite effectuer une RECHERCHE WEB ACTUELLE et créer EXACTEMENT 5 QCM de cours et de recommandations. Le cas n'est PAS la source des réponses.
+Tu reçois un cas clinique anonymisé. Tu as DEUX tâches obligatoires :
+1) classer ce cas dans UNE spécialité médicale/chirurgicale ;
+2) utiliser le cas uniquement comme ancrage thématique pour créer EXACTEMENT 5 QCM de cours et de recommandations.
 
-OBJECTIF
-Transformer le diagnostic/thème suggéré par le cas en une mini-session de cours. Les questions doivent apprendre la pathologie, les critères diagnostiques, les explorations, la prise en charge et les recommandations récentes. Elles ne doivent pas demander de relire ou de restituer ce qui est déjà écrit dans le cas.
+CLASSEMENT DE LA SPÉCIALITÉ — OBLIGATOIRE
+Analyse l'ENSEMBLE du cas : motif, symptômes, antécédents, examen clinique, biologie, imagerie, synthèse diagnostique, traitement/conduite à tenir et orientation. Ne te limite jamais au titre ni à un mot-clé isolé.
 
-RECHERCHE WEB OBLIGATOIRE
-- Utilise la recherche web avant de rédiger les QCM.
-- Pour les recommandations, identifie la version la plus récente disponible à la date de référence.
-- Priorité absolue aux sources de premier niveau : sociétés savantes officielles, autorités sanitaires nationales/internationales, OMS, NICE, HAS, CDC, agences publiques, recommandations/consensus publiés par les collèges et sociétés de spécialité.
-- En seconde intention seulement : revue de synthèse évaluée par les pairs, PubMed/NCBI, article de référence ou ressource pédagogique institutionnelle.
-- N'utilise pas de blogs, sites commerciaux, forums, Wikipédia ou contenus grand public comme source d'une recommandation.
-- Si plusieurs recommandations reconnues divergent, ne les fusionne pas artificiellement : précise l'organisation et l'année dans la question ou la correction.
-- Pour chaque QCM, cite 1 à 3 sources réellement consultées. L'URL retournée doit être l'URL exacte d'une source visitée pendant la recherche.
+Choisis EXACTEMENT une catégorie parmi :
+${specialtiesForPrompt}
 
-LES 5 AXES SONT OBLIGATOIRES, UN SEUL PAR QCM, DANS CET ORDRE
-1. cours_fondamental : physiopathologie, définition, classification ou notion fondamentale utile ;
-2. diagnostic : critères diagnostiques, diagnostic différentiel, score ou signe clé ;
-3. explorations : indications/interprétation de biologie, imagerie ou autre examen ;
-4. prise_en_charge : traitement, surveillance, complication ou stratégie pratique ;
-5. recommandations : point important d'une recommandation récente, changement de pratique ou conduite actuellement recommandée.
+Règles de classement :
+- Cherche activement la spécialité principale la plus pertinente. « Autres cas cliniques » est STRICTEMENT un dernier recours.
+- Ne choisis jamais « Autres cas cliniques » simplement parce que specialist_service est vide ou imprécis.
+- En cas d'ambiguïté, compare les 2 ou 3 spécialités plausibles à partir de tout le contexte clinique et retiens la plus cohérente.
+- « Urgences » n'est PAS un fourre-tout ni le lieu de prise en charge. Une colique néphrétique vue aux urgences = Urologie ; un AVC = Neurologie ; une appendicite = Chirurgie Viscérale. Réserve « Urgences » aux situations réellement transversales de médecine d'urgence/polytraumatisme quand aucune spécialité d'organe ne domine.
+- Distingue Urologie et Néphrologie : lithiase/colique néphrétique/obstruction urétérale/rétention/prostate = Urologie ; atteinte glomérulaire, insuffisance rénale médicale, syndrome néphrotique/néphritique, dialyse ou trouble hydro-électrolytique primitif = Néphrologie.
+- Si specialist_service contient déjà une spécialité, considère-la comme un indice seulement ; le contenu clinique reste la référence sémantique.
+- Retourne specialty_confidence entre 0 et 1. Une confiance basse ne justifie pas à elle seule « Autres » si une spécialité reste raisonnablement identifiable.
 
-RÈGLE CENTRALE
-Le cas clinique sert seulement d'ANCRAGE THÉMATIQUE. Ne pose pas « quel est le diagnostic de ce patient ? », « quelle est sa conclusion d'imagerie ? », « quelle conduite a été faite ? » ou toute question dont la réponse se trouve telle quelle dans le dossier. Une question peut utiliser une courte vignette générique si cela améliore le raisonnement, mais elle ne doit pas inventer de nouvelles données présentées comme appartenant au patient fourni.
+SOURCE PÉDAGOGIQUE OBLIGATOIRE POUR LES QCM
+- Fais une recherche web AVANT toute question.
+- Cherche prioritairement un cours médical institutionnel ou universitaire, NCBI Bookshelf/StatPearls, collège de spécialité, référentiel d'enseignement, société savante ou autorité sanitaire.
+- Pour les recommandations, utilise la version officielle la plus récente disponible à la date de référence.
+- Aucun blog, forum, Wikipédia, site commercial ou contenu grand public.
+- Chaque QCM doit avoir 1 à 3 références réellement consultées avec URL exacte.
+- Le QCM 1 doit obligatoirement citer au moins une source de type 'cours'.
+- Les QCM 2 à 4 doivent être fondés sur une source pédagogique ('cours' ou 'revue') et peuvent être complétés par une recommandation/consensus.
+- Le QCM 5 doit citer au moins une 'recommandation' ou un 'consensus' récent.
 
-QUALITÉ DES QCM
-- Niveau externat/internat, utile en garde et pour la formation continue.
-- Exactement 4 propositions, une seule meilleure réponse.
-- Trois distracteurs plausibles, de même niveau conceptuel.
-- Pas de « toutes les réponses », « aucune des réponses », distracteurs absurdes ou indices de longueur.
-- Privilégie les points discriminants et réellement enseignables plutôt que les détails anecdotiques.
-- Évite les posologies ultra-spécifiques si elles varient selon protocole local ; si une posologie fait partie d'une recommandation internationale stable et essentielle, nomme la source.
-- Ne présente jamais une recommandation ancienne comme « actuelle » lorsqu'une version plus récente existe.
+INTERDIT
+- Ne pose jamais une question de restitution du dossier : formulations du type « dans ce cas », « documenté », « quelle synthèse a été retenue », « quelle conduite a été faite », « quelle orientation a été choisie ».
+- Le texte du cas n'est jamais une preuve scientifique et ne doit jamais être la source de la bonne réponse.
+- N'invente aucun fait clinique, seuil, score, posologie ou recommandation. Si un point ne peut pas être sourcé, choisis un autre point de cours.
 
-EXPLICATION PÉDAGOGIQUE OBLIGATOIRE
-- 3 à 6 phrases concises par QCM.
-- Explique le principe du cours et pourquoi la bonne réponse est la meilleure.
-- Explique brièvement les principaux distracteurs lorsque c'est utile.
-- Lorsque la question dépend d'une recommandation, cite explicitement l'organisation et l'année dans le texte de la correction.
-- Ne dis pas « vous avez raison/tort » : l'explication doit être valable quelle que soit la réponse choisie.
+5 AXES, DANS CET ORDRE
+1 cours_fondamental : physiopathologie, définition, classification ou notion fondamentale ;
+2 diagnostic : critères, signes discriminants, diagnostic différentiel ou score ;
+3 explorations : biologie, imagerie, ECG ou examen utile et son interprétation ;
+4 prise_en_charge : stratégie thérapeutique, surveillance ou complication ;
+5 recommandations : recommandation récente ou changement de pratique.
 
-CONFIDENTIALITÉ
-- Aucun identifiant patient.
-- Les faits propres au patient ne peuvent venir que du cas fourni et ne doivent pas être extrapolés.
+QUALITÉ
+- Niveau externat/internat, intéressant en garde et en formation continue.
+- 4 propositions exactement, une seule meilleure réponse, 3 distracteurs plausibles et homogènes.
+- Pas de « toutes/aucune », pas de distracteur absurde, pas d'indice de longueur.
+- Questions autonomes : elles doivent rester vraies même si on retire le cas clinique initial.
+- Correction en 3 à 6 phrases, factuelle, expliquant le raisonnement et, si pertinent, pourquoi les distracteurs sont faux.
+- Mentionne l'organisation et l'année quand la réponse dépend d'une recommandation.
 - Réponds en français.
 
-CAS ANONYMISÉ — ANCRAGE THÉMATIQUE UNIQUEMENT :
+CAS ANONYMISÉ — CLASSIFICATION + ANCRAGE THÉMATIQUE :
 ${JSON.stringify(safeCase)}`;
 
     const model =
       Deno.env.get('OPENAI_TEXT_MODEL') ||
       Deno.env.get('OPENAI_VISION_MODEL') ||
       'gpt-5.6';
+
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -387,7 +461,7 @@ ${JSON.stringify(safeCase)}`;
         text: {
           format: {
             type: 'json_schema',
-            name: 'clinical_case_course_guideline_qcms',
+            name: 'clinical_case_specialty_and_course_grounded_qcms',
             strict: true,
             schema: fiveQcmSchema,
           },
@@ -397,44 +471,61 @@ ${JSON.stringify(safeCase)}`;
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error('OpenAI guideline QCM failed', response.status, payload);
+      console.error('OpenAI course QCM failed', response.status, payload);
       return json({
-        ok: true,
+        ok: false,
         generated: false,
-        source: 'fallback',
+        source: 'none',
         post_id: post.id,
         reason: 'openai_failed',
-      });
+      }, 503);
     }
 
     const webSources = extractWebSources(payload);
     if (webSources.length === 0) {
-      console.error('OpenAI guideline QCM returned no verifiable web source');
       return json({
-        ok: true,
+        ok: false,
         generated: false,
-        source: 'fallback',
+        source: 'none',
         post_id: post.id,
         reason: 'missing_web_sources',
-      });
+      }, 422);
     }
     const consultedUrls = new Set(webSources.map((source) => canonicalUrl(source.url)));
 
     const generated = parseJsonLoose(extractResponseText(payload));
+    const specialty = String(generated?.specialty ?? '').trim();
+    const specialtyConfidence = Number(generated?.specialty_confidence);
+    if (
+      !specialtyEnum.includes(specialty) ||
+      !Number.isFinite(specialtyConfidence) ||
+      specialtyConfidence < 0 ||
+      specialtyConfidence > 1
+    ) {
+      return json({
+        ok: false,
+        generated: false,
+        source: 'none',
+        post_id: post.id,
+        reason: 'invalid_specialty_classification',
+      }, 422);
+    }
+
     const rawQcms = Array.isArray(generated?.qcms) ? generated.qcms : [];
     if (rawQcms.length !== 5) {
       return json({
-        ok: true,
+        ok: false,
         generated: false,
-        source: 'fallback',
+        source: 'none',
         post_id: post.id,
         reason: 'invalid_qcm_count',
-      });
+      }, 422);
     }
 
     const allowedTopics = new Set(topicEnum);
     const allowedAxes = new Set(axisEnum);
     const allowedKinds = new Set(sourceKindEnum);
+
     const normalized = rawQcms.map((raw: any, index: number) => {
       const options = Array.isArray(raw?.options)
         ? raw.options.map((x: unknown) => scrub(x, 420)).filter(Boolean)
@@ -444,8 +535,7 @@ ${JSON.stringify(safeCase)}`;
       const rawCorrection = scrub(raw?.correction, 5500);
       const topic = String(raw?.topic ?? '').trim();
       const axis = String(raw?.axis ?? '').trim();
-      const rawReferences = Array.isArray(raw?.references) ? raw.references : [];
-      const references = rawReferences
+      const references = (Array.isArray(raw?.references) ? raw.references : [])
         .map((ref: any) => ({
           title: scrub(ref?.title, 600),
           organization: scrub(ref?.organization, 300),
@@ -472,9 +562,30 @@ ${JSON.stringify(safeCase)}`;
         correctIndex > 3 ||
         !allowedTopics.has(topic) ||
         !allowedAxes.has(axis) ||
-        references.length < 1
+        references.length < 1 ||
+        genericQuestionPatterns.some((pattern) => pattern.test(question))
       ) {
         throw new Error(`invalid_qcm_${index + 1}`);
+      }
+
+      const kinds = new Set(references.map((ref: any) => ref.kind));
+      if (index === 0 && !kinds.has('cours')) {
+        throw new Error('qcm_1_missing_course_source');
+      }
+      if (
+        index >= 1 &&
+        index <= 3 &&
+        ![...kinds].some((kind: any) => kind === 'cours' || kind === 'revue')
+      ) {
+        throw new Error(`qcm_${index + 1}_missing_teaching_source`);
+      }
+      if (
+        index === 4 &&
+        ![...kinds].some(
+          (kind: any) => kind === 'recommandation' || kind === 'consensus',
+        )
+      ) {
+        throw new Error('qcm_5_missing_guideline_source');
       }
 
       return {
@@ -491,43 +602,57 @@ ${JSON.stringify(safeCase)}`;
       };
     });
 
-    const actualAxes = normalized.map((q: any) => q.axis);
-    if (actualAxes.some((axis: string, index: number) => axis !== axisEnum[index])) {
+    if (normalized.some((qcm: any, index: number) => qcm.axis !== axisEnum[index])) {
       return json({
-        ok: true,
+        ok: false,
         generated: false,
-        source: 'fallback',
+        source: 'none',
         post_id: post.id,
         reason: 'invalid_axis_order',
-      });
+      }, 422);
     }
-    if (new Set(normalized.map((q: any) => q.question.toLowerCase())).size !== 5) {
+
+    if (new Set(normalized.map((qcm: any) => qcm.question.toLowerCase())).size !== 5) {
       return json({
-        ok: true,
+        ok: false,
         generated: false,
-        source: 'fallback',
+        source: 'none',
         post_id: post.id,
         reason: 'duplicate_questions',
-      });
+      }, 422);
     }
 
     const persisted = normalized.map(({ axis: _axis, ...qcm }: any) => qcm);
-
-    // Compatibilité descendante : le QCM n°1 reste disponible dans les champs
-    // historiques du post. Le trigger resynchronise les fallbacks avant les cinq
-    // upserts finaux et invalide les réponses à l'ancien jeu de questions.
     const first = persisted[0];
+    const now = new Date().toISOString();
+
+    const preserveDeclaredSpecialty =
+      String(post.specialty_classification_source ?? '').trim() === 'declared' &&
+      String(post.specialist_service ?? '').trim() !== '' &&
+      !['Urgences', 'Autres cas cliniques'].includes(
+        String(post.specialist_service ?? '').trim(),
+      );
+
+    const postUpdate: Record<string, unknown> = {
+      qcm_question: first.question,
+      qcm_options: first.options,
+      correct_index: first.correct_index,
+      correction: first.correction,
+      question_topic: first.topic,
+      generation_source: 'openai',
+      updated_at: now,
+    };
+
+    if (!preserveDeclaredSpecialty) {
+      postUpdate.specialist_service = specialty;
+      postUpdate.specialty_classification_confidence = specialtyConfidence;
+      postUpdate.specialty_classification_source = 'ai';
+      postUpdate.specialty_classified_at = now;
+    }
+
     const { error: legacyUpdateError } = await adminClient
       .from('clinical_case_posts')
-      .update({
-        qcm_question: first.question,
-        qcm_options: first.options,
-        correct_index: first.correct_index,
-        correction: first.correction,
-        question_topic: first.topic,
-        generation_source: 'openai',
-        updated_at: new Date().toISOString(),
-      })
+      .update(postUpdate)
       .eq('id', post.id);
     if (legacyUpdateError) throw legacyUpdateError;
 
@@ -540,14 +665,26 @@ ${JSON.stringify(safeCase)}`;
       ok: true,
       generated: true,
       source: 'openai',
-      source_mode: 'live_web_guidelines',
+      source_mode: 'course_grounded_live_web',
       count: 5,
       web_sources: webSources.length,
       post_id: post.id,
       practice_case_id: resolvedPracticeCaseId,
+      specialty: preserveDeclaredSpecialty ? post.specialist_service : specialty,
+      specialty_confidence: preserveDeclaredSpecialty
+        ? post.specialty_classification_confidence
+        : specialtyConfidence,
+      specialty_source: preserveDeclaredSpecialty ? 'declared' : 'ai',
     });
   } catch (error) {
     console.error(error);
-    return json({ ok: false, error: 'generation_failed' }, 500);
+    return json(
+      {
+        ok: false,
+        error: 'generation_failed',
+        detail: String((error as Error)?.message ?? error),
+      },
+      500,
+    );
   }
 });
