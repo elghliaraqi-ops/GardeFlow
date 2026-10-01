@@ -1,61 +1,123 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const axisEnum = [
+  'cours_fondamental',
+  'diagnostic',
+  'explorations',
+  'prise_en_charge',
+  'recommandations',
+] as const;
+const topicEnum = [
+  'motif',
+  'symptome',
+  'examen',
+  'imagerie',
+  'synthese',
+  'prise_en_charge',
+  'orientation',
+  'avis_specialise',
+] as const;
+const sourceKindEnum = ['recommandation', 'consensus', 'revue', 'cours'] as const;
+const maxCasePayloadChars = 14000;
+const requestTimeoutMs = 60000;
 
-function json(body: unknown, status = 200) {
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin')?.trim() ?? '';
+  const configured = (Deno.env.get('GARDEFLOW_ALLOWED_ORIGINS') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+  if (!origin) return headers;
+  if (configured.length === 0) {
+    // Compatibility fallback until production origins are explicitly configured.
+    // JWT authentication remains mandatory; CORS is never used as authentication.
+    headers['Access-Control-Allow-Origin'] = '*';
+  } else if (configured.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Vary'] = 'Origin';
+  }
+  return headers;
+}
+
+function json(req: Request, body: unknown, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: {
+      ...corsHeaders(req),
+      ...extraHeaders,
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
   });
 }
 
-function scrub(value: unknown, max = 5000): string {
+function safeCode(value: unknown, fallback = 'unknown'): string {
+  const raw = String(value ?? '').trim();
+  return /^[a-zA-Z0-9_.:-]{1,80}$/.test(raw) ? raw : fallback;
+}
+
+async function shortHash(value: string): Promise<string> {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(digest).slice(0, 6))
+      .map((x) => x.toString(16).padStart(2, '0'))
+      .join('');
+  } catch (_) {
+    return 'hash_unavailable';
+  }
+}
+
+function logEvent(event: string, fields: Record<string, unknown> = {}) {
+  console.log(JSON.stringify({ event, ...fields }));
+}
+
+function scrub(value: unknown, max = 2200): string {
   let x = String(value ?? '').trim();
   if (!x) return '';
   x = x.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email masqué]');
   x = x.replace(/\b\d{4}-\d{2}-\d{2}\b/g, '[date masquée]');
-  x = x.replace(/\b[0-3]?\d[/-][01]?\d(?:[/-]\d{2,4})?\b/g, '[date masquée]');
-  x = x.replace(/\+?\d[\d .()/-]{7,}\d/g, '[numéro masqué]');
+  x = x.replace(/\b[0-3]?\d[/-][01]?\d[/-]\d{2,4}\b/g, '[date masquée]');
+  x = x.replace(/\+?\d[\d .()/-]{7,}\d/g, '[téléphone masqué]');
   x = x.replace(
-    /\b(nom|prénom|prenom|ipp|cin|dossier)\b\s*[:=-]\s*[^,;\n]{1,100}/gi,
+    /\b(nom|prénom|prenom|patient|patiente|ipp|cin|dossier(?: patient)?|date de naissance|né(?:e)? le|adresse|address|domicile|téléphone|telephone|tel)\b\s*[:=-]\s*[^,;\n]{1,140}/gi,
     '$1 : [masqué]',
   );
+  x = x.replace(
+    /\b(?:M\.|Mr|Mme|Monsieur|Madame)\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÿ'’-]{1,40}(?:\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÿ'’-]{1,40})?/g,
+    '[identité masquée]',
+  );
+  x = x.replace(/\b[A-Z]{1,4}\d{5,}\b/gi, '[identifiant masqué]');
   x = x.replace(/\b\d{7,}\b/g, '[identifiant masqué]');
   return x.slice(0, max).trim();
 }
 
-function extractResponseText(payload: any): string {
-  if (typeof payload?.output_text === 'string') return payload.output_text;
-  const parts: string[] = [];
-  for (const item of payload?.output ?? []) {
-    for (const content of item?.content ?? []) {
-      if (typeof content?.text === 'string') parts.push(content.text);
-    }
-  }
-  return parts.join('\n');
-}
-
-function parseJsonLoose(raw: string): any {
-  const text = raw.trim();
-  if (!text) throw new Error('empty_model_output');
-  try {
-    return JSON.parse(text);
-  } catch (_) {}
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) return JSON.parse(fenced[1]);
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start >= 0 && end > start) return JSON.parse(text.slice(start, end + 1));
-  throw new Error('invalid_model_json');
+function anonymizedCase(post: any): Record<string, string> {
+  const build = (limit: number) => ({
+    age_band: scrub(post.age_band, 80),
+    sex: scrub(post.sex, 40),
+    presentation: scrub(post.presentation, limit),
+    history: scrub(post.history, limit),
+    clinical_exam: scrub(post.clinical_exam, limit),
+    complementary_exams: scrub(post.complementary_exams, limit),
+    imaging_conclusion: scrub(post.imaging_conclusion, limit),
+    assessment: scrub(post.assessment, limit),
+    plan: scrub(post.plan, limit),
+    disposition: scrub(post.disposition, Math.min(limit, 700)),
+    specialist_service: scrub(post.specialist_service, 300),
+  });
+  let result = build(2200);
+  if (JSON.stringify(result).length > maxCasePayloadChars) result = build(900);
+  return result;
 }
 
 function canonicalUrl(value: unknown): string {
   try {
     const url = new URL(String(value ?? '').trim());
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return '';
     url.hash = '';
     url.search = '';
     const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -66,23 +128,17 @@ function canonicalUrl(value: unknown): string {
 }
 
 type WebSource = { title: string; url: string };
-
 function extractWebSources(payload: any): WebSource[] {
   const byUrl = new Map<string, WebSource>();
   const add = (title: unknown, url: unknown) => {
     const rawUrl = String(url ?? '').trim();
     const key = canonicalUrl(rawUrl);
-    if (!key || !rawUrl.startsWith('http')) return;
-    if (!byUrl.has(key)) {
-      byUrl.set(key, { title: scrub(title, 500), url: rawUrl });
-    }
+    if (!key || byUrl.has(key)) return;
+    byUrl.set(key, { title: scrub(title, 500), url: rawUrl });
   };
-
   for (const item of payload?.output ?? []) {
     if (item?.type === 'web_search_call') {
-      for (const source of item?.action?.sources ?? []) {
-        add(source?.title, source?.url);
-      }
+      for (const source of item?.action?.sources ?? []) add(source?.title, source?.url);
     }
     for (const content of item?.content ?? []) {
       for (const annotation of content?.annotations ?? []) {
@@ -98,55 +154,61 @@ function extractWebSources(payload: any): WebSource[] {
   return [...byUrl.values()];
 }
 
-const topicEnum = [
-  'motif',
-  'symptome',
-  'examen',
-  'imagerie',
-  'synthese',
-  'prise_en_charge',
-  'orientation',
-  'avis_specialise',
-];
+function extractResponseText(payload: any): string {
+  if (typeof payload?.output_text === 'string') return payload.output_text;
+  const parts: string[] = [];
+  for (const item of payload?.output ?? []) {
+    for (const content of item?.content ?? []) {
+      if (typeof content?.text === 'string') parts.push(content.text);
+    }
+  }
+  return parts.join('\n');
+}
 
-const axisEnum = [
-  'cours_fondamental',
-  'diagnostic',
-  'explorations',
-  'prise_en_charge',
-  'recommandations',
-];
-
-const sourceKindEnum = ['recommandation', 'consensus', 'revue', 'cours'];
-
-const specialtyEnum = [
-  'Cardiologie',
-  'Pneumologie',
-  'Gastro-entérologie',
-  'Chirurgie Viscérale',
-  'Urologie',
-  'Néphrologie',
-  'Neurologie',
-  'Neurochirurgie',
-  'Traumatologie / Orthopédie',
-  'Rhumatologie',
-  'Gynécologie',
-  'Pédiatrie',
-  'ORL',
-  'Ophtalmologie',
-  'Dermatologie',
-  'Endocrinologie - Diabétologie',
-  'Hématologie',
-  'Oncologie',
-  'Infectiologie',
-  'Réanimation',
-  'Anesthésie',
-  'Psychiatrie',
-  'Imagerie Médicale',
-  'Urgences',
-  'Médecine interne',
-  'Autres cas cliniques',
-];
+const referenceSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'organization', 'year', 'url', 'kind'],
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    organization: { type: 'string', minLength: 1 },
+    year: { type: 'string', minLength: 4 },
+    url: { type: 'string', minLength: 8 },
+    kind: { type: 'string', enum: sourceKindEnum },
+  },
+};
+const qcmItemSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['axis', 'question', 'options', 'correct_index', 'correction', 'topic', 'references'],
+  properties: {
+    axis: { type: 'string', enum: axisEnum },
+    question: { type: 'string', minLength: 12 },
+    options: {
+      type: 'array',
+      minItems: 4,
+      maxItems: 4,
+      items: { type: 'string', minLength: 1 },
+    },
+    correct_index: { type: 'integer', minimum: 0, maximum: 3 },
+    correction: { type: 'string', minLength: 20 },
+    topic: { type: 'string', enum: topicEnum },
+    references: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 3,
+      items: referenceSchema,
+    },
+  },
+};
+const fiveQcmSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['qcms'],
+  properties: {
+    qcms: { type: 'array', minItems: 5, maxItems: 5, items: qcmItemSchema },
+  },
+};
 
 const genericQuestionPatterns = [
   /dans ce cas(?: clinique)?/i,
@@ -159,88 +221,63 @@ const genericQuestionPatterns = [
   /quel élément .* est .* dans ce cas/i,
 ];
 
-const referenceSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['title', 'organization', 'year', 'url', 'kind'],
-  properties: {
-    title: { type: 'string' },
-    organization: { type: 'string' },
-    year: { type: 'string' },
-    url: { type: 'string' },
-    kind: { type: 'string', enum: sourceKindEnum },
-  },
-};
-
-const qcmItemSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: [
-    'axis',
-    'question',
-    'options',
-    'correct_index',
-    'correction',
-    'topic',
-    'references',
-  ],
-  properties: {
-    axis: { type: 'string', enum: axisEnum },
-    question: { type: 'string' },
-    options: {
-      type: 'array',
-      minItems: 4,
-      maxItems: 4,
-      items: { type: 'string' },
-    },
-    correct_index: { type: 'integer', minimum: 0, maximum: 3 },
-    correction: { type: 'string' },
-    topic: { type: 'string', enum: topicEnum },
-    references: {
-      type: 'array',
-      minItems: 1,
-      maxItems: 3,
-      items: referenceSchema,
-    },
-  },
-};
-
-const fiveQcmSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['specialty', 'specialty_confidence', 'qcms'],
-  properties: {
-    specialty: { type: 'string', enum: specialtyEnum },
-    specialty_confidence: { type: 'number', minimum: 0, maximum: 1 },
-    qcms: {
-      type: 'array',
-      minItems: 5,
-      maxItems: 5,
-      items: qcmItemSchema,
-    },
-  },
-};
-
-function formatCorrection(
-  correction: string,
-  references: Array<{
-    title: string;
-    organization: string;
-    year: string;
-    url: string;
-    kind: string;
-  }>,
-): string {
+function formatCorrection(correction: string, references: Array<any>): string {
   const lines = references.map(
     (ref) => `${ref.kind}|||${ref.title}|||${ref.organization}|||${ref.year}|||${ref.url}`,
   );
   return `${correction}\n\n§SOURCES§\n${lines.join('\n')}`.slice(0, 9000);
 }
 
+function retrySeconds(retryAfter: unknown): number | null {
+  const date = Date.parse(String(retryAfter ?? ''));
+  if (!Number.isFinite(date)) return null;
+  return Math.max(1, Math.ceil((date - Date.now()) / 1000));
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') {
-    return json({ ok: false, error: 'method_not_allowed' }, 405);
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  const executionId = safeCode(Deno.env.get('SB_EXECUTION_ID'), 'edge');
+  let adminClient: any = null;
+  let claimedPostId = '';
+  let userHash = '';
+  let postIdForLog = '';
+
+  const baseLog = () => ({
+    request_id: requestId,
+    execution_id: executionId,
+    post_id: postIdForLog || undefined,
+    user_hash: userHash || undefined,
+    duration_ms: Date.now() - startedAt,
+  });
+  const finish = async (success: boolean, errorCode?: string) => {
+    if (!adminClient || !claimedPostId) return;
+    try {
+      await adminClient.rpc('clinical_case_finish_qcm_generation', {
+        p_post_id: claimedPostId,
+        p_success: success,
+        p_error_code: errorCode ? safeCode(errorCode, 'generation_failed') : null,
+      });
+    } catch (_) {
+      logEvent('generation_finish_state_failed', baseLog());
+    }
+  };
+  const fail = (
+    status: number,
+    error: string,
+    retryable: boolean,
+    extra: Record<string, unknown> = {},
+  ) => json(req, { ok: false, error, retryable, ...extra }, status);
+
+  if (req.method === 'OPTIONS') return new Response('ok', { status: 204, headers: corsHeaders(req) });
+  if (req.method !== 'POST') return fail(405, 'method_not_allowed', false);
+
+  const origin = req.headers.get('Origin')?.trim() ?? '';
+  const configuredOrigins = (Deno.env.get('GARDEFLOW_ALLOWED_ORIGINS') ?? '')
+    .split(',').map((x) => x.trim()).filter(Boolean);
+  if (origin && configuredOrigins.length > 0 && !configuredOrigins.includes(origin)) {
+    logEvent('cors_origin_denied', baseLog());
+    return fail(403, 'origin_not_allowed', false);
   }
 
   try {
@@ -250,441 +287,381 @@ Deno.serve(async (req: Request) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     const authorization = req.headers.get('Authorization') ?? '';
 
-    if (!supabaseUrl || !anonKey || !serviceRoleKey || !authorization.startsWith('Bearer ')) {
-      return json({ ok: false, error: 'unauthorized' }, 401);
+    if (!authorization.startsWith('Bearer ')) {
+      logEvent('authentication_failed', baseLog());
+      return fail(401, 'authentication_required', false);
+    }
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      logEvent('server_configuration_missing', {
+        ...baseLog(),
+        missing_supabase_url: !supabaseUrl,
+        missing_anon_key: !anonKey,
+        missing_service_role_key: !serviceRoleKey,
+      });
+      return fail(503, 'server_configuration_unavailable', true);
     }
 
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
     const { data: callerData, error: callerError } = await callerClient.auth.getUser();
     const callerId = callerData.user?.id;
     if (callerError || !callerId) {
-      return json({ ok: false, error: 'unauthorized' }, 401);
+      logEvent('authentication_failed', baseLog());
+      return fail(401, 'authentication_failed', false);
     }
+    userHash = await shortHash(callerId);
 
-    const { data: profile } = await adminClient
+    const { data: profile, error: profileError } = await adminClient
       .from('profiles')
-      .select('id,account_status')
+      .select('id,account_status,role')
       .eq('id', callerId)
       .maybeSingle();
-    if (!profile || profile.account_status !== 'active') {
-      return json({ ok: false, error: 'inactive_account' }, 403);
+    if (profileError || !profile || profile.account_status !== 'active') {
+      logEvent('account_inactive', baseLog());
+      return fail(403, 'account_inactive', false);
     }
 
-    const body = await req.json().catch(() => ({}));
-    const practiceCaseId = String(body?.practice_case_id ?? '').trim();
-    const requestedPostId = String(body?.post_id ?? '').trim();
-    const forceRegenerate = body?.force_regenerate === true;
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') return fail(400, 'invalid_request', false);
+    const practiceCaseId = String((body as any).practice_case_id ?? '').trim();
+    const requestedPostId = String((body as any).post_id ?? '').trim();
+    const requestedForce = (body as any).force_regenerate === true;
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    if (!practiceCaseId && !requestedPostId) {
-      return json({ ok: false, error: 'case_or_post_required' }, 400);
+    if ((!practiceCaseId && !requestedPostId) || (practiceCaseId && requestedPostId)) {
+      return fail(400, 'exactly_one_case_identifier_required', false);
     }
+    if (practiceCaseId && !uuidPattern.test(practiceCaseId)) return fail(400, 'invalid_case_id', false);
+    if (requestedPostId && !uuidPattern.test(requestedPostId)) return fail(400, 'invalid_post_id', false);
 
     const postSelect =
-      'id,practice_case_id,author_id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service,specialty_classification_source,specialty_classification_confidence';
-
+      'id,practice_case_id,author_id,published_at,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service,specialty_classification_source,specialty_classification_confidence';
     let post: any = null;
     let resolvedPracticeCaseId = practiceCaseId;
 
     if (practiceCaseId) {
-      if (!/^[0-9a-f-]{36}$/i.test(practiceCaseId)) {
-        return json({ ok: false, error: 'invalid_case_id' }, 400);
-      }
-
       const { data: practiceCase, error: caseError } = await adminClient
         .from('practice_cases')
         .select('id,user_id,is_draft')
         .eq('id', practiceCaseId)
         .maybeSingle();
       if (caseError || !practiceCase || practiceCase.user_id !== callerId) {
-        return json({ ok: false, error: 'case_not_found' }, 404);
+        logEvent('case_not_found', baseLog());
+        return fail(404, 'case_not_found', false);
       }
-      if (practiceCase.is_draft === true) {
-        return json({ ok: false, error: 'draft_case' }, 409);
-      }
-
+      if (practiceCase.is_draft === true) return fail(409, 'case_not_ready', false);
       const { data, error } = await adminClient
         .from('clinical_case_posts')
         .select(postSelect)
         .eq('practice_case_id', practiceCaseId)
         .maybeSingle();
-      if (error || !data) {
-        return json({ ok: false, error: 'post_not_ready' }, 409);
-      }
+      if (error || !data) return fail(409, 'case_not_ready', false);
       post = data;
     } else {
-      if (!/^[0-9a-f-]{36}$/i.test(requestedPostId)) {
-        return json({ ok: false, error: 'invalid_post_id' }, 400);
-      }
-
       const { data, error } = await adminClient
         .from('clinical_case_posts')
         .select(postSelect)
         .eq('id', requestedPostId)
         .maybeSingle();
-      if (error || !data) {
-        return json({ ok: false, error: 'post_not_found' }, 404);
+      if (error || !data || !data.published_at) {
+        logEvent('case_not_found', baseLog());
+        return fail(404, 'case_not_found', false);
       }
+      // clinical_case_feed is available to every active authenticated physician;
+      // only published posts are therefore eligible through post_id.
       post = data;
       resolvedPracticeCaseId = String(data.practice_case_id ?? '');
     }
 
-    const { data: existingQcms } = await adminClient
+    postIdForLog = String(post.id);
+    logEvent('qcm_generation_started', baseLog());
+
+    const { data: existingQcms, error: existingError } = await adminClient
       .from('clinical_case_qcms')
       .select('id,generation_source')
       .eq('post_id', post.id);
-
+    if (existingError) {
+      logEvent('database_read_failed', baseLog());
+      return fail(503, 'database_unavailable', true);
+    }
     if (
-      !forceRegenerate &&
       (existingQcms ?? []).length === 5 &&
       (existingQcms ?? []).every((q: any) => q.generation_source === 'openai')
     ) {
-      return json({
+      return json(req, {
         ok: true,
         generated: false,
-        source: 'openai',
+        status: 'ready',
         count: 5,
         post_id: post.id,
-        specialty: post.specialist_service,
-        specialty_source: post.specialty_classification_source,
         reason: 'already_ready',
       });
     }
 
+    const isAdmin = String(profile.role ?? '').toLowerCase() === 'admin';
+    const canForce = requestedForce && (isAdmin || post.author_id === callerId);
+    const { data: claimData, error: claimError } = await adminClient.rpc(
+      'clinical_case_claim_qcm_generation',
+      { p_post_id: post.id, p_user_id: callerId, p_force: canForce },
+    );
+    if (claimError || !Array.isArray(claimData) || claimData.length === 0) {
+      logEvent('generation_guard_unavailable', baseLog());
+      return fail(503, 'generation_guard_unavailable', true);
+    }
+    const claim = claimData[0] ?? {};
+    if (claim.claimed !== true) {
+      const claimStatus = String(claim.status ?? 'failed');
+      const claimErrorCode = safeCode(claim.error_code, 'retry_later');
+      const retryAfter = claim.retry_after ?? null;
+      const seconds = retrySeconds(retryAfter);
+      if (claimStatus === 'ready') {
+        return json(req, { ok: true, generated: false, status: 'ready', count: 5, post_id: post.id });
+      }
+      if (claimStatus === 'running') {
+        logEvent('generation_already_running', baseLog());
+        return fail(202, 'generation_in_progress', true, {
+          post_id: post.id,
+          retry_after: retryAfter,
+          retry_after_seconds: seconds,
+        });
+      }
+      if (claimErrorCode === 'rate_limit_exceeded') {
+        logEvent('rate_limit_exceeded', baseLog());
+        return fail(429, 'rate_limit_exceeded', true, {
+          retry_after: retryAfter,
+          retry_after_seconds: seconds,
+        });
+      }
+      const permanent = ['openai_request_invalid', 'authentication_failed', 'authorization_failed', 'invalid_request']
+        .includes(claimErrorCode);
+      return fail(permanent ? 502 : 503, claimErrorCode, !permanent, {
+        retry_after: retryAfter,
+        retry_after_seconds: seconds,
+      });
+    }
+    claimedPostId = post.id;
+
     if (!openaiKey) {
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        count: (existingQcms ?? []).length,
-        post_id: post.id,
-        reason: 'openai_key_missing',
-      }, 503);
+      logEvent('openai_key_missing', baseLog());
+      await finish(false, 'openai_key_missing');
+      claimedPostId = '';
+      return fail(503, 'openai_unavailable', true, { retry_after_seconds: 60 });
     }
 
-    const safeCase = {
-      age_band: scrub(post.age_band, 80),
-      sex: scrub(post.sex, 40),
-      presentation: scrub(post.presentation),
-      history: scrub(post.history),
-      clinical_exam: scrub(post.clinical_exam),
-      complementary_exams: scrub(post.complementary_exams),
-      imaging_conclusion: scrub(post.imaging_conclusion),
-      assessment: scrub(post.assessment),
-      plan: scrub(post.plan),
-      disposition: scrub(post.disposition, 500),
-      specialist_service: scrub(post.specialist_service, 300),
-    };
+    const safeCase = anonymizedCase(post);
+    const safeCaseJson = JSON.stringify(safeCase);
+    if (safeCaseJson.length > maxCasePayloadChars) {
+      await finish(false, 'payload_too_large');
+      claimedPostId = '';
+      return fail(400, 'clinical_payload_too_large', false);
+    }
 
-    const specialtiesForPrompt = specialtyEnum.map((value) => `- ${value}`).join('\n');
+    const prompt = `Tu es responsable pédagogique d'un programme de QCM pour externes et internes en médecine.\nDATE DE RÉFÉRENCE : 1 octobre 2026.\n\nLe cas ci-dessous est anonymisé et sert uniquement d'ancrage thématique. N'essaie jamais d'identifier le patient et ne restitue jamais le dossier.\n\nCrée EXACTEMENT 5 QCM autonomes, vrais et utiles, fondés sur des sources médicales institutionnelles/universitaires et des recommandations récentes réellement consultées sur le web. La recherche web est nécessaire ici car chaque QCM doit être sourcé et le cinquième doit refléter une recommandation récente.\n\nAXES DANS CET ORDRE :\n1 cours_fondamental ; 2 diagnostic ; 3 explorations ; 4 prise_en_charge ; 5 recommandations.\n\nRÈGLES :\n- exactement 4 propositions et une seule meilleure réponse ; distracteurs plausibles ;\n- jamais de formulation « dans ce cas », de restitution du dossier, de « toutes/aucune » ;\n- n'invente aucun seuil, score, posologie ou recommandation ;\n- correction factuelle de 3 à 6 phrases ;\n- QCM 1 : au moins une source 'cours' ; QCM 2-4 : au moins une source 'cours' ou 'revue' ; QCM 5 : au moins une 'recommandation' ou un 'consensus' ;\n- 1 à 3 références réellement consultées par QCM, avec URL exacte ; pas de blog, forum, Wikipédia, site commercial ou grand public ;\n- réponds en français.\n\nCAS ANONYMISÉ :\n${safeCaseJson}`;
 
-    const prompt = `Tu es responsable pédagogique d'un programme de QCM pour externes et internes en médecine.
-DATE DE RÉFÉRENCE : 1 octobre 2026.
+    const model = String(Deno.env.get('OPENAI_TEXT_MODEL') ?? '').trim() || 'gpt-5.6-sol';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+    let response: Response;
 
-Tu reçois un cas clinique anonymisé. Tu as DEUX tâches obligatoires :
-1) classer ce cas dans UNE spécialité médicale/chirurgicale ;
-2) utiliser le cas uniquement comme ancrage thématique pour créer EXACTEMENT 5 QCM de cours et de recommandations.
-
-CLASSEMENT DE LA SPÉCIALITÉ — OBLIGATOIRE
-Analyse l'ENSEMBLE du cas : motif, symptômes, antécédents, examen clinique, biologie, imagerie, synthèse diagnostique, traitement/conduite à tenir et orientation. Ne te limite jamais au titre ni à un mot-clé isolé.
-
-Choisis EXACTEMENT une catégorie parmi :
-${specialtiesForPrompt}
-
-Règles de classement :
-- Cherche activement la spécialité principale la plus pertinente. « Autres cas cliniques » est STRICTEMENT un dernier recours.
-- Ne choisis jamais « Autres cas cliniques » simplement parce que specialist_service est vide ou imprécis.
-- En cas d'ambiguïté, compare les 2 ou 3 spécialités plausibles à partir de tout le contexte clinique et retiens la plus cohérente.
-- « Urgences » n'est PAS un fourre-tout ni le lieu de prise en charge. Une colique néphrétique vue aux urgences = Urologie ; un AVC = Neurologie ; une appendicite = Chirurgie Viscérale. Réserve « Urgences » aux situations réellement transversales de médecine d'urgence/polytraumatisme quand aucune spécialité d'organe ne domine.
-- Distingue Urologie et Néphrologie : lithiase/colique néphrétique/obstruction urétérale/rétention/prostate = Urologie ; atteinte glomérulaire, insuffisance rénale médicale, syndrome néphrotique/néphritique, dialyse ou trouble hydro-électrolytique primitif = Néphrologie.
-- Si specialist_service contient déjà une spécialité, considère-la comme un indice seulement ; le contenu clinique reste la référence sémantique.
-- Retourne specialty_confidence entre 0 et 1. Une confiance basse ne justifie pas à elle seule « Autres » si une spécialité reste raisonnablement identifiable.
-
-SOURCE PÉDAGOGIQUE OBLIGATOIRE POUR LES QCM
-- Fais une recherche web AVANT toute question.
-- Cherche prioritairement un cours médical institutionnel ou universitaire, NCBI Bookshelf/StatPearls, collège de spécialité, référentiel d'enseignement, société savante ou autorité sanitaire.
-- Pour les recommandations, utilise la version officielle la plus récente disponible à la date de référence.
-- Aucun blog, forum, Wikipédia, site commercial ou contenu grand public.
-- Chaque QCM doit avoir 1 à 3 références réellement consultées avec URL exacte.
-- Le QCM 1 doit obligatoirement citer au moins une source de type 'cours'.
-- Les QCM 2 à 4 doivent être fondés sur une source pédagogique ('cours' ou 'revue') et peuvent être complétés par une recommandation/consensus.
-- Le QCM 5 doit citer au moins une 'recommandation' ou un 'consensus' récent.
-
-INTERDIT
-- Ne pose jamais une question de restitution du dossier : formulations du type « dans ce cas », « documenté », « quelle synthèse a été retenue », « quelle conduite a été faite », « quelle orientation a été choisie ».
-- Le texte du cas n'est jamais une preuve scientifique et ne doit jamais être la source de la bonne réponse.
-- N'invente aucun fait clinique, seuil, score, posologie ou recommandation. Si un point ne peut pas être sourcé, choisis un autre point de cours.
-
-5 AXES, DANS CET ORDRE
-1 cours_fondamental : physiopathologie, définition, classification ou notion fondamentale ;
-2 diagnostic : critères, signes discriminants, diagnostic différentiel ou score ;
-3 explorations : biologie, imagerie, ECG ou examen utile et son interprétation ;
-4 prise_en_charge : stratégie thérapeutique, surveillance ou complication ;
-5 recommandations : recommandation récente ou changement de pratique.
-
-QUALITÉ
-- Niveau externat/internat, intéressant en garde et en formation continue.
-- 4 propositions exactement, une seule meilleure réponse, 3 distracteurs plausibles et homogènes.
-- Pas de « toutes/aucune », pas de distracteur absurde, pas d'indice de longueur.
-- Questions autonomes : elles doivent rester vraies même si on retire le cas clinique initial.
-- Correction en 3 à 6 phrases, factuelle, expliquant le raisonnement et, si pertinent, pourquoi les distracteurs sont faux.
-- Mentionne l'organisation et l'année quand la réponse dépend d'une recommandation.
-- Réponds en français.
-
-CAS ANONYMISÉ — CLASSIFICATION + ANCRAGE THÉMATIQUE :
-${JSON.stringify(safeCase)}`;
-
-    const model =
-      Deno.env.get('OPENAI_TEXT_MODEL') ||
-      Deno.env.get('OPENAI_VISION_MODEL') ||
-      'gpt-5.6';
-
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        store: false,
-        tools: [{ type: 'web_search' }],
-        tool_choice: 'required',
-        include: ['web_search_call.action.sources'],
-        input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'clinical_case_specialty_and_course_grounded_qcms',
-            strict: true,
-            schema: fiveQcmSchema,
-          },
+    logEvent('openai_request_started', { ...baseLog(), model });
+    try {
+      response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          model,
+          store: false,
+          tools: [{ type: 'web_search' }],
+          tool_choice: 'required',
+          include: ['web_search_call.action.sources'],
+          input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'clinical_case_course_guideline_qcms',
+              strict: true,
+              schema: fiveQcmSchema,
+            },
+          },
+        }),
+      });
+    } catch (error) {
+      const timeout = error instanceof DOMException && error.name === 'AbortError';
+      const code = timeout ? 'openai_timeout' : 'openai_network_error';
+      logEvent('openai_http_error', { ...baseLog(), provider_error: code });
+      await finish(false, code);
+      claimedPostId = '';
+      return fail(503, 'openai_unavailable', true);
+    } finally {
+      clearTimeout(timer);
+    }
 
-    const payload = await response.json().catch(() => ({}));
+    const providerRequestId = safeCode(response.headers.get('x-request-id'), 'unavailable');
+    const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      console.error('OpenAI course QCM failed', response.status, payload);
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        post_id: post.id,
-        reason: 'openai_failed',
-      }, 503);
+      const providerCode = safeCode(payload?.error?.code, `http_${response.status}`);
+      const providerType = safeCode(payload?.error?.type, 'provider_error');
+      const providerParam = safeCode(payload?.error?.param, '');
+      const schemaProblem = response.status === 400 &&
+        `${providerCode}:${providerType}:${providerParam}`.toLowerCase().includes('schema');
+      logEvent(schemaProblem ? 'openai_invalid_schema' : 'openai_http_error', {
+        ...baseLog(),
+        provider_status: response.status,
+        provider_code: providerCode,
+        provider_type: providerType,
+        provider_request_id: providerRequestId,
+      });
+      const permanent = response.status === 400 || response.status === 401 || response.status === 403;
+      const errorCode = schemaProblem ? 'openai_invalid_schema' :
+        response.status === 400 ? 'openai_request_invalid' :
+        response.status === 429 ? 'openai_rate_limited' :
+        response.status >= 500 ? 'openai_provider_unavailable' :
+        response.status === 401 || response.status === 403 ? 'openai_provider_auth_error' :
+        'openai_provider_error';
+      await finish(false, errorCode);
+      claimedPostId = '';
+      return fail(permanent ? 502 : 503, permanent ? 'openai_request_invalid' : 'openai_unavailable', !permanent);
+    }
+    if (!payload || typeof payload !== 'object') {
+      logEvent('openai_invalid_json', { ...baseLog(), provider_request_id: providerRequestId });
+      await finish(false, 'openai_invalid_json');
+      claimedPostId = '';
+      return fail(502, 'openai_invalid_response', true);
     }
 
     const webSources = extractWebSources(payload);
     if (webSources.length === 0) {
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        post_id: post.id,
-        reason: 'missing_web_sources',
-      }, 422);
+      logEvent('qcm_validation_failed', { ...baseLog(), reason: 'missing_web_sources' });
+      await finish(false, 'missing_web_sources');
+      claimedPostId = '';
+      return fail(502, 'openai_invalid_response', true);
     }
     const consultedUrls = new Set(webSources.map((source) => canonicalUrl(source.url)));
 
-    const generated = parseJsonLoose(extractResponseText(payload));
-    const specialty = String(generated?.specialty ?? '').trim();
-    const specialtyConfidence = Number(generated?.specialty_confidence);
-    if (
-      !specialtyEnum.includes(specialty) ||
-      !Number.isFinite(specialtyConfidence) ||
-      specialtyConfidence < 0 ||
-      specialtyConfidence > 1
-    ) {
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        post_id: post.id,
-        reason: 'invalid_specialty_classification',
-      }, 422);
+    let generated: any;
+    try {
+      const raw = extractResponseText(payload).trim();
+      if (!raw) throw new Error('empty_model_output');
+      generated = JSON.parse(raw);
+    } catch (_) {
+      logEvent('openai_invalid_json', { ...baseLog(), provider_request_id: providerRequestId });
+      await finish(false, 'openai_invalid_json');
+      claimedPostId = '';
+      return fail(502, 'openai_invalid_response', true);
     }
 
-    const rawQcms = Array.isArray(generated?.qcms) ? generated.qcms : [];
-    if (rawQcms.length !== 5) {
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        post_id: post.id,
-        reason: 'invalid_qcm_count',
-      }, 422);
-    }
+    try {
+      const rawQcms = Array.isArray(generated?.qcms) ? generated.qcms : [];
+      if (rawQcms.length !== 5) throw new Error('invalid_qcm_count');
+      const allowedTopics = new Set<string>(topicEnum);
+      const allowedAxes = new Set<string>(axisEnum);
+      const allowedKinds = new Set<string>(sourceKindEnum);
 
-    const allowedTopics = new Set(topicEnum);
-    const allowedAxes = new Set(axisEnum);
-    const allowedKinds = new Set(sourceKindEnum);
+      const normalized = rawQcms.map((raw: any, index: number) => {
+        const options = Array.isArray(raw?.options)
+          ? raw.options.map((x: unknown) => scrub(x, 420)).filter(Boolean)
+          : [];
+        const question = scrub(raw?.question, 1200);
+        const correction = scrub(raw?.correction, 5500);
+        const correctIndex = Number(raw?.correct_index);
+        const topic = String(raw?.topic ?? '').trim();
+        const axis = String(raw?.axis ?? '').trim();
+        const references = (Array.isArray(raw?.references) ? raw.references : [])
+          .map((ref: any) => ({
+            title: scrub(ref?.title, 600),
+            organization: scrub(ref?.organization, 300),
+            year: scrub(ref?.year, 40),
+            url: String(ref?.url ?? '').trim(),
+            kind: String(ref?.kind ?? '').trim(),
+          }))
+          .filter((ref: any) =>
+            ref.title && ref.organization && ref.year && canonicalUrl(ref.url) &&
+            allowedKinds.has(ref.kind) && consultedUrls.has(canonicalUrl(ref.url))
+          );
 
-    const normalized = rawQcms.map((raw: any, index: number) => {
-      const options = Array.isArray(raw?.options)
-        ? raw.options.map((x: unknown) => scrub(x, 420)).filter(Boolean)
-        : [];
-      const correctIndex = Number(raw?.correct_index);
-      const question = scrub(raw?.question, 1200);
-      const rawCorrection = scrub(raw?.correction, 5500);
-      const topic = String(raw?.topic ?? '').trim();
-      const axis = String(raw?.axis ?? '').trim();
-      const references = (Array.isArray(raw?.references) ? raw.references : [])
-        .map((ref: any) => ({
-          title: scrub(ref?.title, 600),
-          organization: scrub(ref?.organization, 300),
-          year: scrub(ref?.year, 40),
-          url: String(ref?.url ?? '').trim(),
-          kind: String(ref?.kind ?? '').trim(),
-        }))
-        .filter((ref: any) =>
-          ref.title &&
-          ref.organization &&
-          ref.year &&
-          ref.url.startsWith('http') &&
-          allowedKinds.has(ref.kind) &&
-          consultedUrls.has(canonicalUrl(ref.url))
-        );
+        if (!question || !correction || options.length !== 4 || new Set(options).size !== 4 ||
+            !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3 ||
+            !allowedTopics.has(topic) || !allowedAxes.has(axis) || references.length < 1 ||
+            genericQuestionPatterns.some((pattern) => pattern.test(question))) {
+          throw new Error(`invalid_qcm_${index + 1}`);
+        }
+        const kinds = new Set(references.map((ref: any) => ref.kind));
+        if (index === 0 && !kinds.has('cours')) throw new Error('qcm_1_missing_course_source');
+        if (index >= 1 && index <= 3 && ![...kinds].some((kind) => kind === 'cours' || kind === 'revue')) {
+          throw new Error(`qcm_${index + 1}_missing_teaching_source`);
+        }
+        if (index === 4 && ![...kinds].some((kind) => kind === 'recommandation' || kind === 'consensus')) {
+          throw new Error('qcm_5_missing_guideline_source');
+        }
+        return {
+          axis,
+          position: index + 1,
+          question,
+          options,
+          correct_index: correctIndex,
+          correction: formatCorrection(correction, references.slice(0, 3)),
+          topic,
+        };
+      });
 
-      if (
-        !question ||
-        !rawCorrection ||
-        options.length !== 4 ||
-        new Set(options).size !== 4 ||
-        !Number.isInteger(correctIndex) ||
-        correctIndex < 0 ||
-        correctIndex > 3 ||
-        !allowedTopics.has(topic) ||
-        !allowedAxes.has(axis) ||
-        references.length < 1 ||
-        genericQuestionPatterns.some((pattern) => pattern.test(question))
-      ) {
-        throw new Error(`invalid_qcm_${index + 1}`);
+      if (normalized.some((qcm: any, index: number) => qcm.axis !== axisEnum[index])) {
+        throw new Error('invalid_axis_order');
       }
-
-      const kinds = new Set(references.map((ref: any) => ref.kind));
-      if (index === 0 && !kinds.has('cours')) {
-        throw new Error('qcm_1_missing_course_source');
-      }
-      if (
-        index >= 1 &&
-        index <= 3 &&
-        ![...kinds].some((kind: any) => kind === 'cours' || kind === 'revue')
-      ) {
-        throw new Error(`qcm_${index + 1}_missing_teaching_source`);
-      }
-      if (
-        index === 4 &&
-        ![...kinds].some(
-          (kind: any) => kind === 'recommandation' || kind === 'consensus',
-        )
-      ) {
-        throw new Error('qcm_5_missing_guideline_source');
-      }
-
-      return {
-        axis,
-        post_id: post.id,
-        position: index + 1,
-        question,
-        options,
-        correct_index: correctIndex,
-        correction: formatCorrection(rawCorrection, references.slice(0, 3)),
-        topic,
-        generation_source: 'openai',
-        updated_at: new Date().toISOString(),
-      };
-    });
-
-    if (normalized.some((qcm: any, index: number) => qcm.axis !== axisEnum[index])) {
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        post_id: post.id,
-        reason: 'invalid_axis_order',
-      }, 422);
-    }
-
-    if (new Set(normalized.map((qcm: any) => qcm.question.toLowerCase())).size !== 5) {
-      return json({
-        ok: false,
-        generated: false,
-        source: 'none',
-        post_id: post.id,
-        reason: 'duplicate_questions',
-      }, 422);
-    }
-
-    const persisted = normalized.map(({ axis: _axis, ...qcm }: any) => qcm);
-    const first = persisted[0];
-    const now = new Date().toISOString();
-
-    const preserveDeclaredSpecialty =
-      String(post.specialty_classification_source ?? '').trim() === 'declared' &&
-      String(post.specialist_service ?? '').trim() !== '' &&
-      !['Urgences', 'Autres cas cliniques'].includes(
-        String(post.specialist_service ?? '').trim(),
+      const normalizedQuestions = normalized.map((qcm: any) =>
+        qcm.question.toLowerCase().replace(/\s+/g, ' ').trim()
       );
+      if (new Set(normalizedQuestions).size !== 5) throw new Error('duplicate_questions');
 
-    const postUpdate: Record<string, unknown> = {
-      qcm_question: first.question,
-      qcm_options: first.options,
-      correct_index: first.correct_index,
-      correction: first.correction,
-      question_topic: first.topic,
-      generation_source: 'openai',
-      updated_at: now,
-    };
-
-    if (!preserveDeclaredSpecialty) {
-      postUpdate.specialist_service = specialty;
-      postUpdate.specialty_classification_confidence = specialtyConfidence;
-      postUpdate.specialty_classification_source = 'ai';
-      postUpdate.specialty_classified_at = now;
+      const persisted = normalized.map(({ axis: _axis, ...qcm }: any) => qcm);
+      const { error: commitError } = await adminClient.rpc('clinical_case_commit_generated_qcms', {
+        p_post_id: post.id,
+        p_qcms: persisted,
+      });
+      if (commitError) {
+        logEvent('database_write_failed', { ...baseLog(), db_code: safeCode(commitError.code, 'rpc_error') });
+        await finish(false, 'database_write_failed');
+        claimedPostId = '';
+        return fail(503, 'database_unavailable', true);
+      }
+    } catch (error) {
+      const reason = safeCode((error as Error)?.message, 'qcm_validation_failed');
+      logEvent('qcm_validation_failed', { ...baseLog(), reason });
+      await finish(false, reason);
+      claimedPostId = '';
+      return fail(502, 'openai_invalid_response', true);
     }
 
-    const { error: legacyUpdateError } = await adminClient
-      .from('clinical_case_posts')
-      .update(postUpdate)
-      .eq('id', post.id);
-    if (legacyUpdateError) throw legacyUpdateError;
-
-    const { error: qcmUpsertError } = await adminClient
-      .from('clinical_case_qcms')
-      .upsert(persisted, { onConflict: 'post_id,position' });
-    if (qcmUpsertError) throw qcmUpsertError;
-
-    return json({
+    await finish(true);
+    claimedPostId = '';
+    logEvent('qcm_generation_success', {
+      ...baseLog(),
+      qcm_count: 5,
+      web_source_count: webSources.length,
+      provider_request_id: providerRequestId,
+    });
+    return json(req, {
       ok: true,
       generated: true,
-      source: 'openai',
-      source_mode: 'course_grounded_live_web',
+      status: 'ready',
       count: 5,
-      web_sources: webSources.length,
       post_id: post.id,
       practice_case_id: resolvedPracticeCaseId,
-      specialty: preserveDeclaredSpecialty ? post.specialist_service : specialty,
-      specialty_confidence: preserveDeclaredSpecialty
-        ? post.specialty_classification_confidence
-        : specialtyConfidence,
-      specialty_source: preserveDeclaredSpecialty ? 'declared' : 'ai',
     });
   } catch (error) {
-    console.error(error);
-    return json(
-      {
-        ok: false,
-        error: 'generation_failed',
-        detail: String((error as Error)?.message ?? error),
-      },
-      500,
-    );
+    const code = safeCode((error as Error)?.message, 'generation_failed');
+    await finish(false, code);
+    claimedPostId = '';
+    logEvent('qcm_generation_failed', { ...baseLog(), error_code: code });
+    return fail(503, 'generation_unavailable', true);
   }
 });
