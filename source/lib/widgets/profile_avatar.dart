@@ -1,7 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../data/profile_avatars.dart';
 import '../services/profile_avatar_service.dart';
+
+class ProfileAvatarArtwork extends StatelessWidget {
+  final ProfileAvatarOption option;
+  final BoxFit fit;
+
+  const ProfileAvatarArtwork({
+    super.key,
+    required this.option,
+    this.fit = BoxFit.cover,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.string(
+      option.svgMarkup,
+      fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      clipBehavior: Clip.antiAlias,
+    );
+  }
+}
 
 class ProfileAvatar extends StatefulWidget {
   final String profileId;
@@ -62,10 +85,14 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
         final key = ProfileAvatarService.instance.avatarKeyFor(widget.profileId);
         final option = profileAvatarByKey(key);
         if (option == null) return _initialsAvatar();
-        return CircleAvatar(
-          radius: widget.radius,
-          backgroundColor: widget.backgroundColor,
-          backgroundImage: AssetImage(option.assetPath),
+        return SizedBox.square(
+          dimension: widget.radius * 2,
+          child: ClipOval(
+            child: ColoredBox(
+              color: widget.backgroundColor,
+              child: ProfileAvatarArtwork(option: option, fit: widget.fit),
+            ),
+          ),
         );
       },
     );
