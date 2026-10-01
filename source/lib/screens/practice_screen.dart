@@ -12,6 +12,7 @@ import '../services/practice_service.dart';
 import '../services/clinical_case_service.dart';
 import '../state/app_state.dart';
 import 'practice_qcm_screen.dart';
+import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
 
 abstract final class PracticeColors {
@@ -309,6 +310,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
               const SizedBox(height: 12),
               _LevelCard(level: level, xp: _all.xp, streak: _all.streak),
+              const SizedBox(height: 22),
+              _sectionLabel('CAS CLINIQUES'),
+              const SizedBox(height: 10),
+              _ClinicalCasesGameCard(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ClinicalCasesScreen()),
+                ),
+              ),
               const SizedBox(height: 22),
               _sectionLabel('DÉFIS QCM'),
               const SizedBox(height: 10),
@@ -665,6 +675,141 @@ class _PracticeGameBadge extends StatelessWidget {
           ],
         ),
       );
+}
+
+
+class _ClinicalCasesGameCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ClinicalCasesGameCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.all(17),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                PracticeColors.gamePurple.withOpacity(.34),
+                PracticeColors.surface,
+                PracticeColors.gameBlue.withOpacity(.20),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: PracticeColors.gamePurple.withOpacity(.48),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: PracticeColors.gamePurple.withOpacity(.15),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -8,
+                top: -20,
+                child: Icon(
+                  Icons.psychology_alt_rounded,
+                  size: 92,
+                  color: Colors.white.withOpacity(.055),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          PracticeColors.gamePurple.withOpacity(.42),
+                          PracticeColors.gameBlue.withOpacity(.28),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(17),
+                      border: Border.all(
+                        color: PracticeColors.gameGold.withOpacity(.28),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.medical_information_rounded,
+                      color: PracticeColors.gameGold,
+                      size: 27,
+                    ),
+                  ),
+                  const SizedBox(width: 13),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'CAS CLINIQUES',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .35,
+                              ),
+                            ),
+                            SizedBox(width: 7),
+                            Icon(
+                              Icons.auto_awesome_rounded,
+                              color: PracticeColors.gameGold,
+                              size: 15,
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Ouvrir les dossiers anonymisés et leurs défis QCM',
+                          style: TextStyle(
+                            color: PracticeColors.textSecondary,
+                            fontSize: 10.8,
+                            height: 1.35,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _QcmPracticeCard extends StatelessWidget {

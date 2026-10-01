@@ -6,6 +6,20 @@ import '../services/clinical_case_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/screen_decor.dart';
 
+abstract final class _CaseGameColors {
+  static const bg = Color(0xFF071526);
+  static const surface = Color(0xFF10243A);
+  static const elevated = Color(0xFF17314E);
+  static const purple = Color(0xFF8B6CFF);
+  static const blue = Color(0xFF3295FF);
+  static const gold = Color(0xFFFFD166);
+  static const pink = Color(0xFFFF6FAE);
+  static const mint = Color(0xFF5BE7B0);
+  static const text = Color(0xFFF5F8FF);
+  static const secondary = Color(0xFFB9CBE0);
+  static const line = Color(0xFF244B68);
+}
+
 class ClinicalCasesSection extends StatefulWidget {
   final GlobalKey? verticalFeedKey;
 
@@ -92,15 +106,56 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DecorSectionBanner(
-            scene: ScreenDecorScene.practice,
-            title: 'CAS CLINIQUES',
-            subtitle: 'Dossiers anonymisés · raisonnement clinique · 5 QCM par cas',
-            icon: Icons.medical_information_rounded,
-            trailing: DecorIconAction(
-              icon: Icons.refresh_rounded,
-              tooltip: 'Actualiser',
-              onTap: _loading ? null : () => _load(reset: true),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF6B50E8), Color(0xFF226FC6), Color(0xFF0B8F76)],
+                stops: [0, .55, 1],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white24),
+              boxShadow: [
+                BoxShadow(
+                  color: _CaseGameColors.purple.withOpacity(.22),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.13),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: _CaseGameColors.gold.withOpacity(.34)),
+                  ),
+                  child: const Icon(Icons.medical_information_rounded, color: _CaseGameColors.gold, size: 25),
+                ),
+                const SizedBox(width: 11),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CLINICAL ARENA', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: .55)),
+                      SizedBox(height: 3),
+                      Text('Dossiers anonymisés · raisonnement · 5 défis QCM par cas', style: TextStyle(color: Color(0xFFE9F2FF), fontSize: 10.5, height: 1.35, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Actualiser',
+                  onPressed: _loading ? null : () => _load(reset: true),
+                  icon: const Icon(Icons.refresh_rounded),
+                  color: Colors.white,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -151,18 +206,18 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
             decoration: BoxDecoration(
               color: AppColors.paperAlt,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.line),
+              border: Border.all(color: Colors.white.withOpacity(.12)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.shield_outlined, size: 17, color: AppColors.inkSoft),
+                const Icon(Icons.shield_outlined, size: 17, color: _CaseGameColors.mint),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Les cas sont automatiquement dé-identifiés avant publication. Les QCM reflètent le cas documenté et ont un objectif pédagogique ; ils ne constituent pas une recommandation clinique.',
                     style: TextStyle(
-                      color: AppColors.inkSoft,
+                      color: _CaseGameColors.secondary,
                       fontSize: 10.5,
                       height: 1.35,
                       fontWeight: FontWeight.w600,
@@ -297,13 +352,17 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.card, AppColors.brandSoft.withOpacity(.38)],
+          colors: [
+            _CaseGameColors.purple.withOpacity(.24),
+            _CaseGameColors.surface,
+            _CaseGameColors.blue.withOpacity(.12),
+          ],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.brand.withOpacity(.30)),
+        border: Border.all(color: _CaseGameColors.purple.withOpacity(.34)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navy.withOpacity(0.13),
+            color: _CaseGameColors.purple.withOpacity(.14),
             blurRadius: 28,
             offset: const Offset(0, 12),
           ),
@@ -341,7 +400,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppColors.inkSoft,
+                    color: _CaseGameColors.secondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
@@ -350,7 +409,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.paperAlt,
+                  color: Colors.white.withOpacity(.08),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: AppColors.line),
                 ),
@@ -487,17 +546,18 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    AppColors.brandSoft.withOpacity(.72),
-                    AppColors.card,
+                    _CaseGameColors.purple.withOpacity(.34),
+                    _CaseGameColors.elevated,
+                    _CaseGameColors.blue.withOpacity(.18),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppColors.brand.withOpacity(.34)),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: _CaseGameColors.purple.withOpacity(.52)),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.brand.withOpacity(.09),
-                    blurRadius: 16,
-                    offset: const Offset(0, 7),
+                    color: _CaseGameColors.purple.withOpacity(.18),
+                    blurRadius: 22,
+                    offset: const Offset(0, 9),
                   ),
                 ],
               ),
@@ -507,15 +567,15 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   Row(
                     children: [
                       Icon(
-                        Icons.quiz_rounded,
-                        color: AppColors.brandBright,
+                        Icons.sports_esports_rounded,
+                        color: _CaseGameColors.gold,
                         size: 19,
                       ),
                       const SizedBox(width: 7),
                       Text(
-                        'QCM ${_currentQcm + 1} / ${_qcms.length}',
+                        'DÉFI ${_currentQcm + 1} / ${_qcms.length}',
                         style: TextStyle(
-                          color: AppColors.brandBright,
+                          color: _CaseGameColors.gold,
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.7,
@@ -540,18 +600,46 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    current.question,
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 14.5,
-                      height: 1.42,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.08,
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(.13),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white.withOpacity(.10)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: _CaseGameColors.gold.withOpacity(.14),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _CaseGameColors.gold.withOpacity(.26)),
+                          ),
+                          child: const Icon(Icons.bolt_rounded, color: _CaseGameColors.gold, size: 17),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            current.question,
+                            style: const TextStyle(
+                              color: _CaseGameColors.text,
+                              fontSize: 15.2,
+                              height: 1.43,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.10,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 11),
+                  const SizedBox(height: 12),
                   for (
                     var index = 0;
                     index < current.options.length;
@@ -588,13 +676,26 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
-                  color: (correct ? AppColors.success : AppColors.danger)
-                      .withOpacity(0.09),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: (correct ? AppColors.success : AppColors.danger)
-                        .withOpacity(0.45),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      (correct ? AppColors.success : AppColors.danger).withOpacity(.19),
+                      _CaseGameColors.surface,
+                      _CaseGameColors.purple.withOpacity(.16),
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: (correct ? AppColors.success : AppColors.danger).withOpacity(0.55),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _CaseGameColors.purple.withOpacity(.10),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,14 +723,14 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                         const Spacer(),
                         Icon(
                           Icons.auto_awesome_rounded,
-                          color: AppColors.brandBright,
+                          color: _CaseGameColors.gold,
                           size: 15,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'EXPLICATION + SOURCES',
+                          'EXPLICATION IA + SOURCES',
                           style: TextStyle(
-                            color: AppColors.brandBright,
+                            color: _CaseGameColors.gold,
                             fontSize: 9,
                             fontWeight: FontWeight.w900,
                             letterSpacing: .5,
@@ -670,8 +771,8 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                                 : q.answered
                                 ? AppColors.danger
                                 : active
-                                ? AppColors.brandBright
-                                : AppColors.line,
+                                ? _CaseGameColors.purple
+                                : _CaseGameColors.line,
                             borderRadius: BorderRadius.circular(99),
                           ),
                         ),
@@ -793,13 +894,39 @@ class _GuidelineCorrection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          explanation,
-          style: TextStyle(
-            color: AppColors.inkSoft,
-            fontSize: 11.5,
-            height: 1.46,
-            fontWeight: FontWeight.w600,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.055),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: _CaseGameColors.purple.withOpacity(.20)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _CaseGameColors.purple.withOpacity(.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.psychology_alt_rounded, color: _CaseGameColors.gold, size: 17),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  explanation,
+                  style: const TextStyle(
+                    color: _CaseGameColors.text,
+                    fontSize: 11.8,
+                    height: 1.48,
+                    fontWeight: FontWeight.w650,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         if (parsed.references.isNotEmpty) ...[
@@ -815,7 +942,7 @@ class _GuidelineCorrection extends StatelessWidget {
               Text(
                 'SOURCES DU COURS',
                 style: TextStyle(
-                  color: AppColors.brandBright,
+                  color: _CaseGameColors.gold,
                   fontSize: 9,
                   fontWeight: FontWeight.w900,
                   letterSpacing: .55,
@@ -838,9 +965,9 @@ class _GuidelineCorrection extends StatelessWidget {
                     vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.paperAlt,
+                    color: Colors.white.withOpacity(.055),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.line.withOpacity(.75)),
+                    border: Border.all(color: _CaseGameColors.line.withOpacity(.90)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,7 +979,7 @@ class _GuidelineCorrection extends StatelessWidget {
                             Text(
                               '${_kindLabel(ref.kind)} · ${ref.organization} · ${ref.year}',
                               style: TextStyle(
-                                color: AppColors.brandBright,
+                                color: _CaseGameColors.gold,
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -863,7 +990,7 @@ class _GuidelineCorrection extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: AppColors.inkSoft,
+                                color: _CaseGameColors.secondary,
                                 fontSize: 10.5,
                                 height: 1.3,
                                 fontWeight: FontWeight.w600,
@@ -876,7 +1003,7 @@ class _GuidelineCorrection extends StatelessWidget {
                       Icon(
                         Icons.open_in_new_rounded,
                         size: 15,
-                        color: AppColors.inkFaint,
+                        color: _CaseGameColors.secondary,
                       ),
                     ],
                   ),
@@ -987,9 +1114,9 @@ class _QcmOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color border = AppColors.line;
-    Color background = AppColors.card;
-    Color foreground = AppColors.ink;
+    Color border = _CaseGameColors.line;
+    Color background = _CaseGameColors.surface;
+    Color foreground = _CaseGameColors.text;
     if (showCorrection && isCorrect) {
       border = AppColors.success;
       background = AppColors.success.withOpacity(0.10);
@@ -999,22 +1126,22 @@ class _QcmOption extends StatelessWidget {
       background = AppColors.danger.withOpacity(0.09);
       foreground = AppColors.danger;
     } else if (selected) {
-      border = AppColors.brand;
-      background = AppColors.brandSoft;
+      border = _CaseGameColors.purple;
+      background = _CaseGameColors.purple.withOpacity(.20);
     }
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(19),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 170),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(19),
             border: Border.all(
               color: border,
               width: selected || (showCorrection && isCorrect) ? 1.35 : 1,
@@ -1033,8 +1160,8 @@ class _QcmOption extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 38,
+                height: 38,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: foreground.withOpacity(0.10),
@@ -1045,7 +1172,7 @@ class _QcmOption extends StatelessWidget {
                   String.fromCharCode(65 + index),
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -1058,8 +1185,8 @@ class _QcmOption extends StatelessWidget {
                     label,
                     style: TextStyle(
                       color: foreground,
-                      fontSize: 11.8,
-                      height: 1.42,
+                      fontSize: 12.3,
+                      height: 1.43,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
