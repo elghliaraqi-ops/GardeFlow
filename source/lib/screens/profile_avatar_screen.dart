@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/screen_decor.dart';
 import '../theme/widgets.dart';
+import '../widgets/profile_avatar.dart';
 
 class ProfileAvatarScreen extends StatefulWidget {
   const ProfileAvatarScreen({super.key});
@@ -170,12 +171,9 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
                                 selected: selected == option.key,
                                 disabled: _saving,
                                 onTap: () => _select(option.key),
-                                child: Image.asset(
-                                  option.assetPath,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Center(
-                                    child: Icon(Icons.person_rounded, size: 44),
-                                  ),
+                                child: ColoredBox(
+                                  color: AppColors.paperAlt,
+                                  child: ProfileAvatarArtwork(option: option),
                                 ),
                               ),
                           ],
