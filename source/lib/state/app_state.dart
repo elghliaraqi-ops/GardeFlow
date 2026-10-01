@@ -41,19 +41,19 @@ class AstreintePhoto {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'ownerPhone': ownerPhone,
-        'bytes': base64Encode(bytes),
-        'name': name,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'ownerPhone': ownerPhone,
+    'bytes': base64Encode(bytes),
+    'name': name,
+    'createdAt': createdAt.toIso8601String(),
+  };
   factory AstreintePhoto.fromJson(Map<String, dynamic> j) => AstreintePhoto(
-        id: j['id'],
-        ownerPhone: j['ownerPhone'],
-        bytes: base64Decode(j['bytes']),
-        name: j['name'],
-        createdAt: DateTime.parse(j['createdAt']),
-      );
+    id: j['id'],
+    ownerPhone: j['ownerPhone'],
+    bytes: base64Decode(j['bytes']),
+    name: j['name'],
+    createdAt: DateTime.parse(j['createdAt']),
+  );
 }
 
 /// État global persistant de l'application.
@@ -99,6 +99,7 @@ class AppState extends ChangeNotifier {
         } else {
           state._sessionEpoch++;
           state.currentUser = profile;
+          state._appearanceTheme = profile.appearanceTheme;
           await LocalStorageService.savePushActiveUserId(profile.id);
           state._applyReminderPrefsForCurrentUser();
           await state._reloadFromBackend();
@@ -113,9 +114,13 @@ class AppState extends ChangeNotifier {
     } else {
       final sessionPhone = await LocalStorageService.loadSessionPhone();
       if (sessionPhone != null) {
-        state.currentUser =
-            state._users.where((u) => u.phone == sessionPhone).firstOrNull;
-        if (state.currentUser != null) state._sessionEpoch++;
+        state.currentUser = state._users
+            .where((u) => u.phone == sessionPhone)
+            .firstOrNull;
+        if (state.currentUser != null) {
+          state._sessionEpoch++;
+          state._appearanceTheme = state.currentUser!.appearanceTheme;
+        }
         state._applyReminderPrefsForCurrentUser();
       }
     }
@@ -130,7 +135,7 @@ class AppState extends ChangeNotifier {
     return state;
   }
 
-  String _appearanceTheme = 'green';
+  String _appearanceTheme = 'black';
 
   String get appearanceTheme => _appearanceTheme;
 
@@ -140,9 +145,24 @@ class AppState extends ChangeNotifier {
 
   Future<void> setAppearanceTheme(String value) async {
     const allowed = <String>{'green', 'red', 'white', 'black'};
-    final next = allowed.contains(value) ? value : 'green';
-    if (_appearanceTheme == next) return;
+    final next = allowed.contains(value) ? value : 'black';
+    if (_appearanceTheme == next && currentUser?.appearanceTheme == next)
+      return;
+
+    // When signed in, write the preference to the account first so a failed
+    // network update cannot pretend that the choice is synchronised.
+    if (backendEnabled && currentUser != null) {
+      await SupabaseBackendService.instance.setMyAppearanceTheme(next);
+    }
+
     _appearanceTheme = next;
+    final me = currentUser;
+    if (me != null) {
+      final updated = me.copyWith(appearanceTheme: next);
+      currentUser = updated;
+      final index = _users.indexWhere((u) => u.id == updated.id);
+      if (index >= 0) _users[index] = updated;
+    }
     await _persistNow();
     notifyListeners();
   }
@@ -274,14 +294,15 @@ class AppState extends ChangeNotifier {
     final me = currentUser;
     if (!backendEnabled ||
         me == null ||
-        me.accountStatus != AccountStatus.active) return;
+        me.accountStatus != AccountStatus.active)
+      return;
     try {
       final changed = await _syncOfficialRosterForProfile(me);
       final disciplinary = await SupabaseBackendService.instance
           .applyCurrentDisciplinaryRulesForMe();
       final disciplinaryChanged =
           ((disciplinary['inserted'] as num?)?.toInt() ?? 0) > 0 ||
-              ((disciplinary['updated'] as num?)?.toInt() ?? 0) > 0;
+          ((disciplinary['updated'] as num?)?.toInt() ?? 0) > 0;
       if (changed || disciplinaryChanged) await _reloadFromBackend();
     } catch (e) {
       // Le planning officiel ne doit jamais empêcher l'utilisateur de se connecter.
@@ -339,10 +360,12 @@ class AppState extends ChangeNotifier {
       ..clear()
       ..addAll(profiles);
     _currentFirstYearPromotion = firstYearPromotion;
-    final refreshedMe =
-        _users.where((u) => u.id == currentUser!.id).firstOrNull;
+    final refreshedMe = _users
+        .where((u) => u.id == currentUser!.id)
+        .firstOrNull;
     if (refreshedMe != null) {
       currentUser = refreshedMe;
+      _appearanceTheme = refreshedMe.appearanceTheme;
     } else if (!_users.any((u) => u.phone == currentUser!.phone)) {
       _users.add(currentUser!);
     }
@@ -405,30 +428,37 @@ class AppState extends ChangeNotifier {
     final client = SupabaseBackendService.instance.client;
     _planningRealtime = client
         .from('planning_entries')
-        .stream(primaryKey: ['id']).listen((_) => _scheduleRealtimeReload());
-    _planningMonthRealtime = client.from('planning_months').stream(primaryKey: [
-      'owner_id',
-      'year',
-      'month'
-    ]).listen((_) => _scheduleRealtimeReload());
+        .stream(primaryKey: ['id'])
+        .listen((_) => _scheduleRealtimeReload());
+    _planningMonthRealtime = client
+        .from('planning_months')
+        .stream(primaryKey: ['owner_id', 'year', 'month'])
+        .listen((_) => _scheduleRealtimeReload());
     _exchangeRealtime = client
         .from('exchange_requests')
-        .stream(primaryKey: ['id']).listen((_) => _scheduleRealtimeReload());
+        .stream(primaryKey: ['id'])
+        .listen((_) => _scheduleRealtimeReload());
     _leaveRealtime = client
         .from('leave_requests')
-        .stream(primaryKey: ['id']).listen((_) => _scheduleRealtimeReload());
-    _profileRealtime = client.from('profiles').stream(primaryKey: [
-      'id'
-    ]).listen((_) => _scheduleRealtimeReload(syncOfficialRoster: true));
-    _directoryRealtime =
-        client.from('directory_contacts').stream(primaryKey: ['id']).listen(
-      (_) => _scheduleRealtimeReload(),
-      onError: (Object e) => debugPrint('Realtime annuaire indisponible: $e'),
-    );
+        .stream(primaryKey: ['id'])
+        .listen((_) => _scheduleRealtimeReload());
+    _profileRealtime = client
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .listen((_) => _scheduleRealtimeReload(syncOfficialRoster: true));
+    _directoryRealtime = client
+        .from('directory_contacts')
+        .stream(primaryKey: ['id'])
+        .listen(
+          (_) => _scheduleRealtimeReload(),
+          onError: (Object e) =>
+              debugPrint('Realtime annuaire indisponible: $e'),
+        );
     if (currentUser?.role == UserRole.admin) {
       _passwordResetRealtime = client
           .from('password_reset_requests')
-          .stream(primaryKey: ['id']).listen((_) => _scheduleRealtimeReload());
+          .stream(primaryKey: ['id'])
+          .listen((_) => _scheduleRealtimeReload());
     }
   }
 
@@ -559,12 +589,14 @@ class AppState extends ChangeNotifier {
     // En mode Supabase, un médecin non-admin ne reçoit les gardes d'un collègue
     // qu'après validation du mois grâce à la RLS. Son planning_month n'est pas
     // directement visible, donc la présence de la garde fait foi côté client.
-    final peerVisibleAndOfficial = backendEnabled &&
+    final peerVisibleAndOfficial =
+        backendEnabled &&
         me != null &&
         me.role != UserRole.admin &&
         entry.ownerId != me.id &&
         entry.ownerPhone != me.phone;
-    final monthApproved = record?.status == PlanningMonthStatus.approved ||
+    final monthApproved =
+        record?.status == PlanningMonthStatus.approved ||
         peerVisibleAndOfficial;
     if (!monthApproved) return false;
     if (entry.shiftId != 'conge') return true;
@@ -600,7 +632,8 @@ class AppState extends ChangeNotifier {
     if (backendEnabled &&
         me != null &&
         me.role != UserRole.admin &&
-        ownerId != me.id) return true;
+        ownerId != me.id)
+      return true;
     return false;
   }
 
@@ -657,15 +690,16 @@ class AppState extends ChangeNotifier {
       _delayMinutes = _reminderDelays.first;
       return;
     }
-    final delays = (p['delays'] as List? ?? const <dynamic>[])
-        .map((e) => (e as num).toInt())
-        .where((e) => e > 0 && e <= 10080)
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    final delays =
+        (p['delays'] as List? ?? const <dynamic>[])
+            .map((e) => (e as num).toInt())
+            .where((e) => e > 0 && e <= 10080)
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
     if (delays.isNotEmpty) _reminderDelays = delays.take(3).toList();
-    _reminderRepeatMinutes =
-        ((p['repeatMinutes'] as num?)?.toInt() ?? 15).clamp(5, 180);
+    _reminderRepeatMinutes = ((p['repeatMinutes'] as num?)?.toInt() ?? 15)
+        .clamp(5, 180);
     _reminderRepeatCount = ((p['repeatCount'] as num?)?.toInt() ?? 1).clamp(
       0,
       3,
@@ -674,8 +708,8 @@ class AppState extends ChangeNotifier {
     final sound = p['soundMode']?.toString() ?? 'urgent';
     _reminderSoundMode =
         const <String>{'system', 'urgent', 'silent', 'alarm'}.contains(sound)
-            ? sound
-            : 'urgent';
+        ? sound
+        : 'urgent';
     _notificationsOn = p['enabled'] as bool? ?? true;
     _delayMinutes = _reminderDelays.first;
   }
@@ -725,8 +759,8 @@ class AppState extends ChangeNotifier {
   Future<void> setReminderSoundMode(String value) async {
     _reminderSoundMode =
         const <String>{'system', 'urgent', 'silent', 'alarm'}.contains(value)
-            ? value
-            : 'system';
+        ? value
+        : 'system';
     await _saveReminderPrefs();
   }
 
@@ -759,13 +793,15 @@ class AppState extends ChangeNotifier {
     _refreshReminderStatuses();
     final me = currentUser;
     if (me == null) return null;
-    final list = _reminders
-        .where(
-          (r) =>
-              r.ownerPhone == me.phone && r.status == ReminderStatus.upcoming,
-        )
-        .toList()
-      ..sort((a, b) => a.fireAt.compareTo(b.fireAt));
+    final list =
+        _reminders
+            .where(
+              (r) =>
+                  r.ownerPhone == me.phone &&
+                  r.status == ReminderStatus.upcoming,
+            )
+            .toList()
+          ..sort((a, b) => a.fireAt.compareTo(b.fireAt));
     if (list.isEmpty) return null;
     final r = list.first;
     return 'Prochain rappel : ${DateFormat('dd/MM à HH:mm', 'fr_FR').format(r.fireAt)} · ${r.label}';
@@ -829,8 +865,8 @@ class AppState extends ChangeNotifier {
       return text.startsWith('Bad state: ')
           ? text.substring('Bad state: '.length)
           : text.startsWith('StateError: ')
-              ? text.substring('StateError: '.length)
-              : text;
+          ? text.substring('StateError: '.length)
+          : text;
     }
   }
 
@@ -894,15 +930,19 @@ class AppState extends ChangeNotifier {
     }
 
     for (final contact in _manualDirectoryContacts) {
-      final section =
-          _directory.where((s) => s.id == contact.categoryId).firstOrNull;
+      final section = _directory
+          .where((s) => s.id == contact.categoryId)
+          .firstOrNull;
       if (section == null) continue;
       final phoneKey = _directoryPhoneKey(contact.phone);
-      if (_directory.expand((s) => s.contacts).any(
+      if (_directory
+          .expand((s) => s.contacts)
+          .any(
             (c) =>
                 c.hospital == contact.hospital &&
                 _directoryPhoneKey(c.phone) == phoneKey,
-          )) continue;
+          ))
+        continue;
       section.contacts.add(contact);
     }
 
@@ -931,7 +971,9 @@ class AppState extends ChangeNotifier {
     if (_directoryPhoneKey(cleanPhone).length < 4)
       return 'Numéro de téléphone invalide.';
     if (!kHospitals.contains(hospital)) return 'Établissement invalide.';
-    final duplicate = _directory.expand((s) => s.contacts).any(
+    final duplicate = _directory
+        .expand((s) => s.contacts)
+        .any(
           (c) =>
               c.hospital == hospital &&
               _directoryPhoneKey(c.phone) == _directoryPhoneKey(cleanPhone),
@@ -981,8 +1023,9 @@ class AppState extends ChangeNotifier {
     final me = currentUser;
     if (me == null || me.role != UserRole.admin)
       return 'Action réservée à l’administrateur.';
-    final existing =
-        _manualDirectoryContacts.where((c) => c.id == id).firstOrNull;
+    final existing = _manualDirectoryContacts
+        .where((c) => c.id == id)
+        .firstOrNull;
     if (existing == null) return 'Contact manuel introuvable.';
     final cleanName = name.trim();
     final cleanPhone = phone.trim();
@@ -992,7 +1035,9 @@ class AppState extends ChangeNotifier {
     if (_directoryPhoneKey(cleanPhone).length < 4)
       return 'Numéro de téléphone invalide.';
     if (!kHospitals.contains(hospital)) return 'Établissement invalide.';
-    final duplicate = _directory.expand((s) => s.contacts).any(
+    final duplicate = _directory
+        .expand((s) => s.contacts)
+        .any(
           (c) =>
               c.id != id &&
               c.hospital == hospital &&
@@ -1134,19 +1179,20 @@ class AppState extends ChangeNotifier {
   }
 
   List<AppUser> get pendingUsers => List.unmodifiable(
-        _users.where((u) => u.accountStatus == AccountStatus.pending),
-      );
+    _users.where((u) => u.accountStatus == AccountStatus.pending),
+  );
 
-  List<PlanningEntry> leaveConflictingEntries(LeaveRequest request) => _planning
-      .where(
-        (e) =>
-            (e.ownerId == request.ownerId ||
-                e.ownerPhone == request.ownerPhone) &&
-            e.shiftId != 'conge' &&
-            request.includesDate(e.dateStr),
-      )
-      .toList()
-    ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
+  List<PlanningEntry> leaveConflictingEntries(LeaveRequest request) =>
+      _planning
+          .where(
+            (e) =>
+                (e.ownerId == request.ownerId ||
+                    e.ownerPhone == request.ownerPhone) &&
+                e.shiftId != 'conge' &&
+                request.includesDate(e.dateStr),
+          )
+          .toList()
+        ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
 
   static String normalizePhone(String raw) =>
       raw.replaceAll(RegExp(r'[\s.\-]'), '');
@@ -1168,6 +1214,7 @@ class AppState extends ChangeNotifier {
         }
         _sessionEpoch++;
         currentUser = user;
+        _appearanceTheme = user.appearanceTheme;
         await LocalStorageService.savePushActiveUserId(user.id);
         _applyReminderPrefsForCurrentUser();
         final locallyDismissedNotifications = Set<String>.from(
@@ -1206,6 +1253,7 @@ class AppState extends ChangeNotifier {
           : 'Votre compte est suspendu. Contactez un administrateur.';
     _sessionEpoch++;
     currentUser = user;
+    _appearanceTheme = user.appearanceTheme;
     _applyReminderPrefsForCurrentUser();
     unawaited(LocalStorageService.saveSessionPhone(user.phone));
     if (_notificationsOn)
@@ -1229,7 +1277,8 @@ class AppState extends ChangeNotifier {
     if (nom.trim().isEmpty ||
         prenom.trim().isEmpty ||
         phone.isEmpty ||
-        password.isEmpty) return 'Merci de remplir tous les champs.';
+        password.isEmpty)
+      return 'Merci de remplir tous les champs.';
     if (password.length < 8)
       return 'Le mot de passe doit contenir au moins 8 caractères.';
     if (grade == MedicalGrade.junior &&
@@ -1281,6 +1330,7 @@ class AppState extends ChangeNotifier {
     _users.add(user);
     _rebuildDirectory();
     currentUser = user;
+    _appearanceTheme = user.appearanceTheme;
     if (_notificationsOn)
       unawaited(NotificationService.instance.requestPermission());
     _persist();
@@ -1302,6 +1352,7 @@ class AppState extends ChangeNotifier {
       await SupabaseBackendService.instance.signOut();
     }
     currentUser = null;
+    _appearanceTheme = 'black';
     await LocalStorageService.saveSessionPhone(null);
     notifyListeners();
   }
@@ -1503,15 +1554,16 @@ class AppState extends ChangeNotifier {
         r.rejectionReason = null;
         final prefix =
             '${month.year}-${month.month.toString().padLeft(2, '0')}-';
-        final conges = _planning
-            .where(
-              (e) =>
-                  (e.ownerId == me.id || e.ownerPhone == me.phone) &&
-                  e.dateStr.startsWith(prefix) &&
-                  e.shiftId == 'conge',
-            )
-            .toList()
-          ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
+        final conges =
+            _planning
+                .where(
+                  (e) =>
+                      (e.ownerId == me.id || e.ownerPhone == me.phone) &&
+                      e.dateStr.startsWith(prefix) &&
+                      e.shiftId == 'conge',
+                )
+                .toList()
+              ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
         var i = 0;
         while (i < conges.length) {
           if (conges[i].leaveRequestId != null) {
@@ -1758,15 +1810,17 @@ class AppState extends ChangeNotifier {
         for (final entry in monthEntries) {
           final leaveId = entry.leaveRequestId;
           if (leaveId == null) continue;
-          final leave =
-              _leaveRequests.where((r) => r.id == leaveId).firstOrNull;
+          final leave = _leaveRequests
+              .where((r) => r.id == leaveId)
+              .firstOrNull;
           if (leave?.status == LeaveRequestStatus.pendingAdmin) {
             pendingLeaveIds.add(leaveId);
           }
         }
         for (final leaveId in pendingLeaveIds) {
-          final leave =
-              _leaveRequests.where((r) => r.id == leaveId).firstOrNull;
+          final leave = _leaveRequests
+              .where((r) => r.id == leaveId)
+              .firstOrNull;
           if (leave != null) {
             leave.status = LeaveRequestStatus.cancelled;
             leave.reviewedAt = DateTime.now();
@@ -1825,8 +1879,9 @@ class AppState extends ChangeNotifier {
         if (entry.shiftId == 'conge' && entry.leaveRequestId != null) {
           final leaveId = entry.leaveRequestId!;
           _planning.removeWhere((x) => x.leaveRequestId == leaveId);
-          final leave =
-              _leaveRequests.where((r) => r.id == leaveId).firstOrNull;
+          final leave = _leaveRequests
+              .where((r) => r.id == leaveId)
+              .firstOrNull;
           if (leave != null) {
             leave.status = LeaveRequestStatus.cancelled;
             leave.reviewedAt = DateTime.now();
@@ -1916,15 +1971,17 @@ class AppState extends ChangeNotifier {
     final added = <ReminderNotification>[];
     for (final delay in _reminderDelays) {
       final first = start.subtract(Duration(minutes: delay));
-      final repeatLimit =
-          _reminderSoundMode == 'alarm' ? 0 : _reminderRepeatCount;
+      final repeatLimit = _reminderSoundMode == 'alarm'
+          ? 0
+          : _reminderRepeatCount;
       for (var repeat = 0; repeat <= repeatLimit; repeat++) {
         final fire = first.add(
           Duration(minutes: _reminderRepeatMinutes * repeat),
         );
         if (!fire.isBefore(start)) continue;
-        final suffix =
-            repeat == 0 ? reminderDelayLabel(delay) : 'répétition $repeat';
+        final suffix = repeat == 0
+            ? reminderDelayLabel(delay)
+            : 'répétition $repeat';
         final r = ReminderNotification(
           id: 'n${++_reminderCounter}',
           ownerPhone: owner,
@@ -1972,7 +2029,8 @@ class AppState extends ChangeNotifier {
     if (me == null ||
         !_notificationsOn ||
         r.ownerPhone != me.phone ||
-        !r.fireAt.isAfter(DateTime.now())) return;
+        !r.fireAt.isAfter(DateTime.now()))
+      return;
     final e = _planning
         .where((e) => e.ownerPhone == me.phone && e.dateStr == r.dateStr)
         .firstOrNull;
@@ -2033,8 +2091,7 @@ class AppState extends ChangeNotifier {
         guardId: guard.id,
         kind: 'practice_guard_start',
         title: 'Practice · Bonne garde',
-        body:
-            'Votre garde aux Urgences commence. Documentez vos cas au fil de la garde et progressez dans Practice.',
+        body: 'Votre garde aux Urgences commence. Documentez vos cas au fil de la garde et progressez dans Practice.',
         fireAt: guard.start,
       );
       await NotificationService.instance.schedulePracticeMoment(
@@ -2042,8 +2099,7 @@ class AppState extends ChangeNotifier {
         guardId: guard.id,
         kind: 'practice_guard_midpoint',
         title: 'Practice · Point de garde',
-        body:
-            'Vous êtes à mi-garde. Pensez à documenter les cas vus : quelques secondes maintenant évitent les oublis en fin de garde.',
+        body: 'Vous êtes à mi-garde. Pensez à documenter les cas vus : quelques secondes maintenant évitent les oublis en fin de garde.',
         fireAt: midpoint,
       );
       await NotificationService.instance.schedulePracticeMoment(
@@ -2051,8 +2107,7 @@ class AppState extends ChangeNotifier {
         guardId: guard.id,
         kind: 'practice_guard_end',
         title: 'Practice · Fin de garde',
-        body:
-            'Garde terminée. Consultez votre bilan, vos XP, vos succès et les 5 QCM générés pour chaque cas clinique.',
+        body: 'Garde terminée. Consultez votre bilan, vos XP, vos succès et les 5 QCM générés pour chaque cas clinique.',
         fireAt: guard.end,
       );
     }
@@ -2079,14 +2134,17 @@ class AppState extends ChangeNotifier {
     final me = currentUser;
     if (cancelExisting) await NotificationService.instance.cancelAll();
     if (me == null || !_notificationsOn) return;
-    final upcoming = _reminders
-        .where(
-          (r) => r.ownerPhone == me.phone && r.fireAt.isAfter(DateTime.now()),
-        )
-        .toList()
-      ..sort((a, b) => a.fireAt.compareTo(b.fireAt));
-    final limit =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS ? 56 : 96;
+    final upcoming =
+        _reminders
+            .where(
+              (r) =>
+                  r.ownerPhone == me.phone && r.fireAt.isAfter(DateTime.now()),
+            )
+            .toList()
+          ..sort((a, b) => a.fireAt.compareTo(b.fireAt));
+    final limit = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+        ? 56
+        : 96;
     for (final r in upcoming.take(limit)) {
       await _scheduleNativeReminder(r);
     }
@@ -2127,11 +2185,10 @@ class AppState extends ChangeNotifier {
       x.status == ExchangeStatus.pendingAdmin;
 
   bool _isEntryLocked(String entryId) => _exchanges.any(
-        (x) =>
-            _isActiveRequest(x) &&
-            (x.planningEntryId == entryId ||
-                x.targetPlanningEntryId == entryId),
-      );
+    (x) =>
+        _isActiveRequest(x) &&
+        (x.planningEntryId == entryId || x.targetPlanningEntryId == entryId),
+  );
 
   List<DirectoryContact> exchangeTargets({bool sameServiceOnly = false}) {
     final me = currentUser;
@@ -2145,11 +2202,13 @@ class AppState extends ChangeNotifier {
     for (final u in _users) {
       if (u.id == me.id ||
           u.phone == me.phone ||
-          u.accountStatus != AccountStatus.active) continue;
+          u.accountStatus != AccountStatus.active)
+        continue;
       if (BusinessRules.sameHospitalRequired && u.hospital != me.hospital)
         continue;
       if ((sameServiceOnly || BusinessRules.sameServiceRequiredForExchange) &&
-          u.service != me.service) continue;
+          u.service != me.service)
+        continue;
       if (BusinessRules.sameGradeRequiredForExchange && u.grade != me.grade)
         continue;
       if (!seen.add(u.id)) continue;
@@ -2224,7 +2283,8 @@ class AppState extends ChangeNotifier {
       (e) =>
           e.dateStr == date &&
           (e.ownerId == target.id || e.ownerPhone == target.phone),
-    )) return '${target.name} a déjà une affectation ce jour-là.';
+    ))
+      return '${target.name} a déjà une affectation ce jour-là.';
     final ex = ExchangeRequest(
       id: backendEnabled
           ? 'ex${DateTime.now().microsecondsSinceEpoch}'
@@ -2349,12 +2409,12 @@ class AppState extends ChangeNotifier {
     String date,
     PlanningEntry entry,
     DirectoryContact target,
-  ) =>
-      createTransferRequest(date, entry, target);
+  ) => createTransferRequest(date, entry, target);
 
   String? _validateRequestState(ExchangeRequest ex) {
-    final source =
-        _planning.where((e) => e.id == ex.planningEntryId).firstOrNull;
+    final source = _planning
+        .where((e) => e.id == ex.planningEntryId)
+        .firstOrNull;
     if (source == null ||
         (source.ownerId != ex.fromId && source.ownerPhone != ex.fromPhone))
       return 'La garde proposée a été modifiée ou supprimée.';
@@ -2407,7 +2467,8 @@ class AppState extends ChangeNotifier {
       return 'Les échanges sont limités aux médecins du même établissement.';
     if (promotionExchangeBlocked(fromUser, toUser))
       return 'La promotion de première année (Promo $currentFirstYearPromotion) ne peut échanger des gardes qu’avec la même promotion.';
-    final involvesService = source.shiftId.startsWith('service-') ||
+    final involvesService =
+        source.shiftId.startsWith('service-') ||
         target.shiftId.startsWith('service-');
     if (involvesService && fromUser.service != toUser.service)
       return 'Toute garde de Service ne peut être échangée qu’entre médecins du même service.';
@@ -2467,10 +2528,12 @@ class AppState extends ChangeNotifier {
       }
     }
     if (_isSameServiceExchange(ex)) {
-      final source =
-          _planning.where((e) => e.id == ex.planningEntryId).firstOrNull;
-      final target =
-          _planning.where((e) => e.id == ex.targetPlanningEntryId).firstOrNull;
+      final source = _planning
+          .where((e) => e.id == ex.planningEntryId)
+          .firstOrNull;
+      final target = _planning
+          .where((e) => e.id == ex.targetPlanningEntryId)
+          .firstOrNull;
       if (source == null || target == null)
         return 'Une des deux gardes est introuvable.';
       final sourceDate = source.dateStr;
@@ -2575,8 +2638,9 @@ class AppState extends ChangeNotifier {
       source.ownerName = ex.toName;
       _scheduleReminder(ex.toPhone, source.dateStr, source.shiftId);
     } else {
-      final target =
-          _planning.where((e) => e.id == ex.targetPlanningEntryId).first;
+      final target = _planning
+          .where((e) => e.id == ex.targetPlanningEntryId)
+          .first;
       final sourceDate = source.dateStr;
       final sourceShift = source.shiftId;
       final targetDate = target.dateStr;
@@ -2607,7 +2671,8 @@ class AppState extends ChangeNotifier {
     if (me == null ||
         ex == null ||
         (ex.fromId != me.id && ex.fromPhone != me.phone) ||
-        ex.status != ExchangeStatus.pendingB) return 'Annulation impossible.';
+        ex.status != ExchangeStatus.pendingB)
+      return 'Annulation impossible.';
     if (backendEnabled) {
       try {
         await SupabaseBackendService.instance.cancelRequest(id);
@@ -2672,15 +2737,16 @@ class AppState extends ChangeNotifier {
   List<PlanningEntry> get disciplinaryNotifications {
     final me = currentUser;
     if (me == null) return const <PlanningEntry>[];
-    final result = _planning
-        .where(
-          (e) =>
-              e.isDisciplinary &&
-              (e.ownerId == me.id || e.ownerPhone == me.phone) &&
-              (e.disciplinaryReason?.trim().isNotEmpty ?? false),
-        )
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final result =
+        _planning
+            .where(
+              (e) =>
+                  e.isDisciplinary &&
+                  (e.ownerId == me.id || e.ownerPhone == me.phone) &&
+                  (e.disciplinaryReason?.trim().isNotEmpty ?? false),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return result;
   }
 
@@ -2691,7 +2757,8 @@ class AppState extends ChangeNotifier {
   void markDisciplinaryNotificationsRead() {
     var changed = false;
     for (final entry in disciplinaryNotifications) {
-      changed = _dismissedNotificationKeys.add(
+      changed =
+          _dismissedNotificationKeys.add(
             _scopedNotificationKey('disciplinary:${entry.id}'),
           ) ||
           changed;
@@ -2710,8 +2777,9 @@ class AppState extends ChangeNotifier {
   final Set<String> _dismissedNotificationKeys = <String>{};
   String _scopedNotificationKey(String key) {
     final me = currentUser;
-    final owner =
-        me == null ? 'anonymous' : (me.id.isNotEmpty ? me.id : me.phone);
+    final owner = me == null
+        ? 'anonymous'
+        : (me.id.isNotEmpty ? me.id : me.phone);
     return '$owner::$key';
   }
 
@@ -2726,12 +2794,14 @@ class AppState extends ChangeNotifier {
       (r) => r.ownerPhone == me.phone && r.status == ReminderStatus.sent,
     );
     for (final e in _exchanges) {
-      final relevant = me.role == UserRole.admin ||
+      final relevant =
+          me.role == UserRole.admin ||
           e.fromId == me.id ||
           e.toId == me.id ||
           e.fromPhone == me.phone ||
           e.toPhone == me.phone;
-      final terminal = e.status == ExchangeStatus.approved ||
+      final terminal =
+          e.status == ExchangeStatus.approved ||
           e.status == ExchangeStatus.declinedB ||
           e.status == ExchangeStatus.rejectedAdmin ||
           e.status == ExchangeStatus.cancelled;
@@ -2741,7 +2811,8 @@ class AppState extends ChangeNotifier {
         );
     }
     for (final r in _leaveRequests) {
-      final relevant = me.role == UserRole.admin ||
+      final relevant =
+          me.role == UserRole.admin ||
           r.ownerId == me.id ||
           r.ownerPhone == me.phone;
       if (relevant && r.status != LeaveRequestStatus.pendingAdmin)
@@ -2752,27 +2823,28 @@ class AppState extends ChangeNotifier {
   }
 
   Map<String, dynamic> _toJson() => {
-        'users': _users.map((e) => e.toJson()).toList(),
-        'planning': _planning.map((e) => e.toJson()).toList(),
-        'astreinte': _astreinte.map((e) => e.toJson()).toList(),
-        'reminders': _reminders.map((e) => e.toJson()).toList(),
-        'manualDirectoryContacts':
-            _manualDirectoryContacts.map((e) => e.toJson()).toList(),
-        'exchanges': _exchanges.map((e) => e.toJson()).toList(),
-        'leaveRequests': _leaveRequests.map((e) => e.toJson()).toList(),
-        'planningMonths': _planningMonths.map((e) => e.toJson()).toList(),
-        'dismissedNotifications': _dismissedNotificationKeys.toList(),
-        'delayMinutes': _delayMinutes,
-        'notificationsOn': _notificationsOn,
-        'reminderPrefsByUser': _reminderPrefsByUser,
-        'planningCounter': _planningCounter,
-        'exchangeCounter': _exchangeCounter,
-        'leaveCounter': _leaveCounter,
-        'reminderCounter': _reminderCounter,
-        'appearanceTheme': _appearanceTheme,
-        'darkMode': darkMode,
-        'darkDefaultAppliedV58': true,
-      };
+    'users': _users.map((e) => e.toJson()).toList(),
+    'planning': _planning.map((e) => e.toJson()).toList(),
+    'astreinte': _astreinte.map((e) => e.toJson()).toList(),
+    'reminders': _reminders.map((e) => e.toJson()).toList(),
+    'manualDirectoryContacts': _manualDirectoryContacts
+        .map((e) => e.toJson())
+        .toList(),
+    'exchanges': _exchanges.map((e) => e.toJson()).toList(),
+    'leaveRequests': _leaveRequests.map((e) => e.toJson()).toList(),
+    'planningMonths': _planningMonths.map((e) => e.toJson()).toList(),
+    'dismissedNotifications': _dismissedNotificationKeys.toList(),
+    'delayMinutes': _delayMinutes,
+    'notificationsOn': _notificationsOn,
+    'reminderPrefsByUser': _reminderPrefsByUser,
+    'planningCounter': _planningCounter,
+    'exchangeCounter': _exchangeCounter,
+    'leaveCounter': _leaveCounter,
+    'reminderCounter': _reminderCounter,
+    'appearanceTheme': _appearanceTheme,
+    'darkMode': darkMode,
+    'darkDefaultAppliedV58': true,
+  };
   void _restore(Map<String, dynamic> j) {
     try {
       _users.addAll(
@@ -2864,14 +2936,15 @@ class AppState extends ChangeNotifier {
     _delayMinutes = (j['delayMinutes'] as num?)?.toInt() ?? 60;
     _notificationsOn = j['notificationsOn'] as bool? ?? true;
     final storedAppearanceTheme = j['appearanceTheme']?.toString();
-    _appearanceTheme = const <String>{
-      'green',
-      'red',
-      'white',
-      'black',
-    }.contains(storedAppearanceTheme)
+    _appearanceTheme =
+        const <String>{
+          'green',
+          'red',
+          'white',
+          'black',
+        }.contains(storedAppearanceTheme)
         ? storedAppearanceTheme!
-        : 'green';
+        : 'black';
     try {
       final raw = Map<String, dynamic>.from(
         j['reminderPrefsByUser'] as Map? ?? const <String, dynamic>{},

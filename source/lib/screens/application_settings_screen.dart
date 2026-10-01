@@ -25,23 +25,30 @@ class ApplicationSettingsScreen extends StatelessWidget {
         value: value,
         swatch: swatch,
         selected: appState.appearanceTheme == value,
-        onTap: () => appState.setAppearanceTheme(value),
+        onTap: () async {
+          try {
+            await appState.setAppearanceTheme(value);
+          } catch (_) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Impossible de synchroniser le thème avec votre compte. Réessayez.',
+                ),
+              ),
+            );
+          }
+        },
       );
     }
 
-    return DecorScaffold(scene: ScreenDecorScene.settings, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.settings,
       backgroundColor: AppColors.paper,
-      appBar: AppBar(
-        title: GardeFlowTitle('Réglages de l’application'),
-      ),
+      appBar: AppBar(title: GardeFlowTitle('Réglages de l’application')),
       body: ListView(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          AppSpace.lg,
-          AppSpace.md,
-          AppSpace.lg,
-          34,
-        ),
+        padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 34),
         children: [
           SectionLabel('Thème de l’application'),
           AppCard(
@@ -68,11 +75,9 @@ class ApplicationSettingsScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Choisissez l’apparence générale de GardeFlow. Le vert reste le thème par défaut.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.inkSoft,
-                              height: 1.4,
-                            ),
+                        'Le noir est le thème par défaut. Votre choix est enregistré sur votre compte et vous suit sur Web, Android et vos autres appareils.',
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AppColors.inkSoft, height: 1.4),
                       ),
                     ),
                   ],
@@ -88,8 +93,17 @@ class ApplicationSettingsScreen extends StatelessWidget {
                         SizedBox(
                           width: itemWidth,
                           child: choice(
+                            label: 'Noir',
+                            subtitle: 'Par défaut · sombre',
+                            value: 'black',
+                            swatch: const Color(0xFF101311),
+                          ),
+                        ),
+                        SizedBox(
+                          width: itemWidth,
+                          child: choice(
                             label: 'Vert',
-                            subtitle: 'Par défaut',
+                            subtitle: 'Vert clinique',
                             value: 'green',
                             swatch: const Color(0xFF138A55),
                           ),
@@ -107,18 +121,9 @@ class ApplicationSettingsScreen extends StatelessWidget {
                           width: itemWidth,
                           child: choice(
                             label: 'Blanc',
-                            subtitle: 'Ancien mode clair',
+                            subtitle: 'Mode clair',
                             value: 'white',
                             swatch: Colors.white,
-                          ),
-                        ),
-                        SizedBox(
-                          width: itemWidth,
-                          child: choice(
-                            label: 'Noir',
-                            subtitle: 'Mode sombre',
-                            value: 'black',
-                            swatch: const Color(0xFF101311),
                           ),
                         ),
                       ],
@@ -203,8 +208,7 @@ class _AppearanceChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedBorder =
-        value == 'white' ? AppColors.inkSoft : swatch;
+    final selectedBorder = value == 'white' ? AppColors.inkSoft : swatch;
 
     return Material(
       color: selected ? swatch.withOpacity(0.16) : AppColors.paperAlt,
@@ -213,10 +217,7 @@ class _AppearanceChoice extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 11,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -233,9 +234,7 @@ class _AppearanceChoice extends StatelessWidget {
                   color: swatch,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: value == 'white'
-                        ? const Color(0xFFCBD6D0)
-                        : swatch,
+                    color: value == 'white' ? const Color(0xFFCBD6D0) : swatch,
                     width: 1.2,
                   ),
                 ),
@@ -247,9 +246,8 @@ class _AppearanceChoice extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 1),
                     Text(
