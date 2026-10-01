@@ -665,8 +665,9 @@ class _DashboardView extends StatelessWidget {
       if (entry.ownerId != me.id && entry.ownerPhone != me.phone) return false;
       if (entry.shiftId == 'conge') return false;
       final date = DateTime.tryParse(entry.dateStr);
-      if (date == null || date.year != now.year || date.month != now.month)
+      if (date == null || date.year != now.year || date.month != now.month) {
         return false;
+      }
       final id = entry.shiftId.toLowerCase();
       final isUrgence = id.contains('urg');
       return urgence ? isUrgence : !isUrgence;
@@ -683,8 +684,7 @@ class _DashboardView extends StatelessWidget {
     final future = _futureGuards(me);
     final next = future.isEmpty ? null : future.first;
     final now = DateTime.now();
-    final hour = now.hour;
-    final isNight = hour >= 18 || hour < 6;
+    final isNight = now.hour >= 18 || now.hour < 6;
     final greeting = isNight ? 'Bonsoir' : 'Bonjour';
     final monthlyCount = _guardsThisMonth(me, now);
     final urgenceMonthlyCount = _guardsThisMonthByCategory(
@@ -699,250 +699,442 @@ class _DashboardView extends StatelessWidget {
     );
 
     final rawDate = DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(now);
-    final dateLabel =
-        rawDate.isEmpty ? '' : rawDate[0].toUpperCase() + rawDate.substring(1);
+    final dateLabel = rawDate.isEmpty
+        ? ''
+        : rawDate[0].toUpperCase() + rawDate.substring(1);
     final timeLabel = DateFormat('HH:mm').format(now);
-
-    final heroColors = isNight
-        ? const [Color(0xFF071426), Color(0xFF123D70)]
-        : const [Color(0xFF55C2FF), Color(0xFF087FE8)];
 
     return SingleChildScrollView(
       controller: scrollController,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 32),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(22, 24, 22, 22),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: heroColors,
+          _HomeHeroCard(
+            user: me,
+            greeting: greeting,
+            dateLabel: dateLabel,
+            timeLabel: timeLabel,
+            isNight: isNight,
+            monthlyCount: monthlyCount,
+            urgenceCount: urgenceMonthlyCount,
+            serviceCount: serviceMonthlyCount,
+          ),
+          const SizedBox(height: 14),
+          _NextGuardCard(entry: next, onTap: onOpenPlanning),
+          const SizedBox(height: 14),
+          PracticeHomeSummary(appState: appState, user: me),
+          const SizedBox(height: 14),
+          _HomeQuickRow(
+            onPlanning: onOpenPlanning,
+            onPractice: onOpenDirectory,
+            onProfile: onOpenProfile,
+          ),
+          const SizedBox(height: 14),
+          _HomeNewsShortcut(
+            onTap: () {
+              final targetContext = newsFeedKey.currentContext;
+              if (targetContext == null) return;
+              Scrollable.ensureVisible(
+                targetContext,
+                duration: const Duration(milliseconds: 480),
+                curve: Curves.easeOutCubic,
+                alignment: 0.04,
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          DailyNewsSection(verticalFeedKey: newsFeedKey),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeHeroCard extends StatelessWidget {
+  final AppUser user;
+  final String greeting;
+  final String dateLabel;
+  final String timeLabel;
+  final bool isNight;
+  final int monthlyCount;
+  final int urgenceCount;
+  final int serviceCount;
+
+  const _HomeHeroCard({
+    required this.user,
+    required this.greeting,
+    required this.dateLabel,
+    required this.timeLabel,
+    required this.isNight,
+    required this.monthlyCount,
+    required this.urgenceCount,
+    required this.serviceCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = isNight
+        ? const [Color(0xFF06101E), Color(0xFF102E53)]
+        : const [Color(0xFF2DB7F5), Color(0xFF087EE6)];
+    final accent = isNight
+        ? const Color(0xFFFFE6A0)
+        : const Color(0xFFFFD54F);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: colors.last.withOpacity(0.20),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: -8,
+            top: -12,
+            child: Container(
+              width: 78,
+              height: 78,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.08),
               ),
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brand.withOpacity(isNight ? 0.12 : 0.20),
-                  blurRadius: 28,
-                  offset: Offset(0, 14),
+            ),
+          ),
+          Positioned(
+            right: 12,
+            top: 7,
+            child: Icon(
+              isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+              color: accent.withOpacity(0.94),
+              size: 44,
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 62),
+                child: Text(
+                  '$greeting Dr ${user.nom}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'SpaceGrotesk',
+                    fontSize: 25,
+                    height: 1.05,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.6,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9),
+              Row(
+                children: [
+                  Icon(
+                    Icons.schedule_rounded,
+                    color: Colors.white.withOpacity(0.82),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '$dateLabel · $timeLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.88),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w650,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: _HomeStatPill(
+                      icon: Icons.calendar_month_rounded,
+                      value: monthlyCount,
+                      label: 'Ce mois',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _HomeStatPill(
+                      icon: Icons.emergency_rounded,
+                      value: urgenceCount,
+                      label: 'Urgences',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _HomeStatPill(
+                      icon: Icons.medical_services_rounded,
+                      value: serviceCount,
+                      label: 'Service',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeStatPill extends StatelessWidget {
+  final IconData icon;
+  final int value;
+  final String label;
+
+  const _HomeStatPill({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white.withOpacity(0.90), size: 17),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$value',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'SpaceGrotesk',
+                    fontSize: 17,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.78),
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w750,
+                  ),
                 ),
               ],
             ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  right: -8,
-                  top: -14,
-                  child: SizedBox(
-                    width: 112,
-                    height: 104,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
-                          size: 104,
-                          color: isNight
-                              ? const Color(0xFFFFF1B8).withOpacity(0.92)
-                              : const Color(0xFFFFD54F).withOpacity(0.94),
-                        ),
-                        Positioned(
-                          right: -8,
-                          bottom: 7,
-                          child: Icon(
-                            Icons.cloud_rounded,
-                            size: 44,
-                            color: const Color(0xFFE7F5FF).withOpacity(0.84),
-                          ),
-                        ),
-                        Positioned(
-                          right: 24,
-                          bottom: -1,
-                          child: Icon(
-                            Icons.cloud_rounded,
-                            size: 28,
-                            color: const Color(0xFFB9DDF4).withOpacity(0.72),
-                          ),
-                        ),
-                      ],
-                    ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeQuickRow extends StatelessWidget {
+  final VoidCallback onPlanning;
+  final VoidCallback onPractice;
+  final VoidCallback onProfile;
+
+  const _HomeQuickRow({
+    required this.onPlanning,
+    required this.onPractice,
+    required this.onProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _HomeQuickAction(
+            icon: Icons.calendar_month_rounded,
+            label: 'Planning',
+            onTap: onPlanning,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _HomeQuickAction(
+            icon: Icons.sports_esports_rounded,
+            label: 'Practice',
+            onTap: onPractice,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _HomeQuickAction(
+            icon: Icons.person_rounded,
+            label: 'Profil',
+            onTap: onProfile,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeQuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _HomeQuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: AppColors.brandBright, size: 19),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w850,
                   ),
                 ),
-                Positioned(
-                  right: 18,
-                  bottom: -34,
-                  child: Container(
-                    width: 82,
-                    height: 82,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.055),
-                    ),
-                  ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeNewsShortcut extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _HomeNewsShortcut({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.brand.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                Column(
+                child: Icon(
+                  Icons.dynamic_feed_rounded,
+                  color: AppColors.brandBright,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$greeting Dr ${me.nom}',
-                      maxLines: 2,
+                      'Actualités du jour',
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Annonces et informations utiles',
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'SpaceGrotesk',
-                        fontSize: 30,
-                        height: 1.08,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.7,
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(
-                          isNight
-                              ? Icons.dark_mode_rounded
-                              : Icons.light_mode_rounded,
-                          color: Colors.white.withOpacity(0.86),
-                          size: 18,
-                        ),
-                        SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            '$dateLabel · $timeLabel',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.90),
-                              fontSize: 13.5,
-                              height: 1.35,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 14),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.13),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withOpacity(0.14)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_month_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              '$monthlyCount garde${monthlyCount > 1 ? 's' : ''} ce mois',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.10),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              'Urg. $urgenceMonthlyCount · Serv. $serviceMonthlyCount',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.90),
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
+                        color: AppColors.inkSoft,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          PracticeHomeSummary(appState: appState, user: me),
-          SizedBox(height: 20),
-          Text(
-            'Prochaine garde à venir',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontFamily: 'SpaceGrotesk',
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.ink,
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.paper,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.line),
                 ),
-          ),
-          SizedBox(height: 6),
-          Text(
-            next == null
-                ? 'Aucune garde validée à venir pour le moment.'
-                : 'Voici votre prochaine garde programmée.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.inkSoft, fontWeight: FontWeight.w500),
-          ),
-          SizedBox(height: 14),
-          _NextGuardCard(entry: next, onTap: onOpenPlanning),
-          SizedBox(height: 14),
-          Center(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () {
-                  final targetContext = newsFeedKey.currentContext;
-                  if (targetContext == null) return;
-                  Scrollable.ensureVisible(
-                    targetContext,
-                    duration: const Duration(milliseconds: 520),
-                    curve: Curves.easeOutCubic,
-                    alignment: 0.04,
-                  );
-                },
-                child: Ink(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.brandBright, width: 1.2),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Actualités plus bas',
-                        style: TextStyle(
-                          color: AppColors.ink,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.brandBright,
-                        size: 20,
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.brandBright,
+                  size: 22,
                 ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 14),
-          DailyNewsSection(verticalFeedKey: newsFeedKey),
-        ],
+        ),
       ),
     );
   }
@@ -1052,34 +1244,68 @@ class _NextGuardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entry == null) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: AppColors.line),
-          boxShadow: AppShadow.low,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.event_available_rounded,
-              color: AppColors.brand,
-              size: 28,
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Ink(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.line),
+              boxShadow: AppShadow.low,
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Aucune garde à venir.',
-                style: TextStyle(
-                  color: AppColors.inkSoft,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.brand.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    Icons.event_available_rounded,
+                    color: AppColors.brandBright,
+                    size: 25,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Prochaine garde',
+                        style: TextStyle(
+                          color: AppColors.ink,
+                          fontFamily: 'SpaceGrotesk',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Aucune garde validée à venir.',
+                        style: TextStyle(
+                          color: AppColors.inkSoft,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.inkFaint,
+                  size: 24,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     }
@@ -1096,7 +1322,8 @@ class _NextGuardCard extends StatelessWidget {
         shiftId.contains('24-h') ||
         shiftLabel.toLowerCase().contains('24h');
     final isNight = !is24h &&
-        (shiftId.contains('nuit') || shiftLabel.toLowerCase().contains('nuit'));
+        (shiftId.contains('nuit') ||
+            shiftLabel.toLowerCase().contains('nuit'));
 
     final category = isUrgence ? 'URGENCES' : 'SERVICE';
     final period = is24h
@@ -1109,235 +1336,186 @@ class _NextGuardCard extends StatelessWidget {
     final dateLabel = date == null
         ? current.dateStr
         : DateFormat('EEE d MMMM', 'fr_FR').format(date);
-
     final timeLabel = is24h
         ? '08:00 → 08:00'
         : isNight
             ? '20:00 → 08:00'
             : '08:00 → 20:00';
 
-    final guardTitle =
-        shiftLabel.isEmpty ? 'Garde de \${period.toLowerCase()}' : shiftLabel;
+    final guardTitle = shiftLabel.isEmpty
+        ? 'Garde de ${period.toLowerCase()}'
+        : shiftLabel;
 
     final colors = is24h
-        ? const [
-            Color(0xFF60CAFF),
-            Color(0xFF2392EA),
-            Color(0xFF173E72),
-            Color(0xFF071426),
-          ]
+        ? const [Color(0xFF287CC7), Color(0xFF0B1C35)]
         : isNight
-            ? const [Color(0xFF071426), Color(0xFF123D70)]
-            : const [Color(0xFF62CBFF), Color(0xFF168DE9)];
-
-    final stops = is24h ? const [0.0, 0.44, 0.58, 1.0] : null;
-
-    final mainIcon = is24h
-        ? Icons.brightness_6_rounded
+            ? const [Color(0xFF0A1729), Color(0xFF123D70)]
+            : const [Color(0xFF25AFE9), Color(0xFF0879D7)];
+    final accent = isUrgence
+        ? const Color(0xFFFFD5DA)
         : isNight
-            ? Icons.nightlight_round
-            : Icons.wb_sunny_rounded;
+            ? const Color(0xFFFFE9A8)
+            : const Color(0xFFFFE06D);
+
+    String countdownLabel = 'À venir';
+    if (date != null) {
+      final today = DateTime.now();
+      final startToday = DateTime(today.year, today.month, today.day);
+      final guardDay = DateTime(date.year, date.month, date.day);
+      final days = guardDay.difference(startToday).inDays;
+      if (days == 0) {
+        countdownLabel = "Aujourd'hui";
+      } else if (days == 1) {
+        countdownLabel = 'Demain';
+      } else if (days > 1) {
+        countdownLabel = 'Dans $days jours';
+      }
+    }
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
         child: Ink(
           width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: colors,
-              stops: stops,
             ),
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(26),
             boxShadow: [
               BoxShadow(
-                color: colors.last.withOpacity(0.24),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
+                color: colors.last.withOpacity(0.20),
+                blurRadius: 20,
+                offset: const Offset(0, 9),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -12,
-                  top: -16,
-                  child: SizedBox(
-                    width: 110,
-                    height: 102,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
+          child: Stack(
+            children: [
+              Positioned(
+                right: -28,
+                bottom: -42,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.06),
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                          ),
+                        ),
+                        child: Icon(
                           is24h
                               ? Icons.brightness_6_rounded
                               : isNight
                                   ? Icons.nightlight_round
                                   : Icons.wb_sunny_rounded,
-                          size: 102,
-                          color: is24h
-                              ? const Color(0xFFBFE4FF).withOpacity(0.88)
-                              : isNight
-                                  ? const Color(0xFFFFF1B8).withOpacity(0.92)
-                                  : const Color(0xFFFFD54F).withOpacity(0.94),
-                        ),
-                        Positioned(
-                          right: -8,
-                          bottom: 6,
-                          child: Icon(
-                            Icons.cloud_rounded,
-                            size: 42,
-                            color: const Color(0xFFE7F5FF).withOpacity(0.82),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (isNight || is24h) ...[
-                  const Positioned(
-                    right: 86,
-                    top: 20,
-                    child: Icon(
-                      Icons.star_rounded,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
-                  ),
-                  const Positioned(
-                    right: 54,
-                    top: 64,
-                    child: Icon(
-                      Icons.star_rounded,
-                      size: 8,
-                      color: Colors.white38,
-                    ),
-                  ),
-                  const Positioned(
-                    right: 126,
-                    top: 82,
-                    child: Icon(
-                      Icons.star_rounded,
-                      size: 7,
-                      color: Colors.white38,
-                    ),
-                  ),
-                ],
-                Positioned(
-                  right: -28,
-                  bottom: -46,
-                  child: Container(
-                    width: 138,
-                    height: 138,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.07),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 17, 15, 17),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 62,
-                        height: 62,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.16),
-                          borderRadius: BorderRadius.circular(19),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.22),
-                          ),
-                        ),
-                        child: Icon(
-                          mainIcon,
-                          color: is24h
-                              ? const Color(0xFFBFE4FF)
-                              : isNight
-                                  ? const Color(0xFFFFF1B8)
-                                  : const Color(0xFFFFD54F),
-                          size: 31,
+                          color: accent,
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 11),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'PROCHAINE GARDE',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.82),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.75,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$category • $period',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'SpaceGrotesk',
-                                fontSize: 22,
-                                height: 1.08,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              guardTitle,
+                              'PROCHAINE GARDE · $countdownLabel',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.92),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
+                                color: Colors.white.withOpacity(0.74),
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.45,
                               ),
                             ),
-                            const SizedBox(height: 13),
-                            _NextGuardInfoLine(
-                              icon: Icons.calendar_month_rounded,
-                              text: dateLabel,
-                            ),
-                            const SizedBox(height: 6),
-                            _NextGuardInfoLine(
-                              icon: Icons.schedule_rounded,
-                              text: timeLabel,
-                            ),
-                            const SizedBox(height: 6),
-                            _NextGuardInfoLine(
-                              icon: isUrgence
-                                  ? Icons.emergency_rounded
-                                  : Icons.medical_services_rounded,
-                              text: isUrgence
-                                  ? 'Garde aux urgences'
-                                  : 'Garde de service',
+                            const SizedBox(height: 3),
+                            Text(
+                              '$category · $period',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'SpaceGrotesk',
+                                fontSize: 20,
+                                height: 1.05,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 42),
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
                         child: Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.white.withOpacity(0.90),
-                          size: 29,
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white.withOpacity(0.92),
+                          size: 20,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                  Text(
+                    guardTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.90),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w750,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      _GuardMetaChip(
+                        icon: Icons.calendar_month_rounded,
+                        text: dateLabel,
+                      ),
+                      _GuardMetaChip(
+                        icon: Icons.schedule_rounded,
+                        text: timeLabel,
+                      ),
+                      _GuardMetaChip(
+                        icon: isUrgence
+                            ? Icons.emergency_rounded
+                            : Icons.medical_services_rounded,
+                        text: isUrgence ? 'Urgences' : 'Service',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -1345,33 +1523,36 @@ class _NextGuardCard extends StatelessWidget {
   }
 }
 
-class _NextGuardInfoLine extends StatelessWidget {
+class _GuardMetaChip extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _NextGuardInfoLine({required this.icon, required this.text});
+  const _GuardMetaChip({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(icon, color: Colors.white.withOpacity(0.90), size: 16),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Text(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.11),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.11)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white.withOpacity(0.88), size: 14),
+          const SizedBox(width: 5),
+          Text(
             text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.94),
-              fontSize: 12.5,
-              height: 1.2,
-              fontWeight: FontWeight.w700,
+              color: Colors.white.withOpacity(0.92),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w750,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
