@@ -6,7 +6,7 @@ on:
       - feat/account-theme-v12
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   patch:
@@ -25,7 +25,44 @@ jobs:
           cache: true
 
       - name: Apply account theme patch
-        run: python3 tools/patch_account_theme_v12.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq "final String appearanceTheme;" source/lib/models/app_user.dart; then
+            echo "Account theme patch already present; skipping patch script."
+          else
+            python3 tools/patch_account_theme_v12.py
+          fi
+
+      - name: Disable automatic signed iOS build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/build-ios-signed.yml')
+          text = path.read_text(encoding='utf-8')
+          old = """on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-ios-signed.yml'
+      - 'source/**'
+"""
+          new = """on:
+  workflow_dispatch:
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+          elif new in text:
+              print('Signed iOS workflow is already manual-only.')
+          else:
+              raise SystemExit('Unexpected build-ios-signed.yml trigger block')
+          PY
 
       - name: Format changed Dart files
         working-directory: source
@@ -49,25 +86,23 @@ jobs:
         working-directory: source
         run: flutter test
 
-      - name: Package validated implementation
+      - name: Commit validated implementation
+        shell: bash
         run: |
-          mkdir -p validated-theme-patch/source/lib/models
-          mkdir -p validated-theme-patch/source/lib/theme
-          mkdir -p validated-theme-patch/source/lib/services
-          mkdir -p validated-theme-patch/source/lib/state
-          mkdir -p validated-theme-patch/source/lib/screens
-          mkdir -p validated-theme-patch/supabase/migrations
-          cp source/lib/models/app_user.dart validated-theme-patch/source/lib/models/
-          cp source/lib/theme/app_theme.dart validated-theme-patch/source/lib/theme/
-          cp source/lib/services/supabase_backend_service.dart validated-theme-patch/source/lib/services/
-          cp source/lib/state/app_state.dart validated-theme-patch/source/lib/state/
-          cp source/lib/screens/application_settings_screen.dart validated-theme-patch/source/lib/screens/
-          cp supabase/migrations/20261001_account_linked_appearance_theme.sql validated-theme-patch/supabase/migrations/
-
-      - name: Upload validated implementation
-        uses: actions/upload-artifact@v4
-        with:
-          name: validated-account-theme-v12
-          path: validated-theme-patch
-          if-no-files-found: error
-          retention-days: 1
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            source/lib/models/app_user.dart \
+            source/lib/theme/app_theme.dart \
+            source/lib/services/supabase_backend_service.dart \
+            source/lib/state/app_state.dart \
+            source/lib/screens/application_settings_screen.dart \
+            supabase/migrations/20261001_account_linked_appearance_theme.sql \
+            .github/workflows/build-ios-signed.yml
+          if git diff --cached --quiet; then
+            echo "No validated implementation changes to commit."
+          else
+            git commit -m "feat: persist account theme and disable signed iOS auto-build [skip ci]"
+            git push origin HEAD:feat/account-theme-v12
+          fi
