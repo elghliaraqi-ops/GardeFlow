@@ -50,6 +50,56 @@ const List<ProfileAvatarOption> kProfileAvatarOptions = [
     label: 'Avatar 6',
     assetPath: 'assets/avatars/gamer_doctor_m_03.webp',
   ),
+  ProfileAvatarOption(
+    key: 'avatar_7',
+    label: 'Avatar 7',
+    assetPath: 'assets/avatars/avatar_7.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_8',
+    label: 'Avatar 8',
+    assetPath: 'assets/avatars/avatar_8.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_9',
+    label: 'Avatar 9',
+    assetPath: 'assets/avatars/avatar_9.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_10',
+    label: 'Avatar 10',
+    assetPath: 'assets/avatars/avatar_10.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_11',
+    label: 'Avatar 11',
+    assetPath: 'assets/avatars/avatar_11.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_12',
+    label: 'Avatar 12',
+    assetPath: 'assets/avatars/avatar_12.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_13',
+    label: 'Avatar 13',
+    assetPath: 'assets/avatars/avatar_13.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_14',
+    label: 'Avatar 14',
+    assetPath: 'assets/avatars/avatar_14.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_15',
+    label: 'Avatar 15',
+    assetPath: 'assets/avatars/avatar_15.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_16',
+    label: 'Avatar 16',
+    assetPath: 'assets/avatars/avatar_16.webp',
+  ),
 ];
 
 ProfileAvatarOption? profileAvatarByKey(String? key) {
