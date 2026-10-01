@@ -10,12 +10,49 @@ class ClinicalCaseService {
   ClinicalCaseService._();
   static final ClinicalCaseService instance = ClinicalCaseService._();
 
+  static const Duration _defaultEnrichmentCooldown = Duration(minutes: 2);
+
   final ValueNotifier<int> revision = ValueNotifier<int>(0);
   final Set<String> _enrichmentRequested = <String>{};
+  final Map<String, DateTime> _enrichmentRetryAfter = <String, DateTime>{};
 
   SupabaseBackendService get _backend => SupabaseBackendService.instance;
 
   void notifyChanged() => revision.value = revision.value + 1;
+
+  bool _canRequestEnrichment(String postId) {
+    final retryAfter = _enrichmentRetryAfter[postId];
+    if (retryAfter == null) return true;
+    if (DateTime.now().isBefore(retryAfter)) return false;
+    _enrichmentRetryAfter.remove(postId);
+    return true;
+  }
+
+  void _deferEnrichment(String postId, {DateTime? retryAfter}) {
+    _enrichmentRetryAfter[postId] =
+        retryAfter ?? DateTime.now().add(_defaultEnrichmentCooldown);
+  }
+
+  void _recordEnrichmentResult(String postId, dynamic data) {
+    if (data is Map) {
+      final status = '${data['status'] ?? ''}'.trim().toLowerCase();
+      final count = int.tryParse('${data['count'] ?? ''}') ?? 0;
+      if (status == 'ready' || count >= 5) {
+        _enrichmentRetryAfter.remove(postId);
+        notifyChanged();
+        return;
+      }
+
+      final retryAfterRaw = '${data['retry_after'] ?? ''}'.trim();
+      final retryAfter = retryAfterRaw.isEmpty
+          ? null
+          : DateTime.tryParse(retryAfterRaw)?.toLocal();
+      _deferEnrichment(postId, retryAfter: retryAfter);
+      return;
+    }
+
+    _deferEnrichment(postId);
+  }
 
   Future<List<ClinicalCasePost>> fetchFeed({
     int offset = 0,
@@ -34,14 +71,17 @@ class ClinicalCaseService {
         .map((row) => ClinicalCasePost.fromMap(Map<String, dynamic>.from(row)))
         .toList(growable: false);
 
-    // Les anciens cas/fallbacks sont utilisables immédiatement puis enrichis
-    // par l'IA en arrière-plan. On déduplique uniquement une requête en cours :
-    // en cas d'échec temporaire, un prochain rafraîchissement pourra réessayer.
+    // L'enrichissement est best-effort. Une requête identique est dédupliquée
+    // pendant son exécution et, après un échec ou un verrou serveur, un délai
+    // est respecté avant toute nouvelle tentative afin d'éviter une boucle de
+    // requêtes vers la fonction IA à chaque rafraîchissement du feed.
     for (final post in posts) {
       final needsAi =
           post.qcms.length < 5 ||
           post.qcms.any((qcm) => qcm.generationSource != 'openai');
-      if (needsAi && _enrichmentRequested.add(post.id)) {
+      if (needsAi &&
+          _canRequestEnrichment(post.id) &&
+          _enrichmentRequested.add(post.id)) {
         unawaited(
           enrichQcmForPost(post.id).whenComplete(() {
             _enrichmentRequested.remove(post.id);
@@ -173,26 +213,25 @@ class ClinicalCaseService {
       }
       notifyChanged();
     } catch (_) {
-      // Cinq fallbacks serveur existent déjà. L'enrichissement IA est best
-      // effort et ne doit jamais bloquer l'enregistrement clinique.
+      // L'enregistrement clinique reste indépendant de l'enrichissement IA.
     }
   }
 
   Future<void> enrichQcmForPost(String postId) async {
+    final normalizedPostId = postId.trim();
     if (!_backend.enabled ||
         _backend.client.auth.currentUser == null ||
-        postId.trim().isEmpty) {
+        normalizedPostId.isEmpty) {
       return;
     }
     try {
       final response = await _backend.client.functions.invoke(
         'generate-clinical-case-qcm',
-        body: <String, dynamic>{'post_id': postId.trim()},
+        body: <String, dynamic>{'post_id': normalizedPostId},
       );
-      final data = response.data;
-      if (data is Map && data['count'] == 5) notifyChanged();
+      _recordEnrichmentResult(normalizedPostId, response.data);
     } catch (_) {
-      // Le feed conserve ses fallbacks si l'IA est temporairement indisponible.
+      _deferEnrichment(normalizedPostId);
     }
   }
 
