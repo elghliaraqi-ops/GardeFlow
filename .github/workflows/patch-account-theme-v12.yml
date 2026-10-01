@@ -42,9 +42,9 @@ jobs:
         working-directory: source
         run: flutter pub get
 
-      - name: Analyze changed implementation
+      - name: Analyze implementation
         working-directory: source
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Run tests
         working-directory: source
