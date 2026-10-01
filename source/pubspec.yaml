@@ -45,6 +45,7 @@ flutter:
     - assets/branding/partners/hui_cheikh_khalifa.png
     - assets/branding/partners/hui_bouskoura.png
     - assets/branding/partners/amium6.png
+    - assets/avatars/
   fonts:
     - family: SpaceGrotesk
       fonts:
