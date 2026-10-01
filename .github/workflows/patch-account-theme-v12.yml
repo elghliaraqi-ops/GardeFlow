@@ -34,26 +34,6 @@ jobs:
             python3 tools/patch_account_theme_v12.py
           fi
 
-      - name: Disable automatic signed iOS build
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('.github/workflows/build-ios-signed.yml')
-          text = path.read_text(encoding='utf-8')
-          old = "on:\n  workflow_dispatch:\n  push:\n    branches:\n      - main\n    paths:\n      - '.github/workflows/build-ios-signed.yml'\n      - 'source/**'\n"
-          new = "on:\n  workflow_dispatch:\n"
-          if old in text:
-              text = text.replace(old, new, 1)
-              path.write_text(text, encoding='utf-8')
-          elif new in text:
-              print('Signed iOS workflow is already manual-only.')
-          else:
-              raise SystemExit('Unexpected build-ios-signed.yml trigger block')
-          PY
-
       - name: Format changed Dart files
         working-directory: source
         run: |
@@ -88,11 +68,10 @@ jobs:
             source/lib/services/supabase_backend_service.dart \
             source/lib/state/app_state.dart \
             source/lib/screens/application_settings_screen.dart \
-            supabase/migrations/20261001_account_linked_appearance_theme.sql \
-            .github/workflows/build-ios-signed.yml
+            supabase/migrations/20261001_account_linked_appearance_theme.sql
           if git diff --cached --quiet; then
             echo "No validated implementation changes to commit."
           else
-            git commit -m "feat: persist account theme and disable signed iOS auto-build [skip ci]"
+            git commit -m "feat: persist account-linked appearance theme [skip ci]"
             git push origin HEAD:feat/account-theme-v12
           fi
