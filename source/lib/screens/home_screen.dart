@@ -746,10 +746,39 @@ class _DashboardView extends StatelessWidget {
                 Positioned(
                   right: -8,
                   top: -14,
-                  child: Icon(
-                    isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
-                    size: 104,
-                    color: Colors.white.withOpacity(0.12),
+                  child: SizedBox(
+                    width: 112,
+                    height: 104,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+                          size: 104,
+                          color: isNight
+                              ? const Color(0xFFFFF1B8).withOpacity(0.92)
+                              : const Color(0xFFFFD54F).withOpacity(0.94),
+                        ),
+                        Positioned(
+                          right: -8,
+                          bottom: 7,
+                          child: Icon(
+                            Icons.cloud_rounded,
+                            size: 44,
+                            color: const Color(0xFFE7F5FF).withOpacity(0.84),
+                          ),
+                        ),
+                        Positioned(
+                          right: 24,
+                          bottom: -1,
+                          child: Icon(
+                            Icons.cloud_rounded,
+                            size: 28,
+                            color: const Color(0xFFB9DDF4).withOpacity(0.72),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 Positioned(
@@ -1209,14 +1238,36 @@ class _NextGuardCard extends StatelessWidget {
                 Positioned(
                   right: -12,
                   top: -16,
-                  child: Icon(
-                    is24h
-                        ? Icons.brightness_6_rounded
-                        : isNight
-                            ? Icons.nightlight_round
-                            : Icons.wb_sunny_rounded,
-                    size: 102,
-                    color: Colors.white.withOpacity(0.12),
+                  child: SizedBox(
+                    width: 110,
+                    height: 102,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          is24h
+                              ? Icons.brightness_6_rounded
+                              : isNight
+                                  ? Icons.nightlight_round
+                                  : Icons.wb_sunny_rounded,
+                          size: 102,
+                          color: is24h
+                              ? const Color(0xFFBFE4FF).withOpacity(0.88)
+                              : isNight
+                                  ? const Color(0xFFFFF1B8).withOpacity(0.92)
+                                  : const Color(0xFFFFD54F).withOpacity(0.94),
+                        ),
+                        Positioned(
+                          right: -8,
+                          bottom: 6,
+                          child: Icon(
+                            Icons.cloud_rounded,
+                            size: 42,
+                            color: const Color(0xFFE7F5FF).withOpacity(0.82),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 if (isNight || is24h) ...[
@@ -1275,7 +1326,15 @@ class _NextGuardCard extends StatelessWidget {
                             color: Colors.white.withOpacity(0.22),
                           ),
                         ),
-                        child: Icon(mainIcon, color: Colors.white, size: 31),
+                        child: Icon(
+                          mainIcon,
+                          color: is24h
+                              ? const Color(0xFFBFE4FF)
+                              : isNight
+                                  ? const Color(0xFFFFF1B8)
+                                  : const Color(0xFFFFD54F),
+                          size: 31,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
