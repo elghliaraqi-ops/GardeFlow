@@ -9,6 +9,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../theme/screen_decor.dart';
+import '../widgets/profile_avatar.dart';
 
 const String _kAllHospitals = 'all';
 const String _kAllCategories = 'all';
@@ -293,7 +294,7 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
       );
     }
 
-    return DecorScaffold(scene: ScreenDecorScene.directory, 
+    return DecorScaffold(scene: ScreenDecorScene.directory,
       backgroundColor: AppColors.paper,
       appBar: AppBar(title: GardeFlowTitle('Annuaire')),
       floatingActionButton: isAdmin
@@ -422,6 +423,8 @@ class _ContactRow extends StatelessWidget {
       if ((contact.service ?? '').trim().isNotEmpty) contact.service!.trim(),
       hospitalDisplayName(contact.hospital),
     ];
+    final isProfileJunior =
+        !contact.isManual && contact.categoryId == kDirectoryCategoryJuniors;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -434,17 +437,13 @@ class _ContactRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CircleAvatar(
+              ProfileAvatar(
+                profileId: contact.id,
+                initials: contact.initials,
+                isJunior: isProfileJunior,
                 radius: 20,
                 backgroundColor: section.color,
-                child: Text(
-                  contact.initials,
-                  style: TextStyle(
-                    color: section.textColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12.5,
-                  ),
-                ),
+                foregroundColor: section.textColor,
               ),
               SizedBox(width: AppSpace.md),
               Expanded(
