@@ -8,6 +8,7 @@ import '../models/shift_type.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'announcements_screen.dart';
+import '../theme/screen_decor.dart';
 
 enum _Mode { transfer, exchange }
 
@@ -113,7 +114,12 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Transfert / échange de garde', style: Theme.of(context).textTheme.displaySmall),
+            const DecorSheetLead(
+              scene: ScreenDecorScene.planning,
+              title: 'Transfert / échange de garde',
+              subtitle: 'Organisez votre remplacement dans un cadre clair et sécurisé',
+              icon: Icons.swap_horiz_rounded,
+            ),
             const SizedBox(height: AppSpace.sm),
             Wrap(
               spacing: 8,

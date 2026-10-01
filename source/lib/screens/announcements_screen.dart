@@ -12,6 +12,7 @@ import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
   final String? initialEntryId;
@@ -438,7 +439,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       firstYearPromotion: state.currentFirstYearPromotion,
     );
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.announcements, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         backgroundColor: AppColors.paper,

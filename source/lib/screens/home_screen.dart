@@ -30,6 +30,7 @@ import 'settings_screen.dart';
 import 'senior_oncall_screen.dart';
 import 'daily_news_section.dart';
 import 'clinical_cases_section.dart';
+import '../theme/screen_decor.dart';
 
 /// Coque principale V11.6.18.
 ///
@@ -73,13 +74,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (me == null) {
-      return Scaffold(
+      return DecorScaffold(scene: ScreenDecorScene.home, 
         backgroundColor: AppColors.paper,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.home, 
       backgroundColor: AppColors.paper,
       extendBody: false,
       body: SafeArea(

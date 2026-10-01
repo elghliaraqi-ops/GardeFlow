@@ -6,6 +6,7 @@ import '../models/shared_resource.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class SeniorRosterReviewScreen extends StatefulWidget {
   final SharedResource resource;
@@ -280,7 +281,7 @@ class _SeniorRosterReviewScreenState extends State<SeniorRosterReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.onCall, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Vérifier l’analyse'),

@@ -12,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../widgets/brand_identity.dart';
 import 'forgot_password_screen.dart';
 import 'home_screen.dart';
+import '../theme/screen_decor.dart';
 
 Color get _loginGreen => AppColors.brand;
 Color get _loginGreenDark => AppColors.brandDark;
@@ -150,7 +151,7 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.auth, 
       backgroundColor: AppColors.paper,
       resizeToAvoidBottomInset: true,
       body: Stack(

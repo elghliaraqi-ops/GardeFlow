@@ -11,6 +11,7 @@ import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 /// Astreintes Juniors : lecture par jour, hôpital et service.
 ///
@@ -397,7 +398,7 @@ class _JuniorOnCallScreenState extends State<JuniorOnCallScreen> {
       ],
     );
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.onCall, 
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: GardeFlowTitle('Astreintes Juniors'),

@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/clinical_case_post.dart';
 import '../services/clinical_case_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/screen_decor.dart';
 
 class ClinicalCasesSection extends StatefulWidget {
   final GlobalKey? verticalFeedKey;
@@ -91,94 +92,15 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(15, 15, 11, 15),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.brandDark, AppColors.brand],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.brand.withOpacity(.20),
-                  blurRadius: 22,
-                  offset: const Offset(0, 9),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.13),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(.18)),
-                  ),
-                  child: const Icon(
-                    Icons.medical_information_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'CAS CLINIQUES',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'SpaceGrotesk',
-                          fontSize: 18.5,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: .35,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Dossiers anonymisés · raisonnement clinique · 5 QCM par cas',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(.78),
-                          fontSize: 10.5,
-                          height: 1.3,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(13),
-                    onTap: _loading ? null : () => _load(reset: true),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.12),
-                        borderRadius: BorderRadius.circular(13),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(.16),
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.refresh_rounded,
-                        color: Colors.white.withOpacity(_loading ? .45 : .95),
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          DecorSectionBanner(
+            scene: ScreenDecorScene.practice,
+            title: 'CAS CLINIQUES',
+            subtitle: 'Dossiers anonymisés · raisonnement clinique · 5 QCM par cas',
+            icon: Icons.medical_information_rounded,
+            trailing: DecorIconAction(
+              icon: Icons.refresh_rounded,
+              tooltip: 'Actualiser',
+              onTap: _loading ? null : () => _load(reset: true),
             ),
           ),
           const SizedBox(height: 12),

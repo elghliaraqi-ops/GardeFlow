@@ -18,6 +18,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'senior_roster_review_screen.dart';
+import '../theme/screen_decor.dart';
 
 class AstreinteScreen extends StatefulWidget {
   final bool embedded;
@@ -486,7 +487,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       return ColoredBox(color: AppColors.paper, child: body);
     }
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.onCall, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Médecins Séniors de Garde / Astreinte'),

@@ -13,6 +13,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'admin_password_reset_screen.dart';
 import '../theme/widgets.dart';
+import '../theme/screen_decor.dart';
 
 class NotificationsScreen extends StatelessWidget {
   final int initialIndex;
@@ -82,7 +83,7 @@ class NotificationsScreen extends StatelessWidget {
     return DefaultTabController(
       length: tabCount,
       initialIndex: resolvedIndex,
-      child: Scaffold(
+      child: DecorScaffold(scene: ScreenDecorScene.notifications, 
         backgroundColor: AppColors.paper,
         appBar: AppBar(
           toolbarHeight: 64,

@@ -16,6 +16,7 @@ import 'junior_oncall_screen.dart';
 import 'notifications_screen.dart';
 import 'official_planning_screen.dart';
 import 'settings_screen.dart';
+import '../theme/screen_decor.dart';
 
 class ProfileScreen extends StatelessWidget {
   final bool embedded;
@@ -38,7 +39,7 @@ class ProfileScreen extends StatelessWidget {
       );
     }
 
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.profile, 
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Mon profil'),

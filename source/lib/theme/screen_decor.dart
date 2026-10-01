@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -62,7 +60,7 @@ extension ScreenDecorSceneVisuals on ScreenDecorScene {
       case ScreenDecorScene.onCall:
         return Icons.emergency_rounded;
       case ScreenDecorScene.practice:
-        return Icons.stethoscope_rounded;
+        return Icons.medical_services_rounded;
       case ScreenDecorScene.news:
         return Icons.newspaper_rounded;
       case ScreenDecorScene.directory:
@@ -257,15 +255,13 @@ class _GlowOrb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color, color.withOpacity(0)],
-          ),
-        ),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: RadialGradient(colors: [color, color.withOpacity(0)]),
+    ),
+  );
 }
 
 class _ScreenDecorPatternPainter extends CustomPainter {
@@ -283,9 +279,7 @@ class _ScreenDecorPatternPainter extends CustomPainter {
     const step = 54.0;
     for (double y = 30; y < size.height; y += step) {
       final row = (y / step).floor();
-      for (double x = row.isEven ? 24 : 50;
-          x < size.width;
-          x += step * 1.65) {
+      for (double x = row.isEven ? 24 : 50; x < size.width; x += step * 1.65) {
         canvas.drawCircle(Offset(x, y), 1.4, paint);
       }
     }
@@ -512,10 +506,7 @@ class DecorSectionBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (trailing != null) ...[
-                  const SizedBox(width: 8),
-                  trailing!,
-                ],
+                if (trailing != null) ...[const SizedBox(width: 8), trailing!],
               ],
             ),
           ],

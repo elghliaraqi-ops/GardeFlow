@@ -12,6 +12,7 @@ import '../services/practice_service.dart';
 import '../services/clinical_case_service.dart';
 import '../state/app_state.dart';
 import 'practice_qcm_screen.dart';
+import '../theme/screen_decor.dart';
 
 abstract final class PracticeColors {
   static const background = Color(0xFF071F18);
@@ -811,7 +812,7 @@ class _PracticeGuardScreenState extends State<PracticeGuardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.practice, 
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -1800,7 +1801,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   @override
   Widget build(BuildContext context) {
     final number = _patientNumber.toString().padLeft(3, '0');
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.practice, 
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -2477,7 +2478,7 @@ class _PracticeAchievementsScreenState
   @override
   Widget build(BuildContext context) {
     final level = practiceLevelForXp(_all.xp);
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.practice, 
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
@@ -2637,7 +2638,7 @@ class _PracticeLeaderboardScreenState extends State<PracticeLeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final me = widget.appState.currentUser;
-    return Scaffold(
+    return DecorScaffold(scene: ScreenDecorScene.practice, 
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
