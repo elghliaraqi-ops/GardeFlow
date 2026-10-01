@@ -1,0 +1,66 @@
+name: Validate QCM Security Fix
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/services/clinical_case_service.dart'
+      - 'source/lib/services/qcm_generation_retry_policy.dart'
+      - 'source/supabase/functions/generate-clinical-case-qcm/**'
+      - 'source/test/qcm_generation_retry_policy_test.dart'
+      - 'source/test/qcm_models_test.dart'
+      - 'source/test/clinical_case_post_test.dart'
+      - 'supabase/migrations/*qcm*'
+      - '.github/workflows/qcm-security-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qcm-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: source
+        run: flutter pub get
+
+      - name: Dart formatting
+        working-directory: source
+        run: dart format --output=none --set-exit-if-changed lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
+
+      - name: Flutter analyzer
+        working-directory: source
+        run: flutter analyze lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
+
+      - name: QCM unit tests
+        working-directory: source
+        run: flutter test test/qcm_generation_retry_policy_test.dart test/qcm_models_test.dart test/clinical_case_post_test.dart
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check QCM Edge Function
+        run: deno check source/supabase/functions/generate-clinical-case-qcm/index.ts
+
+      - name: SQL security assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE='supabase/migrations/20261001_qcm_generation_security_hardening.sql'
+          grep -Fq 'clinical_case_commit_generated_qcms' "$FILE"
+          grep -Fq "legacy.post_id is not null then c.correct_index" "$FILE"
+          grep -Fq 'revoke all on table public.clinical_case_qcms from anon, authenticated' "$FILE"
+          grep -Fq 'clinical_case_claim_qcm_generation' "$FILE"
