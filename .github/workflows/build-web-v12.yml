@@ -55,6 +55,7 @@ jobs:
           set -euo pipefail
           git switch -C generated/practice-cases-qcm-20261001
           python .github/scripts/move_cases_and_game_qcm.py
+          sed -i 's/FontWeight\.w650/FontWeight.w600/g' source/lib/screens/clinical_cases_section.dart
           git diff --check
 
       - name: Install dependencies
