@@ -48,8 +48,7 @@ class ClinicalCaseService {
     // deduplicated in memory and backed by a persisted, bounded cooldown.
     final now = DateTime.now().toUtc();
     for (final post in posts) {
-      final needsAi =
-          post.qcms.length < 5 ||
+      final needsAi = post.qcms.length < 5 ||
           post.qcms.any((qcm) => qcm.generationSource != 'openai');
       if (!needsAi || !_canAutoAttempt(post.id, now)) continue;
       if (!_enrichmentInFlight.add(post.id)) continue;
@@ -250,7 +249,8 @@ class ClinicalCaseService {
       final retryable = details['retryable'] is bool
           ? details['retryable'] as bool
           : QcmGenerationRetryPolicy.isRetryableHttpStatus(status);
-      final code = '${details['error'] ?? details['reason'] ?? 'network_or_function_error'}';
+      final code =
+          '${details['error'] ?? details['reason'] ?? 'network_or_function_error'}';
       await _registerFailure(
         postId,
         retryable: retryable &&
@@ -348,7 +348,8 @@ class ClinicalCaseService {
     return !now.isBefore(state.nextAttemptAt);
   }
 
-  Future<void> _deferWithoutFailure(String postId, DateTime? serverRetry) async {
+  Future<void> _deferWithoutFailure(
+      String postId, DateTime? serverRetry) async {
     final now = DateTime.now().toUtc();
     final current = _retryStates[postId];
     final next = serverRetry != null && serverRetry.isAfter(now)
@@ -474,8 +475,8 @@ class ClinicalCaseService {
       final rows = await _backend.client.rpc('practice_my_achievements');
       if (rows is List) {
         for (final raw in rows.whereType<Map>()) {
-          final unlockedAt = DateTime.tryParse('${raw['unlocked_at'] ?? ''}')
-              ?.toLocal();
+          final unlockedAt =
+              DateTime.tryParse('${raw['unlocked_at'] ?? ''}')?.toLocal();
           final key = '${raw['key'] ?? ''}'.trim();
           if (key.isEmpty || unlockedAt == null) continue;
           if (unlockedAt.isAfter(
@@ -524,7 +525,8 @@ class _QcmRetryState {
       };
 
   static _QcmRetryState? fromMap(Map<String, dynamic> map) {
-    final first = DateTime.tryParse('${map['first_failure_at'] ?? ''}')?.toUtc();
+    final first =
+        DateTime.tryParse('${map['first_failure_at'] ?? ''}')?.toUtc();
     final next = DateTime.tryParse('${map['next_attempt_at'] ?? ''}')?.toUtc();
     if (first == null || next == null) return null;
     return _QcmRetryState(
