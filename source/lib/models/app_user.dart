@@ -32,6 +32,14 @@ class AppUser {
   });
 
   String get fullName => '$prenom $nom';
+  String get initials {
+    final values = <String>[];
+    final first = prenom.trim();
+    final last = nom.trim();
+    if (first.isNotEmpty) values.add(first[0].toUpperCase());
+    if (last.isNotEmpty) values.add(last[0].toUpperCase());
+    return values.isEmpty ? '?' : values.join();
+  }
   String get gradeLabel => grade == MedicalGrade.senior ? 'Senior' : 'Junior';
   String get roleLabel => role == UserRole.admin ? 'Administrateur' : 'Médecin';
 
