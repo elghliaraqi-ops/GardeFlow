@@ -510,25 +510,47 @@ class DecorSectionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = scene.accent;
+    final isNews = scene == ScreenDecorScene.news;
+    final gradientColors = isNews
+        ? const <Color>[
+            Color(0xFF4F46E5),
+            Color(0xFF8B5CF6),
+            Color(0xFFEC4899),
+            Color(0xFFF59E0B),
+          ]
+        : <Color>[
+            Color.lerp(AppColors.navy, accent, .18) ?? AppColors.navy,
+            Color.lerp(AppColors.brandDark, accent, .48) ?? accent,
+          ];
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(15, 15, 11, 15),
+        padding: EdgeInsets.fromLTRB(
+          isNews ? 16 : 15,
+          isNews ? 17 : 15,
+          11,
+          isNews ? 17 : 15,
+        ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color.lerp(AppColors.navy, accent, .18) ?? AppColors.navy,
-              Color.lerp(AppColors.brandDark, accent, .48) ?? accent,
-            ],
+            colors: gradientColors,
+            stops: isNews ? const [0, .34, .70, 1] : null,
           ),
-          border: Border.all(color: accent.withOpacity(.28)),
+          border: Border.all(
+            color: isNews
+                ? Colors.white.withOpacity(.25)
+                : accent.withOpacity(.28),
+          ),
           boxShadow: [
             BoxShadow(
-              color: accent.withOpacity(.15),
-              blurRadius: 24,
+              color: isNews
+                  ? const Color(0xFFEC4899).withOpacity(.23)
+                  : accent.withOpacity(.15),
+              blurRadius: isNews ? 30 : 24,
               offset: const Offset(0, 10),
             ),
           ],
@@ -536,32 +558,123 @@ class DecorSectionBanner extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Positioned(
-              right: -20,
-              top: -34,
-              child: Transform.rotate(
-                angle: -.18,
-                child: Icon(
-                  scene.primaryIcon,
-                  size: 116,
-                  color: Colors.white.withOpacity(.075),
+            if (isNews) ...[
+              Positioned(
+                right: -34,
+                top: -42,
+                child: Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(.09),
+                    border: Border.all(color: Colors.white.withOpacity(.08)),
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                right: 58,
+                bottom: -54,
+                child: Container(
+                  width: 104,
+                  height: 104,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFD166).withOpacity(.16),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 77,
+                top: -14,
+                child: Transform.rotate(
+                  angle: -.18,
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 30,
+                    color: const Color(0xFFFFE08A).withOpacity(.34),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 16,
+                bottom: 7,
+                child: Transform.rotate(
+                  angle: .12,
+                  child: Icon(
+                    Icons.campaign_rounded,
+                    size: 52,
+                    color: Colors.white.withOpacity(.12),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 2,
+                bottom: -14,
+                child: Container(
+                  width: 54,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(99),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF67E8F9),
+                        Color(0xFFFFD166),
+                        Color(0xFFFF6FAE),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ] else
+              Positioned(
+                right: -20,
+                top: -34,
+                child: Transform.rotate(
+                  angle: -.18,
+                  child: Icon(
+                    scene.primaryIcon,
+                    size: 116,
+                    color: Colors.white.withOpacity(.075),
+                  ),
+                ),
+              ),
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: isNews ? 52 : 48,
+                  height: isNews ? 52 : 48,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.13),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(.18)),
+                    gradient: isNews
+                        ? const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFFFFD166),
+                              Color(0xFFFF8A5B),
+                              Color(0xFFFF6FAE),
+                            ],
+                          )
+                        : null,
+                    color: isNews ? null : Colors.white.withOpacity(.13),
+                    borderRadius: BorderRadius.circular(isNews ? 17 : 16),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(isNews ? .30 : .18),
+                    ),
+                    boxShadow: isNews
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFF34165A).withOpacity(.22),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: Icon(
                     icon ?? scene.primaryIcon,
-                    color: Colors.white,
-                    size: 24,
+                    color: isNews ? const Color(0xFF2B165A) : Colors.white,
+                    size: isNews ? 27 : 24,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -569,22 +682,61 @@ class DecorSectionBanner extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (isNews) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(.16),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(.17),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.bolt_rounded,
+                                color: Color(0xFFFFE08A),
+                                size: 12,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'À LA UNE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: .8,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                      ],
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
                           fontFamily: 'SpaceGrotesk',
-                          fontSize: 18.5,
+                          fontSize: isNews ? 19.2 : 18.5,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: .2,
+                          letterSpacing: isNews ? -.15 : .2,
+                          height: 1.05,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         subtitle,
+                        maxLines: isNews ? 2 : null,
+                        overflow: isNews ? TextOverflow.ellipsis : null,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(.78),
-                          fontSize: 10.5,
+                          color: Colors.white.withOpacity(isNews ? .88 : .78),
+                          fontSize: isNews ? 10.8 : 10.5,
                           height: 1.3,
                           fontWeight: FontWeight.w700,
                         ),
