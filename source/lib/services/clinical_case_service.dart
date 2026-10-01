@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/clinical_case_post.dart';
 import '../models/qcm_models.dart';
+import 'qcm_generation_retry_policy.dart';
 import 'supabase_backend_service.dart';
 
 class ClinicalCaseService {
@@ -11,7 +14,12 @@ class ClinicalCaseService {
   static final ClinicalCaseService instance = ClinicalCaseService._();
 
   final ValueNotifier<int> revision = ValueNotifier<int>(0);
-  final Set<String> _enrichmentRequested = <String>{};
+  final Set<String> _enrichmentInFlight = <String>{};
+  final Map<String, _QcmRetryState> _retryStates = <String, _QcmRetryState>{};
+
+  String? _retryUserId;
+  bool _retryStateLoaded = false;
+  Future<void>? _retryLoadFuture;
 
   SupabaseBackendService get _backend => SupabaseBackendService.instance;
 
@@ -24,6 +32,9 @@ class ClinicalCaseService {
     if (!_backend.enabled || _backend.client.auth.currentUser == null) {
       return const <ClinicalCasePost>[];
     }
+
+    await _ensureRetryStateLoaded();
+
     final response = await _backend.client.rpc(
       'clinical_case_feed',
       params: <String, dynamic>{'p_offset': offset, 'p_limit': limit},
@@ -34,20 +45,21 @@ class ClinicalCaseService {
         .map((row) => ClinicalCasePost.fromMap(Map<String, dynamic>.from(row)))
         .toList(growable: false);
 
-    // Les anciens cas/fallbacks sont utilisables immédiatement puis enrichis
-    // par l'IA en arrière-plan. On déduplique uniquement une requête en cours :
-    // en cas d'échec temporaire, un prochain rafraîchissement pourra réessayer.
+    // Un rebuild/refresh du feed ne doit jamais constituer une politique de retry.
+    // Les tentatives automatiques sont dédupliquées, persistées et bornées.
+    final now = DateTime.now().toUtc();
     for (final post in posts) {
       final needsAi =
           post.qcms.length < 5 ||
           post.qcms.any((qcm) => qcm.generationSource != 'openai');
-      if (needsAi && _enrichmentRequested.add(post.id)) {
-        unawaited(
-          enrichQcmForPost(post.id).whenComplete(() {
-            _enrichmentRequested.remove(post.id);
-          }),
-        );
-      }
+      if (!needsAi || !_canAutoAttempt(post.id, now)) continue;
+      if (!_enrichmentInFlight.add(post.id)) continue;
+
+      unawaited(
+        _enrichQcmForPost(post.id, automatic: true).whenComplete(() {
+          _enrichmentInFlight.remove(post.id);
+        }),
+      );
     }
     return posts;
   }
@@ -168,32 +180,265 @@ class ClinicalCaseService {
         body: <String, dynamic>{'practice_case_id': practiceCaseId.trim()},
       );
       final data = response.data;
-      if (data is Map && data['count'] == 5) {
+      if (data is Map && data['count'] == 5 && data['ok'] == true) {
         unawaited(_triggerPush('practice_qcm_ready', practiceCaseId.trim()));
+        notifyChanged();
       }
-      notifyChanged();
     } catch (_) {
-      // Cinq fallbacks serveur existent déjà. L'enrichissement IA est best
-      // effort et ne doit jamais bloquer l'enregistrement clinique.
+      // Best effort : un incident IA ne doit jamais bloquer Practice.
     }
   }
 
+  /// Tentative manuelle. Respecte le cooldown serveur/client ; elle ne contourne
+  /// jamais une erreur permanente ni une tentative déjà en cours.
   Future<void> enrichQcmForPost(String postId) async {
     if (!_backend.enabled ||
         _backend.client.auth.currentUser == null ||
         postId.trim().isEmpty) {
       return;
     }
+    await _ensureRetryStateLoaded();
+    final id = postId.trim();
+    if (!_canManualAttempt(id, DateTime.now().toUtc())) return;
+    if (!_enrichmentInFlight.add(id)) return;
+    try {
+      await _enrichQcmForPost(id, automatic: false);
+    } finally {
+      _enrichmentInFlight.remove(id);
+    }
+  }
+
+  bool canRetryQcmManually(String postId) {
+    final id = postId.trim();
+    if (id.isEmpty || _enrichmentInFlight.contains(id)) return false;
+    return _canManualAttempt(id, DateTime.now().toUtc());
+  }
+
+  DateTime? qcmRetryAfter(String postId) => _retryStates[postId]?.nextAttemptAt;
+
+  Future<void> _enrichQcmForPost(
+    String postId, {
+    required bool automatic,
+  }) async {
+    if (!_backend.enabled || _backend.client.auth.currentUser == null) return;
+
     try {
       final response = await _backend.client.functions.invoke(
         'generate-clinical-case-qcm',
-        body: <String, dynamic>{'post_id': postId.trim()},
+        body: <String, dynamic>{'post_id': postId},
       );
-      final data = response.data;
-      if (data is Map && data['count'] == 5) notifyChanged();
-    } catch (_) {
-      // Le feed conserve ses fallbacks si l'IA est temporairement indisponible.
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      final status = response.status;
+
+      if (data['ok'] == true && data['count'] == 5) {
+        await _clearRetryState(postId);
+        notifyChanged();
+        return;
+      }
+
+      final error = '${data['error'] ?? data['reason'] ?? 'qcm_unavailable'}';
+      final retryable = data['retryable'] is bool
+          ? data['retryable'] as bool
+          : QcmGenerationRetryPolicy.isRetryableHttpStatus(status);
+      final retryAfter = _parseRetryAfter(data);
+
+      if (status == 202 || error == 'generation_in_progress') {
+        await _deferWithoutFailure(postId, retryAfter);
+        return;
+      }
+
+      await _registerFailure(
+        postId,
+        retryable: retryable &&
+            !QcmGenerationRetryPolicy.isPermanentHttpStatus(status),
+        retryAfter: retryAfter,
+        errorCode: error,
+      );
+    } catch (error) {
+      final status = _exceptionStatus(error);
+      final details = _exceptionDetails(error);
+      final retryable = details['retryable'] is bool
+          ? details['retryable'] as bool
+          : QcmGenerationRetryPolicy.isRetryableHttpStatus(status);
+      final code = '${details['error'] ?? details['reason'] ?? 'network_or_function_error'}';
+      await _registerFailure(
+        postId,
+        retryable: retryable &&
+            !QcmGenerationRetryPolicy.isPermanentHttpStatus(status),
+        retryAfter: _parseRetryAfter(details),
+        errorCode: code,
+      );
     }
+  }
+
+  Future<void> _ensureRetryStateLoaded() async {
+    final userId = _backend.client.auth.currentUser?.id;
+    if (userId == null) return;
+    if (_retryStateLoaded && _retryUserId == userId) return;
+    if (_retryLoadFuture != null && _retryUserId == userId) {
+      await _retryLoadFuture;
+      return;
+    }
+
+    _retryUserId = userId;
+    _retryStateLoaded = false;
+    _retryStates.clear();
+    _retryLoadFuture = _loadRetryState(userId);
+    try {
+      await _retryLoadFuture;
+    } finally {
+      _retryLoadFuture = null;
+    }
+  }
+
+  Future<void> _loadRetryState(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_retryPrefsKey(userId));
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final now = DateTime.now().toUtc();
+      for (final entry in decoded.entries) {
+        if (entry.value is! Map) continue;
+        final state = _QcmRetryState.fromMap(
+          Map<String, dynamic>.from(entry.value as Map),
+        );
+        if (state == null) continue;
+        if (now.difference(state.firstFailureAt) >
+            QcmGenerationRetryPolicy.resetWindow) {
+          continue;
+        }
+        _retryStates['${entry.key}'] = state;
+      }
+    } catch (_) {
+      _retryStates.clear();
+    } finally {
+      _retryStateLoaded = true;
+    }
+  }
+
+  Future<void> _persistRetryState() async {
+    final userId = _retryUserId;
+    if (userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = <String, dynamic>{
+        for (final entry in _retryStates.entries)
+          entry.key: entry.value.toMap(),
+      };
+      await prefs.setString(_retryPrefsKey(userId), jsonEncode(encoded));
+    } catch (_) {
+      // La persistance locale ne doit jamais casser le flux Practice.
+    }
+  }
+
+  String _retryPrefsKey(String userId) => 'qcm_generation_retry_v1_$userId';
+
+  bool _canAutoAttempt(String postId, DateTime now) {
+    final state = _retryStates[postId];
+    if (state == null) return !_enrichmentInFlight.contains(postId);
+    if (now.difference(state.firstFailureAt) >
+        QcmGenerationRetryPolicy.resetWindow) {
+      _retryStates.remove(postId);
+      unawaited(_persistRetryState());
+      return !_enrichmentInFlight.contains(postId);
+    }
+    if (state.permanent || state.automaticSuspended) return false;
+    if (now.isBefore(state.nextAttemptAt)) return false;
+    return !_enrichmentInFlight.contains(postId);
+  }
+
+  bool _canManualAttempt(String postId, DateTime now) {
+    final state = _retryStates[postId];
+    if (state == null) return true;
+    if (state.permanent) return false;
+    return !now.isBefore(state.nextAttemptAt);
+  }
+
+  Future<void> _deferWithoutFailure(String postId, DateTime? serverRetry) async {
+    final now = DateTime.now().toUtc();
+    final current = _retryStates[postId];
+    final next = serverRetry != null && serverRetry.isAfter(now)
+        ? serverRetry
+        : now.add(const Duration(minutes: 1));
+    _retryStates[postId] = _QcmRetryState(
+      failureCount: current?.failureCount ?? 0,
+      firstFailureAt: current?.firstFailureAt ?? now,
+      nextAttemptAt: next,
+      permanent: false,
+      automaticSuspended: current?.automaticSuspended ?? false,
+      lastErrorCode: 'generation_in_progress',
+    );
+    await _persistRetryState();
+  }
+
+  Future<void> _registerFailure(
+    String postId, {
+    required bool retryable,
+    required DateTime? retryAfter,
+    required String errorCode,
+  }) async {
+    final now = DateTime.now().toUtc();
+    final previous = _retryStates[postId];
+    final withinWindow = previous != null &&
+        now.difference(previous.firstFailureAt) <=
+            QcmGenerationRetryPolicy.resetWindow;
+    final failureCount = (withinWindow ? previous.failureCount : 0) + 1;
+    final firstFailureAt = withinWindow ? previous.firstFailureAt : now;
+
+    var next = now.add(QcmGenerationRetryPolicy.delayForFailure(failureCount));
+    if (retryAfter != null && retryAfter.isAfter(next)) next = retryAfter;
+
+    _retryStates[postId] = _QcmRetryState(
+      failureCount: failureCount,
+      firstFailureAt: firstFailureAt,
+      nextAttemptAt: next,
+      permanent: !retryable,
+      automaticSuspended:
+          failureCount >= QcmGenerationRetryPolicy.maxAutomaticFailures,
+      lastErrorCode: errorCode.length <= 80
+          ? errorCode
+          : errorCode.substring(0, 80),
+    );
+    await _persistRetryState();
+  }
+
+  Future<void> _clearRetryState(String postId) async {
+    if (_retryStates.remove(postId) != null) await _persistRetryState();
+  }
+
+  DateTime? _parseRetryAfter(Map<String, dynamic> data) {
+    final raw = data['retry_after'];
+    if (raw != null) {
+      final parsed = DateTime.tryParse('$raw')?.toUtc();
+      if (parsed != null) return parsed;
+    }
+    final seconds = int.tryParse('${data['retry_after_seconds'] ?? ''}');
+    if (seconds != null && seconds > 0) {
+      return DateTime.now().toUtc().add(Duration(seconds: seconds));
+    }
+    return null;
+  }
+
+  int? _exceptionStatus(Object error) {
+    try {
+      final value = (error as dynamic).status;
+      if (value is int) return value;
+      return int.tryParse('$value');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _exceptionDetails(Object error) {
+    try {
+      final value = (error as dynamic).details;
+      if (value is Map) return Map<String, dynamic>.from(value);
+    } catch (_) {}
+    return const <String, dynamic>{};
   }
 
   Future<int> _practiceXp() async {
@@ -237,9 +482,6 @@ class ClinicalCaseService {
       await _triggerPush('practice_level_up', postId);
     }
 
-    // practice_my_achievements rafraîchit les succès côté serveur. Seuls ceux
-    // débloqués pendant cette action sont poussés ; les succès historiques ne
-    // provoquent donc pas une rafale de notifications lors de la mise à jour.
     try {
       final rows = await _backend.client.rpc('practice_my_achievements');
       if (rows is List) {
@@ -264,5 +506,46 @@ class ClinicalCaseService {
     } catch (_) {
       // Une notification ne doit jamais rendre une action Practice échouée.
     }
+  }
+}
+
+class _QcmRetryState {
+  final int failureCount;
+  final DateTime firstFailureAt;
+  final DateTime nextAttemptAt;
+  final bool permanent;
+  final bool automaticSuspended;
+  final String lastErrorCode;
+
+  const _QcmRetryState({
+    required this.failureCount,
+    required this.firstFailureAt,
+    required this.nextAttemptAt,
+    required this.permanent,
+    required this.automaticSuspended,
+    required this.lastErrorCode,
+  });
+
+  Map<String, dynamic> toMap() => <String, dynamic>{
+        'failure_count': failureCount,
+        'first_failure_at': firstFailureAt.toUtc().toIso8601String(),
+        'next_attempt_at': nextAttemptAt.toUtc().toIso8601String(),
+        'permanent': permanent,
+        'automatic_suspended': automaticSuspended,
+        'last_error_code': lastErrorCode,
+      };
+
+  static _QcmRetryState? fromMap(Map<String, dynamic> map) {
+    final first = DateTime.tryParse('${map['first_failure_at'] ?? ''}')?.toUtc();
+    final next = DateTime.tryParse('${map['next_attempt_at'] ?? ''}')?.toUtc();
+    if (first == null || next == null) return null;
+    return _QcmRetryState(
+      failureCount: int.tryParse('${map['failure_count'] ?? 0}') ?? 0,
+      firstFailureAt: first,
+      nextAttemptAt: next,
+      permanent: map['permanent'] == true,
+      automaticSuspended: map['automatic_suspended'] == true,
+      lastErrorCode: '${map['last_error_code'] ?? ''}',
+    );
   }
 }
