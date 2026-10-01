@@ -23,6 +23,9 @@ jobs:
       - name: Apply screen-by-screen decorative refresh
         run: python3 ci/apply_full_decor_refresh.py
 
+      - name: Normalize Flutter-compatible decorative icons
+        run: sed -i 's/Icons.stethoscope_rounded/Icons.medical_services_rounded/g' source/lib/theme/screen_decor.dart
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
