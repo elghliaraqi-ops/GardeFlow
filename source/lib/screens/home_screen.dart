@@ -74,15 +74,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (me == null) {
-      return DecorScaffold(
-        scene: ScreenDecorScene.home,
+      return DecorScaffold(scene: ScreenDecorScene.home, 
         backgroundColor: AppColors.paper,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return DecorScaffold(
-      scene: ScreenDecorScene.home,
+    return DecorScaffold(scene: ScreenDecorScene.home, 
       backgroundColor: AppColors.paper,
       extendBody: false,
       body: SafeArea(
@@ -98,9 +96,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               onDirectory: _tab == 3
                   ? () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => DirectoryScreen()),
-                    )
+                        context,
+                        MaterialPageRoute(builder: (_) => DirectoryScreen()),
+                      )
                   : null,
               onAccount: () => Navigator.push(
                 context,
@@ -179,9 +177,8 @@ class _GlobalTopBar extends StatelessWidget {
 
     final badge = appState.totalBadgeCount;
     final rawInitial = user.nom.trim();
-    final initial = rawInitial.isEmpty
-        ? 'D'
-        : rawInitial.substring(0, 1).toUpperCase();
+    final initial =
+        rawInitial.isEmpty ? 'D' : rawInitial.substring(0, 1).toUpperCase();
 
     return Container(
       height: 58,
@@ -636,25 +633,24 @@ class _DashboardView extends StatelessWidget {
   });
 
   List<PlanningEntry> _futureGuards(AppUser me) {
-    final entries =
-        appState.planning
-            .where(
-              (entry) =>
-                  (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
-                  entry.shiftId != 'conge' &&
-                  appState.isPlanningEntryApproved(entry) &&
-                  !appState.guardHasStarted(entry),
-            )
-            .toList()
-          ..sort((a, b) {
-            final ad = DateTime.parse(a.dateStr);
-            final bd = DateTime.parse(b.dateStr);
-            final cmp = ad.compareTo(bd);
-            if (cmp != 0) return cmp;
-            final ashift = ShiftCatalog.byId(a.shiftId);
-            final bshift = ShiftCatalog.byId(b.shiftId);
-            return (ashift.start ?? '').compareTo(bshift.start ?? '');
-          });
+    final entries = appState.planning
+        .where(
+          (entry) =>
+              (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
+              entry.shiftId != 'conge' &&
+              appState.isPlanningEntryApproved(entry) &&
+              !appState.guardHasStarted(entry),
+        )
+        .toList()
+      ..sort((a, b) {
+        final ad = DateTime.parse(a.dateStr);
+        final bd = DateTime.parse(b.dateStr);
+        final cmp = ad.compareTo(bd);
+        if (cmp != 0) return cmp;
+        final ashift = ShiftCatalog.byId(a.shiftId);
+        final bshift = ShiftCatalog.byId(b.shiftId);
+        return (ashift.start ?? '').compareTo(bshift.start ?? '');
+      });
     return entries;
   }
 
@@ -711,9 +707,8 @@ class _DashboardView extends StatelessWidget {
     );
 
     final rawDate = DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(now);
-    final dateLabel = rawDate.isEmpty
-        ? ''
-        : rawDate[0].toUpperCase() + rawDate.substring(1);
+    final dateLabel =
+        rawDate.isEmpty ? '' : rawDate[0].toUpperCase() + rawDate.substring(1);
     final timeLabel = DateFormat('HH:mm').format(now);
 
     final heroColors = isNight
@@ -758,9 +753,7 @@ class _DashboardView extends StatelessWidget {
                       clipBehavior: Clip.none,
                       children: [
                         Icon(
-                          isNight
-                              ? Icons.nightlight_round
-                              : Icons.wb_sunny_rounded,
+                          isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
                           size: 104,
                           color: isNight
                               ? const Color(0xFFFFF1B8).withOpacity(0.92)
@@ -843,16 +836,13 @@ class _DashboardView extends StatelessWidget {
                     ),
                     SizedBox(height: 17),
                     Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 9,
-                      ),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.13),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.14),
-                        ),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.14)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,10 +893,10 @@ class _DashboardView extends StatelessWidget {
           Text(
             'Prochaine garde à venir',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontFamily: 'SpaceGrotesk',
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink,
-            ),
+                  fontFamily: 'SpaceGrotesk',
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink,
+                ),
           ),
           SizedBox(height: 6),
           Text(
@@ -914,9 +904,7 @@ class _DashboardView extends StatelessWidget {
                 ? 'Aucune garde validée à venir pour le moment.'
                 : 'Voici votre prochaine garde programmée.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.inkSoft,
-              fontWeight: FontWeight.w500,
-            ),
+                color: AppColors.inkSoft, fontWeight: FontWeight.w500),
           ),
           SizedBox(height: 14),
           _NextGuardCard(entry: next, onTap: onOpenPlanning),
@@ -942,17 +930,13 @@ class _DashboardView extends StatelessWidget {
                       );
                     },
                     child: Ink(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 8,
-                      ),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: AppColors.brandBright,
-                          width: 1.2,
-                        ),
+                            color: AppColors.brandBright, width: 1.2),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -991,17 +975,13 @@ class _DashboardView extends StatelessWidget {
                       );
                     },
                     child: Ink(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 8,
-                      ),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: AppColors.brandBright,
-                          width: 1.2,
-                        ),
+                            color: AppColors.brandBright, width: 1.2),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1045,21 +1025,21 @@ class _MonthlyGuardChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.13),
-      borderRadius: BorderRadius.circular(11),
-      border: Border.all(color: Colors.white.withOpacity(0.13)),
-    ),
-    child: Text(
-      '$label · $value',
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w800,
-      ),
-    ),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.13),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: Colors.white.withOpacity(0.13)),
+        ),
+        child: Text(
+          '$label · $value',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
 }
 
 class _BadgeCount extends StatelessWidget {
@@ -1068,23 +1048,23 @@ class _BadgeCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    constraints: BoxConstraints(minWidth: 19, minHeight: 19),
-    alignment: Alignment.center,
-    padding: EdgeInsets.symmetric(horizontal: 5),
-    decoration: BoxDecoration(
-      color: AppColors.danger,
-      borderRadius: AppRadius.pillR,
-      border: Border.all(color: AppColors.paper, width: 2),
-    ),
-    child: Text(
-      value > 99 ? '99+' : '$value',
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: 8.5,
-        fontWeight: FontWeight.w900,
-      ),
-    ),
-  );
+        constraints: BoxConstraints(minWidth: 19, minHeight: 19),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          color: AppColors.danger,
+          borderRadius: AppRadius.pillR,
+          border: Border.all(color: AppColors.paper, width: 2),
+        ),
+        child: Text(
+          value > 99 ? '99+' : '$value',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 8.5,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
 }
 
 class _MetricCard extends StatelessWidget {
@@ -1102,35 +1082,35 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-    padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
-    shadow: [],
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: tint, size: 19),
-        SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontFamily: 'SpaceGrotesk',
-            fontSize: 21,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
+        padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
+        shadow: [],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: tint, size: 19),
+            SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'SpaceGrotesk',
+                fontSize: 21,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+              ),
+            ),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.8,
+                fontWeight: FontWeight.w700,
+                color: AppColors.inkSoft,
+              ),
+            ),
+          ],
         ),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 9.8,
-            fontWeight: FontWeight.w700,
-            color: AppColors.inkSoft,
-          ),
-        ),
-      ],
-    ),
-  );
+      );
 }
 
 class _NextGuardCard extends StatelessWidget {
@@ -1179,24 +1159,21 @@ class _NextGuardCard extends StatelessWidget {
     final shiftId = shift.id.toLowerCase();
     final shiftLabel = shift.label.trim();
 
-    final isUrgence =
-        shiftId.startsWith('urg-') ||
+    final isUrgence = shiftId.startsWith('urg-') ||
         shiftId.contains('urgence') ||
         shiftLabel.toLowerCase().contains('urgence');
-    final is24h =
-        shiftId.contains('24h') ||
+    final is24h = shiftId.contains('24h') ||
         shiftId.contains('24-h') ||
         shiftLabel.toLowerCase().contains('24h');
-    final isNight =
-        !is24h &&
+    final isNight = !is24h &&
         (shiftId.contains('nuit') || shiftLabel.toLowerCase().contains('nuit'));
 
     final category = isUrgence ? 'URGENCES' : 'SERVICE';
     final period = is24h
         ? '24H'
         : isNight
-        ? 'NUIT'
-        : 'JOUR';
+            ? 'NUIT'
+            : 'JOUR';
 
     final date = DateTime.tryParse(current.dateStr);
     final dateLabel = date == null
@@ -1206,12 +1183,11 @@ class _NextGuardCard extends StatelessWidget {
     final timeLabel = is24h
         ? '08:00 → 08:00'
         : isNight
-        ? '20:00 → 08:00'
-        : '08:00 → 20:00';
+            ? '20:00 → 08:00'
+            : '08:00 → 20:00';
 
-    final guardTitle = shiftLabel.isEmpty
-        ? 'Garde de \${period.toLowerCase()}'
-        : shiftLabel;
+    final guardTitle =
+        shiftLabel.isEmpty ? 'Garde de \${period.toLowerCase()}' : shiftLabel;
 
     final colors = is24h
         ? const [
@@ -1221,16 +1197,16 @@ class _NextGuardCard extends StatelessWidget {
             Color(0xFF071426),
           ]
         : isNight
-        ? const [Color(0xFF071426), Color(0xFF123D70)]
-        : const [Color(0xFF62CBFF), Color(0xFF168DE9)];
+            ? const [Color(0xFF071426), Color(0xFF123D70)]
+            : const [Color(0xFF62CBFF), Color(0xFF168DE9)];
 
     final stops = is24h ? const [0.0, 0.44, 0.58, 1.0] : null;
 
     final mainIcon = is24h
         ? Icons.brightness_6_rounded
         : isNight
-        ? Icons.nightlight_round
-        : Icons.wb_sunny_rounded;
+            ? Icons.nightlight_round
+            : Icons.wb_sunny_rounded;
 
     return Material(
       color: Colors.transparent,
@@ -1272,14 +1248,14 @@ class _NextGuardCard extends StatelessWidget {
                           is24h
                               ? Icons.brightness_6_rounded
                               : isNight
-                              ? Icons.nightlight_round
-                              : Icons.wb_sunny_rounded,
+                                  ? Icons.nightlight_round
+                                  : Icons.wb_sunny_rounded,
                           size: 102,
                           color: is24h
                               ? const Color(0xFFBFE4FF).withOpacity(0.88)
                               : isNight
-                              ? const Color(0xFFFFF1B8).withOpacity(0.92)
-                              : const Color(0xFFFFD54F).withOpacity(0.94),
+                                  ? const Color(0xFFFFF1B8).withOpacity(0.92)
+                                  : const Color(0xFFFFD54F).withOpacity(0.94),
                         ),
                         Positioned(
                           right: -8,
@@ -1355,8 +1331,8 @@ class _NextGuardCard extends StatelessWidget {
                           color: is24h
                               ? const Color(0xFFBFE4FF)
                               : isNight
-                              ? const Color(0xFFFFF1B8)
-                              : const Color(0xFFFFD54F),
+                                  ? const Color(0xFFFFF1B8)
+                                  : const Color(0xFFFFD54F),
                           size: 31,
                         ),
                       ),
@@ -1546,41 +1522,43 @@ class _ServiceShortcut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.lgR,
-      child: AppCard(
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        shadow: [],
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: tint.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: tint, size: 22),
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.lgR,
+          child: AppCard(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            shadow: [],
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: tint.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: tint, size: 22),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: Theme.of(context).textTheme.titleSmall),
+                      SizedBox(height: 2),
+                      Text(subtitle,
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+              ],
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleSmall),
-                  SizedBox(height: 2),
-                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-          ],
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class _PlanningView extends StatelessWidget {
@@ -1742,10 +1720,8 @@ class _AnnouncementsCompactButtonState
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     final backend = SupabaseBackendService.instance;
     if (backend.enabled) {
-      _realtime = backend.client
-          .from('public_announcements')
-          .stream(primaryKey: ['id'])
-          .listen((_) => _refresh(), onError: (_) {});
+      _realtime = backend.client.from('public_announcements').stream(
+          primaryKey: ['id']).listen((_) => _refresh(), onError: (_) {});
     }
   }
 
@@ -1978,9 +1954,8 @@ class _MainBottomBar extends StatelessWidget {
                     width: 38,
                     height: 28,
                     decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.brandSoft
-                          : Colors.transparent,
+                      color:
+                          selected ? AppColors.brandSoft : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
@@ -2134,9 +2109,8 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
     final now = DateTime.now();
     final chosen = await showDatePicker(
       context: context,
-      initialDate: _date.isBefore(DateTime(now.year, now.month, now.day))
-          ? now
-          : _date,
+      initialDate:
+          _date.isBefore(DateTime(now.year, now.month, now.day)) ? now : _date,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year + 2, 12, 31),
       locale: const Locale('fr', 'FR'),
@@ -2335,7 +2309,9 @@ class _TopBarState extends State<_TopBar> {
                   children: [
                     Text(
                       'GardeFlow',
-                      style: Theme.of(context).textTheme.labelSmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     Row(
@@ -2402,18 +2378,16 @@ class _TopBarState extends State<_TopBar> {
         title: pending
             ? 'Congé en attente de validation'
             : 'Vous êtes en congé aujourd’hui',
-        icon: pending
-            ? Icons.hourglass_top_rounded
-            : Icons.beach_access_rounded,
+        icon:
+            pending ? Icons.hourglass_top_rounded : Icons.beach_access_rounded,
         background: shift.color,
         foreground: shift.textColor,
       );
     }
     final isUrgence = shift.id.startsWith('urg-');
     final location = isUrgence ? 'Urgences' : 'Service';
-    final schedule = shift.start == null
-        ? ''
-        : ' · ${shift.start} → ${shift.end}';
+    final schedule =
+        shift.start == null ? '' : ' · ${shift.start} → ${shift.end}';
     return _TodayStatus(
       title: '$location · ${shift.label}$schedule',
       icon: shift.icon,
@@ -2776,9 +2750,8 @@ class _MonthBar extends StatelessWidget {
         reopenReason = record?.rejectionReason?.trim();
         final reopened = reopenReason != null && reopenReason.isNotEmpty;
         statusLabel = reopened ? 'Rouvert' : 'En préparation';
-        statusIcon = reopened
-            ? Icons.lock_open_rounded
-            : Icons.edit_calendar_rounded;
+        statusIcon =
+            reopened ? Icons.lock_open_rounded : Icons.edit_calendar_rounded;
         statusBg = reopened ? Color(0xFFB3261E) : AppColors.paperAlt;
         statusFg = reopened ? Colors.white : AppColors.ink;
         break;
@@ -2891,7 +2864,8 @@ class _MonthBar extends StatelessWidget {
     switch (status) {
       case PlanningMonthStatus.approved:
         title = 'Calendrier validé définitivement';
-        detail = 'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
+        detail =
+            'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
         break;
       case PlanningMonthStatus.draft:
       case PlanningMonthStatus.submitted:
@@ -2902,7 +2876,8 @@ class _MonthBar extends StatelessWidget {
               'Motif : $reopenReason. Modifiez vos tuiles puis validez à nouveau le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
         } else {
           title = 'Calendrier en préparation';
-          detail = 'Placez vos tuiles Service, Urgences et Congé puis validez définitivement le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
+          detail =
+              'Placez vos tuiles Service, Urgences et Congé puis validez définitivement le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
         }
         break;
     }
@@ -3082,13 +3057,11 @@ class _CalendarGrid extends StatelessWidget {
       final date = DateTime(month.year, month.month, d);
       final dateStr = AppState.dateKey(date);
       final entry = appState.myEntryForDate(dateStr);
-      final editable =
-          monthEditable &&
+      final editable = monthEditable &&
           !appState.dateIsPast(dateStr) &&
           (entry == null ||
               (!entry.isDisciplinary && !appState.isApprovedLeaveEntry(entry)));
-      final canExchange =
-          monthApproved &&
+      final canExchange = monthApproved &&
           entry != null &&
           !entry.isDisciplinary &&
           ShiftCatalog.byId(entry.shiftId).hasSchedule &&
@@ -3124,13 +3097,13 @@ class _CalendarGrid extends StatelessWidget {
             onExchange: entry == null
                 ? null
                 : () => showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    showDragHandle: true,
-                    builder: (_) =>
-                        ExchangeRequestSheet(dateStr: dateStr, entry: entry),
-                  ),
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      showDragHandle: true,
+                      builder: (_) =>
+                          ExchangeRequestSheet(dateStr: dateStr, entry: entry),
+                    ),
           ),
         ),
       );
@@ -3143,9 +3116,8 @@ class _CalendarGrid extends StatelessWidget {
           const gap = 5.0;
           final itemWidth = (constraints.maxWidth - gap * 6) / 7;
           final itemHeight = (constraints.maxHeight - gap * (rows - 1)) / rows;
-          final safeHeight = itemHeight.isFinite && itemHeight > 1
-              ? itemHeight
-              : 1.0;
+          final safeHeight =
+              itemHeight.isFinite && itemHeight > 1 ? itemHeight : 1.0;
           final aspectRatio = itemWidth / safeHeight;
 
           return GridView.count(
@@ -3192,9 +3164,8 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentEntry = entry;
-    final shift = currentEntry == null
-        ? null
-        : ShiftCatalog.byId(currentEntry.shiftId);
+    final shift =
+        currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
     final isUrgence = shift?.id.startsWith('urg-') ?? false;
     final isLeave = shift?.id == 'conge';
     final isDisciplinary = currentEntry?.isDisciplinary ?? false;
@@ -3204,8 +3175,8 @@ class _DayCell extends StatelessWidget {
     if (shift != null) {
       if (isLeave) {
         final leave = context.watch<AppState>().leaveRequestForEntry(
-          currentEntry!,
-        );
+              currentEntry!,
+            );
         final pending = leave?.status == LeaveRequestStatus.pendingAdmin;
         groupLabel = 'CONGÉ';
         shiftLabel = pending ? 'Attente' : 'Congé';
@@ -3220,9 +3191,8 @@ class _DayCell extends StatelessWidget {
       onAcceptWithDetails: (details) => onDrop(details.data),
       builder: (context, candidateData, rejectedData) {
         final hovering = candidateData.isNotEmpty && editable;
-        final background = hovering
-            ? Color(0xFFDCEBFF)
-            : shift?.color ?? AppColors.card;
+        final background =
+            hovering ? Color(0xFFDCEBFF) : shift?.color ?? AppColors.card;
         final foreground = shift?.textColor ?? AppColors.ink;
 
         return GestureDetector(
@@ -3238,8 +3208,8 @@ class _DayCell extends StatelessWidget {
                 color: hovering || isToday
                     ? AppColors.brand
                     : shift != null
-                    ? foreground.withOpacity(0.15)
-                    : AppColors.line,
+                        ? foreground.withOpacity(0.15)
+                        : AppColors.line,
                 width: hovering ? 2 : (isToday ? 1.8 : 1),
               ),
               boxShadow: [
@@ -3266,38 +3236,38 @@ class _DayCell extends StatelessWidget {
                               size: 24,
                             )
                           : shift == null
-                          ? SizedBox.shrink()
-                          : FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    groupLabel!,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: foreground.withOpacity(0.84),
-                                      fontSize: 10.5,
-                                      height: 1,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.25,
-                                    ),
+                              ? SizedBox.shrink()
+                              : FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        groupLabel!,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: foreground.withOpacity(0.84),
+                                          fontSize: 10.5,
+                                          height: 1,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.25,
+                                        ),
+                                      ),
+                                      SizedBox(height: 3),
+                                      Text(
+                                        shiftLabel!,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: foreground,
+                                          fontFamily: 'SpaceGrotesk',
+                                          fontSize: 12,
+                                          height: 1,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  SizedBox(height: 3),
-                                  Text(
-                                    shiftLabel!,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: foreground,
-                                      fontFamily: 'SpaceGrotesk',
-                                      fontSize: 12,
-                                      height: 1,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                                ),
                     ),
                   ),
                 ),
@@ -3312,10 +3282,10 @@ class _DayCell extends StatelessWidget {
                       color: isToday
                           ? AppColors.brandDark
                           : shift != null
-                          ? (AppColors.isDarkMode
-                                ? AppColors.paperAlt.withOpacity(0.96)
-                                : Colors.white.withOpacity(0.78))
-                          : Colors.transparent,
+                              ? (AppColors.isDarkMode
+                                  ? AppColors.paperAlt.withOpacity(0.96)
+                                  : Colors.white.withOpacity(0.78))
+                              : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -3449,19 +3419,17 @@ class _ShiftChip extends StatelessWidget {
     final shift = ShiftCatalog.byId(entry.shiftId);
     final isUrgence = shift.id.startsWith('urg-');
     final isLeave = shift.id == 'conge';
-    final leave = isLeave
-        ? context.watch<AppState>().leaveRequestForEntry(entry)
-        : null;
+    final leave =
+        isLeave ? context.watch<AppState>().leaveRequestForEntry(entry) : null;
     final pendingLeave = leave?.status == LeaveRequestStatus.pendingAdmin;
 
     final groupLabel = isLeave
         ? 'CONGÉ'
         : isUrgence
-        ? 'URG'
-        : 'SERV';
-    final shiftLabel = isLeave
-        ? (pendingLeave ? 'Attente' : 'Congé')
-        : shift.label;
+            ? 'URG'
+            : 'SERV';
+    final shiftLabel =
+        isLeave ? (pendingLeave ? 'Attente' : 'Congé') : shift.label;
 
     return LayoutBuilder(
       builder: (context, constraints) {
