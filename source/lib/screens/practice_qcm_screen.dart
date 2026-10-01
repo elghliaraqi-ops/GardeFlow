@@ -12,12 +12,16 @@ class PracticeQcmScreen extends StatefulWidget {
 }
 
 class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
-  static const _bg = Color(0xFF062E20);
-  static const _surface = Color(0xFF0B4933);
-  static const _elevated = Color(0xFF116044);
-  static const _accent = Color(0xFF20D67A);
-  static const _secondary = Color(0xFFB8D6C9);
-  static const _line = Color(0xFF287154);
+  static const _bg = Color(0xFF071526);
+  static const _surface = Color(0xFF10243A);
+  static const _elevated = Color(0xFF17314E);
+  static const _accent = Color(0xFF5BE7B0);
+  static const _purple = Color(0xFF8B6CFF);
+  static const _blue = Color(0xFF3295FF);
+  static const _gold = Color(0xFFFFD166);
+  static const _pink = Color(0xFFFF6FAE);
+  static const _secondary = Color(0xFFB9CBE0);
+  static const _line = Color(0xFF244B68);
 
   final _service = ClinicalCaseService.instance;
   String _period = 'month';
@@ -87,54 +91,76 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(18, 18, 16, 17),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [_surface, _elevated],
+                  colors: [Color(0xFF6B50E8), Color(0xFF226FC6), Color(0xFF0B8F76)],
+                  stops: [0, .55, 1],
                 ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: _line),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: _accent.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _accent.withOpacity(.22)),
-                    ),
-                    child: const Icon(Icons.quiz_rounded, color: _accent, size: 25),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: Colors.white24),
+                boxShadow: [
+                  BoxShadow(
+                    color: _purple.withOpacity(.25),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Vos statistiques QCM',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 21,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -.35,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Votre progression sur les cas cliniques du fil d’accueil.',
-                          style: TextStyle(
-                            color: _secondary,
-                            fontSize: 11.5,
-                            height: 1.35,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -14,
+                    top: -24,
+                    child: Icon(
+                      Icons.quiz_rounded,
+                      size: 108,
+                      color: Colors.white.withOpacity(.09),
                     ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.13),
+                          borderRadius: BorderRadius.circular(17),
+                          border: Border.all(color: _gold.withOpacity(.34)),
+                        ),
+                        child: const Icon(Icons.sports_esports_rounded, color: _gold, size: 27),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'QCM ARENA',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .45,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Scores, précision et classement des défis Practice',
+                              style: TextStyle(
+                                color: Color(0xFFE9F2FF),
+                                fontSize: 11.2,
+                                height: 1.35,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.bolt_rounded, color: _gold, size: 27),
+                    ],
                   ),
                 ],
               ),
@@ -153,13 +179,17 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: _surface,
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [_purple.withOpacity(.24), _surface, _blue.withOpacity(.12)],
+                ),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _line),
+                border: Border.all(color: _purple.withOpacity(.38)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.emoji_events_rounded, color: _accent),
+                  const Icon(Icons.emoji_events_rounded, color: _gold),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -198,7 +228,7 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
               ],
             ),
             const SizedBox(height: 18),
-            const Text('Classement QCM', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+            const Row(children: [Icon(Icons.leaderboard_rounded, color: _gold, size: 20), SizedBox(width: 8), Text('LEADERBOARD QCM', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: .25))]),
             const SizedBox(height: 10),
             if (_loading)
               const Padding(
@@ -236,16 +266,24 @@ class _Metric extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
+      gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
+          _PracticeQcmScreenState._purple.withOpacity(.26),
           _PracticeQcmScreenState._surface,
-          _PracticeQcmScreenState._elevated,
+          _PracticeQcmScreenState._blue.withOpacity(.15),
         ],
       ),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: _PracticeQcmScreenState._line),
+      border: Border.all(color: _PracticeQcmScreenState._purple.withOpacity(.34)),
+      boxShadow: [
+        BoxShadow(
+          color: _PracticeQcmScreenState._purple.withOpacity(.10),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ],
     ),
     child: Column(
       children: [
@@ -284,7 +322,7 @@ class _Segment extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: selected
-        ? _PracticeQcmScreenState._elevated
+        ? _PracticeQcmScreenState._purple.withOpacity(.30)
         : _PracticeQcmScreenState._surface,
     borderRadius: BorderRadius.circular(15),
     child: InkWell(
@@ -297,14 +335,14 @@ class _Segment extends StatelessWidget {
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
             color: selected
-                ? _PracticeQcmScreenState._accent
+                ? _PracticeQcmScreenState._purple
                 : _PracticeQcmScreenState._line,
             width: selected ? 1.3 : 1,
           ),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: _PracticeQcmScreenState._accent.withOpacity(.07),
+                    color: _PracticeQcmScreenState._purple.withOpacity(.16),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -344,12 +382,21 @@ class _RankRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: _PracticeQcmScreenState._surface,
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            entry.rank <= 3
+                ? _PracticeQcmScreenState._gold.withOpacity(.13)
+                : _PracticeQcmScreenState._purple.withOpacity(.10),
+            _PracticeQcmScreenState._surface,
+          ],
+        ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: entry.rank <= 3
-              ? _PracticeQcmScreenState._accent.withOpacity(.40)
-              : _PracticeQcmScreenState._line,
+              ? _PracticeQcmScreenState._gold.withOpacity(.42)
+              : _PracticeQcmScreenState._purple.withOpacity(.22),
         ),
       ),
       child: Row(
