@@ -8,6 +8,34 @@ permissions:
 jobs:
   patch-and-validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - run: echo "workflow ok"
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Apply home hero patch
+        run: python3 .github/scripts/lighten_home_hero.py
+      - name: Commit visual change
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/lib/screens/home_screen.dart
+          git commit -m "style: alléger la carte principale de l'accueil"
+          git push
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Run tests
+        working-directory: source
+        run: flutter test
+      - name: Analyze Flutter code
+        working-directory: source
+        run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
+      - name: Build Flutter Web release
+        working-directory: source
+        run: flutter build web --release --base-href "/GardeFlow/" --build-name "12.0.0" --build-number "300"
