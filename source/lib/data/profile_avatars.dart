@@ -100,6 +100,26 @@ const List<ProfileAvatarOption> kProfileAvatarOptions = [
     label: 'Avatar 16',
     assetPath: 'assets/avatars/avatar_16.webp',
   ),
+  ProfileAvatarOption(
+    key: 'avatar_17',
+    label: 'Avatar 17',
+    assetPath: 'assets/avatars/avatar_17.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_18',
+    label: 'Avatar 18',
+    assetPath: 'assets/avatars/avatar_18.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_19',
+    label: 'Avatar 19',
+    assetPath: 'assets/avatars/avatar_19.webp',
+  ),
+  ProfileAvatarOption(
+    key: 'avatar_20',
+    label: 'Avatar 20',
+    assetPath: 'assets/avatars/avatar_20.webp',
+  ),
 ];
 
 ProfileAvatarOption? profileAvatarByKey(String? key) {
