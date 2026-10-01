@@ -110,7 +110,7 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
                         ),
                         child: Text(
                           _error!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.danger,
                             fontWeight: FontWeight.w700,
                           ),
@@ -145,7 +145,7 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
                                       backgroundColor: AppColors.brand.withOpacity(0.12),
                                       child: Text(
                                         user.initials,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           color: AppColors.brandDark,
                                           fontSize: 18,
                                           fontWeight: FontWeight.w900,
@@ -153,7 +153,7 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    const Text(
+                                    Text(
                                       'Initiales',
                                       style: TextStyle(
                                         color: AppColors.inkSoft,
@@ -200,7 +200,7 @@ class _ProfileAvatarScreenState extends State<ProfileAvatarScreen> {
                       color: AppColors.inkFaint,
                     ),
                     const SizedBox(height: 14),
-                    const Text(
+                    Text(
                       'Les avatars GardeFlow sont réservés aux médecins Juniors.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -273,7 +273,7 @@ class _AvatarChoiceCard extends StatelessWidget {
                           child: Container(
                             width: 25,
                             height: 25,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppColors.brand,
                               shape: BoxShape.circle,
                             ),
