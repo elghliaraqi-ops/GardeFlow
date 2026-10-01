@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   qcm-security:
@@ -23,6 +23,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: fix/qcm-generation-security
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -35,7 +38,22 @@ jobs:
         working-directory: source
         run: flutter pub get
 
-      - name: Dart formatting
+      - name: Apply Dart formatting
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
+          cd "$GITHUB_WORKSPACE"
+          if ! git diff --quiet; then
+            git config user.name 'GardeFlow CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git add source/lib/services/clinical_case_service.dart source/lib/services/qcm_generation_retry_policy.dart source/test/qcm_generation_retry_policy_test.dart
+            git commit -m 'style(qcm): apply dart format'
+            git push origin HEAD:fix/qcm-generation-security
+          fi
+
+      - name: Verify Dart formatting
         working-directory: source
         run: dart format --output=none --set-exit-if-changed lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
 
