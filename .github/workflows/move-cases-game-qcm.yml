@@ -1,21 +1,23 @@
-name: Move cases and game QCM
+name: Generate Practice cases and QCM gaming
 
 on:
   push:
     branches:
-      - feat/practice-clinical-cases-gaming-qcm-20261001
+      - main
+    paths:
+      - .github/scripts/move_cases_and_game_qcm.py
 
 permissions:
   contents: write
 
 jobs:
-  patch-and-validate:
+  generate-and-validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: feat/practice-clinical-cases-gaming-qcm-20261001
+          ref: main
           fetch-depth: 0
 
       - name: Set up Flutter
@@ -24,28 +26,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Create generated branch
+        run: git switch -c generated/practice-cases-qcm-20261001
+
       - name: Apply requested UI/navigation changes
         run: python .github/scripts/move_cases_and_game_qcm.py
 
       - name: Check patch formatting
         run: git diff --check
-
-      - name: Commit source changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            source/lib/screens/home_screen.dart \
-            source/lib/screens/practice_screen.dart \
-            source/lib/screens/practice_qcm_screen.dart \
-            source/lib/screens/clinical_cases_section.dart \
-            source/lib/screens/clinical_cases_screen.dart
-          if git diff --cached --quiet; then
-            echo "No source changes to commit"
-          else
-            git commit -m "feat: déplacer les cas cliniques dans Practice et gamifier les QCM"
-            git push origin HEAD:feat/practice-clinical-cases-gaming-qcm-20261001
-          fi
 
       - name: Install dependencies
         working-directory: source
@@ -63,7 +51,17 @@ jobs:
         working-directory: source
         run: flutter build web --release --base-href "/GardeFlow/" --build-name "12.0.0" --build-number "301"
 
-      - name: Ensure dependency lock unchanged
+      - name: Restore lockfile and commit validated source
         run: |
           git checkout -- source/pubspec.lock
-          test -z "$(git status --porcelain --untracked-files=no)" || (git status --short && exit 1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            source/lib/screens/home_screen.dart \
+            source/lib/screens/practice_screen.dart \
+            source/lib/screens/practice_qcm_screen.dart \
+            source/lib/screens/clinical_cases_section.dart \
+            source/lib/screens/clinical_cases_screen.dart
+          git diff --cached --check
+          git commit -m "feat: déplacer les cas cliniques dans Practice et gamifier les QCM"
+          git push --force-with-lease origin generated/practice-cases-qcm-20261001
