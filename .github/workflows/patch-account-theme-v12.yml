@@ -6,11 +6,10 @@ on:
       - feat/account-theme-v12
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -50,14 +49,25 @@ jobs:
         working-directory: source
         run: flutter test
 
-      - name: Remove temporary patch script
-        run: rm -f tools/patch_account_theme_v12.py
-
-      - name: Commit patched implementation
+      - name: Package validated implementation
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          git commit -m 'feat: persist appearance theme per account [theme-patch-done]'
-          git push origin HEAD:feat/account-theme-v12
+          mkdir -p validated-theme-patch/source/lib/models
+          mkdir -p validated-theme-patch/source/lib/theme
+          mkdir -p validated-theme-patch/source/lib/services
+          mkdir -p validated-theme-patch/source/lib/state
+          mkdir -p validated-theme-patch/source/lib/screens
+          mkdir -p validated-theme-patch/supabase/migrations
+          cp source/lib/models/app_user.dart validated-theme-patch/source/lib/models/
+          cp source/lib/theme/app_theme.dart validated-theme-patch/source/lib/theme/
+          cp source/lib/services/supabase_backend_service.dart validated-theme-patch/source/lib/services/
+          cp source/lib/state/app_state.dart validated-theme-patch/source/lib/state/
+          cp source/lib/screens/application_settings_screen.dart validated-theme-patch/source/lib/screens/
+          cp supabase/migrations/20261001_account_linked_appearance_theme.sql validated-theme-patch/supabase/migrations/
+
+      - name: Upload validated implementation
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-account-theme-v12
+          path: validated-theme-patch
+          if-no-files-found: error
+          retention-days: 1
