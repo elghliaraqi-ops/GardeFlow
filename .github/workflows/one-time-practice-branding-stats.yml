@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/one-time-practice-branding-stats.yml'
+      - 'ci/one_time_practice_branding.py'
   workflow_dispatch: {}
 
 permissions:
@@ -25,4 +26,4 @@ jobs:
           git commit -m "ui: use original FlowSuite and Practice visual assets"
           git push
 
-# Trigger original asset installation: 2026-10-02
+# Trigger original asset installation: 2026-10-02-r2
