@@ -247,6 +247,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
             ),
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
             children: [
+              const _PracticeOriginalLogo(),
+              const SizedBox(height: 12),
               _PracticeGameHeader(
                 level: level,
                 xp: _all.xp,
@@ -294,8 +296,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const SizedBox(height: 9),
               _EncouragementCard(text: _encouragement(guard)),
               const SizedBox(height: 20),
-              const _PracticeOriginalLogo(),
-              const SizedBox(height: 16),
               const _PracticeHubSectionHeader(
                 icon: Icons.sports_esports_rounded,
                 title: 'S’entraîner',
@@ -5122,16 +5122,17 @@ class _PracticeOriginalLogo extends StatelessWidget {
   const _PracticeOriginalLogo();
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
-    child: Align(
-      alignment: Alignment.centerLeft,
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Semantics(
+      label: 'Practice',
+      image: true,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Image.asset(
           'assets/branding/practice_icon.webp',
-          width: 58,
-          height: 58,
+          width: 52,
+          height: 52,
           fit: BoxFit.cover,
           filterQuality: FilterQuality.high,
         ),

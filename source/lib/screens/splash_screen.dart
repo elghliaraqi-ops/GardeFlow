@@ -265,8 +265,8 @@ class _OriginalBrandBanners extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     children: [
       SizedBox(
-        height: 72,
-        width: 330,
+        height: 92,
+        width: 350,
         child: Image.asset(
           'assets/branding/flowsuite_banner.webp',
           fit: BoxFit.contain,
@@ -275,8 +275,8 @@ class _OriginalBrandBanners extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       SizedBox(
-        height: 88,
-        width: 330,
+        height: 118,
+        width: 350,
         child: Image.asset(
           'assets/branding/practice_banner.webp',
           fit: BoxFit.contain,
