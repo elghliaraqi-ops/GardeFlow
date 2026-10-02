@@ -15,24 +15,21 @@ ASSETS = {
     'practice_icon_app.b64': BRANDING / 'practice_icon.webp',
 }
 
-# These Base64 files were produced directly from the user's uploaded artwork,
-# only resized/compressed for mobile delivery. They are not redraws or Flutter imitations.
+# Install the image assets from the user's original uploaded artwork when staged.
+# On later clean-up runs, keep the already-installed files rather than redrawing anything.
 for staged_name, target in ASSETS.items():
     staged = STAGE / staged_name
-    if not staged.exists():
-        raise SystemExit(f'missing staged branding asset: {staged}')
-    encoded = staged.read_text().strip()
-    # One transport file acquired a single trailing Base64 character while being
-    # copied through GitHub's text contents API. A Base64 stream can never have
-    # length == 1 (mod 4), so remove only that impossible trailing transport byte.
-    if len(encoded) % 4 == 1:
-        encoded = encoded[:-1]
-    data = base64.b64decode(encoded)
-    if not data.startswith(b'RIFF') or b'WEBP' not in data[:16]:
-        raise SystemExit(f'invalid WebP branding asset: {staged_name}')
-    target.write_bytes(data)
+    if staged.exists():
+        encoded = staged.read_text().strip()
+        if len(encoded) % 4 == 1:
+            encoded = encoded[:-1]
+        data = base64.b64decode(encoded)
+        if not data.startswith(b'RIFF') or b'WEBP' not in data[:16]:
+            raise SystemExit(f'invalid WebP branding asset: {staged_name}')
+        target.write_bytes(data)
+    elif not target.exists():
+        raise SystemExit(f'missing original branding asset: {target}')
 
-# Remove temporary transport files, including any obsolete fragment.
 if STAGE.exists():
     for item in STAGE.iterdir():
         if item.is_file():
@@ -58,32 +55,60 @@ pubspec.write_text(p)
 
 practice = ROOT / 'source' / 'lib' / 'screens' / 'practice_screen.dart'
 s = practice.read_text()
+
+# Never keep the former Flutter-drawn Practice imitation.
 s = s.replace('const _PracticeBrandMark(),', 'const _PracticeOriginalLogo(),')
-# Remove the previous code-generated imitation only.
 s = re.sub(
     r'\nclass _PracticeBrandMark extends StatelessWidget \{.*?\n\}\n\n(?=class _QcmCanonicalStatsStrip)',
     '\n',
     s,
     flags=re.S,
 )
-if 'class _PracticeOriginalLogo extends StatelessWidget' not in s:
-    marker = 'class _QcmCanonicalStatsStrip extends StatelessWidget {'
-    if marker not in s:
-        raise SystemExit('QCM stats strip marker missing')
-    widget = '''class _PracticeOriginalLogo extends StatelessWidget {
+
+# Remove the old mid-page placement, then put the real image logo at the top of Practice.
+old_mid = '''              const SizedBox(height: 20),
+              const _PracticeOriginalLogo(),
+              const SizedBox(height: 16),
+              const _PracticeHubSectionHeader(
+                icon: Icons.sports_esports_rounded,'''
+new_mid = '''              const SizedBox(height: 20),
+              const _PracticeHubSectionHeader(
+                icon: Icons.sports_esports_rounded,'''
+s = s.replace(old_mid, new_mid, 1)
+
+# Remove any remaining layout call before inserting one canonical top placement.
+s = s.replace('              const _PracticeOriginalLogo(),\n', '')
+top_anchor = '''            children: [
+              _PracticeGameHeader('''
+top_with_logo = '''            children: [
+              const _PracticeOriginalLogo(),
+              const SizedBox(height: 12),
+              _PracticeGameHeader('''
+if top_anchor not in s:
+    raise SystemExit('Practice top layout anchor missing')
+s = s.replace(top_anchor, top_with_logo, 1)
+
+# Normalize the mini logo widget: image asset only, no gradient/icon/text reconstruction.
+logo_start = s.find('class _PracticeOriginalLogo extends StatelessWidget')
+logo_end_marker = 'class _QcmCanonicalStatsStrip extends StatelessWidget {'
+logo_end = s.find(logo_end_marker, logo_start)
+if logo_start == -1 or logo_end == -1:
+    raise SystemExit('Practice original logo widget marker missing')
+logo_widget = '''class _PracticeOriginalLogo extends StatelessWidget {
   const _PracticeOriginalLogo();
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 14),
-    child: Align(
-      alignment: Alignment.centerLeft,
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Semantics(
+      label: 'Practice',
+      image: true,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Image.asset(
           'assets/branding/practice_icon.webp',
-          width: 58,
-          height: 58,
+          width: 52,
+          height: 52,
           fit: BoxFit.cover,
           filterQuality: FilterQuality.high,
         ),
@@ -93,22 +118,28 @@ if 'class _PracticeOriginalLogo extends StatelessWidget' not in s:
 }
 
 '''
-    s = s.replace(marker, widget + marker, 1)
+s = s[:logo_start] + logo_widget + s[logo_end:]
+if '_PracticeBrandMark' in s:
+    raise SystemExit('Flutter Practice imitation still present')
 practice.write_text(s)
 
 splash = ROOT / 'source' / 'lib' / 'screens' / 'splash_screen.dart'
 z = splash.read_text()
 z = z.replace('const _FlowSuiteSplashBrands(),', 'const _OriginalBrandBanners(),')
-# The imitation classes are at the end of the file; remove them entirely.
+
+# Remove any former code-generated FlowSuite/Practice imitation widgets if present.
 z = re.sub(
     r'\nclass _FlowSuiteSplashBrands extends StatelessWidget \{.*\Z',
     '\n',
     z,
     flags=re.S,
 )
-if 'class _OriginalBrandBanners extends StatelessWidget' not in z:
-    z += '''
-class _OriginalBrandBanners extends StatelessWidget {
+
+banner_start = z.find('class _OriginalBrandBanners extends StatelessWidget')
+if banner_start != -1:
+    z = z[:banner_start]
+
+z += '''class _OriginalBrandBanners extends StatelessWidget {
   const _OriginalBrandBanners();
 
   @override
@@ -116,8 +147,8 @@ class _OriginalBrandBanners extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     children: [
       SizedBox(
-        height: 72,
-        width: 330,
+        height: 92,
+        width: 350,
         child: Image.asset(
           'assets/branding/flowsuite_banner.webp',
           fit: BoxFit.contain,
@@ -126,8 +157,8 @@ class _OriginalBrandBanners extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       SizedBox(
-        height: 88,
-        width: 330,
+        height: 118,
+        width: 350,
         child: Image.asset(
           'assets/branding/practice_banner.webp',
           fit: BoxFit.contain,
@@ -138,6 +169,16 @@ class _OriginalBrandBanners extends StatelessWidget {
   );
 }
 '''
+
+for banned in ('_SplashBrandChip', '_FlowSuiteSplashBrands'):
+    if banned in z:
+        raise SystemExit(f'Flutter splash imitation still present: {banned}')
+for required in (
+    'assets/branding/flowsuite_banner.webp',
+    'assets/branding/practice_banner.webp',
+):
+    if required not in z:
+        raise SystemExit(f'missing splash image asset: {required}')
 splash.write_text(z)
 
-print('Practice/FlowSuite source artwork installed; Flutter-coded imitations removed.')
+print('Original Practice/FlowSuite image assets active; all Flutter logo imitations removed.')
