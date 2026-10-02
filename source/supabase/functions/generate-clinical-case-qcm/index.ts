@@ -178,7 +178,7 @@ Deno.serve(async(req:Request)=>{
   const fail=(status:number,error:string,retryable:boolean,extra:Record<string,unknown>={})=>reply(req,{ok:false,error,retryable,...extra},status);
   const finish=async(success:boolean,error?:string)=>{if(!admin||!claimed)return;try{await admin.rpc('clinical_case_finish_qcm_generation',{p_post_id:claimed,p_success:success,p_error_code:error?code(error,'generation_failed'):null});}catch(_){log('generation_finish_state_failed',meta());}};
 
-  if(req.method==='OPTIONS') return new Response('ok',{status:204,headers:cors(req)});
+  if(req.method==='OPTIONS') return new Response(null,{status:204,headers:cors(req)});
   if(req.method!=='POST') return fail(405,'method_not_allowed',false);
   const origin=req.headers.get('Origin')?.trim()??'';
   const configured=(Deno.env.get('GARDEFLOW_ALLOWED_ORIGINS')??'').split(',').map(x=>x.trim()).filter(Boolean);
