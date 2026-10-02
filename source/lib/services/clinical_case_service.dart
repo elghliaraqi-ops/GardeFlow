@@ -182,8 +182,9 @@ class ClinicalCaseService {
     }
   }
 
-  /// Manual retry. It respects the current cooldown and never bypasses a
-  /// permanent client/auth error or an in-flight request.
+  /// Manual retry deliberately reaches the authoritative server guard. Local
+  /// persisted cooldowns only throttle automatic background retries; the Edge
+  /// Function remains responsible for lock, cooldown and rate-limit decisions.
   Future<void> enrichQcmForPost(String postId) async {
     if (!_backend.enabled ||
         _backend.client.auth.currentUser == null ||
@@ -192,7 +193,6 @@ class ClinicalCaseService {
     }
     await _ensureRetryStateLoaded();
     final id = postId.trim();
-    if (!_canManualAttempt(id, DateTime.now().toUtc())) return;
     if (!_enrichmentInFlight.add(id)) return;
     try {
       await _enrichQcmForPost(id);
@@ -203,8 +203,7 @@ class ClinicalCaseService {
 
   bool canRetryQcmManually(String postId) {
     final id = postId.trim();
-    if (id.isEmpty || _enrichmentInFlight.contains(id)) return false;
-    return _canManualAttempt(id, DateTime.now().toUtc());
+    return id.isNotEmpty && !_enrichmentInFlight.contains(id);
   }
 
   DateTime? qcmRetryAfter(String postId) => _retryStates[postId]?.nextAttemptAt;
@@ -342,13 +341,6 @@ class ClinicalCaseService {
     if (state.permanent || state.automaticSuspended) return false;
     if (now.isBefore(state.nextAttemptAt)) return false;
     return !_enrichmentInFlight.contains(postId);
-  }
-
-  bool _canManualAttempt(String postId, DateTime now) {
-    final state = _retryStates[postId];
-    if (state == null) return true;
-    if (state.permanent) return false;
-    return !now.isBefore(state.nextAttemptAt);
   }
 
   Future<void> _deferWithoutFailure(
