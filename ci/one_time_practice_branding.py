@@ -1,33 +1,149 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import re
 from pathlib import Path
 
-practice = Path('source/lib/screens/practice_screen.dart')
+ROOT = Path('.')
+STAGE = ROOT / 'ci' / 'original_branding_assets'
+BRANDING = ROOT / 'source' / 'assets' / 'branding'
+BRANDING.mkdir(parents=True, exist_ok=True)
+
+ASSETS = {
+    'practice_banner_app.b64': (
+        BRANDING / 'practice_banner.webp',
+        'ea79fa374cbed514d9b53d78a305793294d5f9eda3fcdb84342fe3dc80fffe4f',
+    ),
+    'flowsuite_banner_app.b64': (
+        BRANDING / 'flowsuite_banner.webp',
+        'ed3b35ac2d72833173d274eb20b9b7701944ce3281e96111b609c2a25bbe5606',
+    ),
+    'practice_icon_app.b64': (
+        BRANDING / 'practice_icon.webp',
+        '72204e7abe24566ab175dfd46f31dcd3e9a0b76420053b6c7d91251dd669a567',
+    ),
+}
+
+for staged_name, (target, expected_sha) in ASSETS.items():
+    staged = STAGE / staged_name
+    if not staged.exists():
+        raise SystemExit(f'missing staged original branding asset: {staged}')
+    data = base64.b64decode(staged.read_text().strip(), validate=True)
+    actual_sha = hashlib.sha256(data).hexdigest()
+    if actual_sha != expected_sha:
+        raise SystemExit(
+            f'asset checksum mismatch for {staged_name}: {actual_sha} != {expected_sha}'
+        )
+    target.write_bytes(data)
+
+# Assets were staged only to bridge the original uploaded files into the repository.
+# Remove every staging fragment so no Base64 payload remains in the final tree.
+if STAGE.exists():
+    for item in STAGE.iterdir():
+        if item.is_file():
+            item.unlink()
+    try:
+        STAGE.rmdir()
+    except OSError:
+        pass
+
+# Declare the three real/source-derived image assets.
+pubspec = ROOT / 'source' / 'pubspec.yaml'
+p = pubspec.read_text()
+anchor = '    - assets/branding/gardeflow_logo.png\n'
+asset_lines = ''.join(
+    f'    - assets/branding/{name}\n'
+    for name in ('practice_banner.webp', 'flowsuite_banner.webp', 'practice_icon.webp')
+)
+if 'assets/branding/practice_icon.webp' not in p:
+    if anchor not in p:
+        raise SystemExit('pubspec branding anchor missing')
+    p = p.replace(anchor, anchor + asset_lines, 1)
+pubspec.write_text(p)
+
+# Practice: remove the coded imitation and show only the real logo image.
+practice = ROOT / 'source' / 'lib' / 'screens' / 'practice_screen.dart'
 s = practice.read_text()
+s = s.replace('const _PracticeBrandMark(),', 'const _PracticeOriginalLogo(),')
+s = re.sub(
+    r'\nclass _PracticeBrandMark extends StatelessWidget \{.*?\n\}\n\n(?=class _QcmCanonicalStatsStrip)',
+    '\n',
+    s,
+    flags=re.S,
+)
+if 'class _PracticeOriginalLogo extends StatelessWidget' not in s:
+    marker = 'class _QcmCanonicalStatsStrip extends StatelessWidget {'
+    if marker not in s:
+        raise SystemExit('QCM stats strip marker missing')
+    widget = '''class _PracticeOriginalLogo extends StatelessWidget {
+  const _PracticeOriginalLogo();
 
-def once(old, new, label):
-    global s
-    if new in s:
-        return
-    if old not in s:
-        raise SystemExit(f'anchor missing: {label}')
-    s = s.replace(old, new, 1)
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'assets/branding/practice_icon.webp',
+          width: 58,
+          height: 58,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    ),
+  );
+}
 
-once('  QcmRanks _qcmMonth = const QcmRanks();\n','  QcmRanks _qcmMonth = const QcmRanks();\n  QcmStats _qcmAll = const QcmStats();\n','qcm state')
-once("        _qcmService.qcmRanks(period: 'month'),\n      ]);","        _qcmService.qcmRanks(period: 'month'),\n        _qcmService.qcmSummary(period: 'all'),\n      ]);",'qcm load')
-once('        _qcmMonth = results[8] as QcmRanks;\n        _loading = false;','        _qcmMonth = results[8] as QcmRanks;\n        _qcmAll = results[9] as QcmStats;\n        _loading = false;','qcm assign')
-once("              const _PracticeHubSectionHeader(\n                icon: Icons.sports_esports_rounded,\n                title: 'S’entraîner',","              const _PracticeBrandMark(),\n              const SizedBox(height: 16),\n              const _PracticeHubSectionHeader(\n                icon: Icons.sports_esports_rounded,\n                title: 'S’entraîner',",'brand')
-once('              ),\n              const SizedBox(height: 20),\n              const _PracticeHubSectionHeader(\n                icon: Icons.insights_rounded,','              ),\n              const SizedBox(height: 10),\n              _QcmCanonicalStatsStrip(month: _qcmMonth, total: _qcmAll, loading: _loading),\n              const SizedBox(height: 20),\n              const _PracticeHubSectionHeader(\n                icon: Icons.insights_rounded,','stats strip')
-
-if 'class _PracticeBrandMark extends StatelessWidget' not in s:
-    s += '''\n\nclass _PracticeBrandMark extends StatelessWidget {\n  const _PracticeBrandMark();\n  @override\n  Widget build(BuildContext context) => Container(\n    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),\n    decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), gradient: const LinearGradient(colors: [Color(0xFF0D2D63), Color(0xFF165DCA), Color(0xFF7A36E8)]), border: Border.all(color: const Color(0xFF55C8FF).withOpacity(.45))),\n    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.assignment_turned_in_rounded, color: Colors.white, size: 30), SizedBox(width: 10), Text('Practice', style: TextStyle(color: Colors.white, fontFamily: 'SpaceGrotesk', fontWeight: FontWeight.w900, fontSize: 25))]),\n  );\n}\n\nclass _QcmCanonicalStatsStrip extends StatelessWidget {\n  final QcmRanks month; final QcmStats total; final bool loading;\n  const _QcmCanonicalStatsStrip({required this.month, required this.total, required this.loading});\n  @override\n  Widget build(BuildContext context) => Container(\n    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),\n    decoration: BoxDecoration(color: PracticeColors.surface.withOpacity(.88), borderRadius: BorderRadius.circular(18), border: Border.all(color: PracticeColors.gameBlue.withOpacity(.35))),\n    child: Row(children: [const Icon(Icons.sync_rounded, color: PracticeColors.accent, size: 20), const SizedBox(width: 9), Expanded(child: Text(loading ? 'Synchronisation…' : '${month.answered} ce mois  •  ${total.answered} au total', style: const TextStyle(color: PracticeColors.text, fontWeight: FontWeight.w800, fontSize: 13.5))), const Text('Auto', style: TextStyle(color: PracticeColors.accent, fontSize: 11, fontWeight: FontWeight.w800))]),\n  );\n}\n'''
+'''
+    s = s.replace(marker, widget + marker, 1)
 practice.write_text(s)
 
-splash = Path('source/lib/screens/splash_screen.dart')
-z = splash.read_text().replace('Duration(milliseconds: 2600)', 'Duration(milliseconds: 3200)', 1)
-anchor = "                            SizedBox(height: 26),\n                            Text(\n                              'AU SERVICE DES SOIGNANTS\\nAU SERVICE DES PATIENTS',"
-replacement = "                            SizedBox(height: 22),\n                            const _FlowSuiteSplashBrands(),\n                            SizedBox(height: 22),\n                            Text(\n                              'AU SERVICE DES SOIGNANTS\\nAU SERVICE DES PATIENTS',"
-if '_FlowSuiteSplashBrands(),' not in z:
-    if anchor not in z: raise SystemExit('anchor missing: splash')
-    z = z.replace(anchor, replacement, 1)
-if 'class _FlowSuiteSplashBrands extends StatelessWidget' not in z:
-    z += '''\n\nclass _FlowSuiteSplashBrands extends StatelessWidget {\n  const _FlowSuiteSplashBrands();\n  @override\n  Widget build(BuildContext context) => Container(\n    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),\n    decoration: BoxDecoration(color: Colors.white.withOpacity(.80), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF1A7A62).withOpacity(.14))),\n    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [\n      _SplashBrandChip(icon: Icons.hub_rounded, title: 'FlowSuite', subtitle: 'Écosystème hospitalier', colors: [Color(0xFF08734E), Color(0xFFE53935)]),\n      SizedBox(width: 18),\n      _SplashBrandChip(icon: Icons.assignment_turned_in_rounded, title: 'Practice', subtitle: 'Apprendre · progresser', colors: [Color(0xFF075CCB), Color(0xFF873BE8)]),\n    ]),\n  );\n}\nclass _SplashBrandChip extends StatelessWidget {\n  final IconData icon; final String title; final String subtitle; final List<Color> colors;\n  const _SplashBrandChip({required this.icon, required this.title, required this.subtitle, required this.colors});\n  @override\n  Widget build(BuildContext context) => Flexible(child: Row(mainAxisSize: MainAxisSize.min, children: [\n    Container(width: 38, height: 38, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), gradient: LinearGradient(colors: colors)), child: Icon(icon, color: Colors.white, size: 22)),\n    const SizedBox(width: 7),\n    Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [\n      ShaderMask(shaderCallback: (r) => LinearGradient(colors: colors).createShader(r), child: Text(title, maxLines: 1, style: const TextStyle(color: Colors.white, fontFamily: 'SpaceGrotesk', fontWeight: FontWeight.w900, fontSize: 16))),\n      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF607080), fontSize: 8.5, fontWeight: FontWeight.w700)),\n    ])),\n  ]));\n}\n'''
+# Splash: remove both coded imitation chips and replace them with the two actual banners.
+splash = ROOT / 'source' / 'lib' / 'screens' / 'splash_screen.dart'
+z = splash.read_text()
+z = z.replace('const _FlowSuiteSplashBrands(),', 'const _OriginalBrandBanners(),')
+z = re.sub(
+    r'\nclass _FlowSuiteSplashBrands extends StatelessWidget \{.*\Z',
+    '\n',
+    z,
+    flags=re.S,
+)
+if 'class _OriginalBrandBanners extends StatelessWidget' not in z:
+    z += '''
+class _OriginalBrandBanners extends StatelessWidget {
+  const _OriginalBrandBanners();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      SizedBox(
+        height: 72,
+        width: 330,
+        child: Image.asset(
+          'assets/branding/flowsuite_banner.webp',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+      const SizedBox(height: 8),
+      SizedBox(
+        height: 88,
+        width: 330,
+        child: Image.asset(
+          'assets/branding/practice_banner.webp',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    ],
+  );
+}
+'''
 splash.write_text(z)
+
+print('Original/source-derived FlowSuite + Practice assets installed; Flutter imitations removed.')
