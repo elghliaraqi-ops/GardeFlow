@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply patch
+      - name: Apply Practice patch
         run: python3 ci/one_time_practice_branding.py
       - name: Format Dart
         run: cd source && dart format lib/screens/practice_screen.dart lib/screens/splash_screen.dart
-      - name: Commit
+      - name: Commit app changes
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
