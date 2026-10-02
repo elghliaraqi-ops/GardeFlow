@@ -79,6 +79,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
   PracticePreferences _prefs = const PracticePreferences();
   PracticeRanks _ranks = const PracticeRanks();
   QcmRanks _qcmMonth = const QcmRanks();
+  QcmStats _qcmAll = const QcmStats();
   List<PracticeAchievement> _achievements = const [];
   List<int> _monthly = List<int>.filled(12, 0);
   String? _error;
@@ -129,6 +130,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         _service.achievements(),
         _service.monthlyCounts(year: DateTime.now().year),
         _qcmService.qcmRanks(period: 'month'),
+        _qcmService.qcmSummary(period: 'all'),
       ]);
       if (!mounted) return;
       setState(() {
@@ -141,6 +143,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
         _achievements = results[6] as List<PracticeAchievement>;
         _monthly = results[7] as List<int>;
         _qcmMonth = results[8] as QcmRanks;
+        _qcmAll = results[9] as QcmStats;
         _loading = false;
         _error = null;
       });
@@ -291,6 +294,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const SizedBox(height: 9),
               _EncouragementCard(text: _encouragement(guard)),
               const SizedBox(height: 20),
+              const _PracticeBrandMark(),
+              const SizedBox(height: 16),
               const _PracticeHubSectionHeader(
                 icon: Icons.sports_esports_rounded,
                 title: 'S’entraîner',
@@ -317,6 +322,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 10),
+              _QcmCanonicalStatsStrip(month: _qcmMonth, total: _qcmAll, loading: _loading),
               const SizedBox(height: 20),
               const _PracticeHubSectionHeader(
                 icon: Icons.insights_rounded,
@@ -5108,4 +5115,26 @@ String _initials(String name) {
   if (parts.isEmpty) return 'DR';
   if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
   return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+}
+
+
+class _PracticeBrandMark extends StatelessWidget {
+  const _PracticeBrandMark();
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), gradient: const LinearGradient(colors: [Color(0xFF0D2D63), Color(0xFF165DCA), Color(0xFF7A36E8)]), border: Border.all(color: const Color(0xFF55C8FF).withOpacity(.45))),
+    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.assignment_turned_in_rounded, color: Colors.white, size: 30), SizedBox(width: 10), Text('Practice', style: TextStyle(color: Colors.white, fontFamily: 'SpaceGrotesk', fontWeight: FontWeight.w900, fontSize: 25))]),
+  );
+}
+
+class _QcmCanonicalStatsStrip extends StatelessWidget {
+  final QcmRanks month; final QcmStats total; final bool loading;
+  const _QcmCanonicalStatsStrip({required this.month, required this.total, required this.loading});
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(color: PracticeColors.surface.withOpacity(.88), borderRadius: BorderRadius.circular(18), border: Border.all(color: PracticeColors.gameBlue.withOpacity(.35))),
+    child: Row(children: [const Icon(Icons.sync_rounded, color: PracticeColors.accent, size: 20), const SizedBox(width: 9), Expanded(child: Text(loading ? 'Synchronisation…' : '${month.answered} ce mois  •  ${total.answered} au total', style: const TextStyle(color: PracticeColors.text, fontWeight: FontWeight.w800, fontSize: 13.5))), const Text('Auto', style: TextStyle(color: PracticeColors.accent, fontSize: 11, fontWeight: FontWeight.w800))]),
+  );
 }
