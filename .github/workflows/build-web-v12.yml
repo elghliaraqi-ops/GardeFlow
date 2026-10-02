@@ -139,4 +139,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Manual build trigger: 2026-09-29 rollback-backup
+# Manual build trigger: 2026-10-02 original Practice + FlowSuite assets
