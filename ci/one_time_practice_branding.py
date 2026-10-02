@@ -21,7 +21,13 @@ for staged_name, target in ASSETS.items():
     staged = STAGE / staged_name
     if not staged.exists():
         raise SystemExit(f'missing staged branding asset: {staged}')
-    data = base64.b64decode(staged.read_text().strip())
+    encoded = staged.read_text().strip()
+    # One transport file acquired a single trailing Base64 character while being
+    # copied through GitHub's text contents API. A Base64 stream can never have
+    # length == 1 (mod 4), so remove only that impossible trailing transport byte.
+    if len(encoded) % 4 == 1:
+        encoded = encoded[:-1]
+    data = base64.b64decode(encoded)
     if not data.startswith(b'RIFF') or b'WEBP' not in data[:16]:
         raise SystemExit(f'invalid WebP branding asset: {staged_name}')
     target.write_bytes(data)
