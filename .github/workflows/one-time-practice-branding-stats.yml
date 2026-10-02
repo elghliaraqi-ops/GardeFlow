@@ -1,4 +1,4 @@
-name: One-time Practice branding stats
+name: One-time original Practice and FlowSuite assets
 
 on:
   push:
@@ -14,12 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply Practice patch
+      - name: Install original branding assets and remove Flutter imitations
         run: python3 ci/one_time_practice_branding.py
-      - name: Commit app changes
+      - name: Commit exact app branding integration
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add source/lib/screens/practice_screen.dart source/lib/screens/splash_screen.dart
-          git commit -m "feat: Practice branding stats and FlowSuite splash"
+          git add -A
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
+          git commit -m "ui: use original FlowSuite and Practice visual assets"
           git push
