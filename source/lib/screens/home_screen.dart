@@ -186,7 +186,19 @@ class _GlobalTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          GardeFlowLogo(size: 38),
+          if (title == 'Practice')
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/branding/practice_icon.webp',
+                width: 38,
+                height: 38,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+              ),
+            )
+          else
+            GardeFlowLogo(size: 38),
           SizedBox(width: 10),
           Expanded(
             child: Text(

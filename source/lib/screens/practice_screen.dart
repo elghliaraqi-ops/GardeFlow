@@ -247,8 +247,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
             ),
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
             children: [
-              const _PracticeOriginalLogo(),
-              const SizedBox(height: 12),
               _PracticeGameHeader(
                 level: level,
                 xp: _all.xp,
@@ -5117,29 +5115,6 @@ String _initials(String name) {
   return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
 }
 
-
-class _PracticeOriginalLogo extends StatelessWidget {
-  const _PracticeOriginalLogo();
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: Semantics(
-      label: 'Practice',
-      image: true,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Image.asset(
-          'assets/branding/practice_icon.webp',
-          width: 52,
-          height: 52,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-        ),
-      ),
-    ),
-  );
-}
 
 class _QcmCanonicalStatsStrip extends StatelessWidget {
   final QcmRanks month; final QcmStats total; final bool loading;
