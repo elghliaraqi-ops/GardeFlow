@@ -208,7 +208,7 @@ class _SplashScreenState extends State<SplashScreen> {
                               ],
                             ),
                             SizedBox(height: 22),
-                            const _FlowSuiteSplashBrands(),
+                            const _OriginalBrandBanners(),
                             SizedBox(height: 22),
                             Text(
                               'AU SERVICE DES SOIGNANTS\nAU SERVICE DES PATIENTS',
@@ -256,29 +256,33 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 
-class _FlowSuiteSplashBrands extends StatelessWidget {
-  const _FlowSuiteSplashBrands();
+
+class _OriginalBrandBanners extends StatelessWidget {
+  const _OriginalBrandBanners();
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    decoration: BoxDecoration(color: Colors.white.withOpacity(.80), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF1A7A62).withOpacity(.14))),
-    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      _SplashBrandChip(icon: Icons.hub_rounded, title: 'FlowSuite', subtitle: 'Écosystème hospitalier', colors: [Color(0xFF08734E), Color(0xFFE53935)]),
-      SizedBox(width: 18),
-      _SplashBrandChip(icon: Icons.assignment_turned_in_rounded, title: 'Practice', subtitle: 'Apprendre · progresser', colors: [Color(0xFF075CCB), Color(0xFF873BE8)]),
-    ]),
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      SizedBox(
+        height: 72,
+        width: 330,
+        child: Image.asset(
+          'assets/branding/flowsuite_banner.webp',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+      const SizedBox(height: 8),
+      SizedBox(
+        height: 88,
+        width: 330,
+        child: Image.asset(
+          'assets/branding/practice_banner.webp',
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    ],
   );
-}
-class _SplashBrandChip extends StatelessWidget {
-  final IconData icon; final String title; final String subtitle; final List<Color> colors;
-  const _SplashBrandChip({required this.icon, required this.title, required this.subtitle, required this.colors});
-  @override
-  Widget build(BuildContext context) => Flexible(child: Row(mainAxisSize: MainAxisSize.min, children: [
-    Container(width: 38, height: 38, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), gradient: LinearGradient(colors: colors)), child: Icon(icon, color: Colors.white, size: 22)),
-    const SizedBox(width: 7),
-    Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      ShaderMask(shaderCallback: (r) => LinearGradient(colors: colors).createShader(r), child: Text(title, maxLines: 1, style: const TextStyle(color: Colors.white, fontFamily: 'SpaceGrotesk', fontWeight: FontWeight.w900, fontSize: 16))),
-      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF607080), fontSize: 8.5, fontWeight: FontWeight.w700)),
-    ])),
-  ]));
 }

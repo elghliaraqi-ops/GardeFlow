@@ -294,7 +294,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const SizedBox(height: 9),
               _EncouragementCard(text: _encouragement(guard)),
               const SizedBox(height: 20),
-              const _PracticeBrandMark(),
+              const _PracticeOriginalLogo(),
               const SizedBox(height: 16),
               const _PracticeHubSectionHeader(
                 icon: Icons.sports_esports_rounded,
@@ -5118,13 +5118,25 @@ String _initials(String name) {
 }
 
 
-class _PracticeBrandMark extends StatelessWidget {
-  const _PracticeBrandMark();
+class _PracticeOriginalLogo extends StatelessWidget {
+  const _PracticeOriginalLogo();
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), gradient: const LinearGradient(colors: [Color(0xFF0D2D63), Color(0xFF165DCA), Color(0xFF7A36E8)]), border: Border.all(color: const Color(0xFF55C8FF).withOpacity(.45))),
-    child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.assignment_turned_in_rounded, color: Colors.white, size: 30), SizedBox(width: 10), Text('Practice', style: TextStyle(color: Colors.white, fontFamily: 'SpaceGrotesk', fontWeight: FontWeight.w900, fontSize: 25))]),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'assets/branding/practice_icon.webp',
+          width: 58,
+          height: 58,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    ),
   );
 }
 
