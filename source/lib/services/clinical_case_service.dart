@@ -325,7 +325,10 @@ class ClinicalCaseService {
     }
   }
 
-  String _retryPrefsKey(String userId) => 'qcm_generation_retry_v1_$userId';
+  // v2 intentionally invalidates persisted OpenAI-era failures after the
+  // provider migration to Gemini. Server-side locking/rate limits still guard
+  // against duplicate generation, so old devices cannot create a request storm.
+  String _retryPrefsKey(String userId) => 'qcm_generation_retry_v2_$userId';
 
   bool _canAutoAttempt(String postId, DateTime now) {
     final state = _retryStates[postId];
