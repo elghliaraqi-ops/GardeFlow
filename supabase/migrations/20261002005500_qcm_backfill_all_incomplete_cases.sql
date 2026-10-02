@@ -21,7 +21,7 @@ with qcm_counts as (
   where qcm_count <> 5
 )
 update public.clinical_case_posts p
-set qcm_generation_status = 'pending',
+set qcm_generation_status = 'idle',
     qcm_generation_attempts = 0,
     qcm_generation_started_at = null,
     qcm_generation_finished_at = null,
