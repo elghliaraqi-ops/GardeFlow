@@ -82,21 +82,64 @@ function canonicalUrl(value:unknown) {
   } catch (_) { return ''; }
 }
 
-function extractInteractionSources(payload:any):WebSource[] {
-  const map=new Map<string,WebSource>();
-  for(const step of payload?.steps??payload?.outputs??[]) {
-    if(step?.type!=='model_output'&&step?.type!=='text') continue;
-    const blocks=Array.isArray(step?.content)?step.content:(typeof step?.text==='string'?[step]:[]);
-    for(const block of blocks) {
-      for(const annotation of block?.annotations??[]) {
-        if(annotation?.type&&annotation.type!=='url_citation') continue;
-        const raw=String(annotation?.url??annotation?.uri??annotation?.source??'').trim();
-        const key=canonicalUrl(raw);
-        if(key&&!map.has(key)) map.set(key,{title:scrub(annotation?.title,500)||'Source médicale',url:raw});
-      }
-    }
+function addGroundingSources(metadata:any,map:Map<string,WebSource>) {
+  for(const chunk of metadata?.groundingChunks??[]) {
+    const raw=String(chunk?.web?.uri??'').trim();
+    const key=canonicalUrl(raw);
+    if(key&&!map.has(key)) map.set(key,{title:scrub(chunk?.web?.title,500)||'Source médicale',url:raw});
   }
-  return [...map.values()];
+}
+
+async function geminiLiveResearch(apiKey:string,model:string,prompt:string):Promise<{text:string;sources:WebSource[]}> {
+  return await new Promise((resolve,reject)=>{
+    const url=`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(apiKey)}`;
+    const ws=new WebSocket(url);
+    const transcript:string[]=[];
+    const sourceMap=new Map<string,WebSource>();
+    let settled=false;
+    let promptSent=false;
+    const done=(err?:Error)=>{
+      if(settled)return;
+      settled=true;
+      clearTimeout(timer);
+      try{ws.close(1000,'done');}catch(_){}
+      if(err) reject(err); else resolve({text:transcript.join('').trim(),sources:[...sourceMap.values()]});
+    };
+    const timer=setTimeout(()=>done(new Error('gemini_live_timeout')),timeoutMs);
+    ws.addEventListener('open',()=>{
+      try {
+        ws.send(JSON.stringify({setup:{
+          model:`models/${model}`,
+          generationConfig:{responseModalities:['AUDIO'],temperature:0.1,maxOutputTokens:7000},
+          outputAudioTranscription:{},
+          tools:[{googleSearch:{}}],
+        }}));
+      } catch(_) { done(new Error('gemini_live_setup_failed')); }
+    });
+    ws.addEventListener('message',async(ev)=>{
+      if(settled)return;
+      try {
+        const raw=typeof ev.data==='string'?ev.data:ev.data instanceof Blob?await ev.data.text():String(ev.data??'');
+        const msg=JSON.parse(raw);
+        if(msg?.setupComplete&&!promptSent){
+          promptSent=true;
+          ws.send(JSON.stringify({clientContent:{
+            turns:[{role:'user',parts:[{text:prompt}]}],
+            turnComplete:true,
+          }}));
+          return;
+        }
+        const sc=msg?.serverContent;
+        if(sc){
+          if(typeof sc?.outputTranscription?.text==='string') transcript.push(sc.outputTranscription.text);
+          addGroundingSources(sc?.groundingMetadata,sourceMap);
+          if(sc?.turnComplete===true) done();
+        }
+      } catch(_) { done(new Error('gemini_live_invalid_message')); }
+    });
+    ws.addEventListener('error',()=>done(new Error('gemini_live_network_error')));
+    ws.addEventListener('close',(ev)=>{if(!settled)done(new Error(`gemini_live_closed_${ev.code}`));});
+  });
 }
 
 function extractInteractionText(payload:any) {
@@ -209,7 +252,7 @@ Deno.serve(async(req:Request)=>{
     const clean=safeCase(post),cleanJson=JSON.stringify(clean);
     if(cleanJson.length>maxPayloadChars){await finish(false,'payload_too_large');claimed='';return fail(400,'clinical_payload_too_large',false);}
 
-    const researchModel=String(Deno.env.get('GEMINI_RESEARCH_MODEL')??'').trim()||'gemini-3.8-flash';
+    const researchModel=String(Deno.env.get('GEMINI_RESEARCH_MODEL')??'').trim()||'gemini-3.8-live';
     const generationModel=String(Deno.env.get('GEMINI_TEXT_MODEL')??'').trim()||'gemini-3.8-flash';
     const researchPrompt=`Tu es documentaliste médical. DATE DE RÉFÉRENCE : 2 octobre 2026.
 Recherche avec Google Search des sources médicales fiables et directement pertinentes pour le cas ANONYMISÉ ci-dessous : sociétés savantes, autorités sanitaires, universités, NCBI/StatPearls, revues scientifiques, recommandations ou consensus.
@@ -218,63 +261,36 @@ Priorise les recommandations récentes. Évite Wikipédia, blogs, forums et site
 CAS ANONYMISÉ :
 ${cleanJson}`;
 
-    const researchController=new AbortController();
-    const researchTimer=setTimeout(()=>researchController.abort(),timeoutMs);
-    let researchProvider:Response;
-    log('gemini_research_started',{...meta(),model:researchModel,api:'interactions'});
+    let research:{text:string;sources:WebSource[]};
+    log('gemini_research_started',{...meta(),model:researchModel,api:'live_audio_transcription'});
     try {
-      researchProvider=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-        method:'POST',signal:researchController.signal,
-        headers:{'x-goog-api-key':geminiKey,'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:researchModel,
-          input:researchPrompt,
-          store:false,
-          tools:[{type:'google_search'}],
-          generation_config:{temperature:0.1,thinking_level:'low'}
-        })
-      });
+      research=await geminiLiveResearch(geminiKey,researchModel,researchPrompt);
     } catch(e) {
-      const timeout=e instanceof DOMException&&e.name==='AbortError';
-      log('gemini_http_error',{...meta(),phase:'research',provider_error:timeout?'timeout':'network'});
-      await finish(false,timeout?'gemini_timeout':'gemini_network_error');claimed='';return fail(503,'gemini_unavailable',true);
-    } finally {clearTimeout(researchTimer);}
-
-    const researchProviderId=code(researchProvider.headers.get('x-request-id')??researchProvider.headers.get('x-goog-request-id'),'unavailable');
-    const researchPayload=await researchProvider.json().catch(()=>null);
-    if(!researchProvider.ok){
-      const status=researchProvider.status;
-      const pstatus=code(researchPayload?.error?.status,`http_${status}`);
-      const ptype=code(researchPayload?.error?.details?.[0]?.reason??researchPayload?.error?.status,'provider_error');
-      log('gemini_http_error',{...meta(),phase:'research',provider_status:status,provider_code:pstatus,provider_type:ptype,provider_request_id:researchProviderId});
-      const permanent=[400,401,403,404].includes(status);
-      const finishCode=status===400?'gemini_request_invalid':status===404?'gemini_model_not_found':status===429?'gemini_rate_limited':status>=500?'gemini_provider_unavailable':status===401||status===403?'gemini_provider_auth_error':'gemini_provider_error';
-      await finish(false,finishCode);claimed='';return fail(permanent?502:503,permanent?'gemini_request_invalid':'gemini_unavailable',!permanent);
+      const reason=code((e as Error)?.message,'gemini_live_error');
+      log('gemini_http_error',{...meta(),phase:'research',provider_error:reason});
+      const modelMissing=reason.includes('closed_1008')||reason.includes('closed_1003');
+      await finish(false,modelMissing?'gemini_model_not_found':'gemini_network_error');claimed='';
+      return fail(modelMissing?502:503,modelMissing?'gemini_request_invalid':'gemini_unavailable',!modelMissing);
     }
-    if(!researchPayload||typeof researchPayload!=='object'){
-      log('gemini_invalid_json',{...meta(),phase:'research',provider_request_id:researchProviderId});await finish(false,'gemini_invalid_json');claimed='';return fail(502,'gemini_invalid_response',true);
+    if(!research.text||research.sources.length===0){
+      const reason=!research.text?'gemini_empty_research':'missing_web_sources';
+      log('qcm_validation_failed',{...meta(),phase:'research',reason});await finish(false,reason);claimed='';return fail(502,'gemini_invalid_response',true);
     }
 
-    const researchText=extractInteractionText(researchPayload).trim();
-    const sources=extractInteractionSources(researchPayload).slice(0,20);
-    if(!researchText||sources.length===0){
-      const reason=!researchText?'gemini_empty_research':'missing_web_sources';
-      log('qcm_validation_failed',{...meta(),phase:'research',reason,provider_request_id:researchProviderId});await finish(false,reason);claimed='';return fail(502,'gemini_invalid_response',true);
-    }
-
+    const sources=research.sources.slice(0,20);
     const sourceCatalog=sources.map((s,i)=>`${i+1}. ${s.title||'Source médicale'} — ${s.url}`).join('\n');
     const prompt=`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : 2 octobre 2026.
 Le cas ci-dessous est anonymisé et sert uniquement d'ancrage thématique. N'essaie jamais d'identifier le patient et ne restitue jamais le dossier.
 Crée EXACTEMENT 5 QCM autonomes et sourcés, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.
 Chaque QCM comporte exactement 4 propositions, une seule meilleure réponse, une correction factuelle de 3 à 6 phrases et 1 à 3 références réellement présentes dans le CATALOGUE DE SOURCES.
-Pour chaque référence, recopie exactement l'URL du catalogue sans la modifier.
+Pour chaque référence, recopie exactement l'URL du catalogue sans la modifier. Si l'année ou l'organisation ne sont pas certaines, utilise « Non précisé » plutôt que d'inventer.
 QCM1 exige une source de type cours ; QCM2 à QCM4 exigent une source cours ou revue ; QCM5 exige une recommandation ou un consensus récent.
 N'invente aucun URL, seuil, score, posologie ou recommandation. N'utilise pas “dans ce cas”, “toutes les réponses” ou “aucune des réponses”. Réponds en français et respecte strictement le schéma JSON.
 CAS ANONYMISÉ :
 ${cleanJson}
 
 SYNTHÈSE DOCUMENTAIRE GEMINI :
-${researchText.slice(0,12000)}
+${research.text.slice(0,12000)}
 
 CATALOGUE DE SOURCES CONSULTÉES :
 ${sourceCatalog}`;
@@ -345,7 +361,7 @@ ${sourceCatalog}`;
     }
 
     await finish(true);claimed='';
-    log('qcm_generation_success',{...meta(),provider:'gemini',qcm_count:5,web_source_count:sources.length,research_provider_request_id:researchProviderId,provider_request_id:providerId,research_model:researchModel,generation_model:generationModel});
+    log('qcm_generation_success',{...meta(),provider:'gemini',qcm_count:5,web_source_count:sources.length,provider_request_id:providerId,research_model:researchModel,generation_model:generationModel});
     return reply(req,{ok:true,generated:true,status:'ready',count:5,provider:'gemini',post_id:post.id,practice_case_id:resolvedPractice});
   } catch(e) {
     const err=code((e as Error)?.message,'generation_failed');
