@@ -45,6 +45,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
+  int _homeRefreshTick = 0;
   final GlobalKey _newsFeedKey = GlobalKey();
   final ScrollController _homeScrollController = ScrollController();
 
@@ -97,9 +98,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               onDirectory: _tab == 3
                   ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => DirectoryScreen()),
-                      )
+                      context,
+                      MaterialPageRoute(builder: (_) => DirectoryScreen()),
+                    )
                   : null,
               onAccount: () => Navigator.push(
                 context,
@@ -114,6 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     appState: appState,
                     newsFeedKey: _newsFeedKey,
                     scrollController: _homeScrollController,
+                    refreshToken: _homeRefreshTick,
                     onOpenPlanning: () => setState(() => _tab = 1),
                     onOpenDirectory: () => setState(() => _tab = 2),
                     onOpenProfile: () => Navigator.push(
@@ -132,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: _MainBottomBar(
         selectedIndex: _tab,
-        onSelected: (value) => setState(() => _tab = value),
+        onSelected: (value) => _handleTabSelection(value, appState),
         onReminders: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -141,6 +143,34 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  void _handleTabSelection(int value, AppState appState) {
+    if (value != 0) {
+      if (_tab != value) setState(() => _tab = value);
+      return;
+    }
+
+    if (_tab != 0) setState(() => _tab = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_scrollHomeToTopAndRefresh(appState));
+    });
+  }
+
+  Future<void> _scrollHomeToTopAndRefresh(AppState appState) async {
+    if (_homeScrollController.hasClients) {
+      await _homeScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    try {
+      await appState.refreshBackend();
+    } catch (_) {
+      // L'accueil reste fluide même si le réseau est momentanément indisponible.
+    }
+    if (mounted) setState(() => _homeRefreshTick++);
   }
 
   Future<void> _showQuickAdd(BuildContext context, AppState appState) async {
@@ -625,6 +655,7 @@ class _DashboardView extends StatelessWidget {
   final AppState appState;
   final GlobalKey newsFeedKey;
   final ScrollController scrollController;
+  final int refreshToken;
   final VoidCallback onOpenPlanning;
   final VoidCallback onOpenDirectory;
   final VoidCallback onOpenProfile;
@@ -633,30 +664,32 @@ class _DashboardView extends StatelessWidget {
     required this.appState,
     required this.newsFeedKey,
     required this.scrollController,
+    required this.refreshToken,
     required this.onOpenPlanning,
     required this.onOpenDirectory,
     required this.onOpenProfile,
   });
 
   List<PlanningEntry> _futureGuards(AppUser me) {
-    final entries = appState.planning
-        .where(
-          (entry) =>
-              (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
-              entry.shiftId != 'conge' &&
-              appState.isPlanningEntryApproved(entry) &&
-              !appState.guardHasStarted(entry),
-        )
-        .toList()
-      ..sort((a, b) {
-        final ad = DateTime.parse(a.dateStr);
-        final bd = DateTime.parse(b.dateStr);
-        final cmp = ad.compareTo(bd);
-        if (cmp != 0) return cmp;
-        final ashift = ShiftCatalog.byId(a.shiftId);
-        final bshift = ShiftCatalog.byId(b.shiftId);
-        return (ashift.start ?? '').compareTo(bshift.start ?? '');
-      });
+    final entries =
+        appState.planning
+            .where(
+              (entry) =>
+                  (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
+                  entry.shiftId != 'conge' &&
+                  appState.isPlanningEntryApproved(entry) &&
+                  !appState.guardHasStarted(entry),
+            )
+            .toList()
+          ..sort((a, b) {
+            final ad = DateTime.parse(a.dateStr);
+            final bd = DateTime.parse(b.dateStr);
+            final cmp = ad.compareTo(bd);
+            if (cmp != 0) return cmp;
+            final ashift = ShiftCatalog.byId(a.shiftId);
+            final bshift = ShiftCatalog.byId(b.shiftId);
+            return (ashift.start ?? '').compareTo(bshift.start ?? '');
+          });
     return entries;
   }
 
@@ -713,8 +746,9 @@ class _DashboardView extends StatelessWidget {
     );
 
     final rawDate = DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(now);
-    final dateLabel =
-        rawDate.isEmpty ? '' : rawDate[0].toUpperCase() + rawDate.substring(1);
+    final dateLabel = rawDate.isEmpty
+        ? ''
+        : rawDate[0].toUpperCase() + rawDate.substring(1);
     final timeLabel = DateFormat('HH:mm').format(now);
 
     return SingleChildScrollView(
@@ -736,6 +770,11 @@ class _DashboardView extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _NextGuardCard(entry: next, onTap: onOpenPlanning),
+          const SizedBox(height: 14),
+          _HomeAnnouncementsCard(
+            appState: appState,
+            refreshToken: refreshToken,
+          ),
           const SizedBox(height: 14),
           PracticeHomeSummary(appState: appState, user: me),
           const SizedBox(height: 14),
@@ -760,6 +799,412 @@ class _DashboardView extends StatelessWidget {
           const SizedBox(height: 12),
           DailyNewsSection(verticalFeedKey: newsFeedKey),
         ],
+      ),
+    );
+  }
+}
+
+class _HomeAnnouncement {
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String hospital;
+  final String dateStr;
+  final String shiftId;
+  final String message;
+
+  const _HomeAnnouncement({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.hospital,
+    required this.dateStr,
+    required this.shiftId,
+    required this.message,
+  });
+
+  factory _HomeAnnouncement.fromMap(Map<String, dynamic> map) {
+    return _HomeAnnouncement(
+      id: '${map['id'] ?? ''}',
+      authorId: '${map['author_id'] ?? ''}',
+      authorName: '${map['author_name'] ?? 'Médecin'}',
+      hospital: '${map['hospital'] ?? ''}',
+      dateStr: '${map['date_str'] ?? ''}',
+      shiftId: '${map['shift_id'] ?? ''}',
+      message: '${map['message'] ?? ''}'.trim(),
+    );
+  }
+}
+
+class _HomeAnnouncementsCard extends StatefulWidget {
+  final AppState appState;
+  final int refreshToken;
+
+  const _HomeAnnouncementsCard({
+    required this.appState,
+    required this.refreshToken,
+  });
+
+  @override
+  State<_HomeAnnouncementsCard> createState() => _HomeAnnouncementsCardState();
+}
+
+class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
+  late Future<List<_HomeAnnouncement>> _future;
+  StreamSubscription? _realtime;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+    final backend = SupabaseBackendService.instance;
+    if (backend.enabled) {
+      _realtime = backend.client
+          .from('public_announcements')
+          .stream(primaryKey: ['id'])
+          .listen((_) => unawaited(_reload()), onError: (_) {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeAnnouncementsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      unawaited(_reload());
+    }
+  }
+
+  @override
+  void dispose() {
+    _realtime?.cancel();
+    super.dispose();
+  }
+
+  bool _isRelevant(_HomeAnnouncement item) {
+    final me = widget.appState.currentUser;
+    if (me == null) return false;
+    if (item.authorId == me.id) return true;
+    if (item.hospital != me.hospital) return false;
+    final author = widget.appState.users
+        .where((u) => u.id == item.authorId)
+        .firstOrNull;
+    if (author != null &&
+        widget.appState.promotionExchangeBlocked(
+          me,
+          author,
+          sourceShiftId: item.shiftId,
+        )) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<List<_HomeAnnouncement>> _load() async {
+    final backend = SupabaseBackendService.instance;
+    if (!backend.enabled) return const <_HomeAnnouncement>[];
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final rows = await backend.client
+        .from('public_announcements')
+        .select()
+        .isFilter('closed_at', null)
+        .gte('date_str', today)
+        .order('created_at', ascending: false)
+        .limit(20);
+    return (rows as List)
+        .map(
+          (raw) =>
+              _HomeAnnouncement.fromMap(Map<String, dynamic>.from(raw as Map)),
+        )
+        .where(_isRelevant)
+        .take(5)
+        .toList(growable: false);
+  }
+
+  Future<void> _reload() async {
+    if (!mounted) return;
+    final next = _load();
+    setState(() => _future = next);
+    try {
+      await next;
+    } catch (_) {
+      // La carte conserve son état d'erreur sans bloquer l'accueil.
+    }
+  }
+
+  Future<void> _openAnnouncements() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
+    );
+    if (mounted) await _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.line),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withOpacity(0.07),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.brand.withOpacity(0.22),
+                      AppColors.brandBright.withOpacity(0.10),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.swap_horiz_rounded,
+                  color: AppColors.brandBright,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Annonces & échanges',
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontFamily: 'SpaceGrotesk',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Dernières gardes proposées par vos collègues',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.inkSoft,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: _openAnnouncements,
+                child: const Text('Voir tout'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          FutureBuilder<List<_HomeAnnouncement>>(
+            future: _future,
+            builder: (context, snapshot) {
+              final items = snapshot.data ?? const <_HomeAnnouncement>[];
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  items.isEmpty) {
+                return const SizedBox(
+                  height: 86,
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              }
+              if (snapshot.hasError && items.isEmpty) {
+                return _HomeAnnouncementsEmpty(
+                  icon: Icons.cloud_off_rounded,
+                  text: 'Annonces momentanément indisponibles',
+                  onTap: _reload,
+                );
+              }
+              if (items.isEmpty) {
+                return _HomeAnnouncementsEmpty(
+                  icon: Icons.forum_outlined,
+                  text: 'Aucune annonce active pour le moment',
+                  onTap: _openAnnouncements,
+                );
+              }
+              return SizedBox(
+                height: 104,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 9),
+                  itemBuilder: (context, index) => _HomeAnnouncementPreview(
+                    item: items[index],
+                    onTap: _openAnnouncements,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeAnnouncementsEmpty extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  const _HomeAnnouncementsEmpty({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 78,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.paperAlt,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.inkFaint, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: AppColors.inkSoft,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeAnnouncementPreview extends StatelessWidget {
+  final _HomeAnnouncement item;
+  final VoidCallback onTap;
+
+  const _HomeAnnouncementPreview({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final shift = ShiftCatalog.byId(item.shiftId);
+    final parsedDate = DateTime.tryParse(item.dateStr);
+    final dateLabel = parsedDate == null
+        ? item.dateStr
+        : DateFormat('EEE d MMM', 'fr_FR').format(parsedDate);
+    final isUrgence = item.shiftId.toLowerCase().contains('urg');
+    final category = isUrgence ? 'Urgences' : 'Service';
+    final message = item.message.isEmpty
+        ? 'Disponible pour un échange'
+        : item.message;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          width: 270,
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+          decoration: BoxDecoration(
+            color: AppColors.paperAlt,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: shift.color.withOpacity(0.32)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 165),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: shift.color,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$category · ${shift.label}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: shift.textColor,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    dateLabel,
+                    style: TextStyle(
+                      color: AppColors.inkSoft,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.authorName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.inkSoft,
+                  fontSize: 10.5,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1158,21 +1603,21 @@ class _MonthlyGuardChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.13),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: Colors.white.withOpacity(0.13)),
-        ),
-        child: Text(
-          '$label · $value',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.13),
+      borderRadius: BorderRadius.circular(11),
+      border: Border.all(color: Colors.white.withOpacity(0.13)),
+    ),
+    child: Text(
+      '$label · $value',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 }
 
 class _BadgeCount extends StatelessWidget {
@@ -1181,23 +1626,23 @@ class _BadgeCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        constraints: BoxConstraints(minWidth: 19, minHeight: 19),
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(horizontal: 5),
-        decoration: BoxDecoration(
-          color: AppColors.danger,
-          borderRadius: AppRadius.pillR,
-          border: Border.all(color: AppColors.paper, width: 2),
-        ),
-        child: Text(
-          value > 99 ? '99+' : '$value',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 8.5,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      );
+    constraints: BoxConstraints(minWidth: 19, minHeight: 19),
+    alignment: Alignment.center,
+    padding: EdgeInsets.symmetric(horizontal: 5),
+    decoration: BoxDecoration(
+      color: AppColors.danger,
+      borderRadius: AppRadius.pillR,
+      border: Border.all(color: AppColors.paper, width: 2),
+    ),
+    child: Text(
+      value > 99 ? '99+' : '$value',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 8.5,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _MetricCard extends StatelessWidget {
@@ -1215,35 +1660,35 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
-        shadow: [],
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: tint, size: 19),
-            SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'SpaceGrotesk',
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                color: AppColors.ink,
-              ),
-            ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 9.8,
-                fontWeight: FontWeight.w700,
-                color: AppColors.inkSoft,
-              ),
-            ),
-          ],
+    padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
+    shadow: [],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: tint, size: 19),
+        SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'SpaceGrotesk',
+            fontSize: 21,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+          ),
         ),
-      );
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 9.8,
+            fontWeight: FontWeight.w700,
+            color: AppColors.inkSoft,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _NextGuardCard extends StatelessWidget {
@@ -1324,47 +1769,62 @@ class _NextGuardCard extends StatelessWidget {
     final current = entry!;
     final shift = ShiftCatalog.byId(current.shiftId);
     final shiftId = shift.id.toLowerCase();
-    final shiftLabel = shift.label.trim();
+    final shiftLabel = shift.label.trim().toLowerCase();
 
-    final isUrgence = shiftId.startsWith('urg-') ||
+    final isUrgence =
+        shiftId.startsWith('urg-') ||
         shiftId.contains('urgence') ||
-        shiftLabel.toLowerCase().contains('urgence');
-    final is24h = shiftId.contains('24h') ||
+        shiftLabel.contains('urgence');
+    final is24h =
+        shiftId.contains('24h') ||
         shiftId.contains('24-h') ||
-        shiftLabel.toLowerCase().contains('24h');
-    final isNight = !is24h &&
-        (shiftId.contains('nuit') || shiftLabel.toLowerCase().contains('nuit'));
+        shiftLabel.contains('24h');
+    final isNight =
+        !is24h && (shiftId.contains('nuit') || shiftLabel.contains('nuit'));
 
     final category = isUrgence ? 'URGENCES' : 'SERVICE';
-    final period = is24h
-        ? '24H'
-        : isNight
-            ? 'NUIT'
-            : 'JOUR';
+    final period = is24h ? '24H' : (isNight ? 'Nuit' : 'Jour');
 
     final date = DateTime.tryParse(current.dateStr);
     final dateLabel = date == null
         ? current.dateStr
         : DateFormat('EEE d MMMM', 'fr_FR').format(date);
-    final timeLabel = is24h
+    final timeLabel = shift.start != null && shift.end != null
+        ? '${shift.start} → ${shift.end}'
+        : is24h
         ? '08:00 → 08:00'
         : isNight
-            ? '20:00 → 08:00'
-            : '08:00 → 20:00';
+        ? '20:00 → 08:00'
+        : '08:00 → 20:00';
 
-    final guardTitle =
-        shiftLabel.isEmpty ? 'Garde de ${period.toLowerCase()}' : shiftLabel;
+    late final List<Color> colors;
+    late final Color foreground;
+    if (isUrgence) {
+      if (isNight) {
+        colors = const [Color(0xFF310812), Color(0xFF7A1D31)];
+        foreground = Colors.white;
+      } else if (is24h) {
+        colors = const [Color(0xFFF58A1F), Color(0xFFFFB34E)];
+        foreground = const Color(0xFF3A1B00);
+      } else {
+        colors = const [Color(0xFFFFD9DE), Color(0xFFFF8798)];
+        foreground = const Color(0xFF48131C);
+      }
+    } else {
+      if (isNight) {
+        colors = const [Color(0xFF06152E), Color(0xFF174F89)];
+        foreground = Colors.white;
+      } else if (is24h) {
+        colors = const [Color(0xFFA9E6FF), Color(0xFF4DBDEA)];
+        foreground = const Color(0xFF0B3048);
+      } else {
+        colors = const [Color(0xFFD9F2FF), Color(0xFF75C7F4)];
+        foreground = const Color(0xFF092B47);
+      }
+    }
 
-    final colors = is24h
-        ? const [Color(0xFF287CC7), Color(0xFF0B1C35)]
-        : isNight
-            ? const [Color(0xFF0A1729), Color(0xFF123D70)]
-            : const [Color(0xFF25AFE9), Color(0xFF0879D7)];
-    final accent = isUrgence
-        ? const Color(0xFFFFD5DA)
-        : isNight
-            ? const Color(0xFFFFE9A8)
-            : const Color(0xFFFFE06D);
+    final surface = foreground.withOpacity(0.09);
+    final surfaceBorder = foreground.withOpacity(0.13);
 
     String countdownLabel = 'À venir';
     if (date != null) {
@@ -1398,23 +1858,35 @@ class _NextGuardCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(26),
             boxShadow: [
               BoxShadow(
-                color: colors.last.withOpacity(0.20),
-                blurRadius: 20,
-                offset: const Offset(0, 9),
+                color: colors.last.withOpacity(0.22),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
           child: Stack(
             children: [
               Positioned(
-                right: -28,
-                bottom: -42,
+                right: -30,
+                top: -40,
                 child: Container(
-                  width: 120,
-                  height: 120,
+                  width: 132,
+                  height: 132,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.06),
+                    color: foreground.withOpacity(0.06),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 42,
+                bottom: -54,
+                child: Container(
+                  width: 104,
+                  height: 104,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: foreground.withOpacity(0.045),
                   ),
                 ),
               ),
@@ -1422,28 +1894,25 @@ class _NextGuardCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 46,
-                        height: 46,
+                        width: 50,
+                        height: 50,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.14),
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
+                          color: surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: surfaceBorder),
+                        ),
+                        child: Center(
+                          child: _GuardPeriodGlyph(
+                            isNight: isNight,
+                            is24h: is24h,
+                            size: 27,
                           ),
                         ),
-                        child: Icon(
-                          is24h
-                              ? Icons.brightness_6_rounded
-                              : isNight
-                                  ? Icons.nightlight_round
-                                  : Icons.wb_sunny_rounded,
-                          color: accent,
-                          size: 24,
-                        ),
                       ),
-                      const SizedBox(width: 11),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1453,55 +1922,83 @@ class _NextGuardCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.74),
+                                color: foreground.withOpacity(0.72),
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.45,
                               ),
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '$category · $period',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'SpaceGrotesk',
-                                fontSize: 20,
-                                height: 1.05,
-                                fontWeight: FontWeight.w900,
-                              ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    category,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: foreground,
+                                      fontFamily: 'SpaceGrotesk',
+                                      fontSize: 21,
+                                      height: 1.05,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: surface,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(color: surfaceBorder),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _GuardPeriodGlyph(
+                                        isNight: isNight,
+                                        is24h: is24h,
+                                        size: 14,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        period,
+                                        style: TextStyle(
+                                          color: foreground,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
+                          color: surface,
                           borderRadius: BorderRadius.circular(13),
+                          border: Border.all(color: surfaceBorder),
                         ),
                         child: Icon(
                           Icons.arrow_forward_rounded,
-                          color: Colors.white.withOpacity(0.92),
+                          color: foreground.withOpacity(0.90),
                           size: 20,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    guardTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.90),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 13),
                   Wrap(
                     spacing: 7,
                     runSpacing: 7,
@@ -1509,16 +2006,14 @@ class _NextGuardCard extends StatelessWidget {
                       _GuardMetaChip(
                         icon: Icons.calendar_month_rounded,
                         text: dateLabel,
+                        foreground: foreground,
+                        background: surface,
                       ),
                       _GuardMetaChip(
                         icon: Icons.schedule_rounded,
                         text: timeLabel,
-                      ),
-                      _GuardMetaChip(
-                        icon: isUrgence
-                            ? Icons.emergency_rounded
-                            : Icons.medical_services_rounded,
-                        text: isUrgence ? 'Urgences' : 'Service',
+                        foreground: foreground,
+                        background: surface,
                       ),
                     ],
                   ),
@@ -1532,30 +2027,87 @@ class _NextGuardCard extends StatelessWidget {
   }
 }
 
+class _GuardPeriodGlyph extends StatelessWidget {
+  final bool isNight;
+  final bool is24h;
+  final double size;
+
+  const _GuardPeriodGlyph({
+    required this.isNight,
+    required this.is24h,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (is24h) {
+      return SizedBox(
+        width: size * 1.35,
+        height: size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              child: Icon(
+                Icons.wb_sunny_rounded,
+                color: const Color(0xFFFFD43B),
+                size: size * 0.78,
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Icon(
+                Icons.nightlight_round,
+                color: Colors.white,
+                size: size * 0.76,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Icon(
+      isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+      color: isNight ? Colors.white : const Color(0xFFFFD43B),
+      size: size,
+    );
+  }
+}
+
 class _GuardMetaChip extends StatelessWidget {
   final IconData icon;
   final String text;
+  final Color foreground;
+  final Color background;
 
-  const _GuardMetaChip({required this.icon, required this.text});
+  const _GuardMetaChip({
+    required this.icon,
+    required this.text,
+    this.foreground = Colors.white,
+    this.background = const Color(0x1FFFFFFF),
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.11),
+        color: background,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.11)),
+        border: Border.all(color: foreground.withOpacity(0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white.withOpacity(0.88), size: 14),
+          Icon(icon, color: foreground.withOpacity(0.88), size: 14),
           const SizedBox(width: 5),
           Text(
             text,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.92),
+              color: foreground.withOpacity(0.94),
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
             ),
@@ -1642,43 +2194,41 @@ class _ServiceShortcut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.lgR,
-          child: AppCard(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            shadow: [],
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: tint.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: tint, size: 22),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: Theme.of(context).textTheme.titleSmall),
-                      SizedBox(height: 2),
-                      Text(subtitle,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-              ],
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.lgR,
+      child: AppCard(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        shadow: [],
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: tint.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: tint, size: 22),
             ),
-          ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  SizedBox(height: 2),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _PlanningView extends StatelessWidget {
@@ -1840,8 +2390,10 @@ class _AnnouncementsCompactButtonState
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     final backend = SupabaseBackendService.instance;
     if (backend.enabled) {
-      _realtime = backend.client.from('public_announcements').stream(
-          primaryKey: ['id']).listen((_) => _refresh(), onError: (_) {});
+      _realtime = backend.client
+          .from('public_announcements')
+          .stream(primaryKey: ['id'])
+          .listen((_) => _refresh(), onError: (_) {});
     }
   }
 
@@ -2074,8 +2626,9 @@ class _MainBottomBar extends StatelessWidget {
                     width: 38,
                     height: 28,
                     decoration: BoxDecoration(
-                      color:
-                          selected ? AppColors.brandSoft : Colors.transparent,
+                      color: selected
+                          ? AppColors.brandSoft
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
@@ -2197,8 +2750,8 @@ class _MainBottomBar extends StatelessWidget {
                 child: Text(
                   'Rappels',
                   style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 8.5,
+                    color: AppColors.ink,
+                    fontSize: 9.5,
                     height: 1,
                     fontWeight: FontWeight.w900,
                   ),
@@ -2229,8 +2782,9 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
     final now = DateTime.now();
     final chosen = await showDatePicker(
       context: context,
-      initialDate:
-          _date.isBefore(DateTime(now.year, now.month, now.day)) ? now : _date,
+      initialDate: _date.isBefore(DateTime(now.year, now.month, now.day))
+          ? now
+          : _date,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year + 2, 12, 31),
       locale: const Locale('fr', 'FR'),
@@ -2429,9 +2983,7 @@ class _TopBarState extends State<_TopBar> {
                   children: [
                     Text(
                       'GardeFlow',
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
+                      style: Theme.of(context).textTheme.labelSmall
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     Row(
@@ -2498,16 +3050,18 @@ class _TopBarState extends State<_TopBar> {
         title: pending
             ? 'Congé en attente de validation'
             : 'Vous êtes en congé aujourd’hui',
-        icon:
-            pending ? Icons.hourglass_top_rounded : Icons.beach_access_rounded,
+        icon: pending
+            ? Icons.hourglass_top_rounded
+            : Icons.beach_access_rounded,
         background: shift.color,
         foreground: shift.textColor,
       );
     }
     final isUrgence = shift.id.startsWith('urg-');
     final location = isUrgence ? 'Urgences' : 'Service';
-    final schedule =
-        shift.start == null ? '' : ' · ${shift.start} → ${shift.end}';
+    final schedule = shift.start == null
+        ? ''
+        : ' · ${shift.start} → ${shift.end}';
     return _TodayStatus(
       title: '$location · ${shift.label}$schedule',
       icon: shift.icon,
@@ -2881,14 +3435,16 @@ class _MonthBar extends StatelessWidget {
         reopenReason = record?.rejectionReason?.trim();
         final reopened = reopenReason != null && reopenReason.isNotEmpty;
         statusLabel = reopened ? 'Rouvert' : 'En préparation';
-        statusIcon =
-            reopened ? Icons.lock_open_rounded : Icons.edit_calendar_rounded;
+        statusIcon = reopened
+            ? Icons.lock_open_rounded
+            : Icons.edit_calendar_rounded;
         statusBg = reopened ? const Color(0xFFB3261E) : AppColors.paperAlt;
         statusFg = reopened ? Colors.white : AppColors.ink;
         break;
     }
 
-    final canSubmit = !isPastMonth &&
+    final canSubmit =
+        !isPastMonth &&
         (status == PlanningMonthStatus.draft ||
             status == PlanningMonthStatus.rejected);
 
@@ -2997,13 +3553,11 @@ class _MonthBar extends StatelessWidget {
     switch (status) {
       case PlanningMonthStatus.approved:
         title = 'Calendrier validé définitivement';
-        detail =
-            'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
+        detail = 'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
         break;
       case PlanningMonthStatus.submitted:
         title = 'Calendrier soumis';
-        detail =
-            'Le mois est figé en attente d’une validation finale par un administrateur. À défaut, l’auto-validation peut intervenir à J+7 du planning officiel.';
+        detail = 'Le mois est figé en attente d’une validation finale par un administrateur. À défaut, l’auto-validation peut intervenir à J+7 du planning officiel.';
         break;
       case PlanningMonthStatus.rejected:
         title = 'Calendrier à corriger';
@@ -3017,8 +3571,7 @@ class _MonthBar extends StatelessWidget {
               'Motif : $reopenReason. Modifiez vos tuiles puis soumettez à nouveau le mois.';
         } else {
           title = 'Calendrier en préparation';
-          detail =
-              'Placez vos tuiles Service, Urgences et Congé puis soumettez le mois. Il sera ensuite validé par un administrateur ou automatiquement à J+7 du planning officiel.';
+          detail = 'Placez vos tuiles Service, Urgences et Congé puis soumettez le mois. Il sera ensuite validé par un administrateur ou automatiquement à J+7 du planning officiel.';
         }
         break;
     }
@@ -3199,11 +3752,13 @@ class _CalendarGrid extends StatelessWidget {
       final date = DateTime(month.year, month.month, d);
       final dateStr = AppState.dateKey(date);
       final entry = appState.myEntryForDate(dateStr);
-      final editable = monthEditable &&
+      final editable =
+          monthEditable &&
           !appState.dateIsPast(dateStr) &&
           (entry == null ||
               (!entry.isDisciplinary && !appState.isApprovedLeaveEntry(entry)));
-      final canExchange = monthApproved &&
+      final canExchange =
+          monthApproved &&
           entry != null &&
           !entry.isDisciplinary &&
           ShiftCatalog.byId(entry.shiftId).hasSchedule &&
@@ -3239,13 +3794,13 @@ class _CalendarGrid extends StatelessWidget {
             onExchange: entry == null
                 ? null
                 : () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      showDragHandle: true,
-                      builder: (_) =>
-                          ExchangeRequestSheet(dateStr: dateStr, entry: entry),
-                    ),
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    showDragHandle: true,
+                    builder: (_) =>
+                        ExchangeRequestSheet(dateStr: dateStr, entry: entry),
+                  ),
           ),
         ),
       );
@@ -3258,8 +3813,9 @@ class _CalendarGrid extends StatelessWidget {
           const gap = 5.0;
           final itemWidth = (constraints.maxWidth - gap * 6) / 7;
           final itemHeight = (constraints.maxHeight - gap * (rows - 1)) / rows;
-          final safeHeight =
-              itemHeight.isFinite && itemHeight > 1 ? itemHeight : 1.0;
+          final safeHeight = itemHeight.isFinite && itemHeight > 1
+              ? itemHeight
+              : 1.0;
           final aspectRatio = itemWidth / safeHeight;
 
           return GridView.count(
@@ -3306,8 +3862,9 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentEntry = entry;
-    final shift =
-        currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
+    final shift = currentEntry == null
+        ? null
+        : ShiftCatalog.byId(currentEntry.shiftId);
     final isUrgence = shift?.id.startsWith('urg-') ?? false;
     final isLeave = shift?.id == 'conge';
     final isDisciplinary = currentEntry?.isDisciplinary ?? false;
@@ -3317,8 +3874,8 @@ class _DayCell extends StatelessWidget {
     if (shift != null) {
       if (isLeave) {
         final leave = context.watch<AppState>().leaveRequestForEntry(
-              currentEntry!,
-            );
+          currentEntry!,
+        );
         final pending = leave?.status == LeaveRequestStatus.pendingAdmin;
         groupLabel = 'CONGÉ';
         shiftLabel = pending ? 'Attente' : 'Congé';
@@ -3333,8 +3890,9 @@ class _DayCell extends StatelessWidget {
       onAcceptWithDetails: (details) => onDrop(details.data),
       builder: (context, candidateData, rejectedData) {
         final hovering = candidateData.isNotEmpty && editable;
-        final background =
-            hovering ? Color(0xFFDCEBFF) : shift?.color ?? AppColors.card;
+        final background = hovering
+            ? Color(0xFFDCEBFF)
+            : shift?.color ?? AppColors.card;
         final foreground = shift?.textColor ?? AppColors.ink;
 
         return GestureDetector(
@@ -3350,8 +3908,8 @@ class _DayCell extends StatelessWidget {
                 color: hovering || isToday
                     ? AppColors.brand
                     : shift != null
-                        ? foreground.withOpacity(0.15)
-                        : AppColors.line,
+                    ? foreground.withOpacity(0.15)
+                    : AppColors.line,
                 width: hovering ? 2 : (isToday ? 1.8 : 1),
               ),
               boxShadow: [
@@ -3378,38 +3936,38 @@ class _DayCell extends StatelessWidget {
                               size: 24,
                             )
                           : shift == null
-                              ? SizedBox.shrink()
-                              : FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        groupLabel!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: foreground.withOpacity(0.84),
-                                          fontSize: 10.5,
-                                          height: 1,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.25,
-                                        ),
-                                      ),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        shiftLabel!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: foreground,
-                                          fontFamily: 'SpaceGrotesk',
-                                          fontSize: 12,
-                                          height: 1,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
+                          ? SizedBox.shrink()
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    groupLabel!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: foreground.withOpacity(0.84),
+                                      fontSize: 10.5,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.25,
+                                    ),
                                   ),
-                                ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    shiftLabel!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: foreground,
+                                      fontFamily: 'SpaceGrotesk',
+                                      fontSize: 12,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -3424,10 +3982,10 @@ class _DayCell extends StatelessWidget {
                       color: isToday
                           ? AppColors.brandDark
                           : shift != null
-                              ? (AppColors.isDarkMode
-                                  ? AppColors.paperAlt.withOpacity(0.96)
-                                  : Colors.white.withOpacity(0.78))
-                              : Colors.transparent,
+                          ? (AppColors.isDarkMode
+                                ? AppColors.paperAlt.withOpacity(0.96)
+                                : Colors.white.withOpacity(0.78))
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -3561,17 +4119,19 @@ class _ShiftChip extends StatelessWidget {
     final shift = ShiftCatalog.byId(entry.shiftId);
     final isUrgence = shift.id.startsWith('urg-');
     final isLeave = shift.id == 'conge';
-    final leave =
-        isLeave ? context.watch<AppState>().leaveRequestForEntry(entry) : null;
+    final leave = isLeave
+        ? context.watch<AppState>().leaveRequestForEntry(entry)
+        : null;
     final pendingLeave = leave?.status == LeaveRequestStatus.pendingAdmin;
 
     final groupLabel = isLeave
         ? 'CONGÉ'
         : isUrgence
-            ? 'URG'
-            : 'SERV';
-    final shiftLabel =
-        isLeave ? (pendingLeave ? 'Attente' : 'Congé') : shift.label;
+        ? 'URG'
+        : 'SERV';
+    final shiftLabel = isLeave
+        ? (pendingLeave ? 'Attente' : 'Congé')
+        : shift.label;
 
     return LayoutBuilder(
       builder: (context, constraints) {
