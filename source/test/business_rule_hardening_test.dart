@@ -5,6 +5,7 @@ void main() {
   group('GardeFlow business-rule hardening', () {
     test('same hospital remains mandatory', () {
       expect(BusinessRules.sameHospitalRequired, isTrue);
+      expect(BusinessRules.minimumRestHours, greaterThanOrEqualTo(0));
     });
 
     test('Service exchange requires same service when either guard is Service', () {
