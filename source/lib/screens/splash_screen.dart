@@ -1,10 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
-import '../theme/app_theme.dart';
-import '../theme/screen_decor.dart';
-import '../theme/widgets.dart';
 import 'auth_screen.dart';
 import 'home_screen.dart';
 
@@ -65,91 +64,54 @@ class _SplashScreenState extends State<SplashScreen>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _goNext,
-      child: DecorScaffold(
-        scene: ScreenDecorScene.splash,
-        backgroundColor: const Color(0xFFF9FCFF),
+      child: Scaffold(
+        backgroundColor: Colors.white,
         body: Stack(
           fit: StackFit.expand,
           children: [
-            const _SplashBackdrop(),
+            const _ApprovedSplashBackdrop(),
             SafeArea(
               child: TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 850),
+                duration: const Duration(milliseconds: 700),
                 curve: Curves.easeOutCubic,
                 builder: (context, value, child) {
                   return Opacity(
                     opacity: value,
                     child: Transform.translate(
-                      offset: Offset(0, 16 * (1 - value)),
+                      offset: Offset(0, 12 * (1 - value)),
                       child: child,
                     ),
                   );
                 },
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 22,
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: SizedBox(
-                        width: 430,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const _GardeFlowHero(),
-                            const SizedBox(height: 16),
-                            _PremiumLoadingBar(
-                              animation: _progressAnimation,
-                            ),
-                            const SizedBox(height: 36),
-                            const _BrandBanner(
-                              asset: 'assets/branding/practice_banner.webp',
-                              width: 320,
-                              height: 108,
-                              semanticLabel: 'Practice',
-                            ),
-                            const SizedBox(height: 24),
-                            Container(
-                              width: 128,
-                              height: 1,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.transparent,
-                                    Color(0x332D6FD4),
-                                    Colors.transparent,
-                                  ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: SizedBox(
+                            width: 430,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const _GardeFlowBrandBlock(),
+                                const SizedBox(height: 46),
+                                const _PracticeBrandBlock(),
+                                const SizedBox(height: 38),
+                                const _FlowSuiteBrandBlock(),
+                                const SizedBox(height: 28),
+                                _PremiumLoadingBar(
+                                  animation: _progressAnimation,
                                 ),
-                              ),
+                              ],
                             ),
-                            const SizedBox(height: 22),
-                            const _BrandBanner(
-                              asset: 'assets/branding/flowsuite_banner.webp',
-                              width: 320,
-                              height: 100,
-                              semanticLabel: 'FlowSuite',
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'UN ÉCOSYSTÈME. UN MÊME FLOW.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontFamily: 'SpaceGrotesk',
-                                fontSize: 10,
-                                height: 1.2,
-                                letterSpacing: 2.15,
-                                color: Color(0xFF6A7893),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -160,69 +122,561 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-class _GardeFlowHero extends StatelessWidget {
-  const _GardeFlowHero();
+class _GardeFlowBrandBlock extends StatelessWidget {
+  const _GardeFlowBrandBlock();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.78),
-            borderRadius: BorderRadius.circular(34),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x1F4AA7E8),
-                blurRadius: 28,
-                spreadRadius: 2,
-                offset: Offset(0, 10),
-              ),
-            ],
-          ),
-          child: const GardeFlowLogo(size: 132),
+        _BrandIconCard(
+          size: 154,
+          semanticLabel: 'GardeFlow',
+          painter: _GardeFlowIconPainter(),
         ),
-        const SizedBox(height: 20),
-        RichText(
-          textAlign: TextAlign.center,
-          text: const TextSpan(
-            style: TextStyle(
-              fontFamily: 'SpaceGrotesk',
-              fontSize: 49,
-              height: 0.98,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -2.1,
-            ),
-            children: [
-              TextSpan(
-                text: 'Garde',
-                style: TextStyle(color: Color(0xFF087044)),
-              ),
-              TextSpan(
-                text: 'Flow',
-                style: TextStyle(color: Color(0xFFE11D2E)),
-              ),
-            ],
-          ),
+        SizedBox(height: 19),
+        _GardeFlowWordmark(),
+      ],
+    );
+  }
+}
+
+class _PracticeBrandBlock extends StatelessWidget {
+  const _PracticeBrandBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BrandIconCard(
+          size: 116,
+          semanticLabel: 'Practice',
+          painter: _PracticeIconPainter(),
         ),
-        const SizedBox(height: 10),
-        const Text(
-          'LE PLANNING DE GARDE POUR GARDER LE FLOW',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'SpaceGrotesk',
-            fontSize: 9.8,
-            height: 1.25,
-            letterSpacing: 1.75,
-            color: Color(0xFF607268),
-            fontWeight: FontWeight.w700,
+        SizedBox(height: 12),
+        _GradientWordmark(
+          text: 'Practice',
+          fontSize: 47,
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFF0A2B8A),
+              Color(0xFF0B65D8),
+              Color(0xFF18BCE7),
+              Color(0xFF6E35EE),
+            ],
+            stops: [0.0, 0.34, 0.67, 1.0],
           ),
         ),
       ],
     );
   }
+}
+
+class _FlowSuiteBrandBlock extends StatelessWidget {
+  const _FlowSuiteBrandBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BrandIconCard(
+          size: 116,
+          semanticLabel: 'FlowSuite',
+          painter: _FlowSuiteIconPainter(),
+        ),
+        SizedBox(height: 12),
+        _GradientWordmark(
+          text: 'FlowSuite',
+          fontSize: 45,
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFF073C83),
+              Color(0xFF0A73D5),
+              Color(0xFF642CF1),
+              Color(0xFFF20B9C),
+              Color(0xFFFF8700),
+            ],
+            stops: [0.0, 0.27, 0.53, 0.76, 1.0],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GardeFlowWordmark extends StatelessWidget {
+  const _GardeFlowWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      textAlign: TextAlign.center,
+      text: const TextSpan(
+        style: TextStyle(
+          fontFamily: 'SpaceGrotesk',
+          fontSize: 51,
+          height: 0.98,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -2.4,
+        ),
+        children: [
+          TextSpan(
+            text: 'Garde',
+            style: TextStyle(color: Color(0xFF087343)),
+          ),
+          TextSpan(
+            text: 'Flow',
+            style: TextStyle(color: Color(0xFFEF202B)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GradientWordmark extends StatelessWidget {
+  final String text;
+  final double fontSize;
+  final Gradient gradient;
+
+  const _GradientWordmark({
+    required this.text,
+    required this.fontSize,
+    required this.gradient,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) => gradient.createShader(bounds),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontFamily: 'SpaceGrotesk',
+          fontSize: fontSize,
+          height: 0.98,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -2.2,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandIconCard extends StatelessWidget {
+  final double size;
+  final String semanticLabel;
+  final CustomPainter painter;
+
+  const _BrandIconCard({
+    required this.size,
+    required this.semanticLabel,
+    required this.painter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: semanticLabel,
+      image: true,
+      child: Container(
+        width: size,
+        height: size,
+        padding: EdgeInsets.all(size * 0.085),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(size * 0.22),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF83C8F4).withOpacity(0.26),
+              blurRadius: size * 0.22,
+              spreadRadius: size * 0.02,
+              offset: Offset(0, size * 0.055),
+            ),
+            BoxShadow(
+              color: Colors.white.withOpacity(0.92),
+              blurRadius: size * 0.08,
+              spreadRadius: size * 0.01,
+            ),
+          ],
+        ),
+        child: CustomPaint(
+          painter: painter,
+          size: Size.square(size),
+        ),
+      ),
+    );
+  }
+}
+
+class _GardeFlowIconPainter extends CustomPainter {
+  const _GardeFlowIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final arm = w * 0.36;
+    final overlap = w * 0.045;
+    final center = Offset(w / 2, h / 2);
+    final corner = Radius.circular(w * 0.115);
+
+    final greenRectTop = RRect.fromRectAndRadius(
+      Rect.fromLTWH((w - arm) / 2, 0, arm, h * 0.51 + overlap),
+      corner,
+    );
+    final greenRectLeft = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, (h - arm) / 2, w * 0.51 + overlap, arm),
+      corner,
+    );
+    final redRectRight = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.49 - overlap, (h - arm) / 2,
+          w * 0.51 + overlap, arm),
+      corner,
+    );
+    final redRectBottom = RRect.fromRectAndRadius(
+      Rect.fromLTWH((w - arm) / 2, h * 0.49 - overlap, arm,
+          h * 0.51 + overlap),
+      corner,
+    );
+
+    canvas.drawRRect(
+      greenRectTop,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF13C76A), Color(0xFF00663D)],
+        ).createShader(greenRectTop.outerRect),
+    );
+    canvas.drawRRect(
+      greenRectLeft,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF18C972), Color(0xFF00683F)],
+        ).createShader(greenRectLeft.outerRect),
+    );
+    canvas.drawRRect(
+      redRectRight,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFF2B35), Color(0xFFD30012)],
+        ).createShader(redRectRight.outerRect),
+    );
+    canvas.drawRRect(
+      redRectBottom,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF31623), Color(0xFFD40012)],
+        ).createShader(redRectBottom.outerRect),
+    );
+
+    final clockRadius = w * 0.315;
+    canvas.drawCircle(
+      center,
+      clockRadius,
+      Paint()..color = Colors.white,
+    );
+
+    final sweepPaint = Paint()
+      ..color = const Color(0xFFFFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.047
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: clockRadius + w * 0.045),
+      math.pi * 0.20,
+      math.pi * 1.45,
+      false,
+      sweepPaint,
+    );
+
+    final greenSweepPaint = Paint()
+      ..color = const Color(0xFF07844D)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.027
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: clockRadius + w * 0.005),
+      math.pi * 0.84,
+      math.pi * 0.92,
+      false,
+      greenSweepPaint,
+    );
+
+    final clockPaint = Paint()
+      ..color = const Color(0xFF07864E)
+      ..strokeWidth = w * 0.055
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      center,
+      Offset(center.dx, center.dy - h * 0.19),
+      clockPaint,
+    );
+    canvas.drawLine(
+      center,
+      Offset(center.dx + w * 0.16, center.dy + h * 0.105),
+      clockPaint,
+    );
+    canvas.drawCircle(center, w * 0.072, Paint()..color = const Color(0xFF07864E));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PracticeIconPainter extends CustomPainter {
+  const _PracticeIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final arm = w * 0.37;
+    final radius = Radius.circular(w * 0.12);
+
+    final top = RRect.fromRectAndRadius(
+      Rect.fromLTWH((w - arm) / 2, 0, arm, h * 0.54),
+      radius,
+    );
+    final left = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, (h - arm) / 2, w * 0.55, arm),
+      radius,
+    );
+    final right = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.45, (h - arm) / 2, w * 0.55, arm),
+      radius,
+    );
+    final bottom = RRect.fromRectAndRadius(
+      Rect.fromLTWH((w - arm) / 2, h * 0.46, arm, h * 0.54),
+      radius,
+    );
+
+    canvas.drawRRect(
+      top,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF02E5E8), Color(0xFF006BE9)],
+        ).createShader(top.outerRect),
+    );
+    canvas.drawRRect(
+      left,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF05D5E6), Color(0xFF024AC4)],
+        ).createShader(left.outerRect),
+    );
+    canvas.drawRRect(
+      right,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0C6CE7), Color(0xFF9B31F3)],
+        ).createShader(right.outerRect),
+    );
+    canvas.drawRRect(
+      bottom,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0345CB), Color(0xFF3812A8)],
+        ).createShader(bottom.outerRect),
+    );
+
+    final sheetRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(w * 0.48, h * 0.50),
+        width: w * 0.46,
+        height: h * 0.49,
+      ),
+      Radius.circular(w * 0.07),
+    );
+    canvas.drawRRect(sheetRect, Paint()..color = Colors.white.withOpacity(0.97));
+    canvas.drawRRect(
+      sheetRect,
+      Paint()
+        ..color = const Color(0xFF1252B4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w * 0.035,
+    );
+
+    final clipRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(w * 0.48, h * 0.31),
+        width: w * 0.21,
+        height: h * 0.075,
+      ),
+      Radius.circular(w * 0.03),
+    );
+    canvas.drawRRect(clipRect, Paint()..color = const Color(0xFF1B58B8));
+
+    final linePaint = Paint()
+      ..color = const Color(0xFF2257A5)
+      ..strokeWidth = w * 0.025
+      ..strokeCap = StrokeCap.round;
+    for (final dy in [0.43, 0.53, 0.63]) {
+      canvas.drawCircle(
+        Offset(w * 0.36, h * dy),
+        w * 0.014,
+        Paint()..color = const Color(0xFF0B69D8),
+      );
+      canvas.drawLine(
+        Offset(w * 0.42, h * dy),
+        Offset(w * 0.58, h * dy),
+        linePaint,
+      );
+    }
+
+    final checkCenter = Offset(w * 0.70, h * 0.68);
+    canvas.drawCircle(
+      checkCenter,
+      w * 0.19,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF18D3E6), Color(0xFF0788E8)],
+        ).createShader(Rect.fromCircle(center: checkCenter, radius: w * 0.20)),
+    );
+    canvas.drawCircle(
+      checkCenter,
+      w * 0.19,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = w * 0.03,
+    );
+    final checkPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.045
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final checkPath = Path()
+      ..moveTo(w * 0.62, h * 0.68)
+      ..lineTo(w * 0.68, h * 0.74)
+      ..lineTo(w * 0.79, h * 0.61);
+    canvas.drawPath(checkPath, checkPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _FlowSuiteIconPainter extends CustomPainter {
+  const _FlowSuiteIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final arm = w * 0.37;
+    final radius = Radius.circular(w * 0.12);
+
+    final top = RRect.fromRectAndRadius(
+      Rect.fromLTWH((w - arm) / 2, 0, arm, h * 0.54),
+      radius,
+    );
+    final left = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, (h - arm) / 2, w * 0.55, arm),
+      radius,
+    );
+    final right = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.45, (h - arm) / 2, w * 0.55, arm),
+      radius,
+    );
+    final bottom = RRect.fromRectAndRadius(
+      Rect.fromLTWH((w - arm) / 2, h * 0.46, arm, h * 0.54),
+      radius,
+    );
+
+    canvas.drawRRect(
+      top,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF02DDE7), Color(0xFF0B4DD9)],
+        ).createShader(top.outerRect),
+    );
+    canvas.drawRRect(
+      left,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0ECFE5), Color(0xFF3142ED), Color(0xFF9D16E7)],
+        ).createShader(left.outerRect),
+    );
+    canvas.drawRRect(
+      right,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF8B23F0), Color(0xFFFF0A86), Color(0xFFFF9500)],
+        ).createShader(right.outerRect),
+    );
+    canvas.drawRRect(
+      bottom,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF6D21EE), Color(0xFFE90A91), Color(0xFFCB0D5F)],
+        ).createShader(bottom.outerRect),
+    );
+
+    final center = Offset(w / 2, h / 2);
+    final swirlPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.037
+      ..strokeCap = StrokeCap.round;
+
+    final radii = [w * 0.30, w * 0.24, w * 0.18];
+    final starts = [-0.18, 0.48, 1.12];
+    for (var i = 0; i < radii.length; i++) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radii[i]),
+        math.pi * starts[i],
+        math.pi * 1.30,
+        false,
+        swirlPaint,
+      );
+    }
+
+    canvas.drawCircle(
+      center,
+      w * 0.085,
+      Paint()..color = Colors.white.withOpacity(0.17),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _PremiumLoadingBar extends StatelessWidget {
@@ -238,14 +692,14 @@ class _PremiumLoadingBar extends StatelessWidget {
         animation: animation,
         builder: (context, child) {
           return SizedBox(
-            width: 196,
-            height: 6,
+            width: 164,
+            height: 5,
             child: Stack(
               fit: StackFit.expand,
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8EFF4).withOpacity(0.82),
+                    color: const Color(0xFFEAF1F6).withOpacity(0.76),
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
@@ -261,12 +715,11 @@ class _PremiumLoadingBar extends StatelessWidget {
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                           colors: [
-                            Color(0xFF08A861),
-                            Color(0xFF18B9C8),
-                            Color(0xFF7A57F5),
-                            Color(0xFFE83B58),
+                            Color(0xFF0EA85D),
+                            Color(0xFF12BCE1),
+                            Color(0xFF6A42F4),
+                            Color(0xFFF31A68),
                           ],
-                          stops: [0.0, 0.36, 0.68, 1.0],
                         ),
                       ),
                     ),
@@ -281,176 +734,177 @@ class _PremiumLoadingBar extends StatelessWidget {
   }
 }
 
-class _BrandBanner extends StatelessWidget {
-  final String asset;
-  final double width;
-  final double height;
-  final String semanticLabel;
-
-  const _BrandBanner({
-    required this.asset,
-    required this.width,
-    required this.height,
-    required this.semanticLabel,
-  });
+class _ApprovedSplashBackdrop extends StatelessWidget {
+  const _ApprovedSplashBackdrop();
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Image.asset(
-        asset,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-        semanticLabel: semanticLabel,
+    return const IgnorePointer(
+      child: CustomPaint(
+        painter: _ApprovedBackdropPainter(),
+        size: Size.infinite,
       ),
     );
   }
 }
 
-class _SplashBackdrop extends StatelessWidget {
-  const _SplashBackdrop();
+class _ApprovedBackdropPainter extends CustomPainter {
+  const _ApprovedBackdropPainter();
 
   @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFFFFFFF),
-                Color(0xFFF9FCFF),
-                Color(0xFFFFFBFD),
-              ],
-              stops: [0.0, 0.52, 1.0],
-            ),
-          ),
-        ),
-        Positioned(
-          top: -180,
-          left: -220,
-          child: _GlowOrb(
-            size: 440,
-            colors: [
-              Color(0x3D61E6D2),
-              Color(0x1261E6D2),
-              Colors.transparent,
-            ],
-          ),
-        ),
-        Positioned(
-          bottom: -220,
-          right: -230,
-          child: _GlowOrb(
-            size: 500,
-            colors: [
-              Color(0x34F58AB1),
-              Color(0x1A9B77FF),
-              Colors.transparent,
-            ],
-          ),
-        ),
-        Positioned(
-          top: -150,
-          right: -120,
-          child: Container(
-            width: 390,
-            height: 390,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF70BFEA).withOpacity(0.08),
-                width: 34,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 80,
-          left: -170,
-          child: Container(
-            width: 360,
-            height: 360,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF48CBB7).withOpacity(0.08),
-                width: 28,
-              ),
-            ),
-          ),
-        ),
-        const Positioned(
-          top: 44,
-          right: 18,
-          child: Opacity(
-            opacity: 0.038,
-            child: _MedicalCrossMark(size: 172),
-          ),
-        ),
-      ],
+  void paint(Canvas canvas, Size size) {
+    final fullRect = Offset.zero & size;
+    canvas.drawRect(
+      fullRect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFFFFFFF),
+            Color(0xFFFDFCFF),
+          ],
+          stops: [0.0, 0.55, 1.0],
+        ).createShader(fullRect),
+    );
+
+    final leftGlowRect = Rect.fromLTWH(
+      -size.width * 0.42,
+      size.height * 0.57,
+      size.width * 1.15,
+      size.height * 0.50,
+    );
+    canvas.drawOval(
+      leftGlowRect,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0x2526D6F1), Color(0x0C37A8FF), Colors.transparent],
+        ).createShader(leftGlowRect),
+    );
+
+    final rightGlowRect = Rect.fromLTWH(
+      size.width * 0.42,
+      size.height * 0.60,
+      size.width * 1.05,
+      size.height * 0.46,
+    );
+    canvas.drawOval(
+      rightGlowRect,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: [Color(0x22FF7AAE), Color(0x0A905AFF), Colors.transparent],
+        ).createShader(rightGlowRect),
+    );
+
+    _drawRibbon(
+      canvas,
+      size,
+      startY: 0.63,
+      controlY1: 0.78,
+      controlY2: 0.89,
+      endY: 0.90,
+      thickness: 0.055,
+      color: const Color(0x2436C7F0),
+      fromLeft: true,
+    );
+    _drawRibbon(
+      canvas,
+      size,
+      startY: 0.69,
+      controlY1: 0.83,
+      controlY2: 0.90,
+      endY: 0.88,
+      thickness: 0.040,
+      color: const Color(0x252685FF),
+      fromLeft: true,
+    );
+    _drawRibbon(
+      canvas,
+      size,
+      startY: 0.76,
+      controlY1: 0.87,
+      controlY2: 0.91,
+      endY: 0.86,
+      thickness: 0.030,
+      color: const Color(0x1B26C4E9),
+      fromLeft: true,
+    );
+
+    _drawRibbon(
+      canvas,
+      size,
+      startY: 0.64,
+      controlY1: 0.80,
+      controlY2: 0.91,
+      endY: 0.90,
+      thickness: 0.055,
+      color: const Color(0x20FF668A),
+      fromLeft: false,
+    );
+    _drawRibbon(
+      canvas,
+      size,
+      startY: 0.71,
+      controlY1: 0.84,
+      controlY2: 0.90,
+      endY: 0.88,
+      thickness: 0.041,
+      color: const Color(0x1CEF3D92),
+      fromLeft: false,
+    );
+    _drawRibbon(
+      canvas,
+      size,
+      startY: 0.78,
+      controlY1: 0.88,
+      controlY2: 0.90,
+      endY: 0.86,
+      thickness: 0.028,
+      color: const Color(0x168E59F5),
+      fromLeft: false,
     );
   }
-}
 
-class _GlowOrb extends StatelessWidget {
-  final double size;
-  final List<Color> colors;
+  void _drawRibbon(
+    Canvas canvas,
+    Size size, {
+    required double startY,
+    required double controlY1,
+    required double controlY2,
+    required double endY,
+    required double thickness,
+    required Color color,
+    required bool fromLeft,
+  }) {
+    final startX = fromLeft ? -size.width * 0.10 : size.width * 1.10;
+    final endX = size.width * 0.50;
+    final c1X = fromLeft ? size.width * 0.12 : size.width * 0.88;
+    final c2X = fromLeft ? size.width * 0.31 : size.width * 0.69;
 
-  const _GlowOrb({required this.size, required this.colors});
+    final path = Path()
+      ..moveTo(startX, size.height * startY)
+      ..cubicTo(
+        c1X,
+        size.height * controlY1,
+        c2X,
+        size.height * controlY2,
+        endX,
+        size.height * endY,
+      )
+      ..cubicTo(
+        c2X,
+        size.height * (controlY2 + thickness),
+        c1X,
+        size.height * (controlY1 + thickness),
+        startX,
+        size.height * (startY + thickness),
+      )
+      ..close();
+
+    canvas.drawPath(path, Paint()..color = color);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: colors),
-      ),
-    );
-  }
-}
-
-class _MedicalCrossMark extends StatelessWidget {
-  final double size;
-
-  const _MedicalCrossMark({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    final thickness = size * 0.38;
-    final radius = BorderRadius.circular(size * 0.13);
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: thickness,
-            height: size,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A83D9),
-              borderRadius: radius,
-            ),
-          ),
-          Container(
-            width: size,
-            height: thickness,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A83D9),
-              borderRadius: radius,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
