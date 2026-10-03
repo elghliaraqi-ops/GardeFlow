@@ -19,6 +19,12 @@ jobs:
           ref: home-dashboard-redesign-20261003
           fetch-depth: 0
 
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
       - name: Apply home dashboard redesign
         shell: bash
         run: |
