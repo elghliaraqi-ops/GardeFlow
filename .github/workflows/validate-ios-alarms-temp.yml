@@ -1,0 +1,67 @@
+name: TEMP Validate iOS Guard Alarms
+
+on:
+  push:
+    branches:
+      - feat/ios-alarms-reminders-20261003
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-ios-alarms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-ios-alarms:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: source
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate and configure iOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf ios
+          flutter create --no-pub --platforms=ios --org com.huim6 --project-name huim6_planning .
+          dart tool/configure_ios.dart
+          grep -q 'NSAlarmKitUsageDescription' ios/Runner/Info.plist
+          grep -q 'NSSupportsLiveActivities' ios/Runner/Info.plist
+          grep -q '<string>audio</string>' ios/Runner/Info.plist
+          grep -q 'gardeflow/ios_alarmkit' ios/Runner/AppDelegate.swift
+          flutter clean
+          flutter pub get
+          if [ -f ios/Podfile ]; then
+            (cd ios && pod install --repo-update)
+          fi
+
+      - name: Analyze changed alarm and settings code
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze \
+            lib/services/alarm_ring_service.dart \
+            lib/services/notification_service.dart \
+            lib/screens/settings_screen.dart
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build unsigned iOS release
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign
+          test -d build/ios/iphoneos/Runner.app
