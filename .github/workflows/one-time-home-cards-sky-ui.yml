@@ -32,6 +32,7 @@ jobs:
           set -euo pipefail
           # Normalize the generated Dart snippet before applying it.
           sed -i 's/FontWeight\.w650/FontWeight.w600/g' ci/patch_home_cards_sky_ui.py
+          sed -i 's/^        minHeight: 78,$/        constraints: const BoxConstraints(minHeight: 78),/' ci/patch_home_cards_sky_ui.py
           python3 ci/patch_home_cards_sky_ui.py
           dart format source/lib/screens/home_screen.dart
           git diff --check
