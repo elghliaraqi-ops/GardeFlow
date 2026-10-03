@@ -90,11 +90,7 @@ class _SplashScreenState extends State<SplashScreen>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const _SplashBrandImage(
-                              asset: 'assets/branding/splash_gardeflow_exact.webp',
-                              semanticLabel: 'GardeFlow',
-                              aspectRatio: 2048 / 682,
-                            ),
+                            const _GardeFlowBanner(),
                             const SizedBox(height: 12),
                             const _SplashBrandImage(
                               asset: 'assets/branding/splash_practice.webp',
@@ -118,6 +114,106 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GardeFlowBanner extends StatelessWidget {
+  const _GardeFlowBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'GardeFlow',
+      image: true,
+      child: SizedBox(
+        width: 520,
+        height: 173,
+        child: ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFFFFFFF),
+                      Color(0xFFFEFFFF),
+                      Color(0xFFF7FCFF),
+                    ],
+                  ),
+                ),
+              ),
+              const Positioned(
+                left: -56,
+                bottom: -105,
+                child: _GlowCircle(
+                  size: 210,
+                  color: Color(0x2517CBA1),
+                ),
+              ),
+              const Positioned(
+                right: -58,
+                bottom: -106,
+                child: _GlowCircle(
+                  size: 214,
+                  color: Color(0x25EF425B),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 17),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 139,
+                      height: 139,
+                      child: Image.asset(
+                        'assets/branding/gardeflow_logo.png',
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                        isAntiAlias: true,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                    const SizedBox(width: 17),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text.rich(
+                          const TextSpan(
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 72,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                              letterSpacing: -3.2,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: 'Garde',
+                                style: TextStyle(color: Color(0xFF007A4C)),
+                              ),
+                              TextSpan(
+                                text: 'Flow',
+                                style: TextStyle(color: Color(0xFFE51B28)),
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          softWrap: false,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
