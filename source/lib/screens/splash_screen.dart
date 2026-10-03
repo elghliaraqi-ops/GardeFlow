@@ -91,9 +91,9 @@ class _SplashScreenState extends State<SplashScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const _SplashBrandImage(
-                              asset: 'assets/branding/splash_gardeflow.webp',
+                              asset: 'assets/branding/splash_gardeflow_exact.webp',
                               semanticLabel: 'GardeFlow',
-                              aspectRatio: 3,
+                              aspectRatio: 2048 / 682,
                             ),
                             const SizedBox(height: 12),
                             const _SplashBrandImage(
