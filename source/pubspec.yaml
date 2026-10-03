@@ -42,8 +42,6 @@ flutter:
     - assets/branding/gardeflow_logo.png
     - assets/branding/practice_banner.webp
     - assets/branding/flowsuite_banner.webp
-    - assets/branding/splash_gardeflow.webp
-    - assets/branding/splash_gardeflow_exact.webp
     - assets/branding/splash_practice.webp
     - assets/branding/splash_flowsuite.webp
     - assets/branding/practice_icon.webp
