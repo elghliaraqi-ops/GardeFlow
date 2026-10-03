@@ -1,0 +1,47 @@
+name: One-time format home dashboard
+
+on:
+  push:
+    branches:
+      - home-dashboard-redesign-20261003
+    paths:
+      - .github/workflows/one-time-format-home-dashboard.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: home-dashboard-redesign-20261003
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Format with project language version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd source
+          flutter pub get
+          dart format lib/screens/home_screen.dart
+          cd ..
+          git diff --check
+      - name: Commit formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib/screens/home_screen.dart
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit'
+            exit 0
+          fi
+          git commit -m 'style: format home dashboard with project settings'
+          git push origin HEAD:home-dashboard-redesign-20261003
