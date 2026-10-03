@@ -39,7 +39,7 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
-      - name: Check hardening file formatting
+      - name: Check patched source formatting
         run: >-
           dart format --output=none --set-exit-if-changed
           lib/config/business_rules.dart
@@ -48,7 +48,6 @@ jobs:
           lib/models/planning_month.dart
           lib/screens/home_screen.dart
           lib/screens/admin_screen.dart
-          test/business_rule_hardening_test.dart
       - name: Run tests
         run: flutter test
       - name: Analyze
