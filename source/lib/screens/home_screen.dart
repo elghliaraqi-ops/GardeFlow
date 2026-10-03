@@ -73,13 +73,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (me == null) {
-      return DecorScaffold(scene: ScreenDecorScene.home, 
+      return DecorScaffold(
+        scene: ScreenDecorScene.home,
         backgroundColor: AppColors.paper,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return DecorScaffold(scene: ScreenDecorScene.home, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.home,
       backgroundColor: AppColors.paper,
       extendBody: false,
       body: SafeArea(
@@ -711,9 +713,8 @@ class _DashboardView extends StatelessWidget {
     );
 
     final rawDate = DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(now);
-    final dateLabel = rawDate.isEmpty
-        ? ''
-        : rawDate[0].toUpperCase() + rawDate.substring(1);
+    final dateLabel =
+        rawDate.isEmpty ? '' : rawDate[0].toUpperCase() + rawDate.substring(1);
     final timeLabel = DateFormat('HH:mm').format(now);
 
     return SingleChildScrollView(
@@ -790,9 +791,7 @@ class _HomeHeroCard extends StatelessWidget {
     final colors = isNight
         ? const [Color(0xFF06101E), Color(0xFF102E53)]
         : const [Color(0xFF2DB7F5), Color(0xFF087EE6)];
-    final accent = isNight
-        ? const Color(0xFFFFE6A0)
-        : const Color(0xFFFFD54F);
+    final accent = isNight ? const Color(0xFFFFE6A0) : const Color(0xFFFFD54F);
 
     return Container(
       width: double.infinity,
@@ -1334,8 +1333,7 @@ class _NextGuardCard extends StatelessWidget {
         shiftId.contains('24-h') ||
         shiftLabel.toLowerCase().contains('24h');
     final isNight = !is24h &&
-        (shiftId.contains('nuit') ||
-            shiftLabel.toLowerCase().contains('nuit'));
+        (shiftId.contains('nuit') || shiftLabel.toLowerCase().contains('nuit'));
 
     final category = isUrgence ? 'URGENCES' : 'SERVICE';
     final period = is24h
@@ -1354,9 +1352,8 @@ class _NextGuardCard extends StatelessWidget {
             ? '20:00 → 08:00'
             : '08:00 → 20:00';
 
-    final guardTitle = shiftLabel.isEmpty
-        ? 'Garde de ${period.toLowerCase()}'
-        : shiftLabel;
+    final guardTitle =
+        shiftLabel.isEmpty ? 'Garde de ${period.toLowerCase()}' : shiftLabel;
 
     final colors = is24h
         ? const [Color(0xFF287CC7), Color(0xFF0B1C35)]
@@ -2867,20 +2864,33 @@ class _MonthBar extends StatelessWidget {
         statusBg = AppColors.success;
         statusFg = Colors.white;
         break;
-      case PlanningMonthStatus.draft:
       case PlanningMonthStatus.submitted:
+        statusLabel = 'Soumis · en attente';
+        statusIcon = Icons.hourglass_top_rounded;
+        statusBg = const Color(0xFFF3A712);
+        statusFg = Colors.white;
+        break;
       case PlanningMonthStatus.rejected:
+        reopenReason = record?.rejectionReason?.trim();
+        statusLabel = 'À corriger';
+        statusIcon = Icons.error_outline_rounded;
+        statusBg = const Color(0xFFB3261E);
+        statusFg = Colors.white;
+        break;
+      case PlanningMonthStatus.draft:
         reopenReason = record?.rejectionReason?.trim();
         final reopened = reopenReason != null && reopenReason.isNotEmpty;
         statusLabel = reopened ? 'Rouvert' : 'En préparation';
         statusIcon =
             reopened ? Icons.lock_open_rounded : Icons.edit_calendar_rounded;
-        statusBg = reopened ? Color(0xFFB3261E) : AppColors.paperAlt;
+        statusBg = reopened ? const Color(0xFFB3261E) : AppColors.paperAlt;
         statusFg = reopened ? Colors.white : AppColors.ink;
         break;
     }
 
-    final canSubmit = !isPastMonth && status != PlanningMonthStatus.approved;
+    final canSubmit = !isPastMonth &&
+        (status == PlanningMonthStatus.draft ||
+            status == PlanningMonthStatus.rejected);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(10, 4, 10, 4),
@@ -2990,17 +3000,25 @@ class _MonthBar extends StatelessWidget {
         detail =
             'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
         break;
-      case PlanningMonthStatus.draft:
       case PlanningMonthStatus.submitted:
+        title = 'Calendrier soumis';
+        detail =
+            'Le mois est figé en attente d’une validation finale par un administrateur. À défaut, l’auto-validation peut intervenir à J+7 du planning officiel.';
+        break;
       case PlanningMonthStatus.rejected:
+        title = 'Calendrier à corriger';
+        detail =
+            'Motif : ${reopenReason?.isNotEmpty == true ? reopenReason : 'correction demandée par l’administration'}. Corrigez les tuiles puis soumettez à nouveau le mois.';
+        break;
+      case PlanningMonthStatus.draft:
         if (reopenReason != null && reopenReason.isNotEmpty) {
           title = 'Calendrier rouvert par un administrateur';
           detail =
-              'Motif : $reopenReason. Modifiez vos tuiles puis validez à nouveau le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
+              'Motif : $reopenReason. Modifiez vos tuiles puis soumettez à nouveau le mois.';
         } else {
           title = 'Calendrier en préparation';
           detail =
-              'Placez vos tuiles Service, Urgences et Congé puis validez définitivement le mois. Sans validation manuelle, le calendrier sera automatiquement validé 7 jours après la publication ou le remplacement du planning officiel.';
+              'Placez vos tuiles Service, Urgences et Congé puis soumettez le mois. Il sera ensuite validé par un administrateur ou automatiquement à J+7 du planning officiel.';
         }
         break;
     }
@@ -3078,11 +3096,12 @@ class _ValidateButton extends StatelessWidget {
           final confirm = await showDialog<bool>(
             context: context,
             builder: (dialogContext) => AlertDialog(
-              title: const Text('Valider définitivement ce calendrier ?'),
+              title: const Text('Soumettre ce calendrier ?'),
               content: const Text(
-                'Après validation, vous ne pourrez plus déplacer, remplacer ni retirer vos tuiles. '
-                'Seul un administrateur pourra supprimer une garde validée ou rouvrir le mois pour correction. '
-                'Les tuiles Congé seront envoyées à l’administration pour approbation.',
+                'Après soumission, le mois sera figé en attente de validation finale. '
+                'Un administrateur pourra l’approuver ou demander une correction. '
+                'À défaut, l’auto-validation reste possible à J+7 du planning officiel. '
+                'Les tuiles Congé seront envoyées séparément à l’administration pour approbation.',
               ),
               actions: [
                 TextButton(
@@ -3091,7 +3110,7 @@ class _ValidateButton extends StatelessWidget {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('Valider définitivement'),
+                  child: const Text('Soumettre'),
                 ),
               ],
             ),
@@ -3100,10 +3119,10 @@ class _ValidateButton extends StatelessWidget {
           final err = await appState.submitMyPlanningMonth(month);
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(err ?? 'Calendrier validé définitivement.')),
+            SnackBar(content: Text(err ?? 'Calendrier soumis à validation.')),
           );
         },
-        child: const Text('Valider'),
+        child: const Text('Soumettre'),
       ),
     );
   }

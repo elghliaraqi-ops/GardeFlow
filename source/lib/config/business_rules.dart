@@ -1,16 +1,31 @@
-/// Règles institutionnelles centralisées.
-/// Les contraintes dont la valeur dépend du règlement local sont volontairement
-/// explicites ici au lieu d'être dispersées dans l'UI.
+/// Règles métier GardeFlow centralisées.
+///
+/// L'interface ne doit jamais être la seule barrière : les mêmes
+/// contraintes critiques sont aussi imposées côté PostgreSQL/RLS/RPC.
 class BusinessRules {
   BusinessRules._();
 
   static const bool sameHospitalRequired = true;
-
-  // À activer uniquement si le règlement HUIM6 l'impose formellement.
-  static const bool sameServiceRequiredForExchange = false;
   static const bool sameGradeRequiredForExchange = false;
+  static const bool firstYearSamePromotionRequiredForEmergency = true;
 
-  // 0 = pas de blocage automatique tant qu'une durée officielle n'a pas été
-  // validée par l'établissement. La structure est prête pour une règle future.
+  /// Toute demande d'échange impliquant une garde de Service impose
+  /// que les deux médecins appartiennent au même service.
+  static bool exchangeRequiresSameService(
+    String sourceShiftId,
+    String? targetShiftId,
+  ) =>
+      sourceShiftId.startsWith('service-') ||
+      (targetShiftId?.startsWith('service-') ?? false);
+
+  /// La restriction de promotion de la première année ne s'applique
+  /// qu'aux demandes impliquant les Urgences.
+  static bool requestInvolvesEmergency(
+    String sourceShiftId,
+    String? targetShiftId,
+  ) =>
+      sourceShiftId.startsWith('urg-') ||
+      (targetShiftId?.startsWith('urg-') ?? false);
+
   static const int minimumRestHours = 0;
 }

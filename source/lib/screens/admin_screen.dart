@@ -48,27 +48,26 @@ class _AdminScreenState extends State<AdminScreen> {
     final appState = context.watch<AppState>();
     final hospitalItems = kHospitals.toSet().toList();
     final query = _doctorQuery.trim().toLowerCase();
-    final doctors =
-        appState.users.where((user) {
-          if (user.accountStatus != AccountStatus.active) return false;
-          if (_hospital != _kAllHospitals && user.hospital != _hospital)
-            return false;
-          if (query.isEmpty) return true;
-          final searchable = [
-            user.fullName,
-            user.nom,
-            user.prenom,
-            user.phone,
-            user.service,
-            user.gradeLabel,
-            user.roleLabel,
-            hospitalDisplayName(user.hospital),
-          ].join(' ').toLowerCase();
-          return searchable.contains(query);
-        }).toList()..sort(
-          (a, b) =>
-              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
-        );
+    final doctors = appState.users.where((user) {
+      if (user.accountStatus != AccountStatus.active) return false;
+      if (_hospital != _kAllHospitals && user.hospital != _hospital)
+        return false;
+      if (query.isEmpty) return true;
+      final searchable = [
+        user.fullName,
+        user.nom,
+        user.prenom,
+        user.phone,
+        user.service,
+        user.gradeLabel,
+        user.roleLabel,
+        hospitalDisplayName(user.hospital),
+      ].join(' ').toLowerCase();
+      return searchable.contains(query);
+    }).toList()
+      ..sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
 
     final selectedId = doctors.any((u) => u.id == _doctorId)
         ? _doctorId
@@ -77,23 +76,21 @@ class _AdminScreenState extends State<AdminScreen> {
         ? null
         : doctors.firstWhere((u) => u.id == selectedId);
 
-    final doctorEntries =
-        selectedDoctor == null
-              ? <PlanningEntry>[]
-              : appState.planning
-                    .where(
-                      (e) =>
-                          e.ownerId == selectedDoctor.id ||
-                          e.ownerPhone == selectedDoctor.phone,
-                    )
-                    .toList()
-          ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
+    final doctorEntries = selectedDoctor == null
+        ? <PlanningEntry>[]
+        : appState.planning
+            .where(
+              (e) =>
+                  e.ownerId == selectedDoctor.id ||
+                  e.ownerPhone == selectedDoctor.phone,
+            )
+            .toList()
+      ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
 
     final monthPrefix =
         '${_visibleMonth.year}-${_visibleMonth.month.toString().padLeft(2, '0')}-';
-    final monthEntries = doctorEntries
-        .where((e) => e.dateStr.startsWith(monthPrefix))
-        .toList();
+    final monthEntries =
+        doctorEntries.where((e) => e.dateStr.startsWith(monthPrefix)).toList();
     final monthRecord = selectedDoctor == null
         ? null
         : appState.planningMonthForUser(
@@ -102,7 +99,8 @@ class _AdminScreenState extends State<AdminScreen> {
             _visibleMonth.month,
           );
 
-    return DecorScaffold(scene: ScreenDecorScene.admin, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.admin,
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Gestion des gardes'),
@@ -282,8 +280,27 @@ class _AdminScreenState extends State<AdminScreen> {
                 doctor: selectedDoctor,
                 month: _visibleMonth,
                 record: monthRecord,
-                onReopen:
-                    monthRecord?.status == PlanningMonthStatus.approved &&
+                onApprove:
+                    monthRecord?.status == PlanningMonthStatus.submitted &&
+                            selectedDoctor.id != appState.currentUser?.id
+                        ? () => _confirmReviewPlanningMonth(
+                              context,
+                              appState,
+                              selectedDoctor,
+                              approve: true,
+                            )
+                        : null,
+                onReject:
+                    monthRecord?.status == PlanningMonthStatus.submitted &&
+                            selectedDoctor.id != appState.currentUser?.id
+                        ? () => _confirmReviewPlanningMonth(
+                              context,
+                              appState,
+                              selectedDoctor,
+                              approve: false,
+                            )
+                        : null,
+                onReopen: monthRecord?.status == PlanningMonthStatus.approved &&
                         !DateTime(
                           _visibleMonth.year,
                           _visibleMonth.month,
@@ -296,10 +313,10 @@ class _AdminScreenState extends State<AdminScreen> {
                           ),
                         )
                     ? () => _confirmReopenPlanningMonth(
-                        context,
-                        appState,
-                        selectedDoctor,
-                      )
+                          context,
+                          appState,
+                          selectedDoctor,
+                        )
                     : null,
               ),
               _DoctorCalendar(
@@ -323,6 +340,74 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
+  Future<void> _confirmReviewPlanningMonth(
+    BuildContext context,
+    AppState appState,
+    AppUser doctor, {
+    required bool approve,
+  }) async {
+    if (_adminActionOpen) return;
+    _adminActionOpen = true;
+    final month = _visibleMonth;
+    final monthLabel = _capitalize(DateFormat.yMMMM('fr_FR').format(month));
+    try {
+      String? reason;
+      if (approve) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Valider définitivement ce calendrier ?'),
+            content: Text(
+              '${doctor.fullName} · $monthLabel. Le mois sera verrouillé et les échanges/transferts pourront ensuite utiliser ses gardes validées.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Approuver'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !context.mounted) return;
+      } else {
+        reason = await showDialog<String>(
+          context: context,
+          builder: (_) => AdminReasonDialog(
+            title: 'Demander une correction ?',
+            subject: '${doctor.fullName} · $monthLabel',
+            explanation:
+                'Le calendrier redeviendra modifiable. Les demandes de congé encore en attente créées par cette soumission seront annulées et recréées à la prochaine soumission.',
+            actionLabel: 'Rejeter et rouvrir',
+          ),
+        );
+        if (reason == null || !context.mounted) return;
+      }
+      final error = await appState.reviewPlanningMonth(
+        doctor,
+        month,
+        approve: approve,
+        reason: reason,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error ??
+                (approve
+                    ? 'Calendrier validé définitivement.'
+                    : 'Correction demandée au médecin.'),
+          ),
+        ),
+      );
+    } finally {
+      _adminActionOpen = false;
+    }
+  }
+
   Future<void> _confirmReopenPlanningMonth(
     BuildContext context,
     AppState appState,
@@ -342,13 +427,13 @@ class _AdminScreenState extends State<AdminScreen> {
           subject: '${doctor.fullName} · $monthLabel',
           explanation: doctor.id == appState.currentUser?.id
               ? 'Votre calendrier redeviendra modifiable dans Mon planning. Vous pourrez placer, remplacer ou retirer vos tuiles puis le valider à nouveau. '
-                    'Les échanges et transferts en cours sur ce mois seront annulés. '
-                    'Les congés en attente seront recréés à la prochaine validation. '
-                    'Les congés déjà approuvés restent protégés et peuvent être supprimés avec votre droit administrateur.'
+                  'Les échanges et transferts en cours sur ce mois seront annulés. '
+                  'Les congés en attente seront recréés à la prochaine validation. '
+                  'Les congés déjà approuvés restent protégés et peuvent être supprimés avec votre droit administrateur.'
               : 'Le médecin pourra modifier ses tuiles puis valider à nouveau son calendrier. '
-                    'Les échanges et transferts en cours sur ce mois seront annulés. '
-                    'Les congés en attente seront recréés à la prochaine validation. '
-                    'Les congés déjà approuvés restent protégés.',
+                  'Les échanges et transferts en cours sur ce mois seront annulés. '
+                  'Les congés en attente seront recréés à la prochaine validation. '
+                  'Les congés déjà approuvés restent protégés.',
           actionLabel: 'Dévalider',
         ),
       );
@@ -578,12 +663,10 @@ class _AdminScreenState extends State<AdminScreen> {
     AppState appState,
     AppUser user,
   ) async {
-    var hospital = kHospitals.contains(user.hospital)
-        ? user.hospital
-        : kHospitals.first;
-    var service = kServices.contains(user.service)
-        ? user.service
-        : kServices.first;
+    var hospital =
+        kHospitals.contains(user.hospital) ? user.hospital : kHospitals.first;
+    var service =
+        kServices.contains(user.service) ? user.service : kServices.first;
     var grade = user.grade;
 
     final approved = await showDialog<bool>(
@@ -951,70 +1034,122 @@ class _PlanningValidationBar extends StatelessWidget {
   final AppUser doctor;
   final DateTime month;
   final PlanningMonth? record;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
   final VoidCallback? onReopen;
+
   const _PlanningValidationBar({
     required this.doctor,
     required this.month,
     required this.record,
+    this.onApprove,
+    this.onReject,
     this.onReopen,
   });
 
   @override
   Widget build(BuildContext context) {
     final status = record?.status ?? PlanningMonthStatus.draft;
-    final validated = status == PlanningMonthStatus.approved;
-    final label = validated
-        ? 'Calendrier validé définitivement'
-        : 'Calendrier en préparation';
-    final detail = validated
-        ? (onReopen != null
-              ? 'Validé par ${doctor.fullName}. Un administrateur peut le dévalider pour autoriser une correction, y compris lorsqu’il s’agit de son propre calendrier.'
-              : 'Validé par ${doctor.fullName}. Les mois passés restent verrouillés.')
-        : '${doctor.fullName} peut placer, remplacer ou retirer ses tuiles avant sa prochaine validation.';
-    final icon = validated
-        ? Icons.verified_outlined
-        : Icons.edit_calendar_outlined;
-    final bg = validated
-        ? AppColors.conge.withOpacity(0.18)
-        : AppColors.paperAlt;
+    late String label;
+    late String detail;
+    late IconData icon;
+    late Color bg;
+    late Color fg;
+
+    switch (status) {
+      case PlanningMonthStatus.approved:
+        label = 'Calendrier validé définitivement';
+        detail = onReopen != null
+            ? 'Le mois est verrouillé. Un administrateur peut le rouvrir avec un motif.'
+            : 'Le mois est verrouillé. Les mois passés restent en lecture seule.';
+        icon = Icons.verified_outlined;
+        bg = AppColors.conge.withOpacity(0.18);
+        fg = AppColors.congeText;
+        break;
+      case PlanningMonthStatus.submitted:
+        label = 'Calendrier soumis · validation requise';
+        detail = doctor.id == context.read<AppState>().currentUser?.id
+            ? 'Votre propre calendrier doit être validé par un autre administrateur ou par l’auto-validation J+7.'
+            : 'Vérifiez le mois puis approuvez-le ou demandez une correction.';
+        icon = Icons.hourglass_top_rounded;
+        bg = const Color(0xFFF3A712).withOpacity(0.16);
+        fg = const Color(0xFF9A6200);
+        break;
+      case PlanningMonthStatus.rejected:
+        label = 'Correction demandée';
+        detail = record?.rejectionReason?.trim().isNotEmpty == true
+            ? 'Motif : ${record!.rejectionReason!.trim()}'
+            : 'Le médecin peut corriger puis soumettre à nouveau le mois.';
+        icon = Icons.error_outline_rounded;
+        bg = AppColors.danger.withOpacity(0.12);
+        fg = AppColors.danger;
+        break;
+      case PlanningMonthStatus.draft:
+        label = record?.rejectionReason?.trim().isNotEmpty == true
+            ? 'Calendrier rouvert'
+            : 'Calendrier en préparation';
+        detail = record?.rejectionReason?.trim().isNotEmpty == true
+            ? 'Motif : ${record!.rejectionReason!.trim()}'
+            : '${doctor.fullName} peut encore modifier ses tuiles avant soumission.';
+        icon = Icons.edit_calendar_outlined;
+        bg = AppColors.paperAlt;
+        fg = AppColors.ink;
+        break;
+    }
+
     return Container(
       margin: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.sm),
       padding: EdgeInsets.all(AppSpace.md),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: AppRadius.mdR,
-        border: Border.all(
-          color: validated ? AppColors.conge.withOpacity(0.4) : AppColors.line,
-        ),
+        border: Border.all(color: fg.withOpacity(0.28)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 19,
-                color: validated ? AppColors.congeText : AppColors.ink,
-              ),
+              Icon(icon, size: 19, color: fg),
               SizedBox(width: AppSpace.sm),
               Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+                child:
+                    Text(label, style: Theme.of(context).textTheme.titleSmall),
               ),
             ],
           ),
-          SizedBox(height: 4),
+          const SizedBox(height: 4),
           Text(detail, style: Theme.of(context).textTheme.bodySmall),
-          if (validated && onReopen != null)
+          if (status == PlanningMonthStatus.submitted &&
+              (onApprove != null || onReject != null)) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                if (onReject != null)
+                  OutlinedButton.icon(
+                    onPressed: onReject,
+                    icon: const Icon(Icons.edit_calendar_outlined, size: 16),
+                    label: const Text('Demander correction'),
+                  ),
+                if (onApprove != null)
+                  FilledButton.icon(
+                    onPressed: onApprove,
+                    icon: const Icon(Icons.verified_rounded, size: 16),
+                    label: const Text('Approuver'),
+                  ),
+              ],
+            ),
+          ],
+          if (status == PlanningMonthStatus.approved && onReopen != null)
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
                 onPressed: onReopen,
-                icon: Icon(Icons.lock_open_rounded, size: 16),
-                label: Text('Dévalider'),
+                icon: const Icon(Icons.lock_open_rounded, size: 16),
+                label: const Text('Dévalider'),
               ),
             ),
         ],
@@ -1228,14 +1363,14 @@ class _DoctorCalendar extends StatelessWidget {
           final gap = veryNarrow
               ? 4.0
               : narrow
-              ? 5.0
-              : 8.0;
+                  ? 5.0
+                  : 8.0;
           final cellWidth = (width - gap * 6) / 7;
           final targetHeight = veryNarrow
               ? (cellWidth * 1.66).clamp(70.0, 88.0).toDouble()
               : narrow
-              ? (cellWidth * 1.34).clamp(80.0, 106.0).toDouble()
-              : (cellWidth * 1.08).clamp(96.0, 148.0).toDouble();
+                  ? (cellWidth * 1.34).clamp(80.0, 106.0).toDouble()
+                  : (cellWidth * 1.08).clamp(96.0, 148.0).toDouble();
           final weekdayLabels = veryNarrow
               ? const ['L', 'Ma', 'Me', 'J', 'V', 'S', 'D']
               : const ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -1252,7 +1387,9 @@ class _DoctorCalendar extends StatelessWidget {
                           child: Text(
                             day,
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.labelMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
                                 ?.copyWith(
                                   fontSize: veryNarrow ? 10.5 : 11.5,
                                   fontWeight: FontWeight.w800,
@@ -1298,12 +1435,10 @@ class _AdminDayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentEntry = entry;
-    final shift = currentEntry == null
-        ? null
-        : ShiftCatalog.byId(currentEntry.shiftId);
-    final group = currentEntry == null
-        ? null
-        : _shiftGroup(currentEntry.shiftId);
+    final shift =
+        currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
+    final group =
+        currentEntry == null ? null : _shiftGroup(currentEntry.shiftId);
     final leave = currentEntry != null && currentEntry.shiftId == 'conge'
         ? context.read<AppState>().leaveRequestForEntry(currentEntry)
         : null;
@@ -1424,15 +1559,15 @@ class _AdminShiftTile extends StatelessWidget {
     final groupLabel = shift.id == 'conge'
         ? 'Congé'
         : group == 'service'
-        ? (tiny ? 'SERV' : 'Service')
-        : (tiny ? 'URG' : 'Urgences');
+            ? (tiny ? 'SERV' : 'Service')
+            : (tiny ? 'URG' : 'Urgences');
     final secondLabel = shift.id == 'conge'
         ? (pendingLeave ? 'Attente' : null)
         : shift.label == 'Jour'
-        ? 'Jour'
-        : shift.label == 'Nuit'
-        ? 'Nuit'
-        : '24H';
+            ? 'Jour'
+            : shift.label == 'Nuit'
+                ? 'Nuit'
+                : '24H';
 
     return Container(
       width: double.infinity,
@@ -1470,8 +1605,8 @@ class _AdminShiftTile extends StatelessWidget {
                     fontSize: tiny
                         ? 9.5
                         : compact
-                        ? 10.5
-                        : 13,
+                            ? 10.5
+                            : 13,
                     height: 1.0,
                     fontWeight: FontWeight.w900,
                     color: shift.textColor,
@@ -1486,8 +1621,8 @@ class _AdminShiftTile extends StatelessWidget {
                       fontSize: tiny
                           ? 9
                           : compact
-                          ? 10
-                          : 11.5,
+                              ? 10
+                              : 11.5,
                       height: 1.0,
                       fontWeight: FontWeight.w800,
                       color: shift.textColor.withOpacity(0.94),
@@ -1507,18 +1642,18 @@ class _CalendarLegend extends StatelessWidget {
   const _CalendarLegend();
   @override
   Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
-    child: Wrap(
-      alignment: WrapAlignment.center,
-      spacing: AppSpace.lg,
-      runSpacing: AppSpace.xs,
-      children: [
-        _LegendItem(color: AppColors.catService, label: 'Service'),
-        _LegendItem(color: AppColors.catUrgence, label: 'Urgences'),
-        _LegendItem(color: AppColors.conge, label: 'Congé'),
-      ],
-    ),
-  );
+        padding: EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpace.lg,
+          runSpacing: AppSpace.xs,
+          children: [
+            _LegendItem(color: AppColors.catService, label: 'Service'),
+            _LegendItem(color: AppColors.catUrgence, label: 'Urgences'),
+            _LegendItem(color: AppColors.conge, label: 'Congé'),
+          ],
+        ),
+      );
 }
 
 class _LegendItem extends StatelessWidget {
@@ -1527,50 +1662,50 @@ class _LegendItem extends StatelessWidget {
   const _LegendItem({required this.color, required this.label});
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
-      SizedBox(width: 5),
-      Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.inkSoft,
-        ),
-      ),
-    ],
-  );
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.inkSoft,
+            ),
+          ),
+        ],
+      );
 }
 
 class _EmptyAdminView extends StatelessWidget {
   const _EmptyAdminView();
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: EdgeInsets.all(28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.person_search_rounded,
-            size: 40,
-            color: AppColors.inkFaint,
+        child: Padding(
+          padding: EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.person_search_rounded,
+                size: 40,
+                color: AppColors.inkFaint,
+              ),
+              SizedBox(height: AppSpace.md),
+              Text(
+                'Aucun médecin ne correspond à cet établissement.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.inkSoft),
+              ),
+            ],
           ),
-          SizedBox(height: AppSpace.md),
-          Text(
-            'Aucun médecin ne correspond à cet établissement.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.inkSoft),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 String _shiftGroup(String shiftId) {
