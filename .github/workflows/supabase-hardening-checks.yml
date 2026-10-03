@@ -1,0 +1,35 @@
+name: Supabase hardening checks
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+  push:
+    branches:
+      - hardening-20261003
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  sql-static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify hardening migration invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE='supabase/migrations/20261003070000_gardeflow_business_rule_hardening.sql'
+          test -f "$FILE"
+          grep -Fq "set search_path = ''" "$FILE"
+          grep -Fq "review_planning_month" "$FILE"
+          grep -Fq "clinical_case_qcm_response_events" "$FILE"
+          grep -Fq "auto_validation_blocked" "$FILE"
+          grep -Fq "v_involves_emergency" "$FILE"
+          echo 'Hardening migration static invariants verified.'

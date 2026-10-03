@@ -1,0 +1,47 @@
+name: GardeFlow hardening CI
+
+on:
+  push:
+    branches:
+      - hardening-20261003
+      - main
+    paths:
+      - 'source/lib/**'
+      - 'source/test/**'
+      - 'source/pubspec.yaml'
+      - '.github/workflows/hardening-ci.yml'
+  pull_request:
+    paths:
+      - 'source/lib/**'
+      - 'source/test/**'
+      - 'source/pubspec.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gardeflow-hardening-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Run tests
+        run: flutter test
+      - name: Analyze
+        run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings

@@ -1,0 +1,55 @@
+name: Apply GardeFlow hardening patch
+
+on:
+  push:
+    branches:
+      - hardening-20261003
+    paths:
+      - 'tools/apply_hardening_20261003.py'
+      - '.github/workflows/apply-hardening-20261003.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gardeflow-hardening-autopatch
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[hardening-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: hardening-20261003
+          fetch-depth: 0
+
+      - name: Apply guarded source transformations
+        run: python3 tools/apply_hardening_20261003.py
+
+      - name: Set up Flutter for formatting
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Format changed Dart files
+        working-directory: source
+        run: dart format lib/config/business_rules.dart lib/state/app_state.dart lib/services/supabase_backend_service.dart lib/models/planning_month.dart lib/screens/home_screen.dart lib/screens/admin_screen.dart
+
+      - name: Commit patched sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'GardeFlow Hardening Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib
+          git commit -m 'fix: harden planning, exchange and PDF rules [hardening-applied]'
+          git push origin HEAD:hardening-20261003
