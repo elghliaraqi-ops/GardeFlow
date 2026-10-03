@@ -15,7 +15,8 @@ enum _Mode { transfer, exchange }
 class ExchangeRequestSheet extends StatefulWidget {
   final String dateStr;
   final PlanningEntry entry;
-  const ExchangeRequestSheet({super.key, required this.dateStr, required this.entry});
+  const ExchangeRequestSheet(
+      {super.key, required this.dateStr, required this.entry});
   @override
   State<ExchangeRequestSheet> createState() => _ExchangeRequestSheetState();
 }
@@ -37,15 +38,37 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
   String _normalizeDoctorSearch(String value) {
     var s = value.toLowerCase();
     const replacements = <String, String>{
-      'à': 'a', 'á': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a',
+      'à': 'a',
+      'á': 'a',
+      'â': 'a',
+      'ä': 'a',
+      'ã': 'a',
       'ç': 'c',
-      'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
-      'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+      'è': 'e',
+      'é': 'e',
+      'ê': 'e',
+      'ë': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'î': 'i',
+      'ï': 'i',
       'ñ': 'n',
-      'ò': 'o', 'ó': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o', 'œ': 'oe',
-      'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
-      'ý': 'y', 'ÿ': 'y', 'æ': 'ae',
-      '’': ' ', "'": ' ', '-': ' ',
+      'ò': 'o',
+      'ó': 'o',
+      'ô': 'o',
+      'ö': 'o',
+      'õ': 'o',
+      'œ': 'oe',
+      'ù': 'u',
+      'ú': 'u',
+      'û': 'u',
+      'ü': 'u',
+      'ý': 'y',
+      'ÿ': 'y',
+      'æ': 'ae',
+      '’': ' ',
+      "'": ' ',
+      '-': ' ',
     };
     for (final entry in replacements.entries) {
       s = s.replaceAll(entry.key, entry.value);
@@ -67,7 +90,11 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
       final targetUser = state.users
           .where((u) => u.id == contact.id || u.phone == contact.phone)
           .firstOrNull;
-      if (state.promotionExchangeBlocked(me, targetUser)) {
+      if (state.promotionExchangeBlocked(
+        me,
+        targetUser,
+        sourceShiftId: widget.entry.shiftId,
+      )) {
         return false;
       }
       return true;
@@ -79,29 +106,49 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             final haystack = _normalizeDoctorSearch('${c.name} ${c.service}');
             return haystack.contains(search);
           }).toList();
-    final dateLabel = DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.parse(widget.dateStr));
-    final selectedDoctor = _doctorId == null ? null : targets.where((c) => c.id == _doctorId).firstOrNull;
+    final dateLabel = DateFormat('EEEE d MMMM', 'fr_FR')
+        .format(DateTime.parse(widget.dateStr));
+    final selectedDoctor = _doctorId == null
+        ? null
+        : targets.where((c) => c.id == _doctorId).firstOrNull;
     final selectedDoctorUser = selectedDoctor == null
         ? null
         : state.users
-            .where((u) => u.id == selectedDoctor.id || u.phone == selectedDoctor.phone)
+            .where((u) =>
+                u.id == selectedDoctor.id || u.phone == selectedDoctor.phone)
             .firstOrNull;
-    final crossYearWithSelected =
-        state.promotionExchangeBlocked(me, selectedDoctorUser);
+    final crossYearWithSelected = state.promotionExchangeBlocked(
+      me,
+      selectedDoctorUser,
+      sourceShiftId: widget.entry.shiftId,
+    );
     final allTargetEntries = selectedDoctor == null
         ? <PlanningEntry>[]
-        : state.exchangeableEntriesFor(selectedDoctor.id, excludingDate: widget.dateStr);
+        : state.exchangeableEntriesFor(selectedDoctor.id,
+            excludingDate: widget.dateStr);
     final targetEntries = selectedDoctor == null
         ? <PlanningEntry>[]
         : allTargetEntries.where((e) {
             if (!exchangeMode) return true;
             final targetIsService = e.shiftId.startsWith('service-');
-            if (targetIsService && selectedDoctor.service != state.currentUser?.service) return false;
-            if (crossYearWithSelected) return false;
+            if (targetIsService &&
+                selectedDoctor.service != state.currentUser?.service)
+              return false;
+            if (crossYearWithSelected ||
+                state.promotionExchangeBlocked(
+                  me,
+                  selectedDoctorUser,
+                  sourceShiftId: widget.entry.shiftId,
+                  targetShiftId: e.shiftId,
+                )) {
+              return false;
+            }
             return true;
           }).toList();
-    final selectedTargetEntryId =
-        _targetEntryId != null && targetEntries.any((e) => e.id == _targetEntryId) ? _targetEntryId : null;
+    final selectedTargetEntryId = _targetEntryId != null &&
+            targetEntries.any((e) => e.id == _targetEntryId)
+        ? _targetEntryId
+        : null;
     final promotionLabel = InternPromotions.labelFor(
       me,
       firstYearPromotion: state.currentFirstYearPromotion,
@@ -109,7 +156,11 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.only(left: AppSpace.xl, right: AppSpace.xl, top: AppSpace.sm, bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.xxl),
+        padding: EdgeInsets.only(
+            left: AppSpace.xl,
+            right: AppSpace.xl,
+            top: AppSpace.sm,
+            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpace.xxl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +168,8 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const DecorSheetLead(
               scene: ScreenDecorScene.planning,
               title: 'Transfert / échange de garde',
-              subtitle: 'Organisez votre remplacement dans un cadre clair et sécurisé',
+              subtitle:
+                  'Organisez votre remplacement dans un cadre clair et sécurisé',
               icon: Icons.swap_horiz_rounded,
             ),
             const SizedBox(height: AppSpace.sm),
@@ -127,21 +179,29 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
-                  decoration: BoxDecoration(color: shift.color, borderRadius: AppRadius.smR),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.md, vertical: AppSpace.sm),
+                  decoration: BoxDecoration(
+                      color: shift.color, borderRadius: AppRadius.smR),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(shift.icon, size: 15, color: shift.textColor),
                     const SizedBox(width: AppSpace.xs),
-                    Text('$dateLabel · ${shift.label}', style: TextStyle(fontSize: 12.5, color: shift.textColor, fontWeight: FontWeight.w700)),
+                    Text('$dateLabel · ${shift.label}',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            color: shift.textColor,
+                            fontWeight: FontWeight.w700)),
                   ]),
                 ),
                 if (promotionLabel != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: AppRadius.pillR,
-                      border: Border.all(color: AppColors.brandBright, width: 1.2),
+                      border:
+                          Border.all(color: AppColors.brandBright, width: 1.2),
                     ),
                     child: Text(
                       promotionLabel,
@@ -192,8 +252,14 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             const SizedBox(height: AppSpace.lg),
             SegmentedButton<_Mode>(
               segments: const [
-                ButtonSegment(value: _Mode.transfer, icon: Icon(Icons.arrow_forward_rounded, size: 16), label: Text('Transfert')),
-                ButtonSegment(value: _Mode.exchange, icon: Icon(Icons.swap_horiz_rounded, size: 16), label: Text('Échange')),
+                ButtonSegment(
+                    value: _Mode.transfer,
+                    icon: Icon(Icons.arrow_forward_rounded, size: 16),
+                    label: Text('Transfert')),
+                ButtonSegment(
+                    value: _Mode.exchange,
+                    icon: Icon(Icons.swap_horiz_rounded, size: 16),
+                    label: Text('Échange')),
               ],
               selected: {_mode},
               onSelectionChanged: (v) => setState(() {
@@ -293,16 +359,23 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
               if (_mode == _Mode.exchange && selectedDoctor != null) ...[
                 const SizedBox(height: AppSpace.md),
                 if (targetEntries.isEmpty)
-                  Text('${selectedDoctor.name} n’a aucune garde disponible à échanger.', style: Theme.of(context).textTheme.bodySmall)
+                  Text(
+                      '${selectedDoctor.name} n’a aucune garde disponible à échanger.',
+                      style: Theme.of(context).textTheme.bodySmall)
                 else
                   DropdownButtonFormField<String>(
                     value: selectedTargetEntryId,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Garde reçue en échange'),
+                    decoration: const InputDecoration(
+                        labelText: 'Garde reçue en échange'),
                     items: targetEntries.map((e) {
                       final sh = ShiftCatalog.byId(e.shiftId);
-                      final d = DateFormat('EEE d MMM yyyy', 'fr_FR').format(DateTime.parse(e.dateStr));
-                      return DropdownMenuItem(value: e.id, child: Text('$d · ${sh.label}', overflow: TextOverflow.ellipsis));
+                      final d = DateFormat('EEE d MMM yyyy', 'fr_FR')
+                          .format(DateTime.parse(e.dateStr));
+                      return DropdownMenuItem(
+                          value: e.id,
+                          child: Text('$d · ${sh.label}',
+                              overflow: TextOverflow.ellipsis));
                     }).toList(),
                     onChanged: (v) => setState(() {
                       _targetEntryId = v;
@@ -314,9 +387,15 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
             if (_error != null) ...[
               const SizedBox(height: AppSpace.sm),
               Row(children: [
-                const Icon(Icons.error_rounded, size: 15, color: AppColors.danger),
+                const Icon(Icons.error_rounded,
+                    size: 15, color: AppColors.danger),
                 const SizedBox(width: 6),
-                Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600))),
+                Expanded(
+                    child: Text(_error!,
+                        style: const TextStyle(
+                            color: AppColors.danger,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600))),
               ]),
             ],
             const SizedBox(height: AppSpace.lg),
@@ -326,35 +405,67 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                 onPressed: targets.isEmpty
                     ? null
                     : () async {
-                        final doctor = _doctorId == null ? null : targets.where((c) => c.id == _doctorId).firstOrNull;
+                        final doctor = _doctorId == null
+                            ? null
+                            : targets
+                                .where((c) => c.id == _doctorId)
+                                .firstOrNull;
                         if (doctor == null) {
-                          setState(() => _error = 'Sélectionnez un médecin destinataire.');
+                          setState(() =>
+                              _error = 'Sélectionnez un médecin destinataire.');
                           return;
                         }
                         String? err;
                         if (_mode == _Mode.transfer) {
-                          err = await state.createTransferRequest(widget.dateStr, widget.entry, doctor);
+                          err = await state.createTransferRequest(
+                              widget.dateStr, widget.entry, doctor);
                         } else {
                           final doctorUser = state.users
-                              .where((u) => u.id == doctor.id || u.phone == doctor.phone)
+                              .where((u) =>
+                                  u.id == doctor.id || u.phone == doctor.phone)
                               .firstOrNull;
-                          final crossYear = state.promotionExchangeBlocked(me, doctorUser);
-                          final available = state.exchangeableEntriesFor(doctor.id, excludingDate: widget.dateStr).where((e) {
-                            final targetIsService = e.shiftId.startsWith('service-');
-                            if (targetIsService && doctor.service != state.currentUser?.service) return false;
-                            if (crossYear) return false;
+                          final crossYear = state.promotionExchangeBlocked(
+                            me,
+                            doctorUser,
+                            sourceShiftId: widget.entry.shiftId,
+                          );
+                          final available = state
+                              .exchangeableEntriesFor(doctor.id,
+                                  excludingDate: widget.dateStr)
+                              .where((e) {
+                            final targetIsService =
+                                e.shiftId.startsWith('service-');
+                            if (targetIsService &&
+                                doctor.service != state.currentUser?.service)
+                              return false;
+                            if (crossYear ||
+                                state.promotionExchangeBlocked(
+                                  me,
+                                  doctorUser,
+                                  sourceShiftId: widget.entry.shiftId,
+                                  targetShiftId: e.shiftId,
+                                )) {
+                              return false;
+                            }
                             return true;
                           }).toList();
                           if (available.isEmpty) {
-                            setState(() => _error = '${doctor.name} n’a aucune garde compatible avec les règles d’échange.');
+                            setState(() => _error =
+                                '${doctor.name} n’a aucune garde compatible avec les règles d’échange.');
                             return;
                           }
-                          final targetEntry = _targetEntryId == null ? null : available.where((e) => e.id == _targetEntryId).firstOrNull;
+                          final targetEntry = _targetEntryId == null
+                              ? null
+                              : available
+                                  .where((e) => e.id == _targetEntryId)
+                                  .firstOrNull;
                           if (targetEntry == null) {
-                            setState(() => _error = 'Sélectionnez la garde à recevoir en échange.');
+                            setState(() => _error =
+                                'Sélectionnez la garde à recevoir en échange.');
                             return;
                           }
-                          err = await state.createSwapRequest(widget.dateStr, widget.entry, doctor, targetEntry);
+                          err = await state.createSwapRequest(widget.dateStr,
+                              widget.entry, doctor, targetEntry);
                         }
                         if (!context.mounted) return;
                         if (err != null) {
@@ -363,7 +474,9 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
                         }
                         Navigator.of(context).pop();
                       },
-                child: Text(_mode == _Mode.transfer ? 'Envoyer la demande de transfert' : 'Envoyer la demande d’échange'),
+                child: Text(_mode == _Mode.transfer
+                    ? 'Envoyer la demande de transfert'
+                    : 'Envoyer la demande d’échange'),
               ),
             ),
           ],
@@ -372,7 +485,6 @@ class _ExchangeRequestSheetState extends State<ExchangeRequestSheet> {
     );
   }
 }
-
 
 class _RuleNotice extends StatelessWidget {
   final String text;
@@ -394,11 +506,18 @@ class _RuleNotice extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: AppColors.brand),
           SizedBox(width: AppSpace.sm),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.45))),
+          Expanded(
+              child: Text(text,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(height: 1.45))),
         ],
       ),
     );
   }
 }
 
-extension _FirstOrNull<T> on Iterable<T> { T? get firstOrNull => isEmpty ? null : first; }
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
