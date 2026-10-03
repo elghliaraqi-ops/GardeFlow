@@ -10,21 +10,55 @@ String ensurePlistString(String source, String key, String value) {
     '<key>${RegExp.escape(key)}</key>\\s*<string>[^<]*</string>',
   );
   final replacement = '<key>$key</key>\n\t<string>$value</string>';
-  if (pattern.hasMatch(source))
+  if (pattern.hasMatch(source)) {
     return source.replaceFirst(pattern, replacement);
+  }
+  return source.replaceFirst('</dict>', '\t$replacement\n</dict>');
+}
+
+String ensurePlistBool(String source, String key, bool value) {
+  final pattern = RegExp(
+    '<key>${RegExp.escape(key)}</key>\\s*<(true|false)\\s*/>',
+  );
+  final replacement = '<key>$key</key>\n\t<${value ? 'true' : 'false'}/>';
+  if (pattern.hasMatch(source)) {
+    return source.replaceFirst(pattern, replacement);
+  }
   return source.replaceFirst('</dict>', '\t$replacement\n</dict>');
 }
 
 String ensureBackgroundModes(String source) {
-  if (source.contains('<key>UIBackgroundModes</key>')) return source;
-  const block = '''
+  const requiredModes = <String>[
+    'audio',
+    'fetch',
+    'remote-notification',
+  ];
+  final pattern = RegExp(
+    r'<key>UIBackgroundModes</key>\s*<array>([\s\S]*?)</array>',
+  );
+  final match = pattern.firstMatch(source);
+
+  if (match == null) {
+    final entries = requiredModes
+        .map((mode) => '\t\t<string>$mode</string>')
+        .join('\n');
+    final block = '''
 \t<key>UIBackgroundModes</key>
 \t<array>
-\t\t<string>fetch</string>
-\t\t<string>remote-notification</string>
+$entries
 \t</array>
 ''';
-  return source.replaceFirst('</dict>', '$block</dict>');
+    return source.replaceFirst('</dict>', '$block</dict>');
+  }
+
+  var body = match.group(1) ?? '';
+  for (final mode in requiredModes) {
+    if (!body.contains('<string>$mode</string>')) {
+      body = '$body\n\t\t<string>$mode</string>';
+    }
+  }
+  final replacement = '<key>UIBackgroundModes</key>\n\t<array>$body\n\t</array>';
+  return source.replaceRange(match.start, match.end, replacement);
 }
 
 void copyDirectory(Directory source, Directory target) {
@@ -90,7 +124,8 @@ String addResourceToPbx(
   }
   final resourceId = resourceRef.group(1)!;
   final resources = RegExp(
-    '(${RegExp.escape(resourceId)}' + r' \/\* Resources \*\/ = \{\s*isa = PBXResourcesBuildPhase;[\s\S]*?files = \()',
+    '(${RegExp.escape(resourceId)}' +
+        r' \/\* Resources \*\/ = \{\s*isa = PBXResourcesBuildPhase;[\s\S]*?files = \()',
   );
   if (!resources.hasMatch(pbx)) {
     throw StateError(
@@ -154,6 +189,12 @@ void configure(Directory root) {
     'NSSpeechRecognitionUsageDescription',
     'GardeFlow utilise la reconnaissance vocale pour transcrire, à votre demande, votre dictée dans les champs cliniques.',
   );
+  info = ensurePlistString(
+    info,
+    'NSAlarmKitUsageDescription',
+    'GardeFlow utilise les alarmes système Apple pour vous prévenir avant vos gardes médicales validées, même lorsque l’iPhone est verrouillé.',
+  );
+  info = ensurePlistBool(info, 'NSSupportsLiveActivities', true);
   info = ensureBackgroundModes(info);
   infoFile.writeAsStringSync(info);
 
@@ -166,6 +207,15 @@ void configure(Directory root) {
     Directory('${iosRes.path}/LaunchImage.imageset'),
     Directory('${root.path}/ios/Runner/Assets.xcassets/LaunchImage.imageset'),
   );
+
+  // Replaces the generated Flutter AppDelegate with the GardeFlow bridge.
+  // On iOS 26+ it exposes AlarmKit; on older iOS / older Xcode SDKs it
+  // gracefully reports the native alarm engine as unsupported.
+  final alarmDelegate = File('${iosRes.path}/AppDelegate.swift');
+  final runnerDelegate = file('ios/Runner/AppDelegate.swift');
+  if (alarmDelegate.existsSync()) {
+    alarmDelegate.copySync(runnerDelegate.path);
+  }
 
   // Firebase configuration is optional for compilation but required for FCM on iPhone.
   final rootFirebase = file('GoogleService-Info.plist');
@@ -222,7 +272,10 @@ void configure(Directory root) {
     var pods = podfile.readAsStringSync();
     if (RegExp(r'^#?\s*platform :ios,', multiLine: true).hasMatch(pods)) {
       pods = pods.replaceFirst(
-        RegExp(r'''^#?\s*platform :ios,\s*['"][^'"]+['"]''', multiLine: true),
+        RegExp(
+          r'''^#?\s*platform :ios,\s*['"][^'"]+['"]''',
+          multiLine: true,
+        ),
         "platform :ios, '$deploymentTarget'",
       );
     } else {
@@ -232,7 +285,7 @@ void configure(Directory root) {
   }
 
   stdout.writeln(
-    'iOS configuré : GardeFlow / $bundleId / iOS $deploymentTarget+.',
+    'iOS configuré : GardeFlow / $bundleId / iOS $deploymentTarget+ / AlarmKit iOS 26+.',
   );
   if (!rootFirebase.existsSync()) {
     stdout.writeln(
