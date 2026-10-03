@@ -76,7 +76,7 @@ private struct GardeFlowAlarmMetadata: AlarmMetadata {
             result(self.alarmKitStatus())
           } catch {
             result(FlutterError(
-              code: "ALARMMKIT_AUTHORIZATION_FAILED",
+              code: "ALARMKIT_AUTHORIZATION_FAILED",
               message: "Impossible d’autoriser les alarmes système Apple.",
               details: error.localizedDescription
             ))
@@ -153,6 +153,30 @@ private struct GardeFlowAlarmMetadata: AlarmMetadata {
   }
 
   @available(iOS 26.0, *)
+  private func gardeFlowAlert(title: String) -> AlarmPresentation.Alert {
+    let localizedTitle = LocalizedStringResource(stringLiteral: title)
+
+    // iOS 26.1 simplified the templated alert initializer. Keep the original
+    // iOS 26.0 API as a compatibility path so GardeFlow can use AlarmKit from
+    // the first iOS 26 release rather than dropping back unnecessarily.
+    if #available(iOS 26.1, *) {
+      return AlarmPresentation.Alert(title: localizedTitle)
+    }
+
+    let stopButton = AlarmButton(
+      text: "Arrêter",
+      textColor: .white,
+      systemImageName: "stop.circle.fill"
+    )
+    return AlarmPresentation.Alert(
+      title: localizedTitle,
+      stopButton: stopButton,
+      secondaryButton: nil,
+      secondaryButtonBehavior: nil
+    )
+  }
+
+  @available(iOS 26.0, *)
   private func scheduleAppleAlarm(
     call: FlutterMethodCall,
     result: @escaping FlutterResult
@@ -165,7 +189,7 @@ private struct GardeFlowAlarmMetadata: AlarmMetadata {
       let title = args["title"] as? String
     else {
       result(FlutterError(
-        code: "ALARMMKIT_BAD_ARGUMENTS",
+        code: "ALARMKIT_BAD_ARGUMENTS",
         message: "Paramètres d’alarme iOS incomplets.",
         details: nil
       ))
@@ -196,9 +220,7 @@ private struct GardeFlowAlarmMetadata: AlarmMetadata {
         }
         let displayTitle = String(composedTitle.prefix(150))
 
-        let alert = AlarmPresentation.Alert(
-          title: LocalizedStringResource(stringLiteral: displayTitle)
-        )
+        let alert = self.gardeFlowAlert(title: displayTitle)
         let presentation = AlarmPresentation(alert: alert)
         let attributes = AlarmAttributes<GardeFlowAlarmMetadata>(
           presentation: presentation,
@@ -219,7 +241,7 @@ private struct GardeFlowAlarmMetadata: AlarmMetadata {
         result(true)
       } catch {
         result(FlutterError(
-          code: "ALARMMKIT_SCHEDULE_FAILED",
+          code: "ALARMKIT_SCHEDULE_FAILED",
           message: "L’alarme système Apple n’a pas pu être programmée.",
           details: error.localizedDescription
         ))
@@ -248,7 +270,7 @@ private struct GardeFlowAlarmMetadata: AlarmMetadata {
       result(true)
     } catch {
       result(FlutterError(
-        code: "ALARMMKIT_CANCEL_FAILED",
+        code: "ALARMKIT_CANCEL_FAILED",
         message: "Impossible d’annuler l’alarme système Apple.",
         details: error.localizedDescription
       ))
