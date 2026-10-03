@@ -33,42 +33,45 @@ jobs:
           end = text.index('\n  Future<void> _close(', start)
           composer = text[start:end]
 
-          old_layout = '''          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              18,
-              2,
-              18,
-              18 +
-                  MediaQuery.viewInsetsOf(context).bottom +
-                  MediaQuery.viewPaddingOf(context).bottom,
-            ),
-            child: Column(
-'''
-          new_layout = '''          return SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: EdgeInsets.fromLTRB(
-              18,
-              2,
-              18,
-              18 +
-                  MediaQuery.viewInsetsOf(context).bottom +
-                  MediaQuery.viewPaddingOf(context).bottom,
-            ),
-            child: Column(
-'''
+          old_layout = (
+              "          return Padding(\n"
+              "            padding: EdgeInsets.fromLTRB(\n"
+              "              18,\n"
+              "              2,\n"
+              "              18,\n"
+              "              18 +\n"
+              "                  MediaQuery.viewInsetsOf(context).bottom +\n"
+              "                  MediaQuery.viewPaddingOf(context).bottom,\n"
+              "            ),\n"
+              "            child: Column(\n"
+          )
+          new_layout = (
+              "          return SingleChildScrollView(\n"
+              "            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,\n"
+              "            padding: EdgeInsets.fromLTRB(\n"
+              "              18,\n"
+              "              2,\n"
+              "              18,\n"
+              "              18 +\n"
+              "                  MediaQuery.viewInsetsOf(context).bottom +\n"
+              "                  MediaQuery.viewPaddingOf(context).bottom,\n"
+              "            ),\n"
+              "            child: Column(\n"
+          )
           if old_layout not in composer:
               raise SystemExit('Announcement composer layout anchor not found')
           composer = composer.replace(old_layout, new_layout, 1)
 
-          old_press = '''                        : () async {
-                            setSheetState(() => sending = true);
-'''
-          new_press = '''                        : () async {
-                            // Start the action on the same tap even while the IME
-                            // is visible, then dismiss the keyboard explicitly.
-                            FocusManager.instance.primaryFocus?.unfocus();
-                            setSheetState(() => sending = true);
-'''
+          old_press = (
+              "                        : () async {\n"
+              "                            setSheetState(() => sending = true);\n"
+          )
+          new_press = (
+              "                        : () async {\n"
+              "                            // Keep the CTA active while the IME is visible.\n"
+              "                            FocusManager.instance.primaryFocus?.unfocus();\n"
+              "                            setSheetState(() => sending = true);\n"
+          )
           if old_press not in composer:
               raise SystemExit('Announcement publish button anchor not found')
           composer = composer.replace(old_press, new_press, 1)
