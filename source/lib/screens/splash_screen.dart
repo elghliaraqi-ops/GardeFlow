@@ -90,24 +90,24 @@ class _SplashScreenState extends State<SplashScreen>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const _ExactLogo(
-                              asset: 'assets/branding/gardeflow_logo.png',
+                            const _SplashBrandImage(
+                              asset: 'assets/branding/splash_gardeflow.webp',
                               semanticLabel: 'GardeFlow',
-                              height: 168,
+                              aspectRatio: 3,
                             ),
-                            const SizedBox(height: 14),
-                            const _ExactLogo(
-                              asset: 'assets/branding/practice_banner.webp',
+                            const SizedBox(height: 12),
+                            const _SplashBrandImage(
+                              asset: 'assets/branding/splash_practice.webp',
                               semanticLabel: 'Practice',
-                              height: 168,
+                              aspectRatio: 600 / 270,
                             ),
-                            const SizedBox(height: 14),
-                            const _ExactLogo(
-                              asset: 'assets/branding/flowsuite_banner.webp',
+                            const SizedBox(height: 12),
+                            const _SplashBrandImage(
+                              asset: 'assets/branding/splash_flowsuite.webp',
                               semanticLabel: 'FlowSuite',
-                              height: 168,
+                              aspectRatio: 600 / 257,
                             ),
-                            const SizedBox(height: 22),
+                            const SizedBox(height: 20),
                             _PremiumLoadingBar(animation: _progressAnimation),
                           ],
                         ),
@@ -124,15 +124,15 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-class _ExactLogo extends StatelessWidget {
+class _SplashBrandImage extends StatelessWidget {
   final String asset;
   final String semanticLabel;
-  final double height;
+  final double aspectRatio;
 
-  const _ExactLogo({
+  const _SplashBrandImage({
     required this.asset,
     required this.semanticLabel,
-    required this.height,
+    required this.aspectRatio,
   });
 
   @override
@@ -142,12 +142,15 @@ class _ExactLogo extends StatelessWidget {
       image: true,
       child: SizedBox(
         width: 520,
-        height: height,
-        child: Image.asset(
-          asset,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-          isAntiAlias: true,
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: Image.asset(
+            asset,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            isAntiAlias: true,
+            gaplessPlayback: true,
+          ),
         ),
       ),
     );
