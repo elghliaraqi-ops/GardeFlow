@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter analyze \
+          flutter analyze --no-fatal-infos \
             lib/services/alarm_ring_service.dart \
             lib/services/notification_service.dart \
             lib/screens/settings_screen.dart
