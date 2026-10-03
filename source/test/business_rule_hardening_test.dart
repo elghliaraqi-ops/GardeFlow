@@ -37,6 +37,10 @@ void main() {
         BusinessRules.requestInvolvesEmergency('service-jour', 'service-24h'),
         isFalse,
       );
+      expect(
+        BusinessRules.requestInvolvesEmergency('service-24h', null),
+        isFalse,
+      );
     });
   });
 }
