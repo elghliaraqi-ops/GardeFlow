@@ -23,8 +23,10 @@ class PlanningMonth {
 
   String get key => '$ownerId-$year-${month.toString().padLeft(2, '0')}';
   DateTime get monthDate => DateTime(year, month, 1);
-  bool get isEditable => status != PlanningMonthStatus.approved;
-  bool get isSubmitted => status == PlanningMonthStatus.submitted; // état historique V10.1
+  bool get isEditable =>
+      status == PlanningMonthStatus.draft ||
+      status == PlanningMonthStatus.rejected;
+  bool get isSubmitted => status == PlanningMonthStatus.submitted;
   bool get isApproved => status == PlanningMonthStatus.approved;
 
   Map<String, dynamic> toJson() => {
@@ -42,9 +44,14 @@ class PlanningMonth {
         ownerId: json['ownerId'] as String,
         year: (json['year'] as num).toInt(),
         month: (json['month'] as num).toInt(),
-        status: PlanningMonthStatus.values.byName((json['status'] as String?) ?? 'draft'),
-        submittedAt: json['submittedAt'] == null ? null : DateTime.parse(json['submittedAt'] as String),
-        reviewedAt: json['reviewedAt'] == null ? null : DateTime.parse(json['reviewedAt'] as String),
+        status: PlanningMonthStatus.values
+            .byName((json['status'] as String?) ?? 'draft'),
+        submittedAt: json['submittedAt'] == null
+            ? null
+            : DateTime.parse(json['submittedAt'] as String),
+        reviewedAt: json['reviewedAt'] == null
+            ? null
+            : DateTime.parse(json['reviewedAt'] as String),
         reviewedBy: json['reviewedBy'] as String?,
         rejectionReason: json['rejectionReason'] as String?,
       );

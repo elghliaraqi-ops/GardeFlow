@@ -1,0 +1,8 @@
+-- This file intentionally documents the one-time production attribution repair.
+-- It is NOT a schema migration because it contains production-generated profile IDs.
+-- The repair is executed separately after the schema hardening migration and keeps
+-- actor_user_id unchanged for provenance while changing only stats_user_id.
+--
+-- 2026-10-03: 10 historical QCM response events recorded while testing through
+-- another active account are re-attributed to Dr ARAQUI HOUSSAINI ELGHALI for
+-- statistics, per the application owner's explicit correction request.

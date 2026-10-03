@@ -41,8 +41,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final client = SupabaseBackendService.instance.client;
     _realtime = client
         .from('public_announcements')
-        .stream(primaryKey: ['id'])
-        .listen((_) => _reload(silent: true), onError: (_) {});
+        .stream(primaryKey: ['id']).listen((_) => _reload(silent: true),
+            onError: (_) {});
     if (widget.autoOpenComposer) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openComposer());
     }
@@ -84,7 +84,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       if (!ShiftCatalog.byId(entry.shiftId).hasSchedule) return false;
       if (!state.isPlanningEntryApproved(entry)) return false;
       return !state.guardHasStarted(entry);
-    }).toList()..sort((a, b) => a.dateStr.compareTo(b.dateStr));
+    }).toList()
+      ..sort((a, b) => a.dateStr.compareTo(b.dateStr));
     return result;
   }
 
@@ -104,8 +105,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       return;
     }
 
-    var selectedId =
-        widget.initialEntryId != null &&
+    var selectedId = widget.initialEntryId != null &&
             entries.any((e) => e.id == widget.initialEntryId)
         ? widget.initialEntryId!
         : entries.first.id;
@@ -135,7 +135,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               children: [
                 Text(
                   'Publier une annonce d’échange',
-                  style: Theme.of(context).textTheme.titleLarge
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
                       ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 5),
@@ -197,17 +199,17 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                               await SupabaseBackendService.instance.client
                                   .from('public_announcements')
                                   .insert({
-                                    'id': id,
-                                    'author_id': me.id,
-                                    'author_name': me.fullName,
-                                    'hospital': me.hospital,
-                                    'promotion_number':
-                                        InternPromotions.numberFor(me),
-                                    'planning_entry_id': selected.id,
-                                    'date_str': selected.dateStr,
-                                    'shift_id': selected.shiftId,
-                                    'message': controller.text.trim(),
-                                  });
+                                'id': id,
+                                'author_id': me.id,
+                                'author_name': me.fullName,
+                                'hospital': me.hospital,
+                                'promotion_number':
+                                    InternPromotions.numberFor(me),
+                                'planning_entry_id': selected.id,
+                                'date_str': selected.dateStr,
+                                'shift_id': selected.shiftId,
+                                'message': controller.text.trim(),
+                              });
                               try {
                                 await SupabaseBackendService.instance
                                     .triggerPush('announcement_created', id);
@@ -256,8 +258,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   Future<void> _close(_Announcement announcement) async {
     await SupabaseBackendService.instance.client
         .from('public_announcements')
-        .update({'closed_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('id', announcement.id);
+        .update({'closed_at': DateTime.now().toUtc().toIso8601String()}).eq(
+            'id', announcement.id);
     if (mounted) await _reload(silent: true);
   }
 
@@ -265,9 +267,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final state = context.read<AppState>();
     final me = state.currentUser;
     if (me == null) return;
-    final author = state.users
-        .where((u) => u.id == announcement.authorId)
-        .firstOrNull;
+    final author =
+        state.users.where((u) => u.id == announcement.authorId).firstOrNull;
     final targetEntry = state.planning
         .where((e) => e.id == announcement.planningEntryId)
         .firstOrNull;
@@ -277,7 +278,11 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       );
       return;
     }
-    if (state.promotionExchangeBlocked(me, author)) {
+    if (state.promotionExchangeBlocked(
+      me,
+      author,
+      sourceShiftId: targetEntry.shiftId,
+    )) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -328,7 +333,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               children: [
                 Text(
                   'Proposer un échange à ${announcement.authorName}',
-                  style: Theme.of(context).textTheme.titleLarge
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
                       ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 6),
@@ -440,7 +447,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       firstYearPromotion: state.currentFirstYearPromotion,
     );
 
-    return DecorScaffold(scene: ScreenDecorScene.announcements, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.announcements,
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         backgroundColor: AppColors.paper,
@@ -521,7 +529,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 else if (snapshot.hasError && items.isEmpty)
                   _InfoState(
                     icon: Icons.cloud_off_rounded,
-                    text: 'Le fil est momentanément indisponible. Tirez pour actualiser.',
+                    text:
+                        'Le fil est momentanément indisponible. Tirez pour actualiser.',
                   )
                 else if (items.isEmpty)
                   _InfoState(
@@ -551,7 +560,12 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final me = state.currentUser;
     if (me == null || me.id == item.authorId) return false;
     final author = state.users.where((u) => u.id == item.authorId).firstOrNull;
-    if (author != null && state.promotionExchangeBlocked(me, author)) {
+    if (author != null &&
+        state.promotionExchangeBlocked(
+          me,
+          author,
+          sourceShiftId: item.shiftId,
+        )) {
       return true;
     }
     return me.hospital != item.hospital;
@@ -584,8 +598,8 @@ class _AnnouncementCard extends StatelessWidget {
     final promo = announcement.promotionNumber == 7
         ? '1re année · Promo 7'
         : announcement.promotionNumber == 6
-        ? '2e année · Promo 6'
-        : null;
+            ? '2e année · Promo 6'
+            : null;
 
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -752,19 +766,19 @@ class _InfoState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-    child: Column(
-      children: [
-        Icon(icon, size: 44, color: AppColors.inkFaint),
-        const SizedBox(height: 12),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium,
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        child: Column(
+          children: [
+            Icon(icon, size: 44, color: AppColors.inkFaint),
+            const SizedBox(height: 12),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }
 
 class _Announcement {
@@ -793,17 +807,17 @@ class _Announcement {
   });
 
   factory _Announcement.fromMap(Map<String, dynamic> row) => _Announcement(
-    id: row['id'].toString(),
-    authorId: row['author_id'].toString(),
-    authorName: (row['author_name'] ?? '').toString(),
-    hospital: (row['hospital'] ?? '').toString(),
-    promotionNumber: (row['promotion_number'] as num?)?.toInt(),
-    planningEntryId: row['planning_entry_id'].toString(),
-    dateStr: row['date_str'].toString(),
-    shiftId: row['shift_id'].toString(),
-    message: (row['message'] ?? '').toString(),
-    createdAt: DateTime.parse(row['created_at'].toString()),
-  );
+        id: row['id'].toString(),
+        authorId: row['author_id'].toString(),
+        authorName: (row['author_name'] ?? '').toString(),
+        hospital: (row['hospital'] ?? '').toString(),
+        promotionNumber: (row['promotion_number'] as num?)?.toInt(),
+        planningEntryId: row['planning_entry_id'].toString(),
+        dateStr: row['date_str'].toString(),
+        shiftId: row['shift_id'].toString(),
+        message: (row['message'] ?? '').toString(),
+        createdAt: DateTime.parse(row['created_at'].toString()),
+      );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {
