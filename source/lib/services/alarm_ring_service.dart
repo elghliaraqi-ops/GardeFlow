@@ -452,16 +452,32 @@ class AlarmRingService {
   Future<bool> ringTestNow({required bool vibration}) async {
     if (_isWeb) return false;
 
+    // Le bouton de test doit tester l'écran plein écran lui-même, pas la
+    // capacité Android à programmer une alarme exacte. Sur Android, le bridge
+    // natif ouvre donc immédiatement la même AlarmActivity que les vraies
+    // gardes. Cette voie ne touche pas à la programmation des alarmes réelles.
     if (_isAndroid && await nativeSystemAlarmAvailable(refresh: true)) {
-      return _scheduleNativeAndroidAlarm(
-        id: _testAlarmId,
-        payload: 'guard:test',
-        title: 'Test alarme système de garde',
-        body:
-            'Test GardeFlow : Android doit ouvrir le grand écran d’alarme dans quelques secondes.',
-        fireAt: DateTime.now().add(const Duration(seconds: 2)),
-        vibration: vibration,
-      );
+      try {
+        await _fullScreenAlarmChannel.invokeMethod<void>(
+          'openAlarmActivity',
+          <String, Object>{
+            'alarmId': _testAlarmId,
+            'alarmTitle': 'Test alarme de garde',
+            'alarmBody':
+                'Ceci est un test GardeFlow. Utilisez « RAPPEL 9 MIN » ou « J’AI VU — ARRÊTER ».',
+            'alarmSnoozeLabel': 'RAPPEL 9 MIN',
+            'forceFullScreen': true,
+            'vibration': vibration,
+          },
+        );
+        return true;
+      } catch (e) {
+        debugPrint(
+          'AlarmRingService: ouverture plein écran native impossible: $e',
+        );
+        // Si le bridge natif est présent mais que l'ouverture échoue, le
+        // fallback Flutter ci-dessous reste disponible.
+      }
     }
 
     if (_isIOS) {
