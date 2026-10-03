@@ -120,6 +120,18 @@ if ($LASTEXITCODE -ne 0) {
   throw 'Configuration Android incomplete.'
 }
 
+# Installe l'écran d'alarme puis le scheduler Android natif. Le second script
+# remplace le bridge Flutter par AlarmManager.setAlarmClock(), persiste les
+# alarmes et les restaure après redémarrage du téléphone.
+& python tool/install_alarm_activity.py
+if ($LASTEXITCODE -ne 0) {
+  throw 'Installation de AlarmActivity incomplete.'
+}
+& python tool/install_system_alarm_bridge.py
+if ($LASTEXITCODE -ne 0) {
+  throw 'Installation du bridge d alarme systeme incomplete.'
+}
+
 # configure_android.dart restaure aussi toutes les ressources personnalisees,
 # y compris ic_launcher, ic_stat_huim6, LaunchTheme et NormalTheme.
 Assert-AndroidResources
@@ -139,6 +151,12 @@ if (-not (Test-Path $activityPath)) {
 $activityText = Get-Content $activityPath -Raw
 if ($activityText -notmatch 'io\.flutter\.embedding\.android\.FlutterActivity') {
   throw 'MainActivity n utilise pas Android embedding v2.'
+}
+if ($activityText -notmatch 'scheduleSystemAlarm') {
+  throw 'Le bridge natif des alarmes systeme n est pas installe.'
+}
+if (-not (Test-Path 'android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt')) {
+  throw 'AlarmActivity Android introuvable apres configuration.'
 }
 
 if ($Action -eq 'Run') {
