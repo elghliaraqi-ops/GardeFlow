@@ -120,7 +120,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, setSheetState) {
           final selected = entries.firstWhere((e) => e.id == selectedId);
-          return Padding(
+          return SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: EdgeInsets.fromLTRB(
               18,
               2,
@@ -192,6 +193,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                     onPressed: sending
                         ? null
                         : () async {
+                            // Keep the CTA active while the IME is visible.
+                            FocusManager.instance.primaryFocus?.unfocus();
                             setSheetState(() => sending = true);
                             final id =
                                 'an${DateTime.now().microsecondsSinceEpoch}';
