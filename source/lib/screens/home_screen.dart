@@ -98,9 +98,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               onDirectory: _tab == 3
                   ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => DirectoryScreen()),
-                      )
+                      context,
+                      MaterialPageRoute(builder: (_) => DirectoryScreen()),
+                    )
                   : null,
               onAccount: () => Navigator.push(
                 context,
@@ -670,25 +670,71 @@ class _DashboardView extends StatelessWidget {
     required this.onOpenProfile,
   });
 
+  PlanningEntry? _activeGuard(AppUser me, DateTime now) {
+    final candidates = appState.planning.where(
+      (entry) =>
+          (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
+          entry.shiftId != 'conge' &&
+          appState.isPlanningEntryApproved(entry),
+    );
+
+    PlanningEntry? active;
+    DateTime? latestStart;
+    for (final entry in candidates) {
+      final date = DateTime.tryParse(entry.dateStr);
+      if (date == null) continue;
+      final shift = ShiftCatalog.byId(entry.shiftId);
+      if (!shift.hasSchedule || shift.start == null || shift.end == null) {
+        continue;
+      }
+
+      final startParts = shift.start!.split(':').map(int.parse).toList();
+      final endParts = shift.end!.split(':').map(int.parse).toList();
+      final start = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        startParts[0],
+        startParts[1],
+      );
+      var end = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        endParts[0],
+        endParts[1],
+      );
+      if (!end.isAfter(start)) end = end.add(const Duration(days: 1));
+
+      final inProgress = !now.isBefore(start) && now.isBefore(end);
+      if (inProgress && (latestStart == null || start.isAfter(latestStart))) {
+        active = entry;
+        latestStart = start;
+      }
+    }
+    return active;
+  }
+
   List<PlanningEntry> _futureGuards(AppUser me) {
-    final entries = appState.planning
-        .where(
-          (entry) =>
-              (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
-              entry.shiftId != 'conge' &&
-              appState.isPlanningEntryApproved(entry) &&
-              !appState.guardHasStarted(entry),
-        )
-        .toList()
-      ..sort((a, b) {
-        final ad = DateTime.parse(a.dateStr);
-        final bd = DateTime.parse(b.dateStr);
-        final cmp = ad.compareTo(bd);
-        if (cmp != 0) return cmp;
-        final ashift = ShiftCatalog.byId(a.shiftId);
-        final bshift = ShiftCatalog.byId(b.shiftId);
-        return (ashift.start ?? '').compareTo(bshift.start ?? '');
-      });
+    final entries =
+        appState.planning
+            .where(
+              (entry) =>
+                  (entry.ownerId == me.id || entry.ownerPhone == me.phone) &&
+                  entry.shiftId != 'conge' &&
+                  appState.isPlanningEntryApproved(entry) &&
+                  !appState.guardHasStarted(entry),
+            )
+            .toList()
+          ..sort((a, b) {
+            final ad = DateTime.parse(a.dateStr);
+            final bd = DateTime.parse(b.dateStr);
+            final cmp = ad.compareTo(bd);
+            if (cmp != 0) return cmp;
+            final ashift = ShiftCatalog.byId(a.shiftId);
+            final bshift = ShiftCatalog.byId(b.shiftId);
+            return (ashift.start ?? '').compareTo(bshift.start ?? '');
+          });
     return entries;
   }
 
@@ -727,9 +773,11 @@ class _DashboardView extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final future = _futureGuards(me);
-    final next = future.isEmpty ? null : future.first;
     final now = DateTime.now();
+    final activeGuard = _activeGuard(me, now);
+    final future = _futureGuards(me);
+    final nextGuard = future.isEmpty ? null : future.first;
+    final displayedGuard = activeGuard ?? nextGuard;
     final isNight = now.hour >= 18 || now.hour < 6;
     final greeting = isNight ? 'Bonsoir' : 'Bonjour';
     final monthlyCount = _guardsThisMonth(me, now);
@@ -745,8 +793,9 @@ class _DashboardView extends StatelessWidget {
     );
 
     final rawDate = DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(now);
-    final dateLabel =
-        rawDate.isEmpty ? '' : rawDate[0].toUpperCase() + rawDate.substring(1);
+    final dateLabel = rawDate.isEmpty
+        ? ''
+        : rawDate[0].toUpperCase() + rawDate.substring(1);
     final timeLabel = DateFormat('HH:mm').format(now);
 
     return SingleChildScrollView(
@@ -762,12 +811,17 @@ class _DashboardView extends StatelessWidget {
             dateLabel: dateLabel,
             timeLabel: timeLabel,
             isNight: isNight,
+            guardEntry: displayedGuard,
             monthlyCount: monthlyCount,
             urgenceCount: urgenceMonthlyCount,
             serviceCount: serviceMonthlyCount,
           ),
           const SizedBox(height: 14),
-          _NextGuardCard(entry: next, onTap: onOpenPlanning),
+          _NextGuardCard(
+            entry: displayedGuard,
+            isActive: activeGuard != null,
+            onTap: onOpenPlanning,
+          ),
           const SizedBox(height: 14),
           _HomeAnnouncementsCard(
             appState: appState,
@@ -859,8 +913,8 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
     if (backend.enabled) {
       _realtime = backend.client
           .from('public_announcements')
-          .stream(primaryKey: ['id']).listen((_) => unawaited(_reload()),
-              onError: (_) {});
+          .stream(primaryKey: ['id'])
+          .listen((_) => unawaited(_reload()), onError: (_) {});
     }
   }
 
@@ -883,8 +937,9 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
     if (me == null) return false;
     if (item.authorId == me.id) return true;
     if (item.hospital != me.hospital) return false;
-    final author =
-        widget.appState.users.where((u) => u.id == item.authorId).firstOrNull;
+    final author = widget.appState.users
+        .where((u) => u.id == item.authorId)
+        .firstOrNull;
     if (author != null &&
         widget.appState.promotionExchangeBlocked(
           me,
@@ -941,13 +996,17 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF071A18), Color(0xFF0B302A)],
+        ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navy.withOpacity(0.07),
-            blurRadius: 18,
+            color: const Color(0xFF00C389).withOpacity(0.08),
+            blurRadius: 20,
             offset: const Offset(0, 8),
           ),
         ],
@@ -985,7 +1044,7 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
                     Text(
                       'Annonces & échanges',
                       style: TextStyle(
-                        color: AppColors.ink,
+                        color: Colors.white,
                         fontFamily: 'SpaceGrotesk',
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
@@ -997,7 +1056,7 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppColors.inkSoft,
+                        color: Colors.white.withOpacity(0.58),
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1007,6 +1066,14 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
               ),
               TextButton(
                 onPressed: _openAnnouncements,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF43E6A0),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 child: const Text('Voir tout'),
               ),
             ],
@@ -1075,31 +1142,50 @@ class _HomeAnnouncementsEmpty extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(17),
       child: Container(
-        height: 78,
+        constraints: const BoxConstraints(minHeight: 78),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
-          color: AppColors.paperAlt,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.line),
+          color: Colors.white.withOpacity(0.035),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
         ),
         child: Row(
           children: [
-            Icon(icon, color: AppColors.inkFaint, size: 22),
-            const SizedBox(width: 10),
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFF20C986).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white.withOpacity(0.58),
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 11),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
-                  color: AppColors.inkSoft,
+                  color: Colors.white.withOpacity(0.70),
                   fontSize: 11.5,
+                  height: 1.30,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFF43E6A0),
+              size: 22,
+            ),
           ],
         ),
       ),
@@ -1122,8 +1208,9 @@ class _HomeAnnouncementPreview extends StatelessWidget {
         : DateFormat('EEE d MMM', 'fr_FR').format(parsedDate);
     final isUrgence = item.shiftId.toLowerCase().contains('urg');
     final category = isUrgence ? 'Urgences' : 'Service';
-    final message =
-        item.message.isEmpty ? 'Disponible pour un échange' : item.message;
+    final message = item.message.isEmpty
+        ? 'Disponible pour un échange'
+        : item.message;
 
     return Material(
       color: Colors.transparent,
@@ -1134,7 +1221,7 @@ class _HomeAnnouncementPreview extends StatelessWidget {
           width: 270,
           padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
           decoration: BoxDecoration(
-            color: AppColors.paperAlt,
+            color: Colors.white.withOpacity(0.04),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: shift.color.withOpacity(0.32)),
           ),
@@ -1168,7 +1255,7 @@ class _HomeAnnouncementPreview extends StatelessWidget {
                   Text(
                     dateLabel,
                     style: TextStyle(
-                      color: AppColors.inkSoft,
+                      color: Colors.white.withOpacity(0.62),
                       fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1181,7 +1268,7 @@ class _HomeAnnouncementPreview extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.ink,
+                  color: Colors.white,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1192,7 +1279,7 @@ class _HomeAnnouncementPreview extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.inkSoft,
+                  color: Colors.white.withOpacity(0.62),
                   fontSize: 10.5,
                   height: 1.25,
                   fontWeight: FontWeight.w600,
@@ -1206,12 +1293,222 @@ class _HomeAnnouncementPreview extends StatelessWidget {
   }
 }
 
+class _GuardVisualTheme {
+  final bool isUrgence;
+  final bool isNight;
+  final bool is24h;
+  final List<Color> heroColors;
+  final List<Color> dutyColors;
+  final Color glow;
+
+  const _GuardVisualTheme({
+    required this.isUrgence,
+    required this.isNight,
+    required this.is24h,
+    required this.heroColors,
+    required this.dutyColors,
+    required this.glow,
+  });
+
+  String get category => isUrgence ? 'URGENCES' : 'SERVICE';
+  String get period => is24h ? '24H' : (isNight ? 'Nuit' : 'Jour');
+
+  factory _GuardVisualTheme.fromEntry(
+    PlanningEntry? entry, {
+    required bool fallbackNight,
+  }) {
+    if (entry == null) {
+      return fallbackNight
+          ? const _GuardVisualTheme(
+              isUrgence: false,
+              isNight: true,
+              is24h: false,
+              heroColors: [
+                Color(0xFF051329),
+                Color(0xFF0B326A),
+                Color(0xFF155AA4),
+              ],
+              dutyColors: [Color(0xFF071A36), Color(0xFF164F8E)],
+              glow: Color(0xFF2F8FE8),
+            )
+          : const _GuardVisualTheme(
+              isUrgence: false,
+              isNight: false,
+              is24h: false,
+              heroColors: [
+                Color(0xFF0B75C9),
+                Color(0xFF2AA9F3),
+                Color(0xFF7FD7FF),
+              ],
+              dutyColors: [Color(0xFF137FCB), Color(0xFF50BFF2)],
+              glow: Color(0xFF5AC9FF),
+            );
+    }
+
+    final id = entry.shiftId.toLowerCase();
+    final isUrgence = id.startsWith('urg-') || id.contains('urgence');
+    final is24h = id.contains('24h') || id.contains('24-h');
+    final isNight = !is24h && id.contains('nuit');
+
+    if (isUrgence && isNight) {
+      return const _GuardVisualTheme(
+        isUrgence: true,
+        isNight: true,
+        is24h: false,
+        heroColors: [Color(0xFF25040C), Color(0xFF610A1C), Color(0xFF9A1831)],
+        dutyColors: [Color(0xFF360611), Color(0xFF8B1730)],
+        glow: Color(0xFFD92A4A),
+      );
+    }
+    if (isUrgence && is24h) {
+      return const _GuardVisualTheme(
+        isUrgence: true,
+        isNight: false,
+        is24h: true,
+        heroColors: [Color(0xFF713008), Color(0xFFD95D13), Color(0xFFFF9B2F)],
+        dutyColors: [Color(0xFF9A3A09), Color(0xFFF47B18)],
+        glow: Color(0xFFFFA23D),
+      );
+    }
+    if (isUrgence) {
+      return const _GuardVisualTheme(
+        isUrgence: true,
+        isNight: false,
+        is24h: false,
+        heroColors: [Color(0xFF9D102A), Color(0xFFE32B43), Color(0xFFFF626C)],
+        dutyColors: [Color(0xFFB51630), Color(0xFFF34052)],
+        glow: Color(0xFFFF6272),
+      );
+    }
+    if (isNight) {
+      return const _GuardVisualTheme(
+        isUrgence: false,
+        isNight: true,
+        is24h: false,
+        heroColors: [Color(0xFF041229), Color(0xFF0A3169), Color(0xFF1455A1)],
+        dutyColors: [Color(0xFF06172F), Color(0xFF15559C)],
+        glow: Color(0xFF388DDF),
+      );
+    }
+    if (is24h) {
+      return const _GuardVisualTheme(
+        isUrgence: false,
+        isNight: false,
+        is24h: true,
+        heroColors: [Color(0xFF0877B2), Color(0xFF2FB4E5), Color(0xFF76D7F5)],
+        dutyColors: [Color(0xFF0B83C0), Color(0xFF38BDE9)],
+        glow: Color(0xFF72D8F8),
+      );
+    }
+    return const _GuardVisualTheme(
+      isUrgence: false,
+      isNight: false,
+      is24h: false,
+      heroColors: [Color(0xFF0A6FCA), Color(0xFF28A8F2), Color(0xFF83D9FF)],
+      dutyColors: [Color(0xFF0F7DCE), Color(0xFF48BAF1)],
+      glow: Color(0xFF58C8FF),
+    );
+  }
+}
+
+class _GuardSkyPainter extends CustomPainter {
+  final _GuardVisualTheme theme;
+  final bool compact;
+
+  const _GuardSkyPainter({required this.theme, this.compact = false});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (theme.isNight) {
+      final starPaint = Paint()..color = Colors.white.withOpacity(0.34);
+      final stars = <Offset>[
+        Offset(size.width * .08, size.height * .18),
+        Offset(size.width * .20, size.height * .11),
+        Offset(size.width * .35, size.height * .24),
+        Offset(size.width * .49, size.height * .13),
+        Offset(size.width * .64, size.height * .21),
+        Offset(size.width * .76, size.height * .09),
+        Offset(size.width * .88, size.height * .26),
+      ];
+      for (var i = 0; i < stars.length; i++) {
+        canvas.drawCircle(stars[i], i.isEven ? 1.15 : .75, starPaint);
+      }
+    } else {
+      final cloudPaint = Paint()..color = Colors.white.withOpacity(0.07);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(size.width * .28, size.height * .22),
+          width: size.width * .26,
+          height: size.height * .12,
+        ),
+        cloudPaint,
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(size.width * .68, size.height * .18),
+          width: size.width * .23,
+          height: size.height * .10,
+        ),
+        cloudPaint,
+      );
+    }
+
+    final rearPaint = Paint()..color = Colors.black.withOpacity(0.10);
+    final rear = Path()
+      ..moveTo(0, size.height * .69)
+      ..lineTo(size.width * .12, size.height * .58)
+      ..lineTo(size.width * .24, size.height * .67)
+      ..lineTo(size.width * .39, size.height * .50)
+      ..lineTo(size.width * .52, size.height * .64)
+      ..lineTo(size.width * .66, size.height * .52)
+      ..lineTo(size.width * .81, size.height * .65)
+      ..lineTo(size.width, size.height * .50)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(rear, rearPaint);
+
+    final frontPaint = Paint()
+      ..color = Colors.black.withOpacity(theme.isNight ? 0.26 : 0.15);
+    final base = compact ? .80 : .76;
+    final front = Path()
+      ..moveTo(0, size.height * base)
+      ..quadraticBezierTo(
+        size.width * .18,
+        size.height * (base - .10),
+        size.width * .34,
+        size.height * base,
+      )
+      ..quadraticBezierTo(
+        size.width * .52,
+        size.height * (base - .08),
+        size.width * .69,
+        size.height * base,
+      )
+      ..quadraticBezierTo(
+        size.width * .84,
+        size.height * (base - .07),
+        size.width,
+        size.height * (base - .01),
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(front, frontPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GuardSkyPainter oldDelegate) =>
+      oldDelegate.theme != theme || oldDelegate.compact != compact;
+}
+
 class _HomeHeroCard extends StatelessWidget {
   final AppUser user;
   final String greeting;
   final String dateLabel;
   final String timeLabel;
   final bool isNight;
+  final PlanningEntry? guardEntry;
   final int monthlyCount;
   final int urgenceCount;
   final int serviceCount;
@@ -1222,6 +1519,7 @@ class _HomeHeroCard extends StatelessWidget {
     required this.dateLabel,
     required this.timeLabel,
     required this.isNight,
+    required this.guardEntry,
     required this.monthlyCount,
     required this.urgenceCount,
     required this.serviceCount,
@@ -1229,124 +1527,146 @@ class _HomeHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = isNight
-        ? const [Color(0xFF06101E), Color(0xFF102E53)]
-        : const [Color(0xFF2DB7F5), Color(0xFF087EE6)];
-    final accent = isNight ? const Color(0xFFFFE6A0) : const Color(0xFFFFD54F);
+    final visual = _GuardVisualTheme.fromEntry(
+      guardEntry,
+      fallbackNight: isNight,
+    );
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: colors,
+          colors: visual.heroColors,
+          stops: const [0.0, 0.58, 1.0],
         ),
         borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
         boxShadow: [
           BoxShadow(
-            color: colors.last.withOpacity(0.20),
-            blurRadius: 22,
+            color: visual.glow.withOpacity(0.17),
+            blurRadius: 24,
             offset: const Offset(0, 10),
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Stack(
-        clipBehavior: Clip.none,
         children: [
+          Positioned.fill(
+            child: CustomPaint(painter: _GuardSkyPainter(theme: visual)),
+          ),
           Positioned(
-            right: -8,
-            top: -12,
+            right: -24,
+            top: -28,
             child: Container(
-              width: 78,
-              height: 78,
+              width: 126,
+              height: 126,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.08),
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.16),
+                    Colors.white.withOpacity(0.025),
+                  ],
+                ),
               ),
             ),
           ),
           Positioned(
-            right: 12,
-            top: 7,
-            child: Icon(
-              isNight ? Icons.nightlight_round : Icons.wb_sunny_rounded,
-              color: accent.withOpacity(0.94),
-              size: 44,
+            right: 18,
+            top: 21,
+            child: Container(
+              width: 57,
+              height: 57,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.10),
+                border: Border.all(color: Colors.white.withOpacity(0.10)),
+              ),
+              child: _GuardPeriodGlyph(
+                isNight: visual.isNight,
+                is24h: visual.is24h,
+                size: 32,
+              ),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 62),
-                child: Text(
-                  '$greeting Dr ${user.nom}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'SpaceGrotesk',
-                    fontSize: 25,
-                    height: 1.05,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.6,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 74),
+                  child: Text(
+                    '$greeting Dr ${user.nom}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'SpaceGrotesk',
+                      fontSize: 25,
+                      height: 1.04,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.65,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 9),
-              Row(
-                children: [
-                  Icon(
-                    Icons.schedule_rounded,
-                    color: Colors.white.withOpacity(0.82),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '$dateLabel · $timeLabel',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.88),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      color: Colors.white.withOpacity(0.84),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '$dateLabel · $timeLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.88),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              Row(
-                children: [
-                  Expanded(
-                    child: _HomeStatPill(
-                      icon: Icons.calendar_month_rounded,
-                      value: monthlyCount,
-                      label: 'Ce mois',
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _HomeStatPill(
+                        icon: Icons.calendar_month_rounded,
+                        value: monthlyCount,
+                        label: 'Ce mois',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _HomeStatPill(
-                      icon: Icons.emergency_rounded,
-                      value: urgenceCount,
-                      label: 'Urgences',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _HomeStatPill(
+                        icon: Icons.emergency_rounded,
+                        value: urgenceCount,
+                        label: 'Urgences',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _HomeStatPill(
-                      icon: Icons.medical_services_rounded,
-                      value: serviceCount,
-                      label: 'Service',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _HomeStatPill(
+                        icon: Icons.medical_services_rounded,
+                        value: serviceCount,
+                        label: 'Service',
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1599,21 +1919,21 @@ class _MonthlyGuardChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.13),
-          borderRadius: BorderRadius.circular(11),
-          border: Border.all(color: Colors.white.withOpacity(0.13)),
-        ),
-        child: Text(
-          '$label · $value',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.13),
+      borderRadius: BorderRadius.circular(11),
+      border: Border.all(color: Colors.white.withOpacity(0.13)),
+    ),
+    child: Text(
+      '$label · $value',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 }
 
 class _BadgeCount extends StatelessWidget {
@@ -1622,23 +1942,23 @@ class _BadgeCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        constraints: BoxConstraints(minWidth: 19, minHeight: 19),
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(horizontal: 5),
-        decoration: BoxDecoration(
-          color: AppColors.danger,
-          borderRadius: AppRadius.pillR,
-          border: Border.all(color: AppColors.paper, width: 2),
-        ),
-        child: Text(
-          value > 99 ? '99+' : '$value',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 8.5,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      );
+    constraints: BoxConstraints(minWidth: 19, minHeight: 19),
+    alignment: Alignment.center,
+    padding: EdgeInsets.symmetric(horizontal: 5),
+    decoration: BoxDecoration(
+      color: AppColors.danger,
+      borderRadius: AppRadius.pillR,
+      border: Border.all(color: AppColors.paper, width: 2),
+    ),
+    child: Text(
+      value > 99 ? '99+' : '$value',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 8.5,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _MetricCard extends StatelessWidget {
@@ -1656,42 +1976,47 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
-        shadow: [],
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: tint, size: 19),
-            SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'SpaceGrotesk',
-                fontSize: 21,
-                fontWeight: FontWeight.w700,
-                color: AppColors.ink,
-              ),
-            ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 9.8,
-                fontWeight: FontWeight.w700,
-                color: AppColors.inkSoft,
-              ),
-            ),
-          ],
+    padding: EdgeInsets.fromLTRB(12, 12, 10, 11),
+    shadow: [],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: tint, size: 19),
+        SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'SpaceGrotesk',
+            fontSize: 21,
+            fontWeight: FontWeight.w700,
+            color: AppColors.ink,
+          ),
         ),
-      );
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 9.8,
+            fontWeight: FontWeight.w700,
+            color: AppColors.inkSoft,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _NextGuardCard extends StatelessWidget {
   final PlanningEntry? entry;
+  final bool isActive;
   final VoidCallback onTap;
 
-  const _NextGuardCard({required this.entry, required this.onTap});
+  const _NextGuardCard({
+    required this.entry,
+    required this.isActive,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1704,10 +2029,11 @@ class _NextGuardCard extends StatelessWidget {
           child: Ink(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.card,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0A1C2C), Color(0xFF12354F)],
+              ),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.line),
-              boxShadow: AppShadow.low,
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
             ),
             child: Row(
               children: [
@@ -1715,12 +2041,12 @@ class _NextGuardCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.brand.withOpacity(0.10),
+                    color: Colors.white.withOpacity(0.07),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.event_available_rounded,
-                    color: AppColors.brandBright,
+                    color: Color(0xFF56D8A0),
                     size: 25,
                   ),
                 ),
@@ -1729,10 +2055,10 @@ class _NextGuardCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Prochaine garde',
                         style: TextStyle(
-                          color: AppColors.ink,
+                          color: Colors.white,
                           fontFamily: 'SpaceGrotesk',
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
@@ -1742,7 +2068,7 @@ class _NextGuardCard extends StatelessWidget {
                       Text(
                         'Aucune garde validée à venir.',
                         style: TextStyle(
-                          color: AppColors.inkSoft,
+                          color: Colors.white.withOpacity(0.58),
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1752,7 +2078,7 @@ class _NextGuardCard extends StatelessWidget {
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: AppColors.inkFaint,
+                  color: Colors.white.withOpacity(0.58),
                   size: 24,
                 ),
               ],
@@ -1764,64 +2090,26 @@ class _NextGuardCard extends StatelessWidget {
 
     final current = entry!;
     final shift = ShiftCatalog.byId(current.shiftId);
-    final shiftId = shift.id.toLowerCase();
-    final shiftLabel = shift.label.trim().toLowerCase();
-
-    final isUrgence = shiftId.startsWith('urg-') ||
-        shiftId.contains('urgence') ||
-        shiftLabel.contains('urgence');
-    final is24h = shiftId.contains('24h') ||
-        shiftId.contains('24-h') ||
-        shiftLabel.contains('24h');
-    final isNight =
-        !is24h && (shiftId.contains('nuit') || shiftLabel.contains('nuit'));
-
-    final category = isUrgence ? 'URGENCES' : 'SERVICE';
-    final period = is24h ? '24H' : (isNight ? 'Nuit' : 'Jour');
-
+    final visual = _GuardVisualTheme.fromEntry(current, fallbackNight: false);
     final date = DateTime.tryParse(current.dateStr);
-    final dateLabel = date == null
+    final rawDateLabel = date == null
         ? current.dateStr
         : DateFormat('EEE d MMMM', 'fr_FR').format(date);
+    final dateLabel = rawDateLabel.isEmpty
+        ? rawDateLabel
+        : rawDateLabel[0].toUpperCase() + rawDateLabel.substring(1);
     final timeLabel = shift.start != null && shift.end != null
         ? '${shift.start} → ${shift.end}'
-        : is24h
-            ? '08:00 → 08:00'
-            : isNight
-                ? '20:00 → 08:00'
-                : '08:00 → 20:00';
-
-    late final List<Color> colors;
-    late final Color foreground;
-    if (isUrgence) {
-      if (isNight) {
-        colors = const [Color(0xFF310812), Color(0xFF7A1D31)];
-        foreground = Colors.white;
-      } else if (is24h) {
-        colors = const [Color(0xFFF58A1F), Color(0xFFFFB34E)];
-        foreground = const Color(0xFF3A1B00);
-      } else {
-        colors = const [Color(0xFFFFD9DE), Color(0xFFFF8798)];
-        foreground = const Color(0xFF48131C);
-      }
-    } else {
-      if (isNight) {
-        colors = const [Color(0xFF06152E), Color(0xFF174F89)];
-        foreground = Colors.white;
-      } else if (is24h) {
-        colors = const [Color(0xFFA9E6FF), Color(0xFF4DBDEA)];
-        foreground = const Color(0xFF0B3048);
-      } else {
-        colors = const [Color(0xFFD9F2FF), Color(0xFF75C7F4)];
-        foreground = const Color(0xFF092B47);
-      }
-    }
-
-    final surface = foreground.withOpacity(0.09);
-    final surfaceBorder = foreground.withOpacity(0.13);
+        : visual.is24h
+        ? '08:00 → 08:00'
+        : visual.isNight
+        ? '20:00 → 08:00'
+        : '08:00 → 20:00';
 
     String countdownLabel = 'À venir';
-    if (date != null) {
+    if (isActive) {
+      countdownLabel = 'En cours';
+    } else if (date != null) {
       final today = DateTime.now();
       final startToday = DateTime(today.year, today.month, today.day);
       final guardDay = DateTime(date.year, date.month, date.day);
@@ -1842,178 +2130,234 @@ class _NextGuardCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         child: Ink(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: colors,
+              colors: visual.dutyColors,
             ),
             borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: Colors.white.withOpacity(0.10)),
             boxShadow: [
               BoxShadow(
-                color: colors.last.withOpacity(0.22),
+                color: visual.glow.withOpacity(0.16),
                 blurRadius: 22,
                 offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -30,
-                top: -40,
-                child: Container(
-                  width: 132,
-                  height: 132,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: foreground.withOpacity(0.06),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _GuardSkyPainter(theme: visual, compact: true),
                   ),
                 ),
-              ),
-              Positioned(
-                right: 42,
-                bottom: -54,
-                child: Container(
-                  width: 104,
-                  height: 104,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: foreground.withOpacity(0.045),
+                Positioned(
+                  right: -36,
+                  top: -56,
+                  child: Container(
+                    width: 150,
+                    height: 150,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.13),
+                          Colors.white.withOpacity(0.015),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(15, 15, 14, 14),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: surfaceBorder),
-                        ),
-                        child: Center(
-                          child: _GuardPeriodGlyph(
-                            isNight: isNight,
-                            is24h: is24h,
-                            size: 27,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'PROCHAINE GARDE · $countdownLabel',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: foreground.withOpacity(0.72),
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.45,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.11),
                               ),
                             ),
-                            const SizedBox(height: 5),
-                            Row(
+                            child: _GuardPeriodGlyph(
+                              isNight: visual.isNight,
+                              is24h: visual.is24h,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Flexible(
-                                  child: Text(
-                                    category,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: foreground,
-                                      fontFamily: 'SpaceGrotesk',
-                                      fontSize: 21,
-                                      height: 1.05,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: surface,
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: surfaceBorder),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _GuardPeriodGlyph(
-                                        isNight: isNight,
-                                        is24h: is24h,
-                                        size: 14,
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isActive
+                                            ? const Color(0xFF7CF2A7)
+                                            : const Color(0xFFFFD43B),
                                       ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        period,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        isActive
+                                            ? 'GARDE EN COURS'
+                                            : 'PROCHAINE GARDE',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          color: foreground,
+                                          color: Colors.white.withOpacity(0.76),
                                           fontSize: 9.5,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 0.45,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        visual.category,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontFamily: 'SpaceGrotesk',
+                                          fontSize: 21,
+                                          height: 1.02,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 9,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.11),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.12),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _GuardPeriodGlyph(
+                                            isNight: visual.isNight,
+                                            is24h: visual.is24h,
+                                            size: 13,
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            visual.period,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 38,
+                            height: 38,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(13),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.11),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: surface,
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: surfaceBorder),
-                        ),
-                        child: Icon(
-                          Icons.arrow_forward_rounded,
-                          color: foreground.withOpacity(0.90),
-                          size: 20,
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _GuardMetaChip(
+                              icon: Icons.calendar_month_rounded,
+                              text: dateLabel,
+                              foreground: Colors.white,
+                              background: Colors.white.withOpacity(0.095),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _GuardMetaChip(
+                              icon: Icons.schedule_rounded,
+                              text: timeLabel,
+                              foreground: Colors.white,
+                              background: Colors.white.withOpacity(0.095),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 9),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            countdownLabel,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.88),
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 13),
-                  Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: [
-                      _GuardMetaChip(
-                        icon: Icons.calendar_month_rounded,
-                        text: dateLabel,
-                        foreground: foreground,
-                        background: surface,
-                      ),
-                      _GuardMetaChip(
-                        icon: Icons.schedule_rounded,
-                        text: timeLabel,
-                        foreground: foreground,
-                        background: surface,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2188,43 +2532,41 @@ class _ServiceShortcut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.lgR,
-          child: AppCard(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-            shadow: [],
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: tint.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: tint, size: 22),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: Theme.of(context).textTheme.titleSmall),
-                      SizedBox(height: 2),
-                      Text(subtitle,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
-              ],
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.lgR,
+      child: AppCard(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        shadow: [],
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: tint.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: tint, size: 22),
             ),
-          ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  SizedBox(height: 2),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppColors.inkFaint),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _PlanningView extends StatelessWidget {
@@ -2386,8 +2728,10 @@ class _AnnouncementsCompactButtonState
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     final backend = SupabaseBackendService.instance;
     if (backend.enabled) {
-      _realtime = backend.client.from('public_announcements').stream(
-          primaryKey: ['id']).listen((_) => _refresh(), onError: (_) {});
+      _realtime = backend.client
+          .from('public_announcements')
+          .stream(primaryKey: ['id'])
+          .listen((_) => _refresh(), onError: (_) {});
     }
   }
 
@@ -2620,8 +2964,9 @@ class _MainBottomBar extends StatelessWidget {
                     width: 38,
                     height: 28,
                     decoration: BoxDecoration(
-                      color:
-                          selected ? AppColors.brandSoft : Colors.transparent,
+                      color: selected
+                          ? AppColors.brandSoft
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
@@ -2775,8 +3120,9 @@ class _QuickAddGuardSheetState extends State<_QuickAddGuardSheet> {
     final now = DateTime.now();
     final chosen = await showDatePicker(
       context: context,
-      initialDate:
-          _date.isBefore(DateTime(now.year, now.month, now.day)) ? now : _date,
+      initialDate: _date.isBefore(DateTime(now.year, now.month, now.day))
+          ? now
+          : _date,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year + 2, 12, 31),
       locale: const Locale('fr', 'FR'),
@@ -2975,9 +3321,7 @@ class _TopBarState extends State<_TopBar> {
                   children: [
                     Text(
                       'GardeFlow',
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
+                      style: Theme.of(context).textTheme.labelSmall
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     Row(
@@ -3044,16 +3388,18 @@ class _TopBarState extends State<_TopBar> {
         title: pending
             ? 'Congé en attente de validation'
             : 'Vous êtes en congé aujourd’hui',
-        icon:
-            pending ? Icons.hourglass_top_rounded : Icons.beach_access_rounded,
+        icon: pending
+            ? Icons.hourglass_top_rounded
+            : Icons.beach_access_rounded,
         background: shift.color,
         foreground: shift.textColor,
       );
     }
     final isUrgence = shift.id.startsWith('urg-');
     final location = isUrgence ? 'Urgences' : 'Service';
-    final schedule =
-        shift.start == null ? '' : ' · ${shift.start} → ${shift.end}';
+    final schedule = shift.start == null
+        ? ''
+        : ' · ${shift.start} → ${shift.end}';
     return _TodayStatus(
       title: '$location · ${shift.label}$schedule',
       icon: shift.icon,
@@ -3427,14 +3773,16 @@ class _MonthBar extends StatelessWidget {
         reopenReason = record?.rejectionReason?.trim();
         final reopened = reopenReason != null && reopenReason.isNotEmpty;
         statusLabel = reopened ? 'Rouvert' : 'En préparation';
-        statusIcon =
-            reopened ? Icons.lock_open_rounded : Icons.edit_calendar_rounded;
+        statusIcon = reopened
+            ? Icons.lock_open_rounded
+            : Icons.edit_calendar_rounded;
         statusBg = reopened ? const Color(0xFFB3261E) : AppColors.paperAlt;
         statusFg = reopened ? Colors.white : AppColors.ink;
         break;
     }
 
-    final canSubmit = !isPastMonth &&
+    final canSubmit =
+        !isPastMonth &&
         (status == PlanningMonthStatus.draft ||
             status == PlanningMonthStatus.rejected);
 
@@ -3543,13 +3891,11 @@ class _MonthBar extends StatelessWidget {
     switch (status) {
       case PlanningMonthStatus.approved:
         title = 'Calendrier validé définitivement';
-        detail =
-            'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
+        detail = 'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
         break;
       case PlanningMonthStatus.submitted:
         title = 'Calendrier soumis';
-        detail =
-            'Le mois est figé en attente d’une validation finale par un administrateur. À défaut, l’auto-validation peut intervenir à J+7 du planning officiel.';
+        detail = 'Le mois est figé en attente d’une validation finale par un administrateur. À défaut, l’auto-validation peut intervenir à J+7 du planning officiel.';
         break;
       case PlanningMonthStatus.rejected:
         title = 'Calendrier à corriger';
@@ -3563,8 +3909,7 @@ class _MonthBar extends StatelessWidget {
               'Motif : $reopenReason. Modifiez vos tuiles puis soumettez à nouveau le mois.';
         } else {
           title = 'Calendrier en préparation';
-          detail =
-              'Placez vos tuiles Service, Urgences et Congé puis soumettez le mois. Il sera ensuite validé par un administrateur ou automatiquement à J+7 du planning officiel.';
+          detail = 'Placez vos tuiles Service, Urgences et Congé puis soumettez le mois. Il sera ensuite validé par un administrateur ou automatiquement à J+7 du planning officiel.';
         }
         break;
     }
@@ -3745,11 +4090,13 @@ class _CalendarGrid extends StatelessWidget {
       final date = DateTime(month.year, month.month, d);
       final dateStr = AppState.dateKey(date);
       final entry = appState.myEntryForDate(dateStr);
-      final editable = monthEditable &&
+      final editable =
+          monthEditable &&
           !appState.dateIsPast(dateStr) &&
           (entry == null ||
               (!entry.isDisciplinary && !appState.isApprovedLeaveEntry(entry)));
-      final canExchange = monthApproved &&
+      final canExchange =
+          monthApproved &&
           entry != null &&
           !entry.isDisciplinary &&
           ShiftCatalog.byId(entry.shiftId).hasSchedule &&
@@ -3785,13 +4132,13 @@ class _CalendarGrid extends StatelessWidget {
             onExchange: entry == null
                 ? null
                 : () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      showDragHandle: true,
-                      builder: (_) =>
-                          ExchangeRequestSheet(dateStr: dateStr, entry: entry),
-                    ),
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    showDragHandle: true,
+                    builder: (_) =>
+                        ExchangeRequestSheet(dateStr: dateStr, entry: entry),
+                  ),
           ),
         ),
       );
@@ -3804,8 +4151,9 @@ class _CalendarGrid extends StatelessWidget {
           const gap = 5.0;
           final itemWidth = (constraints.maxWidth - gap * 6) / 7;
           final itemHeight = (constraints.maxHeight - gap * (rows - 1)) / rows;
-          final safeHeight =
-              itemHeight.isFinite && itemHeight > 1 ? itemHeight : 1.0;
+          final safeHeight = itemHeight.isFinite && itemHeight > 1
+              ? itemHeight
+              : 1.0;
           final aspectRatio = itemWidth / safeHeight;
 
           return GridView.count(
@@ -3852,8 +4200,9 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentEntry = entry;
-    final shift =
-        currentEntry == null ? null : ShiftCatalog.byId(currentEntry.shiftId);
+    final shift = currentEntry == null
+        ? null
+        : ShiftCatalog.byId(currentEntry.shiftId);
     final isUrgence = shift?.id.startsWith('urg-') ?? false;
     final isLeave = shift?.id == 'conge';
     final isDisciplinary = currentEntry?.isDisciplinary ?? false;
@@ -3863,8 +4212,8 @@ class _DayCell extends StatelessWidget {
     if (shift != null) {
       if (isLeave) {
         final leave = context.watch<AppState>().leaveRequestForEntry(
-              currentEntry!,
-            );
+          currentEntry!,
+        );
         final pending = leave?.status == LeaveRequestStatus.pendingAdmin;
         groupLabel = 'CONGÉ';
         shiftLabel = pending ? 'Attente' : 'Congé';
@@ -3879,8 +4228,9 @@ class _DayCell extends StatelessWidget {
       onAcceptWithDetails: (details) => onDrop(details.data),
       builder: (context, candidateData, rejectedData) {
         final hovering = candidateData.isNotEmpty && editable;
-        final background =
-            hovering ? Color(0xFFDCEBFF) : shift?.color ?? AppColors.card;
+        final background = hovering
+            ? Color(0xFFDCEBFF)
+            : shift?.color ?? AppColors.card;
         final foreground = shift?.textColor ?? AppColors.ink;
 
         return GestureDetector(
@@ -3896,8 +4246,8 @@ class _DayCell extends StatelessWidget {
                 color: hovering || isToday
                     ? AppColors.brand
                     : shift != null
-                        ? foreground.withOpacity(0.15)
-                        : AppColors.line,
+                    ? foreground.withOpacity(0.15)
+                    : AppColors.line,
                 width: hovering ? 2 : (isToday ? 1.8 : 1),
               ),
               boxShadow: [
@@ -3924,38 +4274,38 @@ class _DayCell extends StatelessWidget {
                               size: 24,
                             )
                           : shift == null
-                              ? SizedBox.shrink()
-                              : FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        groupLabel!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: foreground.withOpacity(0.84),
-                                          fontSize: 10.5,
-                                          height: 1,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.25,
-                                        ),
-                                      ),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        shiftLabel!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: foreground,
-                                          fontFamily: 'SpaceGrotesk',
-                                          fontSize: 12,
-                                          height: 1,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
+                          ? SizedBox.shrink()
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    groupLabel!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: foreground.withOpacity(0.84),
+                                      fontSize: 10.5,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.25,
+                                    ),
                                   ),
-                                ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    shiftLabel!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: foreground,
+                                      fontFamily: 'SpaceGrotesk',
+                                      fontSize: 12,
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -3970,10 +4320,10 @@ class _DayCell extends StatelessWidget {
                       color: isToday
                           ? AppColors.brandDark
                           : shift != null
-                              ? (AppColors.isDarkMode
-                                  ? AppColors.paperAlt.withOpacity(0.96)
-                                  : Colors.white.withOpacity(0.78))
-                              : Colors.transparent,
+                          ? (AppColors.isDarkMode
+                                ? AppColors.paperAlt.withOpacity(0.96)
+                                : Colors.white.withOpacity(0.78))
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -4107,17 +4457,19 @@ class _ShiftChip extends StatelessWidget {
     final shift = ShiftCatalog.byId(entry.shiftId);
     final isUrgence = shift.id.startsWith('urg-');
     final isLeave = shift.id == 'conge';
-    final leave =
-        isLeave ? context.watch<AppState>().leaveRequestForEntry(entry) : null;
+    final leave = isLeave
+        ? context.watch<AppState>().leaveRequestForEntry(entry)
+        : null;
     final pendingLeave = leave?.status == LeaveRequestStatus.pendingAdmin;
 
     final groupLabel = isLeave
         ? 'CONGÉ'
         : isUrgence
-            ? 'URG'
-            : 'SERV';
-    final shiftLabel =
-        isLeave ? (pendingLeave ? 'Attente' : 'Congé') : shift.label;
+        ? 'URG'
+        : 'SERV';
+    final shiftLabel = isLeave
+        ? (pendingLeave ? 'Attente' : 'Congé')
+        : shift.label;
 
     return LayoutBuilder(
       builder: (context, constraints) {
