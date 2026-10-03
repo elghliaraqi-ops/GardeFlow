@@ -5,18 +5,12 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'alarm_ring_service.dart';
 
-/// Notifications locales de GardeFlow.
+/// Notifications et rappels locaux de GardeFlow.
 ///
-/// V11.6.14 : moteur défensif pour Android/Samsung. Une erreur native liée aux
-/// notifications ne doit jamais fermer l'application. Les alarmes exactes ne
-/// sont plus demandées automatiquement : lorsqu'elles ne sont pas disponibles,
-/// les rappels sont programmés en mode compatible (inexactAllowWhileIdle).
-///
-/// V11.6.15 : ajout du mode `soundMode == 'alarm'`. Ce mode ne passe plus du
-/// tout par [flutter_local_notifications] : il est entièrement délégué à
-/// [AlarmRingService], qui programme une vraie alarme (sonnerie en boucle,
-/// écran allumé, bouton Arrêter) au lieu d'une notification sonore classique
-/// limitée à quelques secondes.
+/// Android conserve son moteur natif AlarmManager + plein écran.
+/// iOS utilise AlarmKit à partir d'iOS 26 lorsqu'il est disponible et autorisé,
+/// puis bascule automatiquement vers le moteur `alarm` sur les versions plus
+/// anciennes ou lorsque l'autorisation Apple n'est pas disponible.
 class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
@@ -40,6 +34,7 @@ class NotificationService {
 
   bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   Future<void> init() async {
     if (_initialized || _initializing) return;
@@ -149,11 +144,7 @@ class NotificationService {
       }
 
       _initialized = true;
-      reminderStatus.value = _isAndroid
-          ? (_canScheduleExact == true
-              ? 'Rappels prêts · programmation exacte disponible'
-              : 'Rappels prêts · mode compatible Android')
-          : 'Rappels prêts';
+      await refreshReminderStatus();
     } catch (e, st) {
       _initialized = false;
       reminderStatus.value = 'Rappels locaux momentanément indisponibles';
@@ -166,6 +157,38 @@ class NotificationService {
   Future<bool> _ensureInitialized() async {
     await init();
     return _initialized;
+  }
+
+  Future<void> refreshReminderStatus() async {
+    if (kIsWeb) {
+      reminderStatus.value = 'Rappels locaux indisponibles sur le Web';
+      return;
+    }
+
+    if (_isAndroid) {
+      reminderStatus.value = _canScheduleExact == true
+          ? 'Rappels prêts · programmation exacte disponible'
+          : 'Rappels prêts · mode compatible Android';
+      return;
+    }
+
+    if (_isIOS) {
+      final apple = await AlarmRingService.instance.appleAlarmKitStatus();
+      if (!apple.supported) {
+        reminderStatus.value = 'Rappels iPhone prêts · mode compatible iOS';
+      } else if (apple.authorized) {
+        reminderStatus.value = 'Alarmes Apple prêtes · AlarmKit';
+      } else if (apple.denied) {
+        reminderStatus.value =
+            'Alarmes Apple désactivées · mode compatible iOS actif';
+      } else {
+        reminderStatus.value =
+            'Alarmes Apple disponibles · autorisation requise';
+      }
+      return;
+    }
+
+    reminderStatus.value = 'Rappels prêts';
   }
 
   Future<void> showPush({
@@ -254,12 +277,8 @@ class NotificationService {
     }
   }
 
-  /// Demande uniquement l'autorisation d'afficher des notifications.
-  ///
-  /// L'accès spécial "alarmes exactes" n'est volontairement plus demandé ici :
-  /// l'utilisateur ne doit pas être envoyé vers un écran système lorsqu'il
-  /// change simplement sa sonnerie. L'ordonnanceur utilise un mode compatible
-  /// lorsqu'une alarme exacte n'est pas disponible.
+  /// Demande l'autorisation d'afficher les notifications locales.
+  /// Les autorisations d'alarme système sont gérées séparément par plateforme.
   Future<void> requestPermission() async {
     if (kIsWeb) return;
     if (!await _ensureInitialized()) return;
@@ -280,16 +299,13 @@ class NotificationService {
         } catch (_) {
           _canScheduleExact = false;
         }
-        reminderStatus.value = _canScheduleExact == true
-            ? 'Rappels prêts · programmation exacte disponible'
-            : 'Rappels prêts · mode compatible Android';
-      } else {
-        reminderStatus.value = 'Rappels prêts';
       }
+      await refreshReminderStatus();
     } catch (e) {
       debugPrint('Demande d’autorisation de notification ignorée: $e');
-      reminderStatus.value =
-          'Vérifiez l’autorisation Notifications dans Android';
+      reminderStatus.value = _isIOS
+          ? 'Vérifiez Notifications dans Réglages iPhone'
+          : 'Vérifiez l’autorisation Notifications dans Android';
     }
   }
 
@@ -306,15 +322,37 @@ class NotificationService {
     return _canScheduleExact;
   }
 
-  /// Prépare explicitement Android pour le mode « Alarme ».
+  /// Prépare le mode « Alarme » selon la plateforme.
   ///
-  /// Cette méthode n'est appelée qu'après une action volontaire de l'utilisateur
-  /// (sélection du mode ou bouton de test) afin d'éviter d'ouvrir des écrans
-  /// système au démarrage de l'application.
+  /// Android demande les alarmes exactes et le plein écran.
+  /// iOS demande l'autorisation AlarmKit sur iOS 26+ ; les versions plus
+  /// anciennes restent automatiquement sur le moteur compatible.
   Future<bool> prepareAlarmModePermissions() async {
     if (kIsWeb) return false;
     await requestPermission();
     if (!_initialized) return false;
+
+    if (_isIOS) {
+      final apple =
+          await AlarmRingService.instance.requestAppleAlarmKitAuthorization();
+      if (!apple.supported) {
+        reminderStatus.value = 'Alarme prête · mode compatible iOS';
+        return true;
+      }
+      if (apple.authorized) {
+        reminderStatus.value = 'Alarme Apple prête · AlarmKit';
+        return true;
+      }
+      if (apple.denied) {
+        reminderStatus.value =
+            'Alarmes Apple désactivées · mode compatible iOS actif';
+        return true;
+      }
+      reminderStatus.value =
+          'Alarmes Apple en attente · mode compatible iOS actif';
+      return true;
+    }
+
     if (!_isAndroid) {
       reminderStatus.value = 'Alarme prête';
       return true;
@@ -346,6 +384,16 @@ class NotificationService {
       return false;
     }
   }
+
+  Future<bool> openReminderSettings() async {
+    if (_isIOS) {
+      return AlarmRingService.instance.openIOSAppSettings();
+    }
+    return false;
+  }
+
+  Future<AppleAlarmKitStatus> appleAlarmStatus() =>
+      AlarmRingService.instance.appleAlarmKitStatus();
 
   int _idFor(String ownerPhone, String notificationKey) {
     var hash = 0;
@@ -404,11 +452,20 @@ class NotificationService {
     if (soundMode == 'alarm') {
       final ready = await prepareAlarmModePermissions();
       if (_isAndroid && !ready) return;
+      final before = _isIOS ? await appleAlarmStatus() : null;
       final scheduled =
           await AlarmRingService.instance.ringTestNow(vibration: vibration);
-      reminderStatus.value = scheduled
-          ? 'Test alarme envoyé · sonnerie longue'
-          : 'Test alarme impossible · vérifiez les autorisations';
+      if (_isIOS) {
+        reminderStatus.value = scheduled
+            ? (before?.authorized == true
+                ? 'Test iPhone programmé · alarme système Apple'
+                : 'Test iPhone programmé · mode compatible iOS')
+            : 'Test iPhone impossible · vérifiez les autorisations';
+      } else {
+        reminderStatus.value = scheduled
+            ? 'Test alarme envoyé · sonnerie longue'
+            : 'Test alarme impossible · vérifiez les autorisations';
+      }
       return;
     }
     try {
@@ -426,8 +483,9 @@ class NotificationService {
           : 'Test sonore envoyé';
     } catch (e) {
       debugPrint('Test de rappel ignoré: $e');
-      reminderStatus.value =
-          'Test impossible · vérifiez les notifications Android';
+      reminderStatus.value = _isIOS
+          ? 'Test impossible · vérifiez Notifications dans Réglages iPhone'
+          : 'Test impossible · vérifiez les notifications Android';
     }
   }
 
@@ -462,6 +520,8 @@ class NotificationService {
           return;
         }
       }
+
+      final apple = _isIOS ? await appleAlarmStatus() : null;
       final scheduled = await AlarmRingService.instance.scheduleGuardAlarm(
         ownerPhone: ownerPhone,
         dateStr: dateStr,
@@ -471,8 +531,13 @@ class NotificationService {
         fireAt: fireAt,
         vibration: vibration,
       );
-      if (!scheduled)
+      if (!scheduled) {
         reminderStatus.value = 'Une alarme n’a pas pu être programmée';
+      } else if (_isIOS) {
+        reminderStatus.value = apple?.authorized == true
+            ? 'Rappels programmés · AlarmKit Apple'
+            : 'Rappels programmés · mode compatible iOS';
+      }
       return;
     }
 
@@ -506,8 +571,11 @@ class NotificationService {
 
     try {
       await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
-      if (_isAndroid)
+      if (_isAndroid) {
         reminderStatus.value = 'Rappels programmés · mode compatible Android';
+      } else if (_isIOS) {
+        reminderStatus.value = 'Rappels programmés · notifications iPhone';
+      }
     } catch (e) {
       debugPrint('Impossible de programmer le rappel: $e');
       reminderStatus.value =
