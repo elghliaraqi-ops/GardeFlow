@@ -6,14 +6,15 @@ import 'package:intl/intl.dart';
 
 import '../models/app_user.dart';
 import '../models/planning_entry.dart';
+import '../models/qcm_models.dart';
 import '../models/shift_type.dart';
 import '../state/app_state.dart';
+import 'clinical_case_service.dart';
 
 /// Pont léger entre GardeFlow et le widget Android natif.
 ///
 /// Aucune donnée médicale n'est exposée : uniquement identité d'affichage,
-/// garde personnelle, statut du jour et raccourcis de navigation.
-/// Le cache local reste volontairement limité aux informations du widget.
+/// planning personnel, statut du jour, statistiques Practice et raccourcis.
 class AndroidWidgetService {
   AndroidWidgetService._();
   static final AndroidWidgetService instance = AndroidWidgetService._();
@@ -25,6 +26,8 @@ class AndroidWidgetService {
   final ValueNotifier<String?> action = ValueNotifier<String?>(null);
   bool _initialized = false;
   String? _lastPayload;
+  QcmStats? _practiceMonthCache;
+  DateTime? _practiceCacheAt;
 
   bool get _supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -58,7 +61,8 @@ class AndroidWidgetService {
     if (me == null) return;
     await initialize();
 
-    final payload = _buildPayload(appState, me);
+    final practiceMonth = await _practiceMonthStats();
+    final payload = _buildPayload(appState, me, practiceMonth);
     final encoded = jsonEncode(payload);
     if (encoded == _lastPayload) return;
 
@@ -70,7 +74,28 @@ class AndroidWidgetService {
     }
   }
 
-  Map<String, String> _buildPayload(AppState appState, AppUser me) {
+  Future<QcmStats> _practiceMonthStats() async {
+    final now = DateTime.now();
+    if (_practiceMonthCache != null &&
+        _practiceCacheAt != null &&
+        now.difference(_practiceCacheAt!) < const Duration(minutes: 5)) {
+      return _practiceMonthCache!;
+    }
+    try {
+      final stats = await ClinicalCaseService.instance.qcmSummary(period: 'month');
+      _practiceMonthCache = stats;
+      _practiceCacheAt = now;
+      return stats;
+    } catch (_) {
+      return _practiceMonthCache ?? const QcmStats();
+    }
+  }
+
+  Map<String, String> _buildPayload(
+    AppState appState,
+    AppUser me,
+    QcmStats practiceMonth,
+  ) {
     final now = DateTime.now();
     final mine = appState.planning
         .where(
@@ -82,7 +107,8 @@ class AndroidWidgetService {
 
     PlanningEntry? active;
     DateTime? activeStart;
-    final future = <({PlanningEntry entry, DateTime start})>[];
+    DateTime? activeEnd;
+    final future = <({PlanningEntry entry, DateTime start, DateTime end})>[];
     var isOnLeaveToday = false;
 
     for (final entry in mine) {
@@ -102,24 +128,37 @@ class AndroidWidgetService {
         if (activeStart == null || bounds.$1.isAfter(activeStart)) {
           active = entry;
           activeStart = bounds.$1;
+          activeEnd = bounds.$2;
         }
       } else if (bounds.$1.isAfter(now)) {
-        future.add((entry: entry, start: bounds.$1));
+        future.add((entry: entry, start: bounds.$1, end: bounds.$2));
       }
     }
 
     future.sort((a, b) => a.start.compareTo(b.start));
     final next = active ?? (future.isEmpty ? null : future.first.entry);
+    final nextStart = active != null
+        ? activeStart
+        : (future.isEmpty ? null : future.first.start);
+    final nextEnd = active != null
+        ? activeEnd
+        : (future.isEmpty ? null : future.first.end);
     final nextData = next == null ? null : _guardData(next, now);
 
     String todayStatus;
+    String astreintesDetail;
+    String astreintesSubdetail;
     if (active != null) {
       final shift = _shiftFor(active.shiftId);
       todayStatus = shift == null
           ? 'De garde aujourd’hui'
           : '${_category(active.shiftId)} · ${shift.label.toUpperCase()}';
+      astreintesDetail = 'Vous êtes de garde';
+      astreintesSubdetail = 'Juniors + séniors · accès rapide';
     } else if (isOnLeaveToday) {
       todayStatus = 'Congé aujourd’hui';
+      astreintesDetail = 'Aujourd’hui · Congé';
+      astreintesSubdetail = 'Voir les équipes de garde';
     } else {
       final todayUpcoming = future
           .where((item) => _sameDay(item.start, now))
@@ -127,23 +166,54 @@ class AndroidWidgetService {
       if (todayUpcoming != null) {
         todayStatus =
             'Garde à ${DateFormat('HH:mm').format(todayUpcoming.start)}';
+        astreintesDetail = 'Garde prévue aujourd’hui';
+        astreintesSubdetail = 'Juniors + séniors · accès rapide';
       } else {
         todayStatus = 'Repos aujourd’hui';
+        astreintesDetail = 'Aujourd’hui · Repos';
+        astreintesSubdetail = 'Voir les juniors et séniors de garde';
       }
     }
 
     final futureCount = future.length + (active == null ? 0 : 1);
+    final planningItems = <String>[];
+    if (active != null) planningItems.add(_compactGuardLine(active, now));
+    for (final item in future.take(3 - planningItems.length)) {
+      planningItems.add(_compactGuardLine(item.entry, now));
+    }
+    while (planningItems.length < 3) {
+      planningItems.add('');
+    }
+
+    final practiceAnswered = practiceMonth.answered;
+    final practiceAccuracy = practiceMonth.accuracy;
+    final practiceDetail = practiceAnswered == 0
+        ? 'Ce mois · aucun QCM'
+        : 'Ce mois · $practiceAnswered QCM répondus';
+    final practiceSubdetail = practiceAnswered == 0
+        ? 'Commencer un entraînement'
+        : '${practiceAccuracy.toStringAsFixed(0)}% de réussite · ouvrir Practice';
+
     return <String, String>{
       'doctor_name': _doctorLabel(me),
+      'date_label': _shortDate(now),
       'today_status': todayStatus,
       'next_title': nextData?.title ?? 'Aucune garde à venir',
       'next_detail': nextData?.detail ?? 'Votre planning est à jour',
       'next_shift_id': next?.shiftId ?? 'none',
+      'next_start_ms': nextStart?.millisecondsSinceEpoch.toString() ?? '',
+      'next_end_ms': nextEnd?.millisecondsSinceEpoch.toString() ?? '',
+      'next_active': (active != null).toString(),
       'planning_detail': futureCount == 0
           ? 'Aucune garde à venir'
           : '$futureCount garde${futureCount > 1 ? 's' : ''} à venir',
-      'astreintes_detail': 'Juniors & séniors',
-      'practice_detail': 'QCM & cas cliniques',
+      'planning_line_1': planningItems[0],
+      'planning_line_2': planningItems[1],
+      'planning_line_3': planningItems[2],
+      'astreintes_detail': astreintesDetail,
+      'astreintes_subdetail': astreintesSubdetail,
+      'practice_detail': practiceDetail,
+      'practice_subdetail': practiceSubdetail,
       'updated_at': now.toIso8601String(),
     };
   }
@@ -167,6 +237,20 @@ class AndroidWidgetService {
     final end = DateFormat('HH:mm').format(bounds.$2);
     final endPrefix = _sameDay(bounds.$1, bounds.$2) ? '' : 'demain ';
     return (title: title, detail: '$day · $start → $endPrefix$end');
+  }
+
+  String _compactGuardLine(PlanningEntry entry, DateTime now) {
+    final date = DateTime.tryParse(entry.dateStr) ?? now;
+    final shift = _shiftFor(entry.shiftId);
+    final dateLabel = DateFormat('dd MMM', 'fr_FR').format(date);
+    if (shift == null) return dateLabel;
+    final category = _category(entry.shiftId) == 'URGENCES' ? 'URG' : 'SERVICE';
+    return '$dateLabel · $category ${shift.label.toUpperCase()}';
+  }
+
+  String _shortDate(DateTime value) {
+    final raw = DateFormat('EEE d MMM', 'fr_FR').format(value);
+    return raw.isEmpty ? '' : raw[0].toUpperCase() + raw.substring(1);
   }
 
   String _doctorLabel(AppUser user) {
