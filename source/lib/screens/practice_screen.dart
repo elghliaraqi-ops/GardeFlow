@@ -270,7 +270,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
               const SizedBox(height: 9),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: _PracticePrimaryActionCard(
