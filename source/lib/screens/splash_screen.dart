@@ -129,7 +129,7 @@ class _GardeFlowHero extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(
-            'assets/branding/gardeflow_logo.png',
+            'assets/branding/splash_gardeflow_mark.webp',
             width: 164,
             height: 164,
             fit: BoxFit.contain,
@@ -291,7 +291,7 @@ class _PracticeBrand extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(
-            'assets/branding/practice_icon.webp',
+            'assets/branding/splash_practice_mark.webp',
             width: 78,
             height: 78,
             fit: BoxFit.contain,
@@ -351,17 +351,13 @@ class _FlowSuiteBrand extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  'assets/branding/flowsuite_banner.webp',
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.centerLeft,
-                  filterQuality: FilterQuality.high,
-                  isAntiAlias: true,
-                ),
+              Image.asset(
+                'assets/branding/splash_flowsuite_mark.webp',
+                width: 50,
+                height: 50,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                isAntiAlias: true,
               ),
               const SizedBox(width: 9),
               ShaderMask(
