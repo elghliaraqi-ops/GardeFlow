@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path('.')
@@ -92,4 +94,12 @@ for banned in ('_SplashBrandChip', '_FlowSuiteSplashBrands'):
     if banned in z:
         raise SystemExit(f'Flutter splash imitation still present: {banned}')
 
-print('Practice fixed: clean image assets, Practice icon in top bar, game card restored to top.')
+# Apply the current one-time Practice information architecture cleanup using the
+# already-approved repository patch workflow.
+subprocess.run(
+    [sys.executable, 'ci/one_time_practice_hub_reorg.py'],
+    cwd=ROOT,
+    check=True,
+)
+
+print('Practice fixed: clean image assets, Practice icon in top bar, game card restored to top, hub hierarchy reorganized.')
