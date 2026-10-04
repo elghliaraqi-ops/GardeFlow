@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/one-time-practice-branding-stats.yml'
       - 'ci/one_time_practice_branding.py'
+      - 'ci/one_time_android_widget_integration.py'
   workflow_dispatch: {}
 
 permissions:
@@ -15,12 +16,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install original branding assets and remove Flutter imitations
+      - name: Install branding and Android widget integration
         id: install
         shell: bash
         run: |
           set +e
-          python3 ci/one_time_practice_branding.py > /tmp/branding-install.log 2>&1
+          {
+            python3 ci/one_time_practice_branding.py
+            branding_status=$?
+            if [ "$branding_status" -ne 0 ]; then
+              exit "$branding_status"
+            fi
+            python3 ci/one_time_android_widget_integration.py
+          } > /tmp/branding-install.log 2>&1
           status=$?
           cat /tmp/branding-install.log
           echo "status=$status" >> "$GITHUB_OUTPUT"
@@ -33,17 +41,17 @@ jobs:
           path: /tmp/branding-install.log
           if-no-files-found: error
           retention-days: 1
-      - name: Commit exact app branding integration
+      - name: Commit app integration
         if: steps.install.outputs.status == '0'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add -A
           git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
-          git commit -m "ui: use original FlowSuite and Practice visual assets"
+          git commit -m "feat(widget): integrate four-card Android home widget"
           git push
       - name: Fail after preserving diagnostics
         if: steps.install.outputs.status != '0'
         run: exit 1
 
-# Trigger original asset installation diagnostics: 2026-10-02-r3
+# Trigger Android widget integration: 2026-10-04
