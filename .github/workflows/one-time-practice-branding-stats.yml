@@ -16,6 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
       - name: Install branding and Android widget integration
         id: install
         shell: bash
@@ -28,6 +33,7 @@ jobs:
               exit "$branding_status"
             fi
             python3 ci/one_time_android_widget_integration.py
+            dart format source/lib/screens/home_screen.dart source/lib/services/android_widget_service.dart
           } > /tmp/branding-install.log 2>&1
           status=$?
           cat /tmp/branding-install.log
@@ -48,10 +54,10 @@ jobs:
           git config user.email github-actions@github.com
           git add -A
           git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
-          git commit -m "feat(widget): integrate four-card Android home widget"
+          git commit -m "feat(widget): integrate and format Android home widget"
           git push
       - name: Fail after preserving diagnostics
         if: steps.install.outputs.status != '0'
         run: exit 1
 
-# Trigger Android widget integration: 2026-10-04
+# Trigger formatted Android widget integration: 2026-10-04
