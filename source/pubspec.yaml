@@ -40,6 +40,7 @@ flutter:
   assets:
     - assets/fonts/LICENSE_OFL.txt
     - assets/branding/gardeflow_logo.png
+    - assets/branding/splash_gardeflow_exact.webp
     - assets/branding/practice_banner.webp
     - assets/branding/flowsuite_banner.webp
     - assets/branding/splash_practice.webp
