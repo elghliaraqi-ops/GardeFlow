@@ -33,4 +33,6 @@ subprocess.run(
     check=True,
 )
 
+# The companion workflow also runs dart format on the widget bridge sources so
+# CI formatting stays deterministic after native/widget integrations.
 print('Practice hub reorganization applied; current branding assets preserved and layout constraints verified.')
