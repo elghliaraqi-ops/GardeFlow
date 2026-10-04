@@ -17,7 +17,7 @@ for required in (
     if not required.exists():
         raise SystemExit(f'missing current Practice branding asset: {required}')
 
-# Apply the current one-time Practice information architecture cleanup using the
+# Apply the current Practice information architecture cleanup using the
 # repository's already-approved patch workflow.
 subprocess.run(
     [sys.executable, 'ci/one_time_practice_hub_reorg.py'],
@@ -25,4 +25,12 @@ subprocess.run(
     check=True,
 )
 
-print('Practice hub reorganization applied; current branding assets preserved.')
+# Keep the two primary training cards bounded inside the vertically scrolling
+# ListView; CrossAxisAlignment.stretch would receive an unbounded height.
+subprocess.run(
+    [sys.executable, 'ci/one_time_practice_layout_fix.py'],
+    cwd=ROOT,
+    check=True,
+)
+
+print('Practice hub reorganization applied; current branding assets preserved and layout constraints verified.')
