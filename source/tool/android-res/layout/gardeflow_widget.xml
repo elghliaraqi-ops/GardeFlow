@@ -15,7 +15,7 @@
         android:gravity="center_vertical"
         android:paddingStart="3dp"
         android:paddingEnd="3dp"
-        android:paddingBottom="9dp">
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -28,8 +28,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Bonjour Docteur"
-                android:textColor="#F8FBFF"
-                android:textSize="15sp"
+                android:textColor="#F6FAF8"
+                android:textSize="14.5sp"
                 android:textStyle="bold"
                 android:maxLines="1"
                 android:ellipsize="end" />
@@ -39,9 +39,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="Ouvrez GardeFlow pour synchroniser"
-                android:textColor="#A9C1D6"
-                android:textSize="9.5sp"
+                android:text="Repos aujourd’hui"
+                android:textColor="#9BB6A8"
+                android:textSize="9.2sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </LinearLayout>
@@ -51,9 +51,110 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
+            android:paddingStart="7dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="7dp"
+            android:paddingBottom="3dp"
             android:text="Sam 4 oct"
-            android:textColor="#8FB4D1"
-            android:textSize="8.5sp"
+            android:textColor="#A9C6B7"
+            android:textSize="8.2sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:background="@drawable/bg_widget_period_pill" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_next_card"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1.28"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="10dp"
+        android:background="@drawable/bg_widget_next_default">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="PROCHAINE GARDE"
+                android:textColor="#DCEBE4"
+                android:textSize="7.5sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+
+            <TextView
+                android:id="@+id/widget_next_icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="＋"
+                android:textColor="#F5D86E"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/widget_next_type"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="SERVICE"
+                android:textColor="#FFFFFF"
+                android:textSize="15.5sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/widget_next_period"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="JOUR"
+                android:textColor="#FFF0A8"
+                android:textSize="8.5sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:maxLines="1"
+                android:background="@drawable/bg_widget_period_pill" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_next_detail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Demain · 08:00 → 20:00"
+            android:textColor="#EEF6F2"
+            android:textSize="8.7sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_next_countdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="Dans 2 j 4 h"
+            android:textColor="#F5F8F6"
+            android:textSize="9.3sp"
             android:textStyle="bold"
             android:maxLines="1" />
     </LinearLayout>
@@ -61,193 +162,73 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1.12"
+        android:layout_weight="0.72"
+        android:layout_marginTop="8dp"
         android:orientation="horizontal">
-
-        <LinearLayout
-            android:id="@+id/widget_next_card"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1.07"
-            android:layout_marginEnd="5dp"
-            android:orientation="vertical"
-            android:gravity="center_vertical"
-            android:padding="11dp"
-            android:background="@drawable/bg_widget_next_default">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="PROCHAINE GARDE"
-                    android:textColor="#F5D6DB"
-                    android:textSize="7.5sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.06" />
-
-                <TextView
-                    android:id="@+id/widget_next_icon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="＋"
-                    android:textColor="#FFD75A"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/widget_next_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
-                android:text="Prochaine garde"
-                android:textColor="#FFFFFF"
-                android:textSize="12.5sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_next_detail"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="Planning non synchronisé"
-                android:textColor="#E7EDF5"
-                android:textSize="8.5sp"
-                android:maxLines="2"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_next_countdown"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
-                android:text="Dans 2 j 11 h"
-                android:textColor="#FFD8DE"
-                android:textSize="9sp"
-                android:textStyle="bold"
-                android:maxLines="1" />
-        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/widget_planning_card"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="0.93"
-            android:layout_marginStart="5dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="3dp"
             android:orientation="vertical"
             android:gravity="center_vertical"
-            android:padding="10dp"
-            android:background="@drawable/bg_widget_card">
+            android:padding="8dp"
+            android:background="@drawable/bg_widget_planning">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="▦  PLANNING"
-                android:textColor="#68E8BA"
-                android:textSize="9sp"
-                android:textStyle="bold" />
+                android:textColor="#6FE1A8"
+                android:textSize="7.5sp"
+                android:textStyle="bold"
+                android:maxLines="1" />
 
             <TextView
                 android:id="@+id/widget_planning_detail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="5dp"
                 android:text="3 gardes à venir"
-                android:textColor="#FFFFFF"
-                android:textSize="10.5sp"
+                android:textColor="#F5FAF7"
+                android:textSize="8sp"
                 android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_planning_line_1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="08 oct · SERVICE JOUR"
-                android:textColor="#BBD4E9"
-                android:textSize="7.7sp"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_planning_line_2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="10 oct · URG 24H"
-                android:textColor="#BBD4E9"
-                android:textSize="7.7sp"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_planning_line_3"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="13 oct · SERVICE NUIT"
-                android:textColor="#BBD4E9"
-                android:textSize="7.7sp"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:ellipsize="end" />
         </LinearLayout>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="0.88"
-        android:layout_marginTop="10dp"
-        android:orientation="horizontal">
 
         <LinearLayout
             android:id="@+id/widget_astreintes_card"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:layout_marginEnd="5dp"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
             android:orientation="vertical"
             android:gravity="center_vertical"
-            android:padding="10dp"
-            android:background="@drawable/bg_widget_card">
+            android:padding="8dp"
+            android:background="@drawable/bg_widget_astreintes">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="☎  ASTREINTES"
-                android:textColor="#FFD166"
-                android:textSize="9sp"
-                android:textStyle="bold" />
+                android:textColor="#F2A66C"
+                android:textSize="7.2sp"
+                android:textStyle="bold"
+                android:maxLines="1" />
 
             <TextView
                 android:id="@+id/widget_astreintes_detail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
+                android:layout_marginTop="5dp"
                 android:text="Aujourd’hui · Repos"
-                android:textColor="#FFFFFF"
-                android:textSize="10.5sp"
+                android:textColor="#FFF7F1"
+                android:textSize="7.8sp"
                 android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_astreintes_subdetail"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Voir juniors et séniors de garde"
-                android:textColor="#A9C1D6"
-                android:textSize="8sp"
                 android:maxLines="2"
                 android:ellipsize="end" />
         </LinearLayout>
@@ -257,40 +238,30 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="3dp"
             android:orientation="vertical"
             android:gravity="center_vertical"
-            android:padding="10dp"
+            android:padding="8dp"
             android:background="@drawable/bg_widget_practice">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="✦  PRACTICE"
-                android:textColor="#FFD166"
-                android:textSize="9sp"
-                android:textStyle="bold" />
+                android:textColor="#BCA7FF"
+                android:textSize="7.5sp"
+                android:textStyle="bold"
+                android:maxLines="1" />
 
             <TextView
                 android:id="@+id/widget_practice_detail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
+                android:layout_marginTop="5dp"
                 android:text="Ce mois · QCM"
-                android:textColor="#FFFFFF"
-                android:textSize="10.5sp"
+                android:textColor="#F8F5FF"
+                android:textSize="7.8sp"
                 android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/widget_practice_subdetail"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Ouvrir Practice"
-                android:textColor="#D8D0FF"
-                android:textSize="8sp"
                 android:maxLines="2"
                 android:ellipsize="end" />
         </LinearLayout>
