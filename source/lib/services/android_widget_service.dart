@@ -82,7 +82,9 @@ class AndroidWidgetService {
       return _practiceMonthCache!;
     }
     try {
-      final stats = await ClinicalCaseService.instance.qcmSummary(period: 'month');
+      final stats = await ClinicalCaseService.instance.qcmSummary(
+        period: 'month',
+      );
       _practiceMonthCache = stats;
       _practiceCacheAt = now;
       return stats;
