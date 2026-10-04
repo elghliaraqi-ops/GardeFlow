@@ -232,6 +232,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
         : _ranks.promotionRank != null
         ? '#${_ranks.promotionRank} promo'
         : 'Ouvrir';
+    final qcmMeta = _loading
+        ? 'Chargement…'
+        : '${_qcmMonth.answered} répondus · ${_qcmMonth.accuracy.toStringAsFixed(0)}%';
 
     return ScreenDecorBackdrop(
       scene: ScreenDecorScene.practice,
@@ -257,11 +260,58 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 const SizedBox(height: 10),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
+
+              // 1. L'objectif principal de Practice reste l'entraînement.
               const SizedBox(height: 18),
               const _PracticeHubSectionHeader(
+                icon: Icons.school_rounded,
+                title: 'S’entraîner',
+                subtitle: 'Les deux accès principaux, immédiatement disponibles',
+              ),
+              const SizedBox(height: 9),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _PracticePrimaryActionCard(
+                      icon: Icons.medical_information_rounded,
+                      title: 'Cas cliniques',
+                      subtitle: 'Cas interactifs et défis associés',
+                      meta: 'Cas + QCM',
+                      accent: PracticeColors.gamePurple,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ClinicalCasesScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: _PracticePrimaryActionCard(
+                      icon: Icons.quiz_rounded,
+                      title: 'QCM',
+                      subtitle: 'Répondre, corriger et progresser',
+                      meta: qcmMeta,
+                      accent: PracticeColors.accent,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PracticeQcmScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
+              const SizedBox(height: 22),
+              const _PracticeHubSectionHeader(
                 icon: Icons.emergency_rounded,
-                title: 'Mission de garde',
-                subtitle: 'Accès rapide au suivi des patients pendant la garde',
+                title: 'Ma garde',
+                subtitle: 'Patients, objectif personnel et historique de garde',
               ),
               const SizedBox(height: 9),
               if (guard == null)
@@ -291,42 +341,23 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                   onEditGoal: _editGoal,
                 ),
-              const SizedBox(height: 9),
-              _EncouragementCard(text: _encouragement(guard)),
-              const SizedBox(height: 20),
-              const _PracticeHubSectionHeader(
-                icon: Icons.sports_esports_rounded,
-                title: 'S’entraîner',
-                subtitle: 'Cas cliniques et QCM accessibles sans détour',
-              ),
-              const SizedBox(height: 9),
-              _PracticeHubTrainingGrid(
-                casesCard: _ClinicalCasesGameCard(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ClinicalCasesScreen(),
-                    ),
-                  ),
-                ),
-                qcmCard: _QcmPracticeCard(
-                  stats: _qcmMonth,
-                  loading: _loading,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PracticeQcmScreen(),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _QcmCanonicalStatsStrip(month: _qcmMonth, total: _qcmAll, loading: _loading),
-              const SizedBox(height: 20),
+              if (guard != null) ...[
+                const SizedBox(height: 9),
+                _EncouragementCard(text: _encouragement(guard)),
+              ],
+
+              // 3. Toutes les statistiques sont regroupées dans une seule zone.
+              const SizedBox(height: 22),
               const _PracticeHubSectionHeader(
                 icon: Icons.insights_rounded,
-                title: 'Progression',
-                subtitle: 'Les chiffres utiles regroupés au même endroit',
+                title: 'Mes résultats',
+                subtitle: 'QCM, activité clinique et niveau au même endroit',
+              ),
+              const SizedBox(height: 9),
+              _QcmCanonicalStatsStrip(
+                month: _qcmMonth,
+                total: _qcmAll,
+                loading: _loading,
               ),
               const SizedBox(height: 9),
               _PracticeHubProgressPanel(
@@ -336,7 +367,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 level: level,
                 loading: _loading,
               ),
-              const SizedBox(height: 20),
+
+              // 4. Profil et réglages : utiles mais volontairement secondaires.
+              const SizedBox(height: 22),
               const _PracticeHubSectionHeader(
                 icon: Icons.account_circle_rounded,
                 title: 'Mon profil Practice',
@@ -363,13 +396,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ),
                 onProgression: () => _showProgression(context),
               ),
-              const SizedBox(height: 20),
-              const _PracticeHubSectionHeader(
-                icon: Icons.tune_rounded,
-                title: 'Préférences',
-                subtitle: 'Réglages du profil et visibilité au classement',
-              ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 10),
               _LeaderboardPreferenceCard(
                 value: _prefs.leaderboardOptIn,
                 onChanged: (value) async {
@@ -486,6 +513,122 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   _MiniMetric(
                     label: 'Observations complètes',
                     value: '${_year.completeObservations}',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PracticePrimaryActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String meta;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _PracticePrimaryActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          height: 154,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accent.withOpacity(.22),
+                PracticeColors.surface.withOpacity(.96),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: accent.withOpacity(.34)),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -8,
+                top: -10,
+                child: Icon(
+                  icon,
+                  size: 66,
+                  color: accent.withOpacity(.07),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: accent.withOpacity(.14),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(icon, color: accent, size: 20),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        color: accent.withOpacity(.92),
+                        size: 19,
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: PracticeColors.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: PracticeColors.textSecondary,
+                      fontSize: 10.5,
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
