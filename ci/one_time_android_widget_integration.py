@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path('.')
 HOME = ROOT / 'source/lib/screens/home_screen.dart'
 CONFIG = ROOT / 'source/tool/configure_android.dart'
+ALARM_BRIDGE = ROOT / 'source/tool/install_system_alarm_bridge.py'
 
 home = HOME.read_text()
 
@@ -69,7 +70,6 @@ if 'AndroidWidgetService.instance.sync(appState)' not in home:
 HOME.write_text(home)
 
 config = CONFIG.read_text()
-
 write_anchor = '''  xml = xml.replaceRange(appOpening.end, appOpening.end, additions);'''
 widget_receiver = """  if (!xml.contains('GardeFlowWidgetProvider')) {
     additions += '''\n        <receiver android:name=\".GardeFlowWidgetProvider\" android:exported=\"true\">
@@ -117,8 +117,91 @@ if "final nativeSources = Directory" not in config:
     if source_copy_anchor not in config:
         raise SystemExit('Android resource copy anchor missing')
     config = config.replace(source_copy_anchor, source_copy_replacement, 1)
-
 CONFIG.write_text(config)
+
+# install_system_alarm_bridge.py regenerates MainActivity after configure_android.dart.
+# Merge the widget channel into that generated MainActivity so neither feature overwrites the other.
+bridge = ALARM_BRIDGE.read_text()
+main_start = bridge.find("main_kotlin = r'''package __PACKAGE__")
+main_end_marker = "'''.replace(\"__PACKAGE__\", package_name)\nmain_activity.write_text(main_kotlin, encoding=\"utf-8\")"
+main_end = bridge.find(main_end_marker, main_start)
+if main_start < 0 or main_end < 0:
+    raise SystemExit('System alarm MainActivity template not found')
+main_block = bridge[main_start:main_end]
+if 'com.huim6.huim6_planning/widget' not in main_block:
+    class_anchor = 'class MainActivity : FlutterActivity() {\n'
+    class_fields = '''class MainActivity : FlutterActivity() {
+    companion object {
+        private const val WIDGET_CHANNEL = "com.huim6.huim6_planning/widget"
+        private const val EXTRA_WIDGET_ACTION = "gardeflow_widget_action"
+    }
+
+    private var widgetChannel: MethodChannel? = null
+    private var pendingWidgetAction: String? = null
+'''
+    if class_anchor not in main_block:
+        raise SystemExit('System alarm MainActivity class anchor missing')
+    main_block = main_block.replace(class_anchor, class_fields, 1)
+
+    super_anchor = '        super.configureFlutterEngine(flutterEngine)\n'
+    super_replacement = '''        super.configureFlutterEngine(flutterEngine)
+        pendingWidgetAction = intent?.getStringExtra(EXTRA_WIDGET_ACTION)
+'''
+    if super_anchor not in main_block:
+        raise SystemExit('System alarm configureFlutterEngine anchor missing')
+    main_block = main_block.replace(super_anchor, super_replacement, 1)
+
+    tail = '''        }
+    }
+}
+'''
+    widget_tail = '''        }
+
+        widgetChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            WIDGET_CHANNEL
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getInitialWidgetAction" -> {
+                        val value = pendingWidgetAction
+                        pendingWidgetAction = null
+                        result.success(value)
+                    }
+                    "updateWidgetData" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val values = call.arguments as? Map<String, Any?> ?: emptyMap()
+                        val prefs = getSharedPreferences(GardeFlowWidgetProvider.PREFS_NAME, MODE_PRIVATE)
+                        val editor = prefs.edit()
+                        values.forEach { (key, value) ->
+                            editor.putString(key, value?.toString().orEmpty())
+                        }
+                        editor.apply()
+                        GardeFlowWidgetProvider.updateAll(this)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val action = intent.getStringExtra(EXTRA_WIDGET_ACTION)
+        if (!action.isNullOrBlank()) {
+            pendingWidgetAction = action
+            widgetChannel?.invokeMethod("widgetAction", action)
+        }
+    }
+}
+'''
+    if tail not in main_block:
+        raise SystemExit('System alarm MainActivity tail anchor missing')
+    main_block = main_block.replace(tail, widget_tail, 1)
+    bridge = bridge[:main_start] + main_block + bridge[main_end:]
+ALARM_BRIDGE.write_text(bridge)
 
 for required in (
     widget_import.strip(),
@@ -135,5 +218,13 @@ for required in (
 ):
     if required not in config:
         raise SystemExit(f'missing Android widget integration: {required}')
+for required in (
+    'com.huim6.huim6_planning/widget',
+    'GardeFlowWidgetProvider.updateAll(this)',
+    'override fun onNewIntent',
+    'gardeflow/fullscreen_alarm',
+):
+    if required not in bridge:
+        raise SystemExit(f'missing merged MainActivity feature: {required}')
 
-print('GardeFlow Android widget integrated into HomeScreen and Android generator.')
+print('GardeFlow Android widget integrated without replacing the system alarm bridge.')
