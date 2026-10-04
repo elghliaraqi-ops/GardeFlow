@@ -373,7 +373,8 @@ class _ReferenceProgressBar extends StatelessWidget {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
-        final value = (0.035 + animation.value * 0.965).clamp(0.0, 1.0);
+        final value =
+            (0.035 + animation.value * 0.965).clamp(0.0, 1.0).toDouble();
         return Container(
           width: 706 * scale,
           height: 50 * scale,
