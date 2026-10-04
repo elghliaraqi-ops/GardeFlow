@@ -88,15 +88,13 @@ class NotificationService {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       if (android != null) {
-        await android
-            .createNotificationChannel(const AndroidNotificationChannel(
+        await android.createNotificationChannel(const AndroidNotificationChannel(
           pushChannelId,
           'Échanges et congés',
           description: 'Demandes, validations et événements du planning',
           importance: Importance.high,
         ));
-        await android
-            .createNotificationChannel(const AndroidNotificationChannel(
+        await android.createNotificationChannel(const AndroidNotificationChannel(
           practiceChannelId,
           'Practice',
           description:
@@ -105,8 +103,7 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
         ));
-        await android
-            .createNotificationChannel(const AndroidNotificationChannel(
+        await android.createNotificationChannel(const AndroidNotificationChannel(
           _standardReminderChannel,
           'Rappels de garde · Standard',
           description: 'Rappels sonores avant les gardes validées',
@@ -114,8 +111,7 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
         ));
-        await android
-            .createNotificationChannel(const AndroidNotificationChannel(
+        await android.createNotificationChannel(const AndroidNotificationChannel(
           _urgentReminderChannel,
           'Rappels de garde · Urgent',
           description: 'Rappels prioritaires avant les gardes validées',
@@ -123,8 +119,7 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
         ));
-        await android
-            .createNotificationChannel(const AndroidNotificationChannel(
+        await android.createNotificationChannel(const AndroidNotificationChannel(
           _silentReminderChannel,
           'Rappels de garde · Silencieux',
           description: 'Rappels visuels sans son',
@@ -375,12 +370,12 @@ class NotificationService {
       _canScheduleExact = exact;
       reminderStatus.value = exact
           ? 'Alarme prête · programmation exacte disponible'
-          : 'Alarme non prête · autorisez « Alarmes et rappels » dans Android';
+          : 'Alarme prête · secours Android actif, autorisation exacte recommandée';
       return exact;
     } catch (e) {
       debugPrint('Préparation du mode alarme impossible: $e');
       reminderStatus.value =
-          'Alarme non prête · vérifiez les autorisations Android';
+          'Alarme en mode secours · vérifiez les autorisations Android';
       return false;
     }
   }
@@ -451,7 +446,13 @@ class NotificationService {
     if (kIsWeb) return;
     if (soundMode == 'alarm') {
       final ready = await prepareAlarmModePermissions();
-      if (_isAndroid && !ready) return;
+      if (_isAndroid && !ready) {
+        // Le test plein écran ne dépend pas de SCHEDULE_EXACT_ALARM :
+        // AlarmActivity peut être ouverte immédiatement même si Android refuse
+        // encore la programmation exacte. Ne jamais bloquer le bouton de test.
+        reminderStatus.value =
+            'Test direct en cours · autorisation exacte encore recommandée';
+      }
       final before = _isIOS ? await appleAlarmStatus() : null;
       final scheduled =
           await AlarmRingService.instance.ringTestNow(vibration: vibration);
@@ -499,6 +500,33 @@ class NotificationService {
         value.second,
       );
 
+  Future<bool> _scheduleAndroidBackupNotification({
+    required String ownerPhone,
+    required String notificationKey,
+    required String title,
+    required String body,
+    required DateTime fireAt,
+    required bool vibration,
+  }) async {
+    if (!_isAndroid || !await _ensureInitialized()) return false;
+    final id = _idFor(ownerPhone, 'alarm-backup:$notificationKey');
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        _moroccoTime(fireAt),
+        _reminderDetails(soundMode: 'urgent', vibration: vibration),
+        payload: 'guard:$ownerPhone:backup:$notificationKey',
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Rappel Android de secours impossible: $e');
+      return false;
+    }
+  }
+
   Future<void> scheduleReminder({
     required String ownerPhone,
     required String dateStr,
@@ -512,15 +540,12 @@ class NotificationService {
     if (kIsWeb || !fireAt.isAfter(DateTime.now())) return;
 
     if (soundMode == 'alarm') {
-      if (_isAndroid) {
-        final exact = await canScheduleExactAlarms();
-        if (exact != true) {
-          reminderStatus.value =
-              'Alarme non programmée · autorisez « Alarmes et rappels » dans Android';
-          return;
-        }
-      }
+      final exact = _isAndroid ? await canScheduleExactAlarms() : null;
 
+      // Important : ne jamais quitter ici lorsque SCHEDULE_EXACT_ALARM est
+      // refusée. Android 14+ la refuse par défaut sur de nombreuses nouvelles
+      // installations. Le moteur natif/legacy doit avoir la possibilité de
+      // basculer sur son mode compatible.
       final apple = _isIOS ? await appleAlarmStatus() : null;
       final scheduled = await AlarmRingService.instance.scheduleGuardAlarm(
         ownerPhone: ownerPhone,
@@ -531,13 +556,38 @@ class NotificationService {
         fireAt: fireAt,
         vibration: vibration,
       );
-      if (!scheduled) {
-        reminderStatus.value = 'Une alarme n’a pas pu être programmée';
-      } else if (_isIOS) {
-        reminderStatus.value = apple?.authorized == true
-            ? 'Rappels programmés · AlarmKit Apple'
-            : 'Rappels programmés · mode compatible iOS';
+      if (scheduled) {
+        if (_isAndroid) {
+          reminderStatus.value = exact == true
+              ? 'Alarmes programmées · Android exact'
+              : 'Alarmes programmées · mode compatible Android';
+        } else if (_isIOS) {
+          reminderStatus.value = apple?.authorized == true
+              ? 'Rappels programmés · AlarmKit Apple'
+              : 'Rappels programmés · mode compatible iOS';
+        }
+        return;
       }
+
+      // Dernier filet de sécurité Android : si la vraie sonnerie longue n'a
+      // pas pu être armée, programmer au minimum une notification prioritaire
+      // sonore/vibrante en mode inexact autorisé sans permission spéciale.
+      if (_isAndroid) {
+        final backup = await _scheduleAndroidBackupNotification(
+          ownerPhone: ownerPhone,
+          notificationKey: notificationKey,
+          title: title,
+          body: body,
+          fireAt: fireAt,
+          vibration: vibration,
+        );
+        reminderStatus.value = backup
+            ? 'Alarme de secours programmée · activez « Alarmes et rappels » pour la précision maximale'
+            : 'Une alarme n’a pas pu être programmée · vérifiez les autorisations Android';
+        return;
+      }
+
+      reminderStatus.value = 'Une alarme n’a pas pu être programmée';
       return;
     }
 
