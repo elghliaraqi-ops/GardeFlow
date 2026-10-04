@@ -129,7 +129,7 @@ class _GardeFlowHero extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(
-            'assets/branding/splash_gardeflow_mark.png',
+            'assets/branding/splash_gardeflow_mark.webp',
             width: 164,
             height: 164,
             fit: BoxFit.contain,
@@ -291,7 +291,7 @@ class _PracticeBrand extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(
-            'assets/branding/splash_practice_mark.png',
+            'assets/branding/splash_practice_mark.webp',
             width: 78,
             height: 78,
             fit: BoxFit.contain,
@@ -352,7 +352,7 @@ class _FlowSuiteBrand extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.asset(
-                'assets/branding/splash_flowsuite_mark.png',
+                'assets/branding/splash_flowsuite_mark.webp',
                 width: 50,
                 height: 50,
                 fit: BoxFit.contain,
