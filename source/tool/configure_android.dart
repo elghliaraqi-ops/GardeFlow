@@ -180,6 +180,15 @@ void configure(Directory root) {
             </intent-filter>
         </receiver>''';
   }
+  if (!xml.contains('GardeFlowWidgetProvider')) {
+    additions += '''
+        <receiver android:name=".GardeFlowWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/gardeflow_widget_info" />
+        </receiver>''';
+  }
   xml = xml.replaceRange(appOpening.end, appOpening.end, additions);
   xml = xml.replaceFirst(
       'android:label="huim6_planning"', 'android:label="GardeFlow"');
@@ -195,6 +204,18 @@ void configure(Directory root) {
     final target = file('android/app/src/main/res/$relative');
     target.parent.createSync(recursive: true);
     source.copySync(target.path);
+  }
+
+  final nativeSources = Directory('${root.path}/tool/android-src');
+  if (nativeSources.existsSync()) {
+    for (final source in nativeSources.listSync(recursive: true).whereType<File>()) {
+      final relative = source.path.substring(nativeSources.path.length + 1);
+      final target = file(
+        'android/app/src/main/kotlin/com/huim6/huim6_planning/$relative',
+      );
+      target.parent.createSync(recursive: true);
+      source.copySync(target.path);
+    }
   }
   stdout.writeln('Android configuré : $packageName (Firebase planninghm6).');
 }

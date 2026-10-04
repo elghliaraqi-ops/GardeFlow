@@ -13,6 +13,7 @@ import '../models/planning_month.dart';
 import '../models/shift_type.dart';
 import '../state/app_state.dart';
 import '../services/push_notification_service.dart';
+import '../services/android_widget_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
@@ -50,7 +51,37 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _homeScrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    AndroidWidgetService.instance.action.addListener(_handleWidgetAction);
+    unawaited(AndroidWidgetService.instance.initialize());
+  }
+
+  void _handleWidgetAction() {
+    final action = AndroidWidgetService.instance.action.value;
+    if (!mounted || action == null) return;
+    var target = 0;
+    switch (action) {
+      case 'planning':
+      case 'next_guard':
+        target = 1;
+        break;
+      case 'practice':
+        target = 2;
+        break;
+      case 'astreintes':
+        target = 3;
+        break;
+      default:
+        target = 0;
+    }
+    if (_tab != target) setState(() => _tab = target);
+    AndroidWidgetService.instance.consumeAction();
+  }
+
+  @override
   void dispose() {
+    AndroidWidgetService.instance.action.removeListener(_handleWidgetAction);
     _homeScrollController.dispose();
     super.dispose();
   }
@@ -63,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (me != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted && appState.currentUser != null) {
+          unawaited(AndroidWidgetService.instance.sync(appState));
           PushNotificationService.instance.navigationReady(
             isAdmin: appState.currentUser!.role == UserRole.admin,
             onPractice: () {
