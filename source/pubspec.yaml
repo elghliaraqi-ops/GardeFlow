@@ -52,6 +52,9 @@ flutter:
     - assets/branding/splash_gardeflow_mark.png
     - assets/branding/splash_practice_mark.png
     - assets/branding/splash_flowsuite_mark.png
+    - assets/branding/splash_gardeflow_mark_clean.webp
+    - assets/branding/splash_practice_mark_clean.webp
+    - assets/branding/splash_flowsuite_mark_clean.webp
     - assets/branding/practice_icon.webp
     - assets/branding/elghali_signature.webp
     - assets/branding/login_urgences.jpg
