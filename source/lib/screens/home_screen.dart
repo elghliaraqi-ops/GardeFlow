@@ -999,15 +999,16 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF071A18), Color(0xFF0B302A)],
+          colors: [Color(0xFF061D1A), Color(0xFF0A3A32), Color(0xFF0E5142)],
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withOpacity(0.11)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00C389).withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF19D99A).withOpacity(0.15),
+            blurRadius: 26,
+            spreadRadius: 1,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -1024,16 +1025,16 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppColors.brand.withOpacity(0.22),
-                      AppColors.brandBright.withOpacity(0.10),
+                      const Color(0xFF28E7A5).withOpacity(0.32),
+                      const Color(0xFF0E9E78).withOpacity(0.14),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   Icons.swap_horiz_rounded,
-                  color: AppColors.brandBright,
-                  size: 23,
+                  color: const Color(0xFF63F4C0),
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 11),
@@ -1067,8 +1068,16 @@ class _HomeAnnouncementsCardState extends State<_HomeAnnouncementsCard> {
               TextButton(
                 onPressed: _openAnnouncements,
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF43E6A0),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  foregroundColor: const Color(0xFF79FFD0),
+                  backgroundColor: Colors.white.withOpacity(0.07),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                    side: BorderSide(color: Colors.white.withOpacity(0.09)),
+                  ),
                   textStyle: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
@@ -1148,9 +1157,16 @@ class _HomeAnnouncementsEmpty extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.035),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: Colors.white.withOpacity(0.07)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withOpacity(0.075),
+              const Color(0xFF18C991).withOpacity(0.055),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.10)),
         ),
         child: Row(
           children: [
@@ -1159,22 +1175,28 @@ class _HomeAnnouncementsEmpty extends StatelessWidget {
               height: 42,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFF20C986).withOpacity(0.08),
-                borderRadius: BorderRadius.circular(13),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF2FE4A5).withOpacity(0.18),
+                    const Color(0xFF0D8A69).withOpacity(0.08),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF5EF1BE).withOpacity(0.14),
+                ),
               ),
-              child: Icon(
-                icon,
-                color: Colors.white.withOpacity(0.58),
-                size: 21,
-              ),
+              child: Icon(icon, color: const Color(0xFF72F4C3), size: 22),
             ),
             const SizedBox(width: 11),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.70),
-                  fontSize: 11.5,
+                  color: Colors.white.withOpacity(0.82),
+                  fontSize: 11.7,
                   height: 1.30,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1356,8 +1378,8 @@ class _GuardVisualTheme {
         isNight: true,
         is24h: false,
         heroColors: [Color(0xFF25040C), Color(0xFF610A1C), Color(0xFF9A1831)],
-        dutyColors: [Color(0xFF360611), Color(0xFF8B1730)],
-        glow: Color(0xFFD92A4A),
+        dutyColors: [Color(0xFF420516), Color(0xFFA10D3D), Color(0xFFE72B62)],
+        glow: Color(0xFFFF3B6A),
       );
     }
     if (isUrgence && is24h) {
@@ -1366,8 +1388,8 @@ class _GuardVisualTheme {
         isNight: false,
         is24h: true,
         heroColors: [Color(0xFF713008), Color(0xFFD95D13), Color(0xFFFF9B2F)],
-        dutyColors: [Color(0xFF9A3A09), Color(0xFFF47B18)],
-        glow: Color(0xFFFFA23D),
+        dutyColors: [Color(0xFF9C3300), Color(0xFFF26B06), Color(0xFFFFB020)],
+        glow: Color(0xFFFFA534),
       );
     }
     if (isUrgence) {
@@ -1376,8 +1398,8 @@ class _GuardVisualTheme {
         isNight: false,
         is24h: false,
         heroColors: [Color(0xFF9D102A), Color(0xFFE32B43), Color(0xFFFF626C)],
-        dutyColors: [Color(0xFFB51630), Color(0xFFF34052)],
-        glow: Color(0xFFFF6272),
+        dutyColors: [Color(0xFFB80D2B), Color(0xFFF43F5E), Color(0xFFFF7586)],
+        glow: Color(0xFFFF5570),
       );
     }
     if (isNight) {
@@ -1386,8 +1408,8 @@ class _GuardVisualTheme {
         isNight: true,
         is24h: false,
         heroColors: [Color(0xFF041229), Color(0xFF0A3169), Color(0xFF1455A1)],
-        dutyColors: [Color(0xFF06172F), Color(0xFF15559C)],
-        glow: Color(0xFF388DDF),
+        dutyColors: [Color(0xFF051841), Color(0xFF0C46A0), Color(0xFF1976D2)],
+        glow: Color(0xFF2C8DFF),
       );
     }
     if (is24h) {
@@ -1396,8 +1418,8 @@ class _GuardVisualTheme {
         isNight: false,
         is24h: true,
         heroColors: [Color(0xFF0877B2), Color(0xFF2FB4E5), Color(0xFF76D7F5)],
-        dutyColors: [Color(0xFF0B83C0), Color(0xFF38BDE9)],
-        glow: Color(0xFF72D8F8),
+        dutyColors: [Color(0xFF087CBF), Color(0xFF28B6EE), Color(0xFF7FDBFF)],
+        glow: Color(0xFF54CCFF),
       );
     }
     return const _GuardVisualTheme(
@@ -1405,8 +1427,8 @@ class _GuardVisualTheme {
       isNight: false,
       is24h: false,
       heroColors: [Color(0xFF0A6FCA), Color(0xFF28A8F2), Color(0xFF83D9FF)],
-      dutyColors: [Color(0xFF0F7DCE), Color(0xFF48BAF1)],
-      glow: Color(0xFF58C8FF),
+      dutyColors: [Color(0xFF0B82DC), Color(0xFF37B7F8), Color(0xFF91DEFF)],
+      glow: Color(0xFF54C8FF),
     );
   }
 }
@@ -1420,86 +1442,283 @@ class _GuardSkyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (theme.isNight) {
-      final starPaint = Paint()..color = Colors.white.withOpacity(0.34);
+      final starPaint = Paint()..color = Colors.white.withOpacity(0.44);
       final stars = <Offset>[
-        Offset(size.width * .08, size.height * .18),
-        Offset(size.width * .20, size.height * .11),
-        Offset(size.width * .35, size.height * .24),
-        Offset(size.width * .49, size.height * .13),
-        Offset(size.width * .64, size.height * .21),
-        Offset(size.width * .76, size.height * .09),
-        Offset(size.width * .88, size.height * .26),
+        Offset(size.width * .08, size.height * .17),
+        Offset(size.width * .19, size.height * .09),
+        Offset(size.width * .34, size.height * .22),
+        Offset(size.width * .51, size.height * .13),
+        Offset(size.width * .66, size.height * .20),
+        Offset(size.width * .79, size.height * .10),
+        Offset(size.width * .91, size.height * .24),
       ];
       for (var i = 0; i < stars.length; i++) {
-        canvas.drawCircle(stars[i], i.isEven ? 1.15 : .75, starPaint);
+        canvas.drawCircle(stars[i], i.isEven ? 1.2 : .75, starPaint);
       }
     } else {
-      final cloudPaint = Paint()..color = Colors.white.withOpacity(0.07);
+      final cloudPaint = Paint()..color = Colors.white.withOpacity(0.11);
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(size.width * .28, size.height * .22),
-          width: size.width * .26,
-          height: size.height * .12,
+          center: Offset(size.width * .26, size.height * .18),
+          width: size.width * .24,
+          height: size.height * .09,
         ),
         cloudPaint,
       );
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(size.width * .68, size.height * .18),
-          width: size.width * .23,
-          height: size.height * .10,
+          center: Offset(size.width * .72, size.height * .14),
+          width: size.width * .20,
+          height: size.height * .075,
         ),
         cloudPaint,
       );
     }
 
-    final rearPaint = Paint()..color = Colors.black.withOpacity(0.10);
-    final rear = Path()
-      ..moveTo(0, size.height * .69)
-      ..lineTo(size.width * .12, size.height * .58)
-      ..lineTo(size.width * .24, size.height * .67)
-      ..lineTo(size.width * .39, size.height * .50)
-      ..lineTo(size.width * .52, size.height * .64)
-      ..lineTo(size.width * .66, size.height * .52)
-      ..lineTo(size.width * .81, size.height * .65)
-      ..lineTo(size.width, size.height * .50)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(rear, rearPaint);
+    final ecgPaint = Paint()
+      ..color = Colors.white.withOpacity(theme.isNight ? 0.13 : 0.17)
+      ..strokeWidth = compact ? 1.2 : 1.45
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final y = size.height * (compact ? .54 : .51);
+    final ecg = Path()
+      ..moveTo(size.width * .03, y)
+      ..lineTo(size.width * .18, y)
+      ..lineTo(size.width * .215, y - 4)
+      ..lineTo(size.width * .245, y + 6)
+      ..lineTo(size.width * .28, y - (compact ? 14 : 18))
+      ..lineTo(size.width * .315, y + 9)
+      ..lineTo(size.width * .355, y)
+      ..lineTo(size.width * .55, y)
+      ..lineTo(size.width * .58, y - 3)
+      ..lineTo(size.width * .61, y + 5)
+      ..lineTo(size.width * .645, y - (compact ? 11 : 15))
+      ..lineTo(size.width * .68, y + 7)
+      ..lineTo(size.width * .72, y)
+      ..lineTo(size.width * .97, y);
+    canvas.drawPath(ecg, ecgPaint);
 
-    final frontPaint = Paint()
-      ..color = Colors.black.withOpacity(theme.isNight ? 0.26 : 0.15);
-    final base = compact ? .80 : .76;
-    final front = Path()
-      ..moveTo(0, size.height * base)
-      ..quadraticBezierTo(
-        size.width * .18,
-        size.height * (base - .10),
-        size.width * .34,
-        size.height * base,
-      )
-      ..quadraticBezierTo(
-        size.width * .52,
-        size.height * (base - .08),
-        size.width * .69,
-        size.height * base,
-      )
-      ..quadraticBezierTo(
-        size.width * .84,
-        size.height * (base - .07),
-        size.width,
-        size.height * (base - .01),
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(front, frontPaint);
+    final hospitalPaint = Paint()
+      ..color = Colors.black.withOpacity(theme.isNight ? 0.23 : 0.14)
+      ..style = PaintingStyle.fill;
+    final baseline = size.height * .98;
+    final centerX = size.width * .70;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          centerX - size.width * .13,
+          size.height * .64,
+          size.width * .26,
+          baseline - size.height * .64,
+        ),
+        const Radius.circular(5),
+      ),
+      hospitalPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          centerX - size.width * .07,
+          size.height * .53,
+          size.width * .14,
+          baseline - size.height * .53,
+        ),
+        const Radius.circular(5),
+      ),
+      hospitalPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        centerX - size.width * .22,
+        size.height * .75,
+        size.width * .09,
+        baseline - size.height * .75,
+      ),
+      hospitalPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        centerX + size.width * .13,
+        size.height * .72,
+        size.width * .10,
+        baseline - size.height * .72,
+      ),
+      hospitalPaint,
+    );
+
+    final crossPaint = Paint()
+      ..color = Colors.white.withOpacity(theme.isNight ? 0.17 : 0.23)
+      ..style = PaintingStyle.fill;
+    final cx = centerX;
+    final cy = size.height * .60;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy), width: 22, height: 7),
+        const Radius.circular(3),
+      ),
+      crossPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy), width: 7, height: 22),
+        const Radius.circular(3),
+      ),
+      crossPaint,
+    );
+
+    final arcPaint = Paint()
+      ..color = Colors.white.withOpacity(0.08)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawArc(
+      Rect.fromCircle(
+        center: Offset(size.width * .92, size.height * .06),
+        radius: size.width * .18,
+      ),
+      .7,
+      1.8,
+      false,
+      arcPaint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _GuardSkyPainter oldDelegate) =>
       oldDelegate.theme != theme || oldDelegate.compact != compact;
+}
+
+class _HomeHospitalSkyPainter extends CustomPainter {
+  final bool isNight;
+
+  const _HomeHospitalSkyPainter({required this.isNight});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final glowPaint = Paint()
+      ..color = Colors.white.withOpacity(isNight ? 0.06 : 0.10)
+      ..style = PaintingStyle.fill;
+
+    if (isNight) {
+      final starPaint = Paint()..color = Colors.white.withOpacity(0.46);
+      final stars = <Offset>[
+        Offset(size.width * .08, size.height * .16),
+        Offset(size.width * .18, size.height * .10),
+        Offset(size.width * .31, size.height * .21),
+        Offset(size.width * .48, size.height * .12),
+        Offset(size.width * .64, size.height * .19),
+        Offset(size.width * .78, size.height * .10),
+        Offset(size.width * .90, size.height * .25),
+      ];
+      for (var i = 0; i < stars.length; i++) {
+        canvas.drawCircle(stars[i], i.isEven ? 1.25 : .8, starPaint);
+      }
+    } else {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(size.width * .27, size.height * .17),
+          width: size.width * .27,
+          height: size.height * .10,
+        ),
+        glowPaint,
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(size.width * .67, size.height * .13),
+          width: size.width * .20,
+          height: size.height * .075,
+        ),
+        glowPaint,
+      );
+    }
+
+    final ecgPaint = Paint()
+      ..color = Colors.white.withOpacity(isNight ? 0.11 : 0.15)
+      ..strokeWidth = 1.35
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final y = size.height * .49;
+    final ecg = Path()
+      ..moveTo(size.width * .03, y)
+      ..lineTo(size.width * .17, y)
+      ..lineTo(size.width * .205, y - 5)
+      ..lineTo(size.width * .235, y + 7)
+      ..lineTo(size.width * .275, y - 19)
+      ..lineTo(size.width * .31, y + 11)
+      ..lineTo(size.width * .35, y)
+      ..lineTo(size.width * .52, y)
+      ..lineTo(size.width * .555, y - 4)
+      ..lineTo(size.width * .59, y + 6)
+      ..lineTo(size.width * .625, y - 15)
+      ..lineTo(size.width * .66, y + 8)
+      ..lineTo(size.width * .70, y)
+      ..lineTo(size.width * .97, y);
+    canvas.drawPath(ecg, ecgPaint);
+
+    final hospitalPaint = Paint()
+      ..color = Colors.black.withOpacity(isNight ? 0.18 : 0.10)
+      ..style = PaintingStyle.fill;
+    final baseline = size.height * .88;
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width * .55,
+        size.height * .68,
+        size.width * .27,
+        baseline - size.height * .68,
+      ),
+      hospitalPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width * .61,
+        size.height * .59,
+        size.width * .14,
+        baseline - size.height * .59,
+      ),
+      hospitalPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width * .49,
+        size.height * .75,
+        size.width * .08,
+        baseline - size.height * .75,
+      ),
+      hospitalPaint,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width * .82,
+        size.height * .77,
+        size.width * .10,
+        baseline - size.height * .77,
+      ),
+      hospitalPaint,
+    );
+
+    final crossPaint = Paint()
+      ..color = Colors.white.withOpacity(isNight ? 0.10 : 0.15)
+      ..style = PaintingStyle.fill;
+    final cx = size.width * .68;
+    final cy = size.height * .665;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy), width: 22, height: 7),
+        const Radius.circular(3),
+      ),
+      crossPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy), width: 7, height: 22),
+        const Radius.circular(3),
+      ),
+      crossPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _HomeHospitalSkyPainter oldDelegate) =>
+      oldDelegate.isNight != isNight;
 }
 
 class _HomeHeroCard extends StatelessWidget {
@@ -1527,10 +1746,12 @@ class _HomeHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visual = _GuardVisualTheme.fromEntry(
-      guardEntry,
-      fallbackNight: isNight,
-    );
+    final heroColors = isNight
+        ? const [Color(0xFF020B22), Color(0xFF082E70), Color(0xFF0B65BD)]
+        : const [Color(0xFF147FD1), Color(0xFF39B4F5), Color(0xFF9CE4FF)];
+    final heroGlow = isNight
+        ? const Color(0xFF1C78E8)
+        : const Color(0xFF54C7FF);
 
     return Container(
       width: double.infinity,
@@ -1538,16 +1759,19 @@ class _HomeHeroCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: visual.heroColors,
-          stops: const [0.0, 0.58, 1.0],
+          colors: heroColors,
+          stops: const [0.0, 0.56, 1.0],
         ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: Colors.white.withOpacity(isNight ? 0.10 : 0.20),
+        ),
         boxShadow: [
           BoxShadow(
-            color: visual.glow.withOpacity(0.17),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: heroGlow.withOpacity(isNight ? 0.22 : 0.28),
+            blurRadius: 30,
+            spreadRadius: 1,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -1555,51 +1779,62 @@ class _HomeHeroCard extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: CustomPaint(painter: _GuardSkyPainter(theme: visual)),
+            child: CustomPaint(
+              painter: _HomeHospitalSkyPainter(isNight: isNight),
+            ),
           ),
           Positioned(
-            right: -24,
-            top: -28,
+            right: -28,
+            top: -38,
             child: Container(
-              width: 126,
-              height: 126,
+              width: 146,
+              height: 146,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    Colors.white.withOpacity(0.16),
-                    Colors.white.withOpacity(0.025),
+                    Colors.white.withOpacity(isNight ? 0.15 : 0.26),
+                    Colors.white.withOpacity(0.02),
                   ],
                 ),
               ),
             ),
           ),
           Positioned(
-            right: 18,
-            top: 21,
+            right: 17,
+            top: 18,
             child: Container(
-              width: 57,
-              height: 57,
+              width: 62,
+              height: 62,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.10),
-                border: Border.all(color: Colors.white.withOpacity(0.10)),
+                color: Colors.white.withOpacity(isNight ? 0.10 : 0.18),
+                border: Border.all(
+                  color: Colors.white.withOpacity(isNight ? 0.14 : 0.28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isNight ? Colors.white : const Color(0xFFFFD84A))
+                        .withOpacity(0.18),
+                    blurRadius: 18,
+                  ),
+                ],
               ),
               child: _GuardPeriodGlyph(
-                isNight: visual.isNight,
-                is24h: visual.is24h,
-                size: 32,
+                isNight: isNight,
+                is24h: false,
+                size: 35,
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(right: 74),
+                  padding: const EdgeInsets.only(right: 78),
                   child: Text(
                     '$greeting Dr ${user.nom}',
                     maxLines: 2,
@@ -1619,7 +1854,7 @@ class _HomeHeroCard extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.schedule_rounded,
-                      color: Colors.white.withOpacity(0.84),
+                      color: Colors.white.withOpacity(0.90),
                       size: 16,
                     ),
                     const SizedBox(width: 6),
@@ -1629,15 +1864,15 @@ class _HomeHeroCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.88),
+                          color: Colors.white.withOpacity(0.92),
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 17),
                 Row(
                   children: [
                     Expanded(
@@ -1688,16 +1923,39 @@ class _HomeStatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 54),
+      constraints: const BoxConstraints(minHeight: 57),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.18),
+            Colors.white.withOpacity(0.085),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white.withOpacity(0.90), size: 17),
+          Container(
+            width: 29,
+            height: 29,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.13),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: Colors.white, size: 16),
+          ),
           const SizedBox(width: 7),
           Expanded(
             child: Column(
@@ -1709,7 +1967,7 @@ class _HomeStatPill extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontFamily: 'SpaceGrotesk',
-                    fontSize: 17,
+                    fontSize: 18,
                     height: 1,
                     fontWeight: FontWeight.w900,
                   ),
@@ -1720,9 +1978,9 @@ class _HomeStatPill extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.78),
+                    color: Colors.white.withOpacity(0.86),
                     fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -2136,18 +2394,19 @@ class _NextGuardCard extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: visual.dutyColors,
             ),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: Colors.white.withOpacity(0.10)),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withOpacity(0.16)),
             boxShadow: [
               BoxShadow(
-                color: visual.glow.withOpacity(0.16),
-                blurRadius: 22,
-                offset: const Offset(0, 10),
+                color: visual.glow.withOpacity(0.24),
+                blurRadius: 28,
+                spreadRadius: 1,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(28),
             child: Stack(
               children: [
                 Positioned.fill(
