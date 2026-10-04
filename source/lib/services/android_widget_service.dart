@@ -13,6 +13,7 @@ import '../state/app_state.dart';
 ///
 /// Aucune donnée médicale n'est exposée : uniquement identité d'affichage,
 /// garde personnelle, statut du jour et raccourcis de navigation.
+/// Le cache local reste volontairement limité aux informations du widget.
 class AndroidWidgetService {
   AndroidWidgetService._();
   static final AndroidWidgetService instance = AndroidWidgetService._();
