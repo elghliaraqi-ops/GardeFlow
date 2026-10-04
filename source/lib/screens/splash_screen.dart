@@ -134,15 +134,15 @@ class _ReferenceComposition extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Logo GardeFlow : dimensions et position recalées sur la maquette
-              // 941 x 1672 fournie, sans recadrer le fichier transparent.
+              // PNG volontairement utilisé ici : rendu alpha plus fiable sur
+              // Flutter Web/Chrome Android que les versions WebP précédentes.
               Positioned(
                 top: sy(112),
                 left: 0,
                 right: 0,
                 child: Center(
                   child: Image.asset(
-                    'assets/branding/splash_gardeflow_mark.webp',
+                    'assets/branding/splash_gardeflow_mark.png',
                     width: ss(435),
                     height: ss(435),
                     fit: BoxFit.contain,
@@ -235,7 +235,7 @@ class _ReferenceComposition extends StatelessWidget {
                 right: 0,
                 child: Center(
                   child: Image.asset(
-                    'assets/branding/splash_practice_mark.webp',
+                    'assets/branding/splash_practice_mark.png',
                     width: ss(232),
                     height: ss(232),
                     fit: BoxFit.contain,
@@ -480,7 +480,7 @@ class _FlowSuiteLockup extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/branding/splash_flowsuite_mark.webp',
+            'assets/branding/splash_flowsuite_mark.png',
             width: 157 * scale,
             height: 157 * scale,
             fit: BoxFit.contain,
