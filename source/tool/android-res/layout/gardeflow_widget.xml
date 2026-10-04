@@ -244,18 +244,18 @@
 
             <TextView
                 android:id="@+id/widget_planning_line_1"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone" />
             <TextView
                 android:id="@+id/widget_planning_line_2"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone" />
             <TextView
                 android:id="@+id/widget_planning_line_3"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone" />
         </LinearLayout>
 
@@ -295,8 +295,8 @@
 
             <TextView
                 android:id="@+id/widget_astreintes_subdetail"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone" />
         </LinearLayout>
 
@@ -326,7 +326,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="QCM & cas"
+                android:text="QCM &amp; cas"
                 android:textColor="#F8F6FF"
                 android:textSize="8.5sp"
                 android:textStyle="bold"
@@ -335,8 +335,8 @@
 
             <TextView
                 android:id="@+id/widget_practice_subdetail"
-                android:layout_width="1dp"
-                android:layout_height="1dp"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
                 android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
