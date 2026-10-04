@@ -1,0 +1,56 @@
+name: One-time home hospital visuals v2
+
+on:
+  push:
+    branches:
+      - feat/home-hospital-visuals-v2
+    paths:
+      - .github/workflows/one-time-home-visuals-v2.yml
+      - ci/patch_home_visuals_v2.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/home-hospital-visuals-v2
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply home hospital visuals v2
+        run: |
+          set -euo pipefail
+          python3 ci/patch_home_visuals_v2.py
+          dart format source/lib/screens/home_screen.dart
+          git diff --check
+
+      - name: Validate Flutter source
+        working-directory: source
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/home_screen.dart
+          flutter test test/mobile_layout_test.dart
+
+      - name: Commit validated source changes
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- source/lib/screens/home_screen.dart; then
+            echo 'No source change required.'
+            exit 0
+          fi
+          git config user.name 'GardeFlow CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add source/lib/screens/home_screen.dart
+          git commit -m 'feat: polish home cards with hospital visuals'
+          git push origin HEAD:feat/home-hospital-visuals-v2
