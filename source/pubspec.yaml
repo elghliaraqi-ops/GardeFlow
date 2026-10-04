@@ -3,6 +3,7 @@ description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux U
 publish_to: "none"
 version: 12.0.0+300
 
+# Splash branding refresh: force Web/Android rebuild with verified original assets.
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
