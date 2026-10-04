@@ -39,7 +39,6 @@ class _AuthScreenState extends State<AuthScreen>
 
   final _loginPhoneCtrl = TextEditingController();
   final _loginPasswordCtrl = TextEditingController();
-
   final _regNomCtrl = TextEditingController();
   final _regPrenomCtrl = TextEditingController();
   final _regPhoneCtrl = TextEditingController();
@@ -196,6 +195,9 @@ class _AuthScreenState extends State<AuthScreen>
                           : constraints.maxWidth < 600
                               ? 20.0
                               : 32.0;
+                      final minContentHeight = constraints.maxHeight > 38
+                          ? constraints.maxHeight - 38
+                          : 0.0;
 
                       return SingleChildScrollView(
                         keyboardDismissBehavior:
@@ -209,8 +211,7 @@ class _AuthScreenState extends State<AuthScreen>
                         ),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                            minHeight: (constraints.maxHeight - 38)
-                                .clamp(0.0, double.infinity),
+                            minHeight: minContentHeight,
                           ),
                           child: Center(
                             child: ConstrainedBox(
@@ -565,7 +566,7 @@ class _AuthScreenState extends State<AuthScreen>
                       color: AppColors.ink,
                       fontSize: 11.5,
                       height: 1.4,
-                      fontWeight: FontWeight.w650,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -797,7 +798,7 @@ class _AuthScreenState extends State<AuthScreen>
             ),
             child: const Text(
               'Déjà inscrit ? Se connecter',
-              style: TextStyle(fontWeight: FontWeight.w750),
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -869,7 +870,9 @@ class _AuthScreenState extends State<AuthScreen>
           decoration: BoxDecoration(
             color: selected
                 ? _loginGreen
-                : AppColors.paperAlt.withOpacity(AppColors.isDarkMode ? 0.95 : 0.82),
+                : AppColors.paperAlt.withOpacity(
+                    AppColors.isDarkMode ? 0.95 : 0.82,
+                  ),
             border: Border.all(
               color: selected ? _loginGreen : AppColors.line,
               width: selected ? 1.5 : 1,
@@ -1015,7 +1018,7 @@ class _LoginBrandHero extends StatelessWidget {
               fontSize: expanded ? 16 : 13.5,
               height: 1.45,
               color: AppColors.inkSoft,
-              fontWeight: FontWeight.w650,
+              fontWeight: FontWeight.w600,
             ),
           ),
           if (expanded) ...[
@@ -1024,9 +1027,18 @@ class _LoginBrandHero extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: const [
-                _BrandCapability(icon: Icons.calendar_month_outlined, label: 'Planning'),
-                _BrandCapability(icon: Icons.sync_alt_rounded, label: 'Échanges'),
-                _BrandCapability(icon: Icons.notifications_active_outlined, label: 'Rappels'),
+                _BrandCapability(
+                  icon: Icons.calendar_month_outlined,
+                  label: 'Planning',
+                ),
+                _BrandCapability(
+                  icon: Icons.sync_alt_rounded,
+                  label: 'Échanges',
+                ),
+                _BrandCapability(
+                  icon: Icons.notifications_active_outlined,
+                  label: 'Rappels',
+                ),
               ],
             ),
           ],
@@ -1056,7 +1068,10 @@ class _CompactBrandBar extends StatelessWidget {
             ),
             children: [
               TextSpan(text: 'Garde', style: TextStyle(color: AppColors.brand)),
-              const TextSpan(text: 'Flow', style: TextStyle(color: AppColors.cyan)),
+              const TextSpan(
+                text: 'Flow',
+                style: TextStyle(color: AppColors.cyan),
+              ),
             ],
           ),
         ),
@@ -1089,7 +1104,7 @@ class _BrandCapability extends StatelessWidget {
             style: TextStyle(
               fontSize: 11.5,
               color: AppColors.inkSoft,
-              fontWeight: FontWeight.w750,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1286,7 +1301,7 @@ class _Banner extends StatelessWidget {
               text,
               style: TextStyle(
                 color: AppColors.ink,
-                fontWeight: FontWeight.w650,
+                fontWeight: FontWeight.w600,
                 height: 1.35,
                 fontSize: 12.5,
               ),
