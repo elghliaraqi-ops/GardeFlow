@@ -70,20 +70,16 @@ HOME.write_text(home)
 
 config = CONFIG.read_text()
 
-receiver_anchor = '''  if (!xml.contains(
-      'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver')) {
-    additions += '''
-# Insert the widget receiver just before application additions are written.
 write_anchor = '''  xml = xml.replaceRange(appOpening.end, appOpening.end, additions);'''
-widget_receiver = '''  if (!xml.contains('GardeFlowWidgetProvider')) {
-    additions += '''\n        <receiver android:name=".GardeFlowWidgetProvider" android:exported="true">
+widget_receiver = """  if (!xml.contains('GardeFlowWidgetProvider')) {
+    additions += '''\n        <receiver android:name=\".GardeFlowWidgetProvider\" android:exported=\"true\">
             <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name=\"android.appwidget.action.APPWIDGET_UPDATE\" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/gardeflow_widget_info" />
+            <meta-data android:name=\"android.appwidget.provider\" android:resource=\"@xml/gardeflow_widget_info\" />
         </receiver>''';
   }
-'''
+"""
 if "android.appwidget.action.APPWIDGET_UPDATE" not in config:
     if write_anchor not in config:
         raise SystemExit('Android manifest write anchor missing')
@@ -124,7 +120,6 @@ if "final nativeSources = Directory" not in config:
 
 CONFIG.write_text(config)
 
-# Guardrails: fail rather than silently shipping a half-connected widget.
 for required in (
     widget_import.strip(),
     'AndroidWidgetService.instance.sync(appState)',
