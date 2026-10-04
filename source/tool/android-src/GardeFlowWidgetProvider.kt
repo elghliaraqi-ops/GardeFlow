@@ -40,7 +40,6 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
                 "Ouvrez GardeFlow pour synchroniser",
             ).orEmpty()
             val dateLabel = prefs.getString("date_label", "").orEmpty()
-            val nextTitle = prefs.getString("next_title", "Prochaine garde").orEmpty()
             val nextDetail = prefs.getString(
                 "next_detail",
                 "Planning non synchronisé",
@@ -50,7 +49,6 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_greeting, "$greeting $doctor")
             views.setTextViewText(R.id.widget_today_status, today)
             views.setTextViewText(R.id.widget_date, dateLabel)
-            views.setTextViewText(R.id.widget_next_title, nextTitle)
             views.setTextViewText(R.id.widget_next_detail, nextDetail)
 
             val countdown = countdownLabel(prefs)
@@ -64,50 +62,29 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
                 R.id.widget_planning_detail,
                 prefs.getString("planning_detail", "Voir le mois").orEmpty(),
             )
-            setOptionalLine(
-                views,
-                R.id.widget_planning_line_1,
-                prefs.getString("planning_line_1", "").orEmpty(),
-            )
-            setOptionalLine(
-                views,
-                R.id.widget_planning_line_2,
-                prefs.getString("planning_line_2", "").orEmpty(),
-            )
-            setOptionalLine(
-                views,
-                R.id.widget_planning_line_3,
-                prefs.getString("planning_line_3", "").orEmpty(),
-            )
-
             views.setTextViewText(
                 R.id.widget_astreintes_detail,
                 prefs.getString("astreintes_detail", "Aujourd’hui").orEmpty(),
             )
             views.setTextViewText(
-                R.id.widget_astreintes_subdetail,
-                prefs.getString(
-                    "astreintes_subdetail",
-                    "Juniors + séniors · accès direct",
-                ).orEmpty(),
-            )
-            views.setTextViewText(
                 R.id.widget_practice_detail,
                 prefs.getString("practice_detail", "Ce mois · QCM").orEmpty(),
-            )
-            views.setTextViewText(
-                R.id.widget_practice_subdetail,
-                prefs.getString(
-                    "practice_subdetail",
-                    "Ouvrir Practice",
-                ).orEmpty(),
             )
 
             val visual = visualFor(shiftId)
             views.setInt(R.id.widget_next_card, "setBackgroundResource", visual.background)
+            views.setTextViewText(R.id.widget_next_type, visual.typeLabel)
+            views.setTextViewText(R.id.widget_next_period, visual.periodLabel)
             views.setTextViewText(R.id.widget_next_icon, visual.icon)
-            views.setTextColor(R.id.widget_next_title, Color.WHITE)
+            views.setTextColor(R.id.widget_next_type, Color.WHITE)
             views.setTextColor(R.id.widget_next_detail, visual.detailColor)
+            views.setTextColor(R.id.widget_next_countdown, visual.detailColor)
+            views.setTextColor(R.id.widget_next_icon, visual.iconColor)
+            views.setTextColor(R.id.widget_next_period, visual.iconColor)
+            views.setViewVisibility(
+                R.id.widget_next_period,
+                if (visual.periodLabel.isBlank()) View.GONE else View.VISIBLE,
+            )
 
             views.setOnClickPendingIntent(
                 R.id.widget_next_card,
@@ -131,11 +108,6 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
             )
 
             manager.updateAppWidget(appWidgetId, views)
-        }
-
-        private fun setOptionalLine(views: RemoteViews, id: Int, text: String) {
-            views.setTextViewText(id, text)
-            views.setViewVisibility(id, if (text.isBlank()) View.GONE else View.VISIBLE)
         }
 
         private fun countdownLabel(
@@ -182,45 +154,69 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
 
         private data class WidgetVisual(
             val background: Int,
+            val typeLabel: String,
+            val periodLabel: String,
             val icon: String,
+            val iconColor: Int,
             val detailColor: Int = Color.WHITE,
         )
 
         private fun visualFor(shiftId: String): WidgetVisual = when (shiftId) {
             "urg-jour" -> WidgetVisual(
                 R.drawable.bg_widget_urg_day,
+                "URGENCE",
+                "JOUR",
                 "☀",
-                Color.rgb(255, 245, 245),
+                Color.rgb(255, 219, 88),
+                Color.rgb(255, 245, 242),
             )
             "urg-nuit" -> WidgetVisual(
                 R.drawable.bg_widget_urg_night,
+                "URGENCE",
+                "NUIT",
                 "☾",
-                Color.rgb(255, 238, 238),
+                Color.WHITE,
+                Color.rgb(255, 238, 240),
             )
             "urg-24h" -> WidgetVisual(
                 R.drawable.bg_widget_urg_24,
+                "URGENCE",
+                "24H",
                 "☀  ☾",
-                Color.rgb(255, 250, 238),
+                Color.rgb(255, 235, 174),
+                Color.rgb(255, 248, 238),
             )
             "service-jour" -> WidgetVisual(
                 R.drawable.bg_widget_service_day,
+                "SERVICE",
+                "JOUR",
                 "☀",
-                Color.rgb(241, 249, 255),
+                Color.rgb(255, 221, 91),
+                Color.rgb(244, 250, 255),
             )
             "service-nuit" -> WidgetVisual(
                 R.drawable.bg_widget_service_night,
+                "SERVICE",
+                "NUIT",
                 "☾",
-                Color.rgb(235, 244, 255),
+                Color.WHITE,
+                Color.rgb(236, 245, 255),
             )
             "service-24h" -> WidgetVisual(
                 R.drawable.bg_widget_service_24,
+                "SERVICE",
+                "24H",
                 "☀  ☾",
-                Color.rgb(239, 250, 255),
+                Color.rgb(255, 238, 181),
+                Color.rgb(241, 250, 255),
             )
             else -> WidgetVisual(
                 R.drawable.bg_widget_next_default,
+                "AUCUNE GARDE",
+                "",
                 "＋",
-                Color.rgb(210, 225, 239),
+                Color.rgb(111, 225, 168),
+                Color.rgb(215, 230, 222),
             )
         }
     }
