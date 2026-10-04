@@ -134,15 +134,16 @@ class _ReferenceComposition extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // PNG volontairement utilisé ici : rendu alpha plus fiable sur
-              // Flutter Web/Chrome Android que les versions WebP précédentes.
+              // Ces trois assets sont régénérés directement depuis les logos
+              // originaux fournis, sous de nouveaux noms pour éviter tout
+              // reliquat de cache Web des fichiers précédemment corrompus.
               Positioned(
                 top: sy(112),
                 left: 0,
                 right: 0,
                 child: Center(
                   child: Image.asset(
-                    'assets/branding/splash_gardeflow_mark.png',
+                    'assets/branding/splash_gardeflow_mark_clean.webp',
                     width: ss(435),
                     height: ss(435),
                     fit: BoxFit.contain,
@@ -235,7 +236,7 @@ class _ReferenceComposition extends StatelessWidget {
                 right: 0,
                 child: Center(
                   child: Image.asset(
-                    'assets/branding/splash_practice_mark.png',
+                    'assets/branding/splash_practice_mark_clean.webp',
                     width: ss(232),
                     height: ss(232),
                     fit: BoxFit.contain,
@@ -480,7 +481,7 @@ class _FlowSuiteLockup extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/branding/splash_flowsuite_mark.png',
+            'assets/branding/splash_flowsuite_mark_clean.webp',
             width: 157 * scale,
             height: 157 * scale,
             fit: BoxFit.contain,
