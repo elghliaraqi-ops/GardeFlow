@@ -7,8 +7,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.view.View
 import android.widget.RemoteViews
 import java.util.Calendar
+import kotlin.math.max
 
 class GardeFlowWidgetProvider : AppWidgetProvider() {
     companion object {
@@ -33,26 +35,72 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
             val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             val greeting = if (hour >= 18 || hour < 6) "Bonsoir" else "Bonjour"
             val doctor = prefs.getString("doctor_name", "Docteur").orEmpty()
-            val today = prefs.getString("today_status", "Ouvrez GardeFlow pour synchroniser").orEmpty()
+            val today = prefs.getString(
+                "today_status",
+                "Ouvrez GardeFlow pour synchroniser",
+            ).orEmpty()
+            val dateLabel = prefs.getString("date_label", "").orEmpty()
             val nextTitle = prefs.getString("next_title", "Prochaine garde").orEmpty()
-            val nextDetail = prefs.getString("next_detail", "Planning non synchronisé").orEmpty()
+            val nextDetail = prefs.getString(
+                "next_detail",
+                "Planning non synchronisé",
+            ).orEmpty()
             val shiftId = prefs.getString("next_shift_id", "none").orEmpty()
 
             views.setTextViewText(R.id.widget_greeting, "$greeting $doctor")
             views.setTextViewText(R.id.widget_today_status, today)
+            views.setTextViewText(R.id.widget_date, dateLabel)
             views.setTextViewText(R.id.widget_next_title, nextTitle)
             views.setTextViewText(R.id.widget_next_detail, nextDetail)
+
+            val countdown = countdownLabel(prefs)
+            views.setTextViewText(R.id.widget_next_countdown, countdown)
+            views.setViewVisibility(
+                R.id.widget_next_countdown,
+                if (countdown.isBlank()) View.GONE else View.VISIBLE,
+            )
+
             views.setTextViewText(
                 R.id.widget_planning_detail,
                 prefs.getString("planning_detail", "Voir le mois").orEmpty(),
             )
+            setOptionalLine(
+                views,
+                R.id.widget_planning_line_1,
+                prefs.getString("planning_line_1", "").orEmpty(),
+            )
+            setOptionalLine(
+                views,
+                R.id.widget_planning_line_2,
+                prefs.getString("planning_line_2", "").orEmpty(),
+            )
+            setOptionalLine(
+                views,
+                R.id.widget_planning_line_3,
+                prefs.getString("planning_line_3", "").orEmpty(),
+            )
+
             views.setTextViewText(
                 R.id.widget_astreintes_detail,
-                prefs.getString("astreintes_detail", "Juniors & séniors").orEmpty(),
+                prefs.getString("astreintes_detail", "Aujourd’hui").orEmpty(),
+            )
+            views.setTextViewText(
+                R.id.widget_astreintes_subdetail,
+                prefs.getString(
+                    "astreintes_subdetail",
+                    "Juniors + séniors · accès direct",
+                ).orEmpty(),
             )
             views.setTextViewText(
                 R.id.widget_practice_detail,
-                prefs.getString("practice_detail", "QCM & cas cliniques").orEmpty(),
+                prefs.getString("practice_detail", "Ce mois · QCM").orEmpty(),
+            )
+            views.setTextViewText(
+                R.id.widget_practice_subdetail,
+                prefs.getString(
+                    "practice_subdetail",
+                    "Ouvrir Practice",
+                ).orEmpty(),
             )
 
             val visual = visualFor(shiftId)
@@ -85,9 +133,43 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
             manager.updateAppWidget(appWidgetId, views)
         }
 
+        private fun setOptionalLine(views: RemoteViews, id: Int, text: String) {
+            views.setTextViewText(id, text)
+            views.setViewVisibility(id, if (text.isBlank()) View.GONE else View.VISIBLE)
+        }
+
+        private fun countdownLabel(
+            prefs: android.content.SharedPreferences,
+        ): String {
+            val start = prefs.getString("next_start_ms", "")?.toLongOrNull() ?: return ""
+            val end = prefs.getString("next_end_ms", "")?.toLongOrNull() ?: return ""
+            val now = System.currentTimeMillis()
+            return when {
+                now in start until end -> "En cours · finit dans ${formatDuration(end - now)}"
+                start > now -> "Dans ${formatDuration(start - now)}"
+                else -> ""
+            }
+        }
+
+        private fun formatDuration(milliseconds: Long): String {
+            val totalMinutes = max(0L, milliseconds / 60_000L)
+            val days = totalMinutes / (24L * 60L)
+            val hours = (totalMinutes % (24L * 60L)) / 60L
+            val minutes = totalMinutes % 60L
+            return when {
+                days > 0L && hours > 0L -> "$days j $hours h"
+                days > 0L -> "$days j"
+                hours > 0L && minutes > 0L -> "$hours h $minutes min"
+                hours > 0L -> "$hours h"
+                else -> "$minutes min"
+            }
+        }
+
         private fun openApp(context: Context, action: String, requestCode: Int): PendingIntent {
             val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_WIDGET_ACTION, action)
             }
             return PendingIntent.getActivity(
@@ -105,13 +187,41 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
         )
 
         private fun visualFor(shiftId: String): WidgetVisual = when (shiftId) {
-            "urg-jour" -> WidgetVisual(R.drawable.bg_widget_urg_day, "☀", Color.rgb(255, 245, 245))
-            "urg-nuit" -> WidgetVisual(R.drawable.bg_widget_urg_night, "☾", Color.rgb(255, 238, 238))
-            "urg-24h" -> WidgetVisual(R.drawable.bg_widget_urg_24, "☀  ☾", Color.rgb(255, 250, 238))
-            "service-jour" -> WidgetVisual(R.drawable.bg_widget_service_day, "☀", Color.rgb(241, 249, 255))
-            "service-nuit" -> WidgetVisual(R.drawable.bg_widget_service_night, "☾", Color.rgb(235, 244, 255))
-            "service-24h" -> WidgetVisual(R.drawable.bg_widget_service_24, "☀  ☾", Color.rgb(239, 250, 255))
-            else -> WidgetVisual(R.drawable.bg_widget_next_default, "＋", Color.rgb(210, 225, 239))
+            "urg-jour" -> WidgetVisual(
+                R.drawable.bg_widget_urg_day,
+                "☀",
+                Color.rgb(255, 245, 245),
+            )
+            "urg-nuit" -> WidgetVisual(
+                R.drawable.bg_widget_urg_night,
+                "☾",
+                Color.rgb(255, 238, 238),
+            )
+            "urg-24h" -> WidgetVisual(
+                R.drawable.bg_widget_urg_24,
+                "☀  ☾",
+                Color.rgb(255, 250, 238),
+            )
+            "service-jour" -> WidgetVisual(
+                R.drawable.bg_widget_service_day,
+                "☀",
+                Color.rgb(241, 249, 255),
+            )
+            "service-nuit" -> WidgetVisual(
+                R.drawable.bg_widget_service_night,
+                "☾",
+                Color.rgb(235, 244, 255),
+            )
+            "service-24h" -> WidgetVisual(
+                R.drawable.bg_widget_service_24,
+                "☀  ☾",
+                Color.rgb(239, 250, 255),
+            )
+            else -> WidgetVisual(
+                R.drawable.bg_widget_next_default,
+                "＋",
+                Color.rgb(210, 225, 239),
+            )
         }
     }
 
