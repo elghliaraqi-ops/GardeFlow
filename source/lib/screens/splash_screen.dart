@@ -64,64 +64,50 @@ class _SplashScreenState extends State<SplashScreen>
       behavior: HitTestBehavior.opaque,
       onTap: _goNext,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F7F6),
+        backgroundColor: const Color(0xFFF7FAF9),
         body: Stack(
           fit: StackFit.expand,
           children: [
-            const _ModernSplashBackdrop(),
+            const _SplashBackdrop(),
             SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxHeight < 700;
-                  final veryCompact = constraints.maxHeight < 610;
-                  final horizontalPadding = constraints.maxWidth < 370 ? 20.0 : 28.0;
-
-                  return Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 480),
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          compact ? 8 : 18,
-                          horizontalPadding,
-                          compact ? 10 : 18,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    alignment: Alignment.center,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 680),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) => Opacity(
+                        opacity: value,
+                        child: Transform.translate(
+                          offset: Offset(0, 14 * (1 - value)),
+                          child: child,
                         ),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: 1),
-                          duration: const Duration(milliseconds: 720),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, value, child) {
-                            return Opacity(
-                              opacity: value,
-                              child: Transform.translate(
-                                offset: Offset(0, 16 * (1 - value)),
-                                child: Transform.scale(
-                                  scale: 0.985 + (0.015 * value),
-                                  child: child,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Column(
-                            children: [
-                              Expanded(
-                                flex: veryCompact ? 5 : 6,
-                                child: Center(
-                                  child: _HeroBrand(compact: compact),
-                                ),
-                              ),
-                              _PracticeModule(compact: compact),
-                              SizedBox(height: compact ? 16 : 24),
-                              _LoadingCluster(animation: _progressAnimation),
-                              SizedBox(height: compact ? 15 : 22),
-                              const _FlowSuiteFooter(),
-                            ],
-                          ),
+                      ),
+                      child: SizedBox(
+                        width: 420,
+                        height: 720,
+                        child: Column(
+                          children: [
+                            const _GardeFlowHero(),
+                            const SizedBox(height: 22),
+                            _LoadingCluster(animation: _progressAnimation),
+                            const Spacer(),
+                            const _PracticeBrand(),
+                            const SizedBox(height: 24),
+                            const _FlowSuiteBrand(),
+                          ],
                         ),
                       ),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ],
@@ -131,148 +117,95 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-class _HeroBrand extends StatelessWidget {
-  final bool compact;
-
-  const _HeroBrand({required this.compact});
+class _GardeFlowHero extends StatelessWidget {
+  const _GardeFlowHero();
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'GardeFlow. Avec vous, à chaque garde.',
+      label: 'GardeFlow. Le planning pour garder le flow.',
       image: true,
-      child: SizedBox(
-        width: double.infinity,
-        height: compact ? 185 : 225,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned(
-              left: 22,
-              right: 22,
-              top: compact ? 22 : 28,
-              bottom: compact ? 8 : 12,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    radius: 0.8,
-                    colors: [
-                      Color(0x3DFFFFFF),
-                      Color(0x12FFFFFF),
-                      Color(0x00FFFFFF),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/branding/splash_gardeflow_exact.webp',
-                  width: compact ? 315 : 360,
-                  height: compact ? 112 : 138,
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
-                  isAntiAlias: true,
-                  gaplessPlayback: true,
-                ),
-                SizedBox(height: compact ? 8 : 12),
-                const Text(
-                  'AVEC VOUS, À CHAQUE GARDE',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Color(0xFF273A42),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.85,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 11),
-                Container(
-                  width: 48,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(99),
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF00985F),
-                        Color(0xFF55B997),
-                        Color(0xFFE33A45),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PracticeModule extends StatelessWidget {
-  final bool compact;
-
-  const _PracticeModule({required this.compact});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Practice, éducation médicale',
-      image: true,
-      child: Container(
-        width: compact ? 245 : 270,
-        padding: EdgeInsets.fromLTRB(
-          20,
-          compact ? 10 : 13,
-          20,
-          compact ? 10 : 12,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.72),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.92),
-            width: 1.2,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/branding/splash_gardeflow_mark.png',
+            width: 164,
+            height: 164,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            isAntiAlias: true,
+            gaplessPlayback: true,
           ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x100B2A36),
-              blurRadius: 28,
-              offset: Offset(0, 12),
+          const SizedBox(height: 4),
+          const _GardeFlowWordmark(),
+          const SizedBox(height: 8),
+          const Text(
+            'Le planning pour garder le flow',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF314858),
+              fontSize: 19,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -0.35,
+              height: 1.15,
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/branding/splash_practice.webp',
-              width: compact ? 182 : 205,
-              height: compact ? 62 : 72,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-              isAntiAlias: true,
-              gaplessPlayback: true,
-            ),
-            const SizedBox(height: 3),
-            const Text(
-              'ÉDUCATION MÉDICALE',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF6E7F87),
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: 58,
+            height: 4,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(99),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF008D55),
+                  Color(0xFF39B778),
+                  Color(0xFFFF3348),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GardeFlowWordmark extends StatelessWidget {
+  const _GardeFlowWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return const FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Garde',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF087844),
+              fontSize: 58,
+              fontWeight: FontWeight.w800,
+              height: 0.95,
+              letterSpacing: -3.0,
+            ),
+          ),
+          Text(
+            'Flow',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFFEF1823),
+              fontSize: 58,
+              fontWeight: FontWeight.w800,
+              height: 0.95,
+              letterSpacing: -3.0,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -290,24 +223,36 @@ class _LoadingCluster extends StatelessWidget {
       children: [
         const Text(
           'PRÉPARATION DE VOTRE ESPACE',
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontFamily: 'Inter',
-            color: Color(0xFF7C8B91),
-            fontSize: 9.5,
+            color: Color(0xFF7189A8),
+            fontSize: 11.5,
             fontWeight: FontWeight.w700,
-            letterSpacing: 1.45,
+            letterSpacing: 2.15,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         AnimatedBuilder(
           animation: animation,
           builder: (context, _) {
             return Container(
-              width: 238,
-              height: 5,
+              width: 286,
+              height: 8,
               decoration: BoxDecoration(
-                color: const Color(0xFFDDE5E3),
+                color: const Color(0xFFE0E7EB),
                 borderRadius: BorderRadius.circular(99),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.90),
+                  width: 1.2,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x160B3E51),
+                    blurRadius: 10,
+                    offset: Offset(0, 3),
+                  ),
+                ],
               ),
               clipBehavior: Clip.antiAlias,
               alignment: Alignment.centerLeft,
@@ -317,10 +262,11 @@ class _LoadingCluster extends StatelessWidget {
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Color(0xFF008E59),
-                        Color(0xFF20A77A),
-                        Color(0xFFE13743),
+                        Color(0xFF00A768),
+                        Color(0xFF36B980),
+                        Color(0xFFFF3048),
                       ],
+                      stops: [0.0, 0.54, 1.0],
                     ),
                   ),
                 ),
@@ -333,8 +279,66 @@ class _LoadingCluster extends StatelessWidget {
   }
 }
 
-class _FlowSuiteFooter extends StatelessWidget {
-  const _FlowSuiteFooter();
+class _PracticeBrand extends StatelessWidget {
+  const _PracticeBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Practice, éducation médicale',
+      image: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/branding/splash_practice_mark.png',
+            width: 78,
+            height: 78,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            isAntiAlias: true,
+          ),
+          const SizedBox(height: 3),
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [
+                Color(0xFF1238B7),
+                Color(0xFF09A9E8),
+                Color(0xFF7D29F3),
+              ],
+            ).createShader(bounds),
+            child: const Text(
+              'Practice',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: Colors.white,
+                fontSize: 38,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.8,
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'ÉDUCATION MÉDICALE',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF7587A5),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlowSuiteBrand extends StatelessWidget {
+  const _FlowSuiteBrand();
 
   @override
   Widget build(BuildContext context) {
@@ -344,36 +348,63 @@ class _FlowSuiteFooter extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset(
-            'assets/branding/splash_flowsuite.webp',
-            width: 138,
-            height: 52,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-            isAntiAlias: true,
-            gaplessPlayback: true,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/branding/splash_flowsuite_mark.png',
+                width: 50,
+                height: 50,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                isAntiAlias: true,
+              ),
+              const SizedBox(width: 9),
+              ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xFF07549D),
+                    Color(0xFF0089E8),
+                    Color(0xFFA51CF3),
+                    Color(0xFFFF1769),
+                    Color(0xFFFFA600),
+                  ],
+                ).createShader(bounds),
+                child: const Text(
+                  'FlowSuite',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 31,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1.6,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 9),
           const Text(
             'Cette application fait partie de l’écosystème FlowSuite.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Inter',
-              color: Color(0xFF798A91),
-              fontSize: 9.5,
+              color: Color(0xFF8292A6),
+              fontSize: 10.5,
               fontWeight: FontWeight.w500,
-              height: 1.3,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 8),
           const Text(
             'VERSION ${_SplashScreenState._appVersion}',
             style: TextStyle(
               fontFamily: 'Inter',
-              color: Color(0xFFA0ADB2),
-              fontSize: 8.5,
+              color: Color(0xFF97A6B7),
+              fontSize: 10,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.15,
+              letterSpacing: 1.8,
             ),
           ),
         ],
@@ -382,49 +413,57 @@ class _FlowSuiteFooter extends StatelessWidget {
   }
 }
 
-class _ModernSplashBackdrop extends StatelessWidget {
-  const _ModernSplashBackdrop();
+class _SplashBackdrop extends StatelessWidget {
+  const _SplashBackdrop();
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            Color(0xFFF9FBFA),
-            Color(0xFFF1F6F4),
-            Color(0xFFF6F4F5),
+            Color(0xFFFBFCFC),
+            Color(0xFFF5F9F8),
+            Color(0xFFF8F6F7),
           ],
-          stops: [0.0, 0.54, 1.0],
+          stops: [0.0, 0.52, 1.0],
         ),
       ),
       child: Stack(
         fit: StackFit.expand,
         children: const [
           Positioned(
-            top: -140,
-            left: -150,
-            child: _SoftOrb(
-              size: 360,
-              inner: Color(0x2B31C38B),
+            top: -155,
+            left: -165,
+            child: _GlowOrb(
+              size: 400,
+              color: Color(0x3439D58F),
             ),
           ),
           Positioned(
-            right: -170,
-            bottom: -145,
-            child: _SoftOrb(
+            top: 160,
+            right: -165,
+            child: _GlowOrb(
               size: 390,
-              inner: Color(0x27E85762),
+              color: Color(0x252CA7E3),
             ),
           ),
           Positioned(
-            right: -95,
-            top: 180,
-            child: _SoftOrb(
-              size: 230,
-              inner: Color(0x171F9DD3),
+            bottom: -170,
+            right: -145,
+            child: _GlowOrb(
+              size: 410,
+              color: Color(0x2EFF5465),
+            ),
+          ),
+          Positioned(
+            bottom: -150,
+            left: -170,
+            child: _GlowOrb(
+              size: 360,
+              color: Color(0x1821C9AF),
             ),
           ),
         ],
@@ -433,11 +472,11 @@ class _ModernSplashBackdrop extends StatelessWidget {
   }
 }
 
-class _SoftOrb extends StatelessWidget {
+class _GlowOrb extends StatelessWidget {
   final double size;
-  final Color inner;
+  final Color color;
 
-  const _SoftOrb({required this.size, required this.inner});
+  const _GlowOrb({required this.size, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -449,9 +488,9 @@ class _SoftOrb extends StatelessWidget {
           shape: BoxShape.circle,
           gradient: RadialGradient(
             colors: [
-              inner,
-              inner.withOpacity(0.38),
-              inner.withOpacity(0),
+              color,
+              color.withOpacity(0.34),
+              color.withOpacity(0),
             ],
             stops: const [0.0, 0.45, 1.0],
           ),
