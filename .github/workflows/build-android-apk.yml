@@ -7,6 +7,7 @@ on:
       - main
       - v12-optimisee
       - alarm-reminders-v12
+      - ui/login-widget-premium-2026-10-04
     paths:
       - '.github/workflows/build-android-apk.yml'
       - 'source/**'
