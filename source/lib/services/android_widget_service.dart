@@ -39,7 +39,9 @@ class AndroidWidgetService {
       }
     });
     try {
-      final initial = await _channel.invokeMethod<String>('getInitialWidgetAction');
+      final initial = await _channel.invokeMethod<String>(
+        'getInitialWidgetAction',
+      );
       if (initial != null && initial.isNotEmpty) action.value = initial;
     } catch (_) {
       // Le widget ne doit jamais bloquer l'ouverture de l'application.
@@ -123,7 +125,8 @@ class AndroidWidgetService {
           .where((item) => _sameDay(item.start, now))
           .firstOrNull;
       if (todayUpcoming != null) {
-        todayStatus = 'Garde à ${DateFormat('HH:mm').format(todayUpcoming.start)}';
+        todayStatus =
+            'Garde à ${DateFormat('HH:mm').format(todayUpcoming.start)}';
       } else {
         todayStatus = 'Repos aujourd’hui';
       }
@@ -163,10 +166,7 @@ class AndroidWidgetService {
     final start = DateFormat('HH:mm').format(bounds.$1);
     final end = DateFormat('HH:mm').format(bounds.$2);
     final endPrefix = _sameDay(bounds.$1, bounds.$2) ? '' : 'demain ';
-    return (
-      title: title,
-      detail: '$day · $start → $endPrefix$end',
-    );
+    return (title: title, detail: '$day · $start → $endPrefix$end');
   }
 
   String _doctorLabel(AppUser user) {
