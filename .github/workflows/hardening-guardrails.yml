@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Patch stat pills and restore CI
+      - name: Patch compact home stat labels
         shell: bash
         run: |
           set -euo pipefail
@@ -60,27 +60,38 @@ jobs:
                'child: Icon(icon, color: Colors.white, size: 15),'),
               ('const SizedBox(width: 7),', 'const SizedBox(width: 5),'),
               ('fontSize: 9.5,', 'fontSize: 9.0,'),
-              ('maxLines: 1,\n                  overflow: TextOverflow.ellipsis,',
-               'maxLines: 1,\n                  softWrap: false,\n                  overflow: TextOverflow.ellipsis,'),
           ]
 
+          changed = False
           for old, new in replacements:
-              if old not in block:
-                  raise SystemExit(f'Expected HomeStatPill fragment not found: {old!r}')
-              block = block.replace(old, new, 1)
+              if old in block:
+                  block = block.replace(old, new, 1)
+                  changed = True
 
-          path.write_text(text[:start] + block + text[end:])
+          if 'softWrap: false,' not in block:
+              old = 'maxLines: 1,\n                  overflow: TextOverflow.ellipsis,'
+              new = 'maxLines: 1,\n                  softWrap: false,\n                  overflow: TextOverflow.ellipsis,'
+              if old not in block:
+                  raise SystemExit('HomeStatPill label layout fragment not found')
+              block = block.replace(old, new, 1)
+              changed = True
+
+          if changed:
+              path.write_text(text[:start] + block + text[end:])
           PY
 
           grep -q 'BoxConstraints(minHeight: 60)' source/lib/screens/home_screen.dart
           grep -q 'EdgeInsets.symmetric(horizontal: 7, vertical: 8)' source/lib/screens/home_screen.dart
           grep -q 'fontSize: 9.0' source/lib/screens/home_screen.dart
+          grep -q 'softWrap: false' source/lib/screens/home_screen.dart
 
-          echo 'bmFtZTogR2FyZGVGbG93IGhhcmRlbmluZyBndWFyZHJhaWxzCgpvbjoKICBwdWxsX3JlcXVlc3Q6CiAgcHVzaDoKICAgIGJyYW5jaGVzOgogICAgICAtIGhhcmRlbmluZy0yMDI2MTAwMwogICAgICAtIG1haW4KCnBlcm1pc3Npb25zOgogIGNvbnRlbnRzOiByZWFkCgpqb2JzOgogIHJlcG9zaXRvcnktZ3VhcmRyYWlsczoKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIHN0ZXBzOgogICAgICAtIHVzZXM6IGFjdGlvbnMvY2hlY2tvdXQAdjUKICAgICAgLSBuYW1lOiBSZWplY3QgZWRpdHMgdG8gbGVnYWN5IHRvcC1sZXZlbCBsaWIgc291cmNlCiAgICAgICAgc2hlbGw6IGJhc2gKICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICBpZiBnaXQgZGlmZiAtLW5hbWUtb25seSAiJHt7IGdpdGh1Yi5ldmVudC5iZWZvcmUgfHwgZ2l0aHViLmV2ZW50LnB1bGxfcmVxdWVzdC5iYXNlLnNoYSB9fSIgIiR7eyBnaXRodWIuc2hhIH19IiAyPi9kZXYvbnVsbCB8IGdyZXAgLUUgJ15saWIvJzsgdGhlbgogICAgICAgICAgICBlY2hvICdFUlJPUjogdG9wLWxldmVsIGxpYi8gaXMgbGVnYWN5LiBNb2RpZnkgc291cmNlL2xpYi8gb25seS4nID4mMgogICAgICAgICAgICBleGl0IDEKICAgICAgICAgIGZpCiAgICAgICAgICBlY2hvICdDYW5vbmljYWwgc291cmNlIGd1YXJkIHBhc3NlZDogc291cmNlL2xpYi8gb25seS4nCg==' | base64 -d > .github/workflows/hardening-guardrails.yml
-          rm -f .github/workflows/one-time-fix-home-stat-labels.yml
+          if git diff --quiet -- source/lib/screens/home_screen.dart; then
+            echo 'Home stat labels already fixed.'
+            exit 0
+          fi
 
           git config user.name 'elghliaraqi-ops'
           git config user.email 'elghliaraqi@gmail.com'
-          git add source/lib/screens/home_screen.dart .github/workflows/hardening-guardrails.yml .github/workflows/one-time-fix-home-stat-labels.yml
+          git add source/lib/screens/home_screen.dart
           git commit -m 'Fix home dashboard stat labels on narrow screens'
           git push origin HEAD:main
