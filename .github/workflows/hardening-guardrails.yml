@@ -8,7 +8,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   repository-guardrails:
@@ -24,74 +24,3 @@ jobs:
             exit 1
           fi
           echo 'Canonical source guard passed: source/lib/ only.'
-
-  apply-home-stat-label-fix:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Patch compact home stat labels
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('source/lib/screens/home_screen.dart')
-          text = path.read_text()
-          start_marker = 'class _HomeStatPill extends StatelessWidget {'
-          end_marker = 'class _HomeQuickRow extends StatelessWidget {'
-          start = text.index(start_marker)
-          end = text.index(end_marker, start)
-          block = text[start:end]
-
-          replacements = [
-              ('constraints: const BoxConstraints(minHeight: 57),',
-               'constraints: const BoxConstraints(minHeight: 60),'),
-              ('padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),',
-               'padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 8),'),
-              ('width: 29,', 'width: 27,'),
-              ('height: 29,', 'height: 27,'),
-              ('borderRadius: BorderRadius.circular(10),',
-               'borderRadius: BorderRadius.circular(9),'),
-              ('child: Icon(icon, color: Colors.white, size: 16),',
-               'child: Icon(icon, color: Colors.white, size: 15),'),
-              ('const SizedBox(width: 7),', 'const SizedBox(width: 5),'),
-              ('fontSize: 9.5,', 'fontSize: 9.0,'),
-          ]
-
-          changed = False
-          for old, new in replacements:
-              if old in block:
-                  block = block.replace(old, new, 1)
-                  changed = True
-
-          if 'softWrap: false,' not in block:
-              old = 'maxLines: 1,\n                  overflow: TextOverflow.ellipsis,'
-              new = 'maxLines: 1,\n                  softWrap: false,\n                  overflow: TextOverflow.ellipsis,'
-              if old not in block:
-                  raise SystemExit('HomeStatPill label layout fragment not found')
-              block = block.replace(old, new, 1)
-              changed = True
-
-          if changed:
-              path.write_text(text[:start] + block + text[end:])
-          PY
-
-          grep -q 'BoxConstraints(minHeight: 60)' source/lib/screens/home_screen.dart
-          grep -q 'EdgeInsets.symmetric(horizontal: 7, vertical: 8)' source/lib/screens/home_screen.dart
-          grep -q 'fontSize: 9.0' source/lib/screens/home_screen.dart
-          grep -q 'softWrap: false' source/lib/screens/home_screen.dart
-
-          if git diff --quiet -- source/lib/screens/home_screen.dart; then
-            echo 'Home stat labels already fixed.'
-            exit 0
-          fi
-
-          git config user.name 'elghliaraqi-ops'
-          git config user.email 'elghliaraqi@gmail.com'
-          git add source/lib/screens/home_screen.dart
-          git commit -m 'Fix home dashboard stat labels on narrow screens'
-          git push origin HEAD:main
