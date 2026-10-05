@@ -122,6 +122,7 @@ void configure(Directory root) {
     'USE_FULL_SCREEN_INTENT',
     'FOREGROUND_SERVICE',
     'FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+    'FOREGROUND_SERVICE_SPECIAL_USE',
     'ACCESS_NOTIFICATION_POLICY'
   ]) {
     final name = 'android.permission.$permission';
