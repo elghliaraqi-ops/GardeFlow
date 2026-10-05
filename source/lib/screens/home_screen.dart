@@ -1955,8 +1955,8 @@ class _HomeStatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 57),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      constraints: const BoxConstraints(minHeight: 60),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -1979,16 +1979,16 @@ class _HomeStatPill extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 29,
-            height: 29,
+            width: 27,
+            height: 27,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.13),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, color: Colors.white, size: 16),
+            child: Icon(icon, color: Colors.white, size: 15),
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 5),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2008,10 +2008,11 @@ class _HomeStatPill extends StatelessWidget {
                 Text(
                   label,
                   maxLines: 1,
+                  softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.86),
-                    fontSize: 9.5,
+                    fontSize: 9.0,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
