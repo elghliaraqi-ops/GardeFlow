@@ -81,13 +81,29 @@ jobs:
           python3 tool/install_alarm_activity.py
           python3 tool/install_system_alarm_bridge.py
           python3 tool/harden_alarm_fallback.py
-          grep -q 'android.permission.SCHEDULE_EXACT_ALARM' android/app/src/main/AndroidManifest.xml
-          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' android/app/src/main/AndroidManifest.xml
-          grep -q 'com.gdelataillade.alarm.action.RING' android/app/src/main/AndroidManifest.xml
-          grep -q 'GuardAlarmBootReceiver' android/app/src/main/AndroidManifest.xml
-          grep -q 'setAlarmClock' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
-          grep -q 'setAndAllowWhileIdle' android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
-          test -f android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          ALARM=android/app/src/main/kotlin/com/huim6/huim6_planning/AlarmActivity.kt
+
+          grep -q 'android.permission.SCHEDULE_EXACT_ALARM' "$MANIFEST"
+          grep -q 'android.permission.USE_FULL_SCREEN_INTENT' "$MANIFEST"
+          grep -q 'android.permission.WAKE_LOCK' "$MANIFEST"
+          grep -q 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$MANIFEST"
+          grep -q 'com.gdelataillade.alarm.action.RING' "$MANIFEST"
+          grep -q 'GuardAlarmBootReceiver' "$MANIFEST"
+          grep -q 'GuardAlarmTriggerReceiver' "$MANIFEST"
+          grep -q 'GuardAlarmService' "$MANIFEST"
+          grep -q 'foregroundServiceType="specialUse"' "$MANIFEST"
+
+          test -f "$ALARM"
+          grep -q 'class GuardAlarmTriggerReceiver' "$ALARM"
+          grep -q 'class GuardAlarmService : Service()' "$ALARM"
+          grep -q 'PowerManager.PARTIAL_WAKE_LOCK' "$ALARM"
+          grep -q 'Notification.CATEGORY_ALARM' "$ALARM"
+          grep -q 'setFullScreenIntent(fullScreenPending, true)' "$ALARM"
+          grep -q 'PendingIntent.getBroadcast' "$ALARM"
+          grep -q 'setAlarmClock' "$ALARM"
+          grep -q 'setAndAllowWhileIdle' "$ALARM"
 
       - name: Install dependencies
         run: |
