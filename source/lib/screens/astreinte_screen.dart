@@ -35,6 +35,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   List<SharedResource> _photos = const [];
   bool _loading = true;
   bool _uploading = false;
+  bool _deletingAllPhotos = false;
   bool _hospitalInitialized = false;
   String? _selectedHospital;
   String? _error;
@@ -64,6 +65,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   }
 
   Future<void> _selectHospital(String hospital) async {
+    if (_deletingAllPhotos) return;
     if (!kHospitals.contains(hospital) || hospital == _selectedHospital) return;
     setState(() {
       _selectedHospital = hospital;
@@ -105,7 +107,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
   }
 
   Future<void> _pickResource() async {
-    if (_uploading) return;
+    if (_uploading || _deletingAllPhotos) return;
     final hospital = _activeHospital();
     final action = await showModalBottomSheet<_AstreintePickAction>(
       context: context,
@@ -288,14 +290,28 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     }
   }
 
+  Future<void> _deleteSeniorResource(SharedResource resource) async {
+    if (_isImageResource(resource)) {
+      await _backend.client
+          .from('senior_oncall_rosters')
+          .delete()
+          .eq('source_label', 'photo:${resource.id}');
+    }
+    await _backend.deleteSharedResource(resource);
+  }
+
   Future<void> _delete(SharedResource resource) async {
+    if (_deletingAllPhotos) return;
     final hospital = _activeHospital();
+    final isImage = _isImageResource(resource);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer ce document ?'),
+        title: Text(isImage ? 'Supprimer cette photo ?' : 'Supprimer ce document ?'),
         content: Text(
-          'Il disparaîtra des documents des Séniors d’astreinte de ${hospitalDisplayName(hospital)}.',
+          isImage
+              ? 'Elle disparaîtra des documents des Séniors d’astreinte de ${hospitalDisplayName(hospital)}. Les astreintes publiées à partir de cette photo seront également retirées du calendrier.'
+              : 'Il disparaîtra des documents des Séniors d’astreinte de ${hospitalDisplayName(hospital)}.',
         ),
         actions: [
           TextButton(
@@ -311,7 +327,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
     );
     if (confirm != true) return;
     try {
-      await _backend.deleteSharedResource(resource);
+      await _deleteSeniorResource(resource);
       _imageCache.remove(resource.id);
       await _load();
     } catch (e) {
@@ -320,6 +336,100 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Suppression impossible : $e')));
       }
+    }
+  }
+
+  Future<void> _deleteAllPhotos() async {
+    if (_deletingAllPhotos || _uploading) return;
+
+    final hospital = _activeHospital();
+    final images = _photos.where(_isImageResource).toList(growable: false);
+    if (images.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucune photo à supprimer.')),
+        );
+      }
+      return;
+    }
+
+    final count = images.length;
+    final target = hospitalDisplayName(hospital);
+    final firstConfirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.danger),
+        title: const Text('Effacer toutes les photos ?'),
+        content: Text(
+          '$count photo${count > 1 ? 's' : ''} de $target ${count > 1 ? 'seront supprimées' : 'sera supprimée'} définitivement.\n\nLes PDF et fichiers Excel seront conservés. Les astreintes publiées à partir de ces photos seront retirées du calendrier. Les contacts Séniors resteront conservés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+    if (firstConfirm != true || !mounted) return;
+
+    final finalConfirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmation définitive'),
+        content: Text(
+          'Cette action est irréversible. Confirmer la suppression de $count photo${count > 1 ? 's' : ''} pour $target ?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.delete_forever_rounded),
+            label: Text('Effacer $count photo${count > 1 ? 's' : ''}'),
+          ),
+        ],
+      ),
+    );
+    if (finalConfirm != true || !mounted) return;
+
+    setState(() => _deletingAllPhotos = true);
+    var deleted = 0;
+    var failed = 0;
+    try {
+      for (final resource in images) {
+        try {
+          await _deleteSeniorResource(resource);
+          _imageCache.remove(resource.id);
+          deleted++;
+        } catch (_) {
+          failed++;
+        }
+      }
+
+      await _load();
+      if (!mounted) return;
+      final message = failed == 0
+          ? 'Toutes les photos de $target ont été supprimées ($deleted).'
+          : '$deleted photo${deleted > 1 ? 's' : ''} supprimée${deleted > 1 ? 's' : ''}, $failed échec${failed > 1 ? 's' : ''}. Les éléments en échec ont été conservés.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _deletingAllPhotos = false);
     }
   }
 
@@ -375,6 +485,7 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         (user != null && kHospitals.contains(user.hospital)
             ? user.hospital
             : kHospitals.first);
+    final hasImages = _photos.any(_isImageResource);
 
     Widget content;
     if (_loading) {
@@ -421,8 +532,8 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                 return _AstreintePhotoCard(
                   resource: resource,
                   imageFuture: isImage ? _bytesFor(resource) : null,
-                  canDelete: isAdmin,
-                  canAnalyze: isAdmin,
+                  canDelete: isAdmin && !_deletingAllPhotos,
+                  canAnalyze: isAdmin && !_deletingAllPhotos,
                   onTap: () => _openResource(resource),
                   onAnalyze: () => _analyze(resource),
                   onDelete: () => _delete(resource),
@@ -453,15 +564,33 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
                 ),
                 IconButton(
                   tooltip: 'Actualiser',
-                  onPressed: _loading ? null : _load,
+                  onPressed: _loading || _deletingAllPhotos ? null : _load,
                   icon: const Icon(Icons.refresh_rounded),
                   color: AppColors.brand,
                 ),
+                if (isAdmin && hasImages)
+                  IconButton(
+                    tooltip:
+                        'Effacer toutes les photos de ${hospitalDisplayName(hospital)}',
+                    onPressed: _loading || _uploading || _deletingAllPhotos
+                        ? null
+                        : _deleteAllPhotos,
+                    icon: _deletingAllPhotos
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_sweep_rounded),
+                    color: AppColors.danger,
+                  ),
                 if (isAdmin)
                   IconButton(
                     tooltip:
                         'Ajouter une photo, un PDF ou un Excel pour ${hospitalDisplayName(hospital)}',
-                    onPressed: _uploading ? null : _pickResource,
+                    onPressed: _uploading || _deletingAllPhotos
+                        ? null
+                        : _pickResource,
                     icon: _uploading
                         ? const SizedBox(
                             width: 18,
@@ -487,21 +616,38 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       return ColoredBox(color: AppColors.paper, child: body);
     }
 
-    return DecorScaffold(scene: ScreenDecorScene.onCall, 
+    return DecorScaffold(
+      scene: ScreenDecorScene.onCall,
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         title: GardeFlowTitle('Médecins Séniors de Garde / Astreinte'),
         actions: [
           IconButton(
             tooltip: 'Actualiser',
-            onPressed: _loading ? null : _load,
+            onPressed: _loading || _deletingAllPhotos ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
           ),
+          if (isAdmin && hasImages)
+            IconButton(
+              tooltip:
+                  'Effacer toutes les photos de ${hospitalDisplayName(hospital)}',
+              onPressed: _loading || _uploading || _deletingAllPhotos
+                  ? null
+                  : _deleteAllPhotos,
+              icon: _deletingAllPhotos
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_sweep_rounded),
+              color: AppColors.danger,
+            ),
           if (isAdmin)
             IconButton(
               tooltip:
                   'Ajouter une photo, un PDF ou un Excel pour ${hospitalDisplayName(hospital)}',
-              onPressed: _uploading ? null : _pickResource,
+              onPressed: _uploading || _deletingAllPhotos ? null : _pickResource,
               icon: _uploading
                   ? const SizedBox(
                       width: 20,
