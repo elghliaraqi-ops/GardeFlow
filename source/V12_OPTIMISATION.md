@@ -17,6 +17,10 @@ V12 part d'un principe simple : le dossier `source/` est désormais la source ap
 - Branche de préparation : `v12-optimisee`
 - Sauvegarde du main pré-V12 : `backup-main-pre-v12-20260923`
 
+## Maintenance UI
+
+- 2026-10-05 : les trois statistiques de la carte d'accueil ont été rendues plus compactes afin d'afficher correctement `Ce mois`, `Urgences` et `Service` sur les écrans étroits.
+
 ## Objectifs techniques
 
 1. réduire le temps et la fragilité des builds ;
