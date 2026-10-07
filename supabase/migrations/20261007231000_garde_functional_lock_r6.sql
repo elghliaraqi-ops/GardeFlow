@@ -5,7 +5,7 @@ create or replace function public.guardeflow_normalize_official_identity(p_value
 returns text
 language sql
 immutable
-set search_path = public
+set search_path = ''
 as $$
   select trim(
     regexp_replace(
@@ -14,10 +14,16 @@ as $$
           replace(
             replace(
               replace(
-                translate(
-                  lower(coalesce(p_value,'')),
-                  'àáâäãåçèéêëìíîïñòóôöõùúûüýÿæœ',
-                  'aaaaaaceeeeiiiinooooouuuuyyaeoe'
+                replace(
+                  replace(
+                    translate(
+                      lower(coalesce(p_value,'')),
+                      'àáâäãåçèéêëìíîïñòóôöõùúûüýÿ',
+                      'aaaaaaceeeeiiiinooooouuuuyy'
+                    ),
+                    'æ','ae'
+                  ),
+                  'œ','oe'
                 ),
                 '’',' '
               ),
@@ -259,7 +265,7 @@ create or replace function public.save_official_roster_analysis_r6(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_resource public.shared_resources%rowtype;
@@ -620,10 +626,14 @@ begin
       coalesce(v_conflict->'a','{}'::jsonb),
       coalesce(v_conflict->'b','{}'::jsonb),
       v_conflict->'c',
-      'resolved_auto',
+      case
+        when p_extraction->>'agreement' = 'ADMIN' then 'resolved_manual'
+        else 'resolved_auto'
+      end,
       jsonb_build_object(
         'agreement', p_extraction->>'agreement',
-        'status', v_status
+        'status', v_status,
+        'manual_resolution', v_conflict->'resolution'
       ),
       auth.uid(),
       now()
@@ -735,7 +745,7 @@ create or replace function public.admin_set_official_roster_identity_link(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_norm_first text;
@@ -867,7 +877,7 @@ create or replace function public.admin_delete_official_roster_identity_link(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_link public.official_roster_identity_links%rowtype;
@@ -935,7 +945,7 @@ create or replace function public.admin_correct_official_roster_guard(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_guard public.official_roster_guards%rowtype;
@@ -1079,7 +1089,7 @@ create or replace function public.admin_preview_official_roster_recalculation(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_profile public.profiles%rowtype;
@@ -1116,7 +1126,7 @@ begin
   with target as (
     select
       g.id,
-      g.date_str,
+      g.date_str::text as date_str,
       g.shift_id,
       g.confidence,
       g.review_status,
@@ -1149,8 +1159,8 @@ begin
     left join current_entries e on e.date_str = t.date_str
     left join public.planning_months pm
       on pm.owner_id = p_profile_id
-      and pm.year = extract(year from t.date_str)::int
-      and pm.month = extract(month from t.date_str)::int
+      and pm.year = extract(year from t.date_str::date)::int
+      and pm.month = extract(month from t.date_str::date)::int
   ),
   added as (
     select * from classified_target
@@ -1227,7 +1237,7 @@ create or replace function public.admin_apply_official_roster_recalculation(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_preview jsonb;
@@ -1397,6 +1407,12 @@ grant execute on function public.admin_preview_official_roster_recalculation(
 grant execute on function public.admin_apply_official_roster_recalculation(
   uuid,text
 ) to authenticated;
+
+grant select on table public.official_roster_import_reports to authenticated;
+grant select on table public.official_roster_guards to authenticated;
+grant select on table public.official_roster_identity_links to authenticated;
+grant select on table public.official_roster_anomalies to authenticated;
+grant select on table public.official_roster_recalculation_runs to authenticated;
 
 comment on table public.official_roster_guards is
   'Immutable-source interpretation of every official guard, including doctors without GardeFlow accounts. Personal calendars are derived separately.';
