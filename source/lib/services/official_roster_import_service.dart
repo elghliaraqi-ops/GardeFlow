@@ -23,7 +23,7 @@ class OfficialRosterAssignment {
         'date': dateStr,
         'shift_id': shiftId,
         'is_disciplinary': isDisciplinary,
-        'parser_revision': 'v12.0.1-r3',
+        'parser_revision': OfficialRosterImportService.parserRevision,
       };
 }
 
@@ -43,7 +43,7 @@ class OfficialRosterDisciplinaryMark {
         'date': dateStr,
         'shift_id': shiftId,
         'red_text': redText,
-        'parser_revision': 'v12.0.1-r3',
+        'parser_revision': OfficialRosterImportService.parserRevision,
       };
 }
 
@@ -76,6 +76,8 @@ class OfficialRosterParseResult {
 /// Aucune OCR n'est utilisée : pdfrx expose le texte et ses coordonnées PDF.
 class OfficialRosterImportService {
   OfficialRosterImportService._();
+
+  static const String parserRevision = 'v12.0.1-r3';
 
   static final RegExp _datePattern = RegExp(
     r'\b([0-3]?\d)[/.\-]([01]?\d)(?:[/.\-](20\d{2}|\d{2}))?\b',
