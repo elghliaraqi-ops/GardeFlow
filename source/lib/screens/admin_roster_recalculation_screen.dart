@@ -286,22 +286,49 @@ class _AdminRosterRecalculationScreenState
     setState(() => _globalBusy = true);
     var applied = 0;
     final failures = <String>[];
+    final resultItems = <Map<String, dynamic>>[];
     for (final preview in applicable) {
       final profileId = preview['profile_id']?.toString() ?? '';
       final token = preview['preview_token']?.toString() ?? '';
       if (profileId.isEmpty || token.isEmpty) continue;
       try {
-        await _backend.applyOfficialRosterRecalculation(
+        final result = await _backend.applyOfficialRosterRecalculation(
           profileId: profileId,
           previewToken: token,
         );
         applied++;
+        resultItems.add({
+          'profile_id': profileId,
+          'profile_name': preview['profile_name'],
+          'ok': true,
+          'result': result,
+        });
       } catch (e) {
         failures.add(
           '${preview['profile_name'] ?? profileId}: $e',
         );
+        resultItems.add({
+          'profile_id': profileId,
+          'profile_name': preview['profile_name'],
+          'ok': false,
+          'error': e.toString(),
+        });
       }
       if (!mounted) return;
+    }
+
+    try {
+      await _backend.logGlobalOfficialRosterRecalculation(
+        previews: applicable,
+        result: {
+          'applied_count': applied,
+          'failure_count': failures.length,
+          'items': resultItems,
+          'source_unchanged': true,
+        },
+      );
+    } catch (e) {
+      failures.add('Traçabilité globale: $e');
     }
 
     try {
