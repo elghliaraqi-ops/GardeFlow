@@ -184,6 +184,7 @@ class PracticeService {
           .from('practice_cases')
           .select()
           .eq('user_id', uid)
+          .eq('encounter_context', practiceEmergencyEncounterContext)
           .eq('is_draft', false);
       if (guardId != null) query = query.eq('guard_id', guardId);
       if (scope == 'month' || scope == 'year') {
@@ -229,6 +230,7 @@ class PracticeService {
     if (!includePending || offset > 0) return remote;
     final pending = await pendingCases();
     final filtered = pending.where((item) {
+      if (item.isStandalone) return false;
       if (guardId != null && item.guardId != guardId) return false;
       if (scope == 'month' || scope == 'year') {
         final date = DateTime.tryParse(item.guardDate);
