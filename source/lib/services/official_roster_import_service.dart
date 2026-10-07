@@ -54,6 +54,8 @@ class OfficialRosterParseResult {
   final int detectedRows;
   final int detectedCells;
   final int correctedDates;
+  final List<String> coveredDates;
+  final List<String> validationErrors;
 
   const OfficialRosterParseResult({
     required this.assignments,
@@ -62,7 +64,11 @@ class OfficialRosterParseResult {
     required this.detectedRows,
     required this.detectedCells,
     required this.correctedDates,
+    required this.coveredDates,
+    required this.validationErrors,
   });
+
+  bool get isComplete => validationErrors.isEmpty;
 }
 
 /// Lit les tableaux de garde Urgences directement depuis le PDF structuré.
@@ -77,7 +83,7 @@ class OfficialRosterParseResult {
 class OfficialRosterImportService {
   OfficialRosterImportService._();
 
-  static const String parserRevision = 'v12.0.1-r3';
+  static const String parserRevision = 'v12.0.2-r4';
 
   static final RegExp _datePattern = RegExp(
     r'\b([0-3]?\d)[/.\-]([01]?\d)(?:[/.\-](20\d{2}|\d{2}))?\b',
@@ -242,6 +248,7 @@ class OfficialRosterImportService {
     final unmatched = <Map<String, dynamic>>[];
     final disciplinaryMarks = <OfficialRosterDisciplinaryMark>[];
     final rawAssignments = <OfficialRosterAssignment>[];
+    final coverageShifts = <String, Set<String>>{};
 
     for (final row in rows) {
       final resolution = _resolveDate(row.rawDate, fallbackYear, previous);
@@ -252,6 +259,7 @@ class OfficialRosterImportService {
 
       for (final cell in row.cells) {
         detectedCells++;
+        coverageShifts.putIfAbsent(dateStr, () => <String>{}).add(cell.shiftId);
 
         final redText = _cellRedText(cell);
         if (redText.isNotEmpty) {
@@ -291,6 +299,8 @@ class OfficialRosterImportService {
     }
 
     final assignments = _coalesceAssignments(rawAssignments);
+    final coveredDates = coverageShifts.keys.toList()..sort();
+    final validationErrors = _validateCoverage(coverageShifts);
     return OfficialRosterParseResult(
       assignments: assignments,
       unmatchedCells: unmatched,
@@ -298,7 +308,39 @@ class OfficialRosterImportService {
       detectedRows: rows.length,
       detectedCells: detectedCells,
       correctedDates: correctedDates,
+      coveredDates: coveredDates,
+      validationErrors: validationErrors,
     );
+  }
+
+  static List<String> _validateCoverage(Map<String, Set<String>> coverageShifts) {
+    if (coverageShifts.isEmpty) {
+      return const <String>['Aucune date exploitable détectée.'];
+    }
+    final dates = coverageShifts.keys.map(DateTime.parse).toList()..sort();
+    final errors = <String>[];
+    var cursor = dates.first;
+    final last = dates.last;
+    final dateKeys = coverageShifts.keys.toSet();
+    while (!cursor.isAfter(last)) {
+      final key = _dateKey(cursor);
+      if (!dateKeys.contains(key)) {
+        errors.add('Date absente du tableau : ' + key);
+      }
+      cursor = cursor.add(const Duration(days: 1));
+    }
+    for (final key in coverageShifts.keys.toList()..sort()) {
+      final shifts = coverageShifts[key] ?? const <String>{};
+      final valid24h = shifts.length == 1 && shifts.contains('urg-24h');
+      final validSplit = shifts.length == 2 &&
+          shifts.contains('urg-jour') && shifts.contains('urg-nuit');
+      if (!valid24h && !validSplit) {
+        final labels = shifts.toList()..sort();
+        errors.add('Ligne incomplète ' + key + ' : ' +
+            (labels.isEmpty ? 'aucun créneau' : labels.join(' + ')));
+      }
+    }
+    return errors;
   }
 
   static List<OfficialRosterAssignment> _coalesceAssignments(
