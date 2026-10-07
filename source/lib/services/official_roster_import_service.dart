@@ -4,6 +4,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
+import '../models/official_roster_guard.dart';
 import '../models/shared_resource.dart';
 import 'official_roster_consensus_service.dart';
 
@@ -59,6 +60,7 @@ class OfficialRosterParseResult {
   final List<String> coveredDates;
   final List<String> validationErrors;
   final List<OfficialRosterLocalCell> localCells;
+  final List<OfficialRosterGuard> officialGuards;
 
   const OfficialRosterParseResult({
     required this.assignments,
@@ -70,6 +72,7 @@ class OfficialRosterParseResult {
     required this.coveredDates,
     required this.validationErrors,
     this.localCells = const <OfficialRosterLocalCell>[],
+    this.officialGuards = const <OfficialRosterGuard>[],
   });
 
   bool get isComplete => validationErrors.isEmpty;
@@ -87,7 +90,7 @@ class OfficialRosterParseResult {
 class OfficialRosterImportService {
   OfficialRosterImportService._();
 
-  static const String parserRevision = 'v12.0.2-r5';
+  static const String parserRevision = 'v12.0.2-r6';
 
   static final RegExp _datePattern = RegExp(
     r'\b([0-3]?\d)[/.\-]([01]?\d)(?:[/.\-](20\d{2}|\d{2}))?\b',
@@ -464,6 +467,7 @@ class OfficialRosterImportService {
     final unmatched = <Map<String, dynamic>>[];
     final disciplinary = <OfficialRosterDisciplinaryMark>[];
     final localCells = <OfficialRosterLocalCell>[];
+    final officialGuards = <OfficialRosterGuard>[];
     var detectedRows = 0;
     var detectedCells = 0;
     var correctedDates = 0;
@@ -495,6 +499,11 @@ class OfficialRosterImportService {
           (cell) => datesFromThisVersion.contains(cell.date),
         ),
       );
+      officialGuards.addAll(
+        result.officialGuards.where(
+          (guard) => datesFromThisVersion.contains(guard.dateStr),
+        ),
+      );
 
       claimedDates.addAll(datesFromThisVersion);
       detectedRows += datesFromThisVersion.length;
@@ -518,6 +527,7 @@ class OfficialRosterImportService {
       coveredDates: coveredDates,
       validationErrors: validationErrors,
       localCells: localCells,
+      officialGuards: officialGuards,
     );
   }
 
