@@ -34,10 +34,19 @@ class ClinicalCaseService {
     }
     await _ensureRetryStateLoaded();
 
-    final response = await _backend.client.rpc(
-      'clinical_case_feed',
-      params: <String, dynamic>{'p_offset': offset, 'p_limit': limit},
-    );
+    dynamic response;
+    try {
+      response = await _backend.client.rpc(
+        'clinical_case_feed_v2',
+        params: <String, dynamic>{'p_offset': offset, 'p_limit': limit},
+      );
+    } catch (_) {
+      // Backward-compatible fallback while a backend migration is propagating.
+      response = await _backend.client.rpc(
+        'clinical_case_feed',
+        params: <String, dynamic>{'p_offset': offset, 'p_limit': limit},
+      );
+    }
     if (response is! List) return const <ClinicalCasePost>[];
     final posts = response
         .whereType<Map>()
@@ -148,9 +157,11 @@ class ClinicalCaseService {
     if (!_backend.enabled || _backend.client.auth.currentUser == null) {
       return const <QcmLeaderboardEntry>[];
     }
+    final params = <String, dynamic>{'p_period': period};
+    if (promotion != null) params['p_promotion'] = promotion;
     final response = await _backend.client.rpc(
       'clinical_case_qcm_leaderboard',
-      params: <String, dynamic>{'p_period': period, 'p_promotion': promotion},
+      params: params,
     );
     if (response is! List) return const <QcmLeaderboardEntry>[];
     return response
@@ -159,6 +170,19 @@ class ClinicalCaseService {
           (row) => QcmLeaderboardEntry.fromMap(Map<String, dynamic>.from(row)),
         )
         .toList(growable: false);
+  }
+
+  Future<int> resetMyQcmAnswers({required String postId}) async {
+    if (!_backend.enabled || _backend.client.auth.currentUser == null) {
+      throw StateError('Authentification requise.');
+    }
+    final response = await _backend.client.rpc(
+      'clinical_case_reset_my_qcm_answers',
+      params: <String, dynamic>{'p_post_id': postId},
+    );
+    final count = int.tryParse('$response') ?? 0;
+    notifyChanged();
+    return count;
   }
 
   Future<void> enrichQcmForPracticeCase(String practiceCaseId) async {
