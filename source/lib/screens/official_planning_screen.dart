@@ -173,7 +173,10 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       final slot = _slotForId(resource.slot);
       if (slot == null || _autoImportingSlots.contains(slot.id) || _busySlot == slot.id) continue;
       try {
-        final current = await _backend.officialRosterImportIsCurrent(resource);
+        final current = await _backend.officialRosterImportIsCurrent(
+          resource,
+          parserRevision: OfficialRosterImportService.parserRevision,
+        );
         if (current) {
           if (mounted) setState(() => _importStatus[slot.id] = 'Gardes Urgences synchronisées');
           continue;
@@ -220,6 +223,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         resource: resource,
         assignments: parsed.assignments.map((a) => a.toJson()).toList(growable: false),
         unmatchedCells: parsed.unmatchedCells,
+        parserRevision: OfficialRosterImportService.parserRevision,
       );
 
       await _backend.registerOfficialDisciplinaryMarks(
