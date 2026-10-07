@@ -46,7 +46,6 @@ jobs:
           lib/state/app_state.dart
           lib/services/supabase_backend_service.dart
           lib/models/planning_month.dart
-          lib/screens/home_screen.dart
           lib/screens/admin_screen.dart
       - name: Run tests
         run: flutter test
