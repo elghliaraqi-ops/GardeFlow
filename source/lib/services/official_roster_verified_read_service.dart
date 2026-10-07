@@ -140,7 +140,7 @@ class OfficialRosterVerifiedReadService {
 
     final revision = extraction['parser_revision']?.toString() ?? '';
     final isR6Extraction =
-        OfficialRosterImportService._revisionRankForCompatibility(revision) >= 6;
+        _revisionRank(revision) >= 6;
 
     final rawRows = extraction['rows'];
     final rows = rawRows is List ? rawRows : const <dynamic>[];
@@ -582,6 +582,19 @@ class OfficialRosterVerifiedReadService {
     }
 
     return errors;
+  }
+
+  static int _revisionRank(String revision) {
+    final match = RegExp(r'r(\d+)
+    return date.year.toString().padLeft(4, '0') +
+        '-' +
+        date.month.toString().padLeft(2, '0') +
+        '-' +
+        date.day.toString().padLeft(2, '0');
+  }
+}
+).firstMatch(revision.trim());
+    return int.tryParse(match?.group(1) ?? '') ?? 0;
   }
 
   static String _dateKey(DateTime date) {
