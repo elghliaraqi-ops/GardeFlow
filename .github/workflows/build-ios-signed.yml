@@ -14,8 +14,8 @@ jobs:
     env:
       PROJECT_DIR: source
       BUNDLE_ID: com.huim6.gardeflow
-      APP_VERSION: 12.0.0
-      BUILD_NUMBER: "300"
+      APP_VERSION: 12.0.1
+      BUILD_NUMBER: "301"
 
     steps:
       - name: Checkout repository
@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '^version: 12.0.0+300$' pubspec.yaml
+          grep -q '^version: 12.0.1+301$' pubspec.yaml
           test -f lib/main.dart
 
       - name: Verify signing secrets
@@ -158,12 +158,12 @@ jobs:
           xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive -exportPath build/ios/ipa -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
           IPA_PATH="$(find build/ios/ipa -maxdepth 1 -name '*.ipa' -print -quit)"
           test -n "$IPA_PATH"
-          cp "$IPA_PATH" build/ios/ipa/GardeFlow-v12.0.0-signed.ipa
+          cp "$IPA_PATH" build/ios/ipa/GardeFlow-v12.0.1-signed.ipa
 
       - name: Upload signed IPA
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v12.0.0-ios-signed
-          path: source/build/ios/ipa/GardeFlow-v12.0.0-signed.ipa
+          name: GardeFlow-v12.0.1-ios-signed
+          path: source/build/ios/ipa/GardeFlow-v12.0.1-signed.ipa
           if-no-files-found: error
           retention-days: 30
