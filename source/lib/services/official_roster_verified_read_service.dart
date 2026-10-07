@@ -1,9 +1,116 @@
+import 'dart:typed_data';
+
 import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
+import '../models/shared_resource.dart';
 import 'official_roster_import_service.dart';
 
 class OfficialRosterVerifiedReadService {
   OfficialRosterVerifiedReadService._();
+
+  static Future<OfficialRosterParseResult> readVersionHistory({
+    required List<SharedResource> versionsNewestFirst,
+    required Future<Uint8List> Function(String storagePath) loadBytes,
+    required Future<Map<String, dynamic>?> Function(SharedResource resource)
+        loadVerified,
+    required String hospital,
+    required List<AppUser> profiles,
+    Map<String, Uint8List> suppliedBytes = const <String, Uint8List>{},
+  }) async {
+    final ordered = [...versionsNewestFirst]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final seen = <String>{};
+    final results = <OfficialRosterParseResult>[];
+
+    for (final version in ordered) {
+      final key = version.storagePath +
+          '|' +
+          version.updatedAt.toUtc().toIso8601String();
+      if (!seen.add(key)) continue;
+
+      OfficialRosterParseResult? local;
+      try {
+        final bytes =
+            suppliedBytes[version.storagePath] ??
+            await loadBytes(version.storagePath);
+        local = await OfficialRosterImportService.parse(
+          bytes: bytes,
+          displayName: version.displayName,
+          hospital: hospital,
+          profiles: profiles,
+          resourceUpdatedAt: version.updatedAt,
+        );
+      } catch (_) {
+        local = null;
+      }
+
+      Map<String, dynamic>? payload;
+      try {
+        payload = await loadVerified(version);
+      } catch (_) {
+        payload = null;
+      }
+
+      if (payload != null) {
+        final verified = fromExtraction(
+          extraction: payload,
+          hospital: hospital,
+          profiles: profiles,
+        );
+        if (!verified.isComplete || verified.detectedRows == 0) {
+          results.add(verified);
+          continue;
+        }
+        if (local != null &&
+            local.isComplete &&
+            local.detectedRows > 0 &&
+            !sameCoreAssignments(local, verified)) {
+          results.add(
+            OfficialRosterParseResult(
+              assignments: verified.assignments,
+              unmatchedCells: verified.unmatchedCells,
+              disciplinaryMarks: verified.disciplinaryMarks,
+              detectedRows: verified.detectedRows,
+              detectedCells: verified.detectedCells,
+              correctedDates: verified.correctedDates,
+              coveredDates: verified.coveredDates,
+              validationErrors: [
+                ...verified.validationErrors,
+                'Les lectures géométrique et visuelle ne concordent pas.',
+              ],
+            ),
+          );
+          continue;
+        }
+        results.add(verified);
+        continue;
+      }
+
+      if (local != null) results.add(local);
+    }
+
+    if (results.isEmpty) {
+      return const OfficialRosterParseResult(
+        assignments: <OfficialRosterAssignment>[],
+        unmatchedCells: <Map<String, dynamic>>[],
+        disciplinaryMarks: <OfficialRosterDisciplinaryMark>[],
+        detectedRows: 0,
+        detectedCells: 0,
+        correctedDates: 0,
+        coveredDates: <String>[],
+        validationErrors: <String>[
+          'Aucune version exploitable du planning officiel.',
+        ],
+      );
+    }
+
+    final invalid = results.where((result) => !result.isComplete).toList();
+    if (invalid.isNotEmpty && results.first == invalid.first) {
+      return invalid.first;
+    }
+
+    return OfficialRosterImportService.mergeNewestFirst(results);
+  }
 
   static OfficialRosterParseResult fromExtraction({
     required Map<String, dynamic> extraction,
