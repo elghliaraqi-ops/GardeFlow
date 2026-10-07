@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/clinical_case_post.dart';
@@ -21,8 +22,13 @@ abstract final class _PracticeGame {
 
 class ClinicalCasesSection extends StatefulWidget {
   final GlobalKey? verticalFeedKey;
+  final Future<void> Function(String practiceCaseId)? onEditCase;
 
-  const ClinicalCasesSection({super.key, this.verticalFeedKey});
+  const ClinicalCasesSection({
+    super.key,
+    this.verticalFeedKey,
+    this.onEditCase,
+  });
 
   @override
   State<ClinicalCasesSection> createState() => _ClinicalCasesSectionState();
@@ -39,6 +45,9 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   String? _selectedSpecialtyKey;
   String? _selectedCaseId;
   String _query = '';
+  bool _browseByDate = false;
+  bool _newestFirst = true;
+  String? _editingCaseId;
 
   @override
   void initState() {
@@ -237,6 +246,19 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
 
   void _openCase(String id) => setState(() => _selectedCaseId = id);
 
+  Future<void> _editCase(ClinicalCasePost post) async {
+    final edit = widget.onEditCase;
+    final practiceCaseId = post.practiceCaseId?.trim() ?? '';
+    if (edit == null || !post.canEdit || practiceCaseId.isEmpty) return;
+    setState(() => _editingCaseId = post.id);
+    try {
+      await edit(practiceCaseId);
+      await _loadAll(showLoader: false);
+    } finally {
+      if (mounted) setState(() => _editingCaseId = null);
+    }
+  }
+
   void _back() {
     if (_selectedCaseId != null) {
       setState(() => _selectedCaseId = null);
@@ -312,67 +334,125 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
 
   Widget _buildSpecialtiesView() {
     final groups = _sortedGroups();
+    final dated = List<ClinicalCasePost>.from(_items)
+      ..sort((a, b) {
+        final ad = a.publishedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = b.publishedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return _newestFirst ? bd.compareTo(ad) : ad.compareTo(bd);
+      });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Cas cliniques par spécialité',
-          style: TextStyle(
+        Text(
+          _browseByDate
+              ? 'Cas cliniques par date de publication'
+              : 'Cas cliniques par spécialité',
+          style: const TextStyle(
             color: _PracticeGame.text,
             fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Choisissez une spécialité pour accéder aux dossiers et aux QCM associés.',
-          style: TextStyle(
+        Text(
+          _browseByDate
+              ? 'Parcourez tous les cas selon leur date de publication.'
+              : 'Choisissez une spécialité pour accéder aux dossiers et aux QCM associés.',
+          style: const TextStyle(
             color: _PracticeGame.secondary,
             fontSize: 11.5,
             height: 1.4,
             fontWeight: FontWeight.w600,
           ),
         ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _BrowseToggle(
+                icon: Icons.folder_copy_outlined,
+                label: 'Spécialités',
+                selected: !_browseByDate,
+                onTap: () => setState(() => _browseByDate = false),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _BrowseToggle(
+                icon: Icons.calendar_month_rounded,
+                label: 'Publication',
+                selected: _browseByDate,
+                onTap: () => setState(() => _browseByDate = true),
+              ),
+            ),
+          ],
+        ),
+        if (_browseByDate) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _BrowseToggle(
+              icon: _newestFirst
+                  ? Icons.arrow_downward_rounded
+                  : Icons.arrow_upward_rounded,
+              label: _newestFirst ? 'Plus récents' : 'Plus anciens',
+              selected: true,
+              compact: true,
+              onTap: () => setState(() => _newestFirst = !_newestFirst),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 760
-                ? 3
-                : constraints.maxWidth >= 500
-                    ? 2
-                    : 1;
-            if (columns == 1) {
-              return Column(
-                children: [
-                  for (var i = 0; i < groups.length; i++) ...[
-                    _SpecialtyCard(
-                      group: groups[i],
-                      onTap: () => _openSpecialty(groups[i].key),
-                    ),
-                    if (i != groups.length - 1) const SizedBox(height: 10),
+        if (_browseByDate)
+          for (var i = 0; i < dated.length; i++) ...[
+            _CaseListTile(
+              post: dated[i],
+              number: i + 1,
+              onTap: () => _openCase(dated[i].id),
+            ),
+            if (i != dated.length - 1) const SizedBox(height: 9),
+          ]
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 760
+                  ? 3
+                  : constraints.maxWidth >= 500
+                      ? 2
+                      : 1;
+              if (columns == 1) {
+                return Column(
+                  children: [
+                    for (var i = 0; i < groups.length; i++) ...[
+                      _SpecialtyCard(
+                        group: groups[i],
+                        onTap: () => _openSpecialty(groups[i].key),
+                      ),
+                      if (i != groups.length - 1) const SizedBox(height: 10),
+                    ],
                   ],
+                );
+              }
+              const spacing = 10.0;
+              final width =
+                  (constraints.maxWidth - (columns - 1) * spacing) / columns;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (final group in groups)
+                    SizedBox(
+                      width: width,
+                      child: _SpecialtyCard(
+                        group: group,
+                        onTap: () => _openSpecialty(group.key),
+                      ),
+                    ),
                 ],
               );
-            }
-            const spacing = 10.0;
-            final width =
-                (constraints.maxWidth - (columns - 1) * spacing) / columns;
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: [
-                for (final group in groups)
-                  SizedBox(
-                    width: width,
-                    child: _SpecialtyCard(
-                      group: group,
-                      onTap: () => _openSpecialty(group.key),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
+            },
+          ),
       ],
     );
   }
@@ -478,7 +558,22 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
           subtitle: _specialtyLabel(post),
           onBack: _back,
         ),
-        const SizedBox(height: 12),
+        if (post.canEdit &&
+            widget.onEditCase != null &&
+            (post.practiceCaseId?.trim().isNotEmpty ?? false)) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: _GamingTextButton(
+              icon: Icons.edit_note_rounded,
+              label: _editingCaseId == post.id
+                  ? 'Ouverture…'
+                  : 'Modifier ce cas clinique',
+              onPressed:
+                  _editingCaseId == null ? () => _editCase(post) : null,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         _ClinicalCaseCard(post: post, number: number),
       ],
     );
@@ -662,6 +757,68 @@ class _GamingIconButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BrowseToggle extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool compact;
+
+  const _BrowseToggle({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 12,
+              vertical: compact ? 8 : 10,
+            ),
+            decoration: BoxDecoration(
+              color: selected
+                  ? _PracticeGame.purple.withOpacity(.22)
+                  : _PracticeGame.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? _PracticeGame.purple : _PracticeGame.line,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    size: 16,
+                    color: selected
+                        ? _PracticeGame.gold
+                        : _PracticeGame.secondary),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected
+                        ? _PracticeGame.text
+                        : _PracticeGame.secondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class _SpecialtyCard extends StatelessWidget {
@@ -882,6 +1039,12 @@ class _CaseListTile extends StatelessWidget {
                               ? 'QCM en préparation'
                               : '$answered/$total répondus',
                         ),
+                        if (post.publishedAt != null)
+                          _MetaText(
+                            icon: Icons.calendar_today_rounded,
+                            text: DateFormat('dd/MM/yyyy')
+                                .format(post.publishedAt!.toLocal()),
+                          ),
                       ],
                     ),
                   ],
@@ -990,6 +1153,7 @@ class _ClinicalCaseCard extends StatefulWidget {
 class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   bool _expanded = false;
   bool _submitting = false;
+  bool _resetting = false;
   int _currentQcm = 0;
   List<ClinicalCaseQcm> _qcms = <ClinicalCaseQcm>[];
   final Map<String, bool> _explanationExpanded = <String, bool>{};
@@ -1079,6 +1243,60 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     }
   }
 
+  Future<void> _redoQcm() async {
+    if (_qcms.isEmpty || _submitting || _resetting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Refaire le QCM ?'),
+        content: const Text(
+          'Vos réponses affichées seront réinitialisées pour ce cas. '
+          'Votre historique et le classement officiel restent basés sur '
+          'votre première tentative.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.replay_rounded),
+            label: const Text('Refaire'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _resetting = true);
+    try {
+      await ClinicalCaseService.instance.resetMyQcmAnswers(
+        postId: widget.post.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _qcms = _qcms.map((qcm) => qcm.copyWith(clearAnswer: true)).toList();
+        _currentQcm = 0;
+        _explanationExpanded.updateAll((_, __) => false);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'QCM réinitialisé. Le classement conserve la première tentative.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de réinitialiser ce QCM.')),
+      );
+    } finally {
+      if (mounted) setState(() => _resetting = false);
+    }
+  }
+
   void _moveQcm(int delta) {
     if (_qcms.isEmpty) return;
     final next = (_currentQcm + delta).clamp(0, _qcms.length - 1);
@@ -1162,7 +1380,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
             current: current,
             currentIndex: _currentQcm,
             total: _qcms.length,
-            submitting: _submitting,
+            submitting: _submitting || _resetting,
             onAnswer: _answer,
           ),
           if (answered) ...[
@@ -1196,6 +1414,16 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               ),
             ),
           ),
+          if (answeredCount > 0) ...[
+            const SizedBox(height: 5),
+            Center(
+              child: _GamingTextButton(
+                icon: Icons.replay_rounded,
+                label: _resetting ? 'Réinitialisation…' : 'Refaire le QCM',
+                onPressed: _resetting ? null : _redoQcm,
+              ),
+            ),
+          ],
         ],
       ],
     );
