@@ -24,8 +24,8 @@ jobs:
 
     env:
       PROJECT_DIR: source
-      APP_VERSION: 12.0.0
-      BUILD_NUMBER: "300"
+      APP_VERSION: 12.0.1
+      BUILD_NUMBER: "301"
 
     steps:
       - name: Checkout repository
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '^version: 12.0.0+300$' pubspec.yaml
+          grep -q '^version: 12.0.1+301$' pubspec.yaml
           test -f lib/main.dart
           test -f tool/configure_ios.dart
 
@@ -83,15 +83,15 @@ jobs:
           rm -rf build/ios/unsigned-output
           mkdir -p build/ios/unsigned-output/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/unsigned-output/Payload/GardeFlow.app
-          ditto -c -k --keepParent build/ios/iphoneos/Runner.app build/ios/unsigned-output/GardeFlow-v12.0.0-unsigned.app.zip
-          (cd build/ios/unsigned-output && zip -qry GardeFlow-v12.0.0-unsigned.ipa Payload)
+          ditto -c -k --keepParent build/ios/iphoneos/Runner.app build/ios/unsigned-output/GardeFlow-v12.0.1-unsigned.app.zip
+          (cd build/ios/unsigned-output && zip -qry GardeFlow-v12.0.1-unsigned.ipa Payload)
 
       - name: Upload unsigned iOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v12.0.0-ios-unsigned
+          name: GardeFlow-v12.0.1-ios-unsigned
           path: |
-            source/build/ios/unsigned-output/GardeFlow-v12.0.0-unsigned.app.zip
-            source/build/ios/unsigned-output/GardeFlow-v12.0.0-unsigned.ipa
+            source/build/ios/unsigned-output/GardeFlow-v12.0.1-unsigned.app.zip
+            source/build/ios/unsigned-output/GardeFlow-v12.0.1-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
