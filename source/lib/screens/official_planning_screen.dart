@@ -110,14 +110,19 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     if (resource == null || _guardCountLoading.contains(slot.id)) return;
     setState(() => _guardCountLoading.add(slot.id));
     try {
-      final bytes = await _backend.downloadSharedResource(resource.storagePath);
       final profiles = await _backend.fetchVisibleProfiles();
-      final parsed = await OfficialRosterImportService.parse(
-        bytes: bytes,
-        displayName: resource.displayName,
+      final versions = await _backend.fetchOfficialRosterVersions(slot.id);
+      final hasCurrentVersion = versions.any(
+        (v) =>
+            v.storagePath == resource.storagePath &&
+            v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
+      );
+      if (!hasCurrentVersion) versions.insert(0, resource);
+      final parsed = await OfficialRosterImportService.parseVersionHistory(
+        versionsNewestFirst: versions,
+        loadBytes: _backend.downloadSharedResource,
         hospital: slot.hospital,
         profiles: profiles,
-        resourceUpdatedAt: resource.updatedAt,
       );
       // Le résumé affiché doit refléter ce qui est réellement retrouvé
       // dans le PDF, pas seulement les lignes déjà transposées en base.
@@ -204,14 +209,24 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       });
     }
     try {
-      final sourceBytes = bytes ?? await _backend.downloadSharedResource(resource.storagePath);
       final profiles = await _backend.fetchVisibleProfiles();
-      final parsed = await OfficialRosterImportService.parse(
-        bytes: sourceBytes,
-        displayName: resource.displayName,
+      final versions = await _backend.fetchOfficialRosterVersions(slot.id);
+      final hasCurrentVersion = versions.any(
+        (v) =>
+            v.storagePath == resource.storagePath &&
+            v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
+      );
+      if (!hasCurrentVersion) versions.insert(0, resource);
+
+      final supplied = <String, Uint8List>{
+        if (bytes != null) resource.storagePath: bytes,
+      };
+      final parsed = await OfficialRosterImportService.parseVersionHistory(
+        versionsNewestFirst: versions,
+        loadBytes: _backend.downloadSharedResource,
         hospital: slot.hospital,
         profiles: profiles,
-        resourceUpdatedAt: resource.updatedAt,
+        suppliedBytes: supplied,
       );
       if (parsed.detectedRows == 0) {
         throw StateError('Aucune ligne de garde 08h-20h / 20h-08h reconnue dans ce PDF.');
