@@ -212,6 +212,7 @@ class AppState extends ChangeNotifier {
     final alreadyCurrent = await backend.officialRosterProfileSyncIsCurrent(
       resource: resource,
       profileId: profile.id,
+      parserRevision: OfficialRosterImportService.parserRevision,
     );
     if (alreadyCurrent) return false;
 
@@ -249,6 +250,7 @@ class AppState extends ChangeNotifier {
       profileId: profile.id,
       assignments: myAssignments,
       unmatchedCells: parsed.unmatchedCells,
+      parserRevision: OfficialRosterImportService.parserRevision,
     );
 
     await backend.applyCurrentDisciplinaryRulesForMe();
