@@ -310,7 +310,13 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         );
       }
 
-      final resource = await _backend.uploadOfficialPlanningPdf(slot: slot.id, bytes: bytes, fileName: file.name);
+      final resource = await _backend.uploadOfficialPlanningPdf(
+        slot: slot.id,
+        bytes: bytes,
+        fileName: file.name,
+        coveredDates: preflight.coveredDates,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      );
       Map<String, dynamic>? importResult;
       Object? importError;
       try {
