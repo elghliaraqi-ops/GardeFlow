@@ -381,6 +381,68 @@ class OfficialRosterImportService {
     return errors;
   }
 
+  /// Fusionne plusieurs versions validées du planning, de la plus récente
+  /// à la plus ancienne. Une version récente est autoritaire uniquement pour
+  /// les dates qu'elle couvre ; les versions plus anciennes complètent les
+  /// trous sans pouvoir écraser une date déjà couverte.
+  static OfficialRosterParseResult mergeNewestFirst(
+    List<OfficialRosterParseResult> results,
+  ) {
+    final claimedDates = <String>{};
+    final assignments = <OfficialRosterAssignment>[];
+    final unmatched = <Map<String, dynamic>>[];
+    final disciplinary = <OfficialRosterDisciplinaryMark>[];
+    var detectedRows = 0;
+    var detectedCells = 0;
+    var correctedDates = 0;
+
+    for (final result in results) {
+      if (!result.isComplete) continue;
+      final datesFromThisVersion = result.coveredDates
+          .where((date) => !claimedDates.contains(date))
+          .toSet();
+      if (datesFromThisVersion.isEmpty) continue;
+
+      assignments.addAll(
+        result.assignments.where(
+          (a) => datesFromThisVersion.contains(a.dateStr),
+        ),
+      );
+      unmatched.addAll(
+        result.unmatchedCells.where(
+          (u) => datesFromThisVersion.contains(u['date']?.toString()),
+        ),
+      );
+      disciplinary.addAll(
+        result.disciplinaryMarks.where(
+          (m) => datesFromThisVersion.contains(m.dateStr),
+        ),
+      );
+
+      claimedDates.addAll(datesFromThisVersion);
+      detectedRows += datesFromThisVersion.length;
+      detectedCells += result.detectedCells;
+      correctedDates += result.correctedDates;
+    }
+
+    final coveredDates = claimedDates.toList()..sort();
+    final continuity = <String, Set<String>>{
+      for (final date in coveredDates) date: <String>{'urg-24h'},
+    };
+    final validationErrors = _validateCoverage(continuity);
+
+    return OfficialRosterParseResult(
+      assignments: _coalesceAssignments(assignments),
+      unmatchedCells: unmatched,
+      disciplinaryMarks: disciplinary,
+      detectedRows: detectedRows,
+      detectedCells: detectedCells,
+      correctedDates: correctedDates,
+      coveredDates: coveredDates,
+      validationErrors: validationErrors,
+    );
+  }
+
   static List<OfficialRosterAssignment> _coalesceAssignments(
     List<OfficialRosterAssignment> input,
   ) {
