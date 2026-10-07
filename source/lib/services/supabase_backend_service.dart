@@ -947,12 +947,129 @@ class SupabaseBackendService {
     }
   }
 
+  Future<Map<String, dynamic>> analyzeOfficialRosterResource(
+    String resourceId, {
+    String parserRevision = 'v12.0.2-r5',
+  }) async {
+    if (!enabled || client.auth.currentUser == null) {
+      throw StateError('Connexion administrateur requise.');
+    }
+    final response = await client.functions.invoke(
+      'analyze-official-roster-pdf',
+      body: {
+        'resourceId': resourceId,
+        'parserRevision': parserRevision,
+      },
+    );
+    return _officialRosterExtractionFromFunction(response.data);
+  }
+
+  Future<Map<String, dynamic>> analyzeOfficialRosterPreflight({
+    required Uint8List bytes,
+    required String fileName,
+    required String slot,
+    String parserRevision = 'v12.0.2-r5',
+  }) async {
+    final uid = client.auth.currentUser?.id;
+    if (!enabled || uid == null) {
+      throw StateError('Connexion administrateur requise.');
+    }
+    if (bytes.isEmpty || bytes.length > 25 * 1024 * 1024) {
+      throw StateError('Le PDF est vide ou dépasse 25 Mo.');
+    }
+
+    final path = 'official_preflight/' +
+        uid +
+        '/' +
+        DateTime.now().microsecondsSinceEpoch.toString() +
+        '.pdf';
+
+    await client.storage.from(sharedBucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/pdf',
+            upsert: false,
+          ),
+        );
+
+    try {
+      final response = await client.functions.invoke(
+        'analyze-official-roster-pdf',
+        body: {
+          'tempStoragePath': path,
+          'slot': slot,
+          'displayName': fileName,
+          'parserRevision': parserRevision,
+        },
+      );
+      return _officialRosterExtractionFromFunction(response.data);
+    } finally {
+      try {
+        await client.storage.from(sharedBucket).remove([path]);
+      } catch (_) {
+        // Le nettoyage du fichier temporaire ne doit pas masquer le résultat.
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchOfficialRosterVerifiedRead({
+    required SharedResource resource,
+    String parserRevision = 'v12.0.2-r5',
+  }) async {
+    final raw = await client.rpc(
+      'get_official_roster_verified_read',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at':
+            resource.updatedAt.toUtc().toIso8601String(),
+        'p_parser_revision': parserRevision,
+      },
+    );
+    if (raw == null) return null;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
+  }
+
+  Map<String, dynamic> _officialRosterExtractionFromFunction(dynamic raw) {
+    if (raw is Map && raw['ok'] == true && raw['extraction'] is Map) {
+      return Map<String, dynamic>.from(raw['extraction'] as Map);
+    }
+
+    final error = raw is Map ? raw['error']?.toString() : null;
+    switch (error) {
+      case 'forbidden':
+        throw StateError(
+          'La vérification des plannings officiels est réservée aux administrateurs.',
+        );
+      case 'verifier_not_configured':
+        throw StateError(
+          'Le vérificateur visuel sécurisé du planning n’est pas configuré.',
+        );
+      case 'resource_not_found':
+      case 'invalid_preflight_resource':
+        throw StateError('Le PDF officiel à vérifier est introuvable.');
+      case 'pdf_download_failed':
+        throw StateError('Impossible de charger le PDF pour sa vérification.');
+      case 'invalid_pdf_size':
+        throw StateError('Le PDF est vide ou dépasse la limite de 25 Mo.');
+      case 'cache_failed':
+        throw StateError(
+          'La lecture du PDF a réussi mais sa vérification n’a pas pu être enregistrée.',
+        );
+      default:
+        throw StateError(
+          'La double lecture du planning est momentanément indisponible.',
+        );
+    }
+  }
+
   Future<SharedResource> uploadOfficialPlanningPdf({
     required String slot,
     required Uint8List bytes,
     required String fileName,
     required List<String> coveredDates,
-    String parserRevision = 'v12.0.2-r4',
+    String parserRevision = 'v12.0.2-r5',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
@@ -999,7 +1116,7 @@ class SupabaseBackendService {
 
   Future<bool> officialRosterImportIsCurrent(
     SharedResource resource, {
-    String parserRevision = 'v12.0.2-r4',
+    String parserRevision = 'v12.0.2-r5',
   }) async {
     final result = await client.rpc(
       'official_roster_import_is_current_v2',
@@ -1016,7 +1133,7 @@ class SupabaseBackendService {
     required SharedResource resource,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r4',
+    String parserRevision = 'v12.0.2-r5',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_v2',
@@ -1079,7 +1196,7 @@ class SupabaseBackendService {
   Future<bool> officialRosterProfileSyncIsCurrent({
     required SharedResource resource,
     required String profileId,
-    String parserRevision = 'v12.0.2-r4',
+    String parserRevision = 'v12.0.2-r5',
   }) async {
     final result = await client.rpc(
       'official_roster_profile_sync_is_current_v2',
@@ -1098,7 +1215,7 @@ class SupabaseBackendService {
     required String profileId,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r4',
+    String parserRevision = 'v12.0.2-r5',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_for_profile_v2',
