@@ -161,14 +161,52 @@ class OfficialRosterImportService {
         final midpoint = (dayCenter + nightCenter) / 2;
         final separation = nightCenter - dayCenter;
 
-        for (final dateFragment in fragments) {
+        final dateFragments = fragments
+            .where((f) => _datePattern.hasMatch(f.text))
+            .toList()
+          ..sort((a, b) => a.centerY.compareTo(b.centerY));
+
+        for (var dateIndex = 0; dateIndex < dateFragments.length; dateIndex++) {
+          final dateFragment = dateFragments[dateIndex];
           final dateMatch = _datePattern.firstMatch(dateFragment.text);
           if (dateMatch == null) continue;
 
-          final tolerance = (dateFragment.height * 0.70).clamp(3.5, 6.0).toDouble();
+          // Chaque fragment est rattaché à la bande géométrique de sa date,
+          // délimitée par les milieux avec les dates voisines. Contrairement
+          // à une tolérance verticale fixe, cela reste fiable quand un PDF
+          // décale légèrement certains noms ou utilise des lignes plus hautes.
+          final currentY = dateFragment.centerY;
+          final previousY =
+              dateIndex > 0 ? dateFragments[dateIndex - 1].centerY : null;
+          final nextY = dateIndex + 1 < dateFragments.length
+              ? dateFragments[dateIndex + 1].centerY
+              : null;
+
+          double minY;
+          double maxY;
+          if (previousY != null) {
+            minY = (previousY + currentY) / 2;
+          } else if (nextY != null) {
+            minY = currentY - (nextY - currentY).abs() / 2;
+          } else {
+            minY = currentY - 12;
+          }
+          if (nextY != null) {
+            maxY = (currentY + nextY) / 2;
+          } else if (previousY != null) {
+            maxY = currentY + (currentY - previousY).abs() / 2;
+          } else {
+            maxY = currentY + 12;
+          }
+          if (minY > maxY) {
+            final swap = minY;
+            minY = maxY;
+            maxY = swap;
+          }
+
           final rowFragments = fragments.where((f) {
             if (identical(f, dateFragment)) return false;
-            if ((f.centerY - dateFragment.centerY).abs() > tolerance) return false;
+            if (f.centerY < minY || f.centerY > maxY) return false;
             if (f.left <= dateFragment.right + 2) return false;
             if (_isDayHeader(f.text) || _isNightHeader(f.text)) return false;
             if (_datePattern.hasMatch(f.text)) return false;
