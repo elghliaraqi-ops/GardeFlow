@@ -259,6 +259,20 @@ class PracticeService {
     ];
   }
 
+  Future<PracticeCase?> fetchCaseById(String id) async {
+    final uid = _authUserId;
+    final caseId = id.trim();
+    if (!_backend.enabled || uid == null || caseId.isEmpty) return null;
+    final row = await _backend.client
+        .from('practice_cases')
+        .select()
+        .eq('id', caseId)
+        .eq('user_id', uid)
+        .maybeSingle();
+    if (row == null) return null;
+    return PracticeCase.fromMap(Map<String, dynamic>.from(row));
+  }
+
   Future<PracticeSaveResult> saveValidated(PracticeCase value) async {
     final normalized = value.copyWith(isDraft: false, pendingSync: false);
     if (!normalized.isValid) {
