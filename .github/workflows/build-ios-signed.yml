@@ -2,6 +2,11 @@ name: Build GardeFlow V12 iOS Signed
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-ios-signed.yml'
 
 permissions:
   contents: read
