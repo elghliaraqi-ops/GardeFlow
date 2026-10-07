@@ -236,6 +236,12 @@ class AppState extends ChangeNotifier {
         'Le planning officiel ${resource.displayName} ne contient aucune ligne Urgences reconnue.',
       );
     }
+    if (!parsed.isComplete) {
+      throw StateError(
+        'Lecture incomplète du planning officiel : ' +
+            parsed.validationErrors.take(4).join(' • '),
+      );
+    }
 
     final myAssignments = parsed.assignments
         .where((a) => a.profileId == profile.id)
