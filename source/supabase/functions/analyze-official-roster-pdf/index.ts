@@ -509,6 +509,25 @@ Deno.serve(async (req: Request) => {
       storagePath = tempStoragePath;
     }
 
+    const { data: activeProfiles } = await adminClient
+      .from('profiles')
+      .select('prenom,nom')
+      .eq('hospital', hospital)
+      .eq('account_status', 'active')
+      .order('nom', { ascending: true });
+
+    const profileContext = Array.isArray(activeProfiles) && activeProfiles.length > 0
+      ? [
+          'MÉDECINS ACTIFS CONNUS DANS CET ÉTABLISSEMENT (aide de désambiguïsation uniquement):',
+          ...activeProfiles.map((profile: any) =>
+            '- ' + String(profile?.prenom ?? '').trim() + ' ' +
+            String(profile?.nom ?? '').trim()
+          ),
+          '',
+          'Utilise l’orthographe canonique de cette liste seulement si le nom visible sur le PDF correspond clairement. Si le document montre une autre personne, conserve le nom réellement visible et ne force jamais une correspondance.',
+        ].join('\n')
+      : 'Aucune liste de profils actifs disponible pour la désambiguïsation.';
+
     const { data: blob, error: downloadError } = await adminClient.storage
       .from('gardeflow-shared')
       .download(storagePath);
@@ -529,13 +548,13 @@ Deno.serve(async (req: Request) => {
       const readA = await runRead(
         openAiFileId,
         openAiKey,
-        'PREMIÈRE LECTURE: lis le PDF depuis zéro et rends le tableau complet.',
+        'PREMIÈRE LECTURE: lis le PDF depuis zéro et rends le tableau complet.\n\n' + profileContext,
         'official_roster_read_a',
       );
       const readB = await runRead(
         openAiFileId,
         openAiKey,
-        'DEUXIÈME LECTURE INDÉPENDANTE: relis le PDF depuis zéro. Ne suppose pas que la première lecture existe. Vérifie chaque date et chaque nom.',
+        'DEUXIÈME LECTURE INDÉPENDANTE: relis le PDF depuis zéro. Ne suppose pas que la première lecture existe. Vérifie chaque date et chaque nom.\n\n' + profileContext,
         'official_roster_read_b',
       );
 
@@ -555,7 +574,9 @@ Deno.serve(async (req: Request) => {
           'TROISIÈME LECTURE / ARBITRAGE. Les deux lectures précédentes ne sont pas identiques. Relis toi-même le PDF visuellement et rends la version exacte. Ne choisis pas par majorité sans vérifier le document.\n\nLecture A:\n' +
           JSON.stringify(readA) +
           '\n\nLecture B:\n' +
-          JSON.stringify(readB);
+          JSON.stringify(readB) +
+          '\n\n' +
+          profileContext;
         const readC = await runRead(
           openAiFileId,
           openAiKey,
