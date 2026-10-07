@@ -949,8 +949,10 @@ class SupabaseBackendService {
 
   Future<Map<String, dynamic>> analyzeOfficialRosterResource(
     String resourceId, {
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
     String? verificationToken,
+    List<Map<String, dynamic>> localEvidence =
+        const <Map<String, dynamic>>[],
   }) async {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
@@ -960,6 +962,7 @@ class SupabaseBackendService {
       body: {
         'resourceId': resourceId,
         'parserRevision': parserRevision,
+        'localEvidence': localEvidence,
         if (verificationToken != null && verificationToken.isNotEmpty)
           'verificationToken': verificationToken,
       },
@@ -971,7 +974,8 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required String slot,
-    String parserRevision = 'v12.0.2-r5',
+    required List<Map<String, dynamic>> localEvidence,
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (!enabled || uid == null) {
@@ -1004,6 +1008,7 @@ class SupabaseBackendService {
           'slot': slot,
           'displayName': fileName,
           'parserRevision': parserRevision,
+          'localEvidence': localEvidence,
         },
       );
       return _officialRosterExtractionFromFunction(response.data);
@@ -1018,7 +1023,7 @@ class SupabaseBackendService {
 
   Future<Map<String, dynamic>?> fetchOfficialRosterVerifiedRead({
     required SharedResource resource,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final raw = await client.rpc(
       'get_official_roster_verified_read',
@@ -1072,7 +1077,7 @@ class SupabaseBackendService {
         );
       default:
         throw StateError(
-          'La double lecture du planning est momentanément indisponible.',
+          'La vérification indépendante A/B/C du planning est momentanément indisponible.',
         );
     }
   }
@@ -1082,7 +1087,7 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required List<String> coveredDates,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
@@ -1129,7 +1134,7 @@ class SupabaseBackendService {
 
   Future<bool> officialRosterImportIsCurrent(
     SharedResource resource, {
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'official_roster_import_is_current_v2',
@@ -1146,7 +1151,7 @@ class SupabaseBackendService {
     required SharedResource resource,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_v2',
@@ -1209,7 +1214,7 @@ class SupabaseBackendService {
   Future<bool> officialRosterProfileSyncIsCurrent({
     required SharedResource resource,
     required String profileId,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'official_roster_profile_sync_is_current_v2',
@@ -1228,7 +1233,7 @@ class SupabaseBackendService {
     required String profileId,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_for_profile_v2',
