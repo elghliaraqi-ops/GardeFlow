@@ -939,34 +939,50 @@ class SupabaseBackendService {
     required String slot,
     required Uint8List bytes,
     required String fileName,
+    required List<String> coveredDates,
+    String parserRevision = 'v12.0.2-r4',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
-    final path = 'official/$slot.pdf';
+    if (coveredDates.isEmpty) {
+      throw StateError('Aucune date validée dans le planning officiel.');
+    }
+
+    final sortedDates = [...coveredDates]..sort();
+    final publishedAt = DateTime.now().toUtc();
+    final path =
+        'official_versions/$slot/${publishedAt.microsecondsSinceEpoch}.pdf';
+
     await client.storage.from(sharedBucket).uploadBinary(
           path,
           bytes,
           fileOptions: const FileOptions(
             contentType: 'application/pdf',
-            upsert: true,
+            upsert: false,
           ),
         );
-    await client.from('shared_resources').upsert({
-      'kind': 'official_pdf',
-      'slot': slot,
-      'storage_path': path,
-      'display_name': fileName,
-      'mime_type': 'application/pdf',
-      'uploaded_by': uid,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'kind,slot');
-    final row = await client
-        .from('shared_resources')
-        .select()
-        .eq('kind', 'official_pdf')
-        .eq('slot', slot)
-        .single();
-    return SharedResource.fromJson(Map<String, dynamic>.from(row));
+
+    try {
+      final row = await client.rpc(
+        'publish_official_roster_version',
+        params: {
+          'p_slot': slot,
+          'p_storage_path': path,
+          'p_display_name': fileName,
+          'p_resource_updated_at': publishedAt.toIso8601String(),
+          'p_first_date': sortedDates.first,
+          'p_last_date': sortedDates.last,
+          'p_coverage_dates': sortedDates,
+          'p_parser_revision': parserRevision,
+        },
+      );
+      return SharedResource.fromJson(
+        Map<String, dynamic>.from(row as Map),
+      );
+    } catch (_) {
+      await client.storage.from(sharedBucket).remove([path]);
+      rethrow;
+    }
   }
 
   Future<bool> officialRosterImportIsCurrent(
