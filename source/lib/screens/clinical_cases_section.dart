@@ -2099,21 +2099,68 @@ class _GuidelineReference {
   });
 }
 
+class _ExternalImageReference {
+  final String title;
+  final Uri previewUrl;
+  final Uri sourceUrl;
+
+  const _ExternalImageReference({
+    required this.title,
+    required this.previewUrl,
+    required this.sourceUrl,
+  });
+}
+
 class _GuidelineCorrection extends StatelessWidget {
   final String correction;
 
   const _GuidelineCorrection({required this.correction});
 
-  ({String explanation, List<_GuidelineReference> references}) _parse() {
-    const marker = '\n\n§SOURCES§\n';
+  ({
+    String explanation,
+    List<_ExternalImageReference> images,
+    List<_GuidelineReference> references,
+  }) _parse() {
+    const sourceMarker = '\n\n§SOURCES§\n';
+    const imageMarker = '\n\n§IMAGES§\n';
     final raw = correction.trim();
-    final markerIndex = raw.indexOf(marker);
-    if (markerIndex < 0) {
-      return (explanation: raw, references: const <_GuidelineReference>[]);
+
+    final sourceIndex = raw.indexOf(sourceMarker);
+    final beforeSources =
+        sourceIndex < 0 ? raw : raw.substring(0, sourceIndex).trim();
+    final sourcesText = sourceIndex < 0
+        ? ''
+        : raw.substring(sourceIndex + sourceMarker.length).trim();
+
+    final imageIndex = beforeSources.indexOf(imageMarker);
+    final explanation = imageIndex < 0
+        ? beforeSources
+        : beforeSources.substring(0, imageIndex).trim();
+    final imagesText = imageIndex < 0
+        ? ''
+        : beforeSources.substring(imageIndex + imageMarker.length).trim();
+
+    final images = <_ExternalImageReference>[];
+    for (final line in imagesText.split('\n')) {
+      final parts = line.split('|||');
+      if (parts.length != 3) continue;
+      final preview = Uri.tryParse(parts[1].trim());
+      final source = Uri.tryParse(parts[2].trim());
+      if (preview == null ||
+          source == null ||
+          preview.scheme != 'https' ||
+          source.scheme != 'https') {
+        continue;
+      }
+      images.add(
+        _ExternalImageReference(
+          title: parts[0].trim(),
+          previewUrl: preview,
+          sourceUrl: source,
+        ),
+      );
     }
 
-    final explanation = raw.substring(0, markerIndex).trim();
-    final sourcesText = raw.substring(markerIndex + marker.length).trim();
     final references = <_GuidelineReference>[];
     for (final line in sourcesText.split('\n')) {
       final parts = line.split('|||');
@@ -2132,7 +2179,11 @@ class _GuidelineCorrection extends StatelessWidget {
         ),
       );
     }
-    return (explanation: explanation, references: references);
+    return (
+      explanation: explanation,
+      images: images,
+      references: references,
+    );
   }
 
   String _kindLabel(String value) {
@@ -2241,6 +2292,109 @@ class _GuidelineCorrection extends StatelessWidget {
             children: _explanationWidgets(explanation),
           ),
         ),
+        if (parsed.images.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Icon(Icons.image_search_rounded,
+                  size: 15, color: _PracticeGame.mint),
+              SizedBox(width: 6),
+              Text(
+                'IMAGE PÉDAGOGIQUE EXTERNE',
+                style: TextStyle(
+                  color: _PracticeGame.gold,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .55,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          for (final imageRef in parsed.images) ...[
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => launchUrl(
+                  imageRef.sourceUrl,
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: _PracticeGame.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _PracticeGame.purple.withOpacity(.28),
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: 170,
+                        child: Image.network(
+                          imageRef.previewUrl.toString(),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: _PracticeGame.secondary,
+                                size: 34,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                imageRef.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _PracticeGame.text,
+                                  fontSize: 10.5,
+                                  height: 1.3,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.open_in_new_rounded,
+                              size: 15,
+                              color: _PracticeGame.gold,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+          const Text(
+            'Aperçu chargé depuis une source externe · aucune image n’est stockée dans GardeFlow.',
+            style: TextStyle(
+              color: _PracticeGame.secondary,
+              fontSize: 9.2,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         if (parsed.references.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Row(
