@@ -192,7 +192,7 @@ create index if not exists official_roster_anomalies_report_idx
 
 create table if not exists public.official_roster_recalculation_runs (
   id uuid primary key default gen_random_uuid(),
-  scope text not null check (scope in ('individual','global_item')),
+  scope text not null check (scope in ('individual','global')),
   profile_id uuid references public.profiles(id) on delete set null,
   resource_id uuid references public.shared_resources(id) on delete set null,
   resource_updated_at timestamptz,
@@ -1370,6 +1370,71 @@ begin
 end;
 $$;
 
+create or replace function public.admin_log_official_roster_global_recalculation(
+  p_preview jsonb,
+  p_result jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_run_id uuid;
+  v_token text;
+  v_actor_name text;
+begin
+  if not public.is_admin() then
+    raise exception 'Réservé à l’administrateur';
+  end if;
+
+  v_token := md5(coalesce(p_preview,'{}'::jsonb)::text);
+
+  insert into public.official_roster_recalculation_runs(
+    scope,
+    requested_by,
+    preview,
+    preview_token,
+    applied,
+    result,
+    applied_at
+  ) values (
+    'global',
+    auth.uid(),
+    coalesce(p_preview,'{}'::jsonb),
+    v_token,
+    true,
+    coalesce(p_result,'{}'::jsonb),
+    now()
+  )
+  returning id into v_run_id;
+
+  select trim(coalesce(p.prenom,'') || ' ' || coalesce(p.nom,''))
+  into v_actor_name
+  from public.profiles p
+  where p.id = auth.uid();
+
+  insert into public.audit_log(
+    actor_id, actor_name, action, entity_type, entity_id,
+    reason, details
+  ) values (
+    auth.uid(),
+    coalesce(nullif(v_actor_name,''),'Administrateur'),
+    'official_roster_recalculated_global',
+    'official_roster_recalculation',
+    v_run_id::text,
+    'Recalcul global depuis les sources officielles',
+    jsonb_build_object(
+      'preview', coalesce(p_preview,'{}'::jsonb),
+      'result', coalesce(p_result,'{}'::jsonb),
+      'source_unchanged', true
+    )
+  );
+
+  return v_run_id;
+end;
+$;
+
 revoke all on function public.save_official_roster_analysis_r6(
   uuid,timestamptz,jsonb,jsonb,jsonb
 ) from public;
@@ -1387,6 +1452,9 @@ revoke all on function public.admin_preview_official_roster_recalculation(
 ) from public;
 revoke all on function public.admin_apply_official_roster_recalculation(
   uuid,text
+) from public;
+revoke all on function public.admin_log_official_roster_global_recalculation(
+  jsonb,jsonb
 ) from public;
 
 grant execute on function public.save_official_roster_analysis_r6(
@@ -1406,6 +1474,9 @@ grant execute on function public.admin_preview_official_roster_recalculation(
 ) to authenticated;
 grant execute on function public.admin_apply_official_roster_recalculation(
   uuid,text
+) to authenticated;
+grant execute on function public.admin_log_official_roster_global_recalculation(
+  jsonb,jsonb
 ) to authenticated;
 
 grant select on table public.official_roster_import_reports to authenticated;
