@@ -971,7 +971,7 @@ class SupabaseBackendService {
 
   Future<bool> officialRosterImportIsCurrent(
     SharedResource resource, {
-    required String parserRevision,
+    String parserRevision = 'v12.0.1-r3',
   }) async {
     final result = await client.rpc(
       'official_roster_import_is_current_v2',
@@ -988,7 +988,7 @@ class SupabaseBackendService {
     required SharedResource resource,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    required String parserRevision,
+    String parserRevision = 'v12.0.1-r3',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_v2',
@@ -1051,7 +1051,7 @@ class SupabaseBackendService {
   Future<bool> officialRosterProfileSyncIsCurrent({
     required SharedResource resource,
     required String profileId,
-    required String parserRevision,
+    String parserRevision = 'v12.0.1-r3',
   }) async {
     final result = await client.rpc(
       'official_roster_profile_sync_is_current_v2',
@@ -1070,7 +1070,7 @@ class SupabaseBackendService {
     required String profileId,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    required String parserRevision,
+    String parserRevision = 'v12.0.1-r3',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_for_profile_v2',
