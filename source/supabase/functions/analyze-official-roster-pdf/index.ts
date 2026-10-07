@@ -372,6 +372,13 @@ async function runRead(
   return normalizeExtraction(parseJsonLoose(extractResponseText(payload)));
 }
 
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function hospitalForSlot(slot: string): string | null {
   if (slot === 'hm6_bouskoura') {
     return 'Hôpital Universitaire International Mohammed VI de Bouskoura';
@@ -446,6 +453,10 @@ Deno.serve(async (req: Request) => {
     const tempStoragePath =
       typeof body?.tempStoragePath === 'string'
         ? body.tempStoragePath.trim()
+        : '';
+    const verificationToken =
+      typeof body?.verificationToken === 'string'
+        ? body.verificationToken.trim()
         : '';
 
     let storagePath = '';
@@ -543,6 +554,67 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: 'invalid_pdf_size' }, 400);
     }
 
+    if (
+      cacheResourceId &&
+      /^[0-9a-f-]{36}$/i.test(verificationToken)
+    ) {
+      const nowIso = new Date().toISOString();
+      const fileSha256 = await sha256Hex(bytes);
+      const { data: preflight } = await adminClient
+        .from('official_roster_preflight_reads')
+        .select('id,slot,file_sha256,extraction,expires_at')
+        .eq('id', verificationToken)
+        .eq('owner_id', callerId)
+        .gt('expires_at', nowIso)
+        .maybeSingle();
+
+      if (
+        preflight &&
+        preflight.slot === slot &&
+        preflight.file_sha256 === fileSha256 &&
+        preflight.extraction?.verified === true
+      ) {
+        const promotedExtraction = {
+          ...preflight.extraction,
+          engine:
+            String(preflight.extraction?.engine ?? 'openai_pdf_triple_read') +
+            '+sha256',
+        };
+        const { error: promoteError } = await adminClient
+          .from('official_roster_verified_reads')
+          .upsert(
+            {
+              resource_id: cacheResourceId,
+              resource_updated_at: resourceUpdatedAt,
+              parser_revision: PARSER_REVISION,
+              engine: promotedExtraction.engine,
+              extraction: promotedExtraction,
+              confidence: promotedExtraction.confidence ?? 0,
+              warnings: promotedExtraction.warnings ?? [],
+              created_at: new Date().toISOString(),
+            },
+            {
+              onConflict:
+                'resource_id,resource_updated_at,parser_revision',
+            },
+          );
+        if (!promoteError) {
+          await adminClient
+            .from('official_roster_preflight_reads')
+            .delete()
+            .eq('id', verificationToken)
+            .eq('owner_id', callerId);
+          return json({
+            ok: true,
+            cached: false,
+            promoted: true,
+            extraction: promotedExtraction,
+          });
+        }
+        console.error('Verified preflight promotion failed', promoteError);
+      }
+    }
+
     let openAiFileId = '';
     try {
       openAiFileId = await uploadOpenAIFile(bytes, displayName, openAiKey);
@@ -560,74 +632,77 @@ Deno.serve(async (req: Request) => {
         'official_roster_read_b',
       );
 
+      const readC = await runRead(
+        openAiFileId,
+        openAiKey,
+        'TROISIÈME LECTURE INDÉPENDANTE: recommence depuis zéro. Vérifie toutes les pages, toutes les dates et tous les noms sans te fier aux autres lectures.\n\n' + profileContext,
+        'official_roster_read_c',
+      );
+
       let chosen: NormalizedExtraction | null = null;
       let agreement = '';
-      if (
-        readA.validationErrors.length === 0 &&
-        readB.validationErrors.length === 0 &&
-        canonical(readA) === canonical(readB)
-      ) {
+      const aValid = readA.validationErrors.length === 0;
+      const bValid = readB.validationErrors.length === 0;
+      const cValid = readC.validationErrors.length === 0;
+      const aKey = canonical(readA);
+      const bKey = canonical(readB);
+      const cKey = canonical(readC);
+
+      if (aValid && bValid && cValid && aKey === bKey && bKey === cKey) {
+        chosen = readA;
+        chosen.confidence = Math.min(
+          readA.confidence,
+          readB.confidence,
+          readC.confidence,
+        );
+        chosen.warnings = [
+          ...new Set([
+            ...readA.warnings,
+            ...readB.warnings,
+            ...readC.warnings,
+          ]),
+        ];
+        agreement = 'A=B=C';
+      } else if (aValid && bValid && aKey === bKey) {
         chosen = readA;
         chosen.confidence = Math.min(readA.confidence, readB.confidence);
         chosen.warnings = [...new Set([...readA.warnings, ...readB.warnings])];
         agreement = 'A=B';
+      } else if (aValid && cValid && aKey === cKey) {
+        chosen = readA;
+        chosen.confidence = Math.min(readA.confidence, readC.confidence);
+        chosen.warnings = [...new Set([...readA.warnings, ...readC.warnings])];
+        agreement = 'A=C';
+      } else if (bValid && cValid && bKey === cKey) {
+        chosen = readB;
+        chosen.confidence = Math.min(readB.confidence, readC.confidence);
+        chosen.warnings = [...new Set([...readB.warnings, ...readC.warnings])];
+        agreement = 'B=C';
       } else {
-        const adjudicationPrompt =
-          'TROISIÈME LECTURE / ARBITRAGE. Les deux lectures précédentes ne sont pas identiques. Relis toi-même le PDF visuellement et rends la version exacte. Ne choisis pas par majorité sans vérifier le document.\n\nLecture A:\n' +
-          JSON.stringify(readA) +
-          '\n\nLecture B:\n' +
-          JSON.stringify(readB) +
-          '\n\n' +
-          profileContext;
-        const readC = await runRead(
-          openAiFileId,
-          openAiKey,
-          adjudicationPrompt,
-          'official_roster_read_c',
-        );
-
-        if (
-          readC.validationErrors.length === 0 &&
-          canonical(readC) === canonical(readA)
-        ) {
-          chosen = readA;
-          chosen.confidence = Math.min(readA.confidence, readC.confidence);
-          chosen.warnings = [...new Set([...readA.warnings, ...readC.warnings])];
-          agreement = 'A=C';
-        } else if (
-          readC.validationErrors.length === 0 &&
-          canonical(readC) === canonical(readB)
-        ) {
-          chosen = readB;
-          chosen.confidence = Math.min(readB.confidence, readC.confidence);
-          chosen.warnings = [...new Set([...readB.warnings, ...readC.warnings])];
-          agreement = 'B=C';
-        } else {
-          return json({
-            ok: true,
-            cached: false,
-            extraction: {
-              verified: false,
-              parser_revision: PARSER_REVISION,
-              engine: 'openai_pdf_triple_read',
-              confidence: Math.min(
-                readA.confidence,
-                readB.confidence,
-                readC.confidence,
-              ),
-              agreement: 'none',
-              warnings: [
-                'Les lectures indépendantes du PDF ne concordent pas. Import automatique bloqué.',
-              ],
-              rows: [],
-              validation_errors: [
-                ...readA.validationErrors,
-                ...readB.validationErrors,
-                ...readC.validationErrors,
-              ],
-            },
-          });
-        }
+        return json({
+          ok: true,
+          cached: false,
+          extraction: {
+            verified: false,
+            parser_revision: PARSER_REVISION,
+            engine: 'openai_pdf_triple_read',
+            confidence: Math.min(
+              readA.confidence,
+              readB.confidence,
+              readC.confidence,
+            ),
+            agreement: 'none',
+            warnings: [
+              'Aucune majorité exacte entre les trois lectures indépendantes. Import automatique bloqué.',
+            ],
+            rows: [],
+            validation_errors: [
+              ...readA.validationErrors,
+              ...readB.validationErrors,
+              ...readC.validationErrors,
+            ],
+          },
+        });
       }
 
       if (!chosen || chosen.confidence < 0.9) {
@@ -653,9 +728,7 @@ Deno.serve(async (req: Request) => {
       const extraction = {
         verified: true,
         parser_revision: PARSER_REVISION,
-        engine: agreement === 'A=B'
-          ? 'openai_pdf_double_read'
-          : 'openai_pdf_triple_read',
+        engine: 'openai_pdf_triple_read',
         confidence: chosen.confidence,
         agreement,
         hospital,
@@ -690,6 +763,31 @@ Deno.serve(async (req: Request) => {
           console.error('Verified roster cache failed', cacheError);
           return json({ ok: false, error: 'cache_failed' }, 500);
         }
+      }
+
+      if (!cacheResourceId) {
+        const fileSha256 = await sha256Hex(bytes);
+        const { data: preflight, error: preflightError } = await adminClient
+          .from('official_roster_preflight_reads')
+          .insert({
+            owner_id: callerId,
+            slot,
+            file_sha256: fileSha256,
+            extraction,
+            expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          })
+          .select('id')
+          .single();
+        if (preflightError || !preflight?.id) {
+          console.error('Verified preflight token creation failed', preflightError);
+          return json({ ok: false, error: 'preflight_cache_failed' }, 500);
+        }
+        return json({
+          ok: true,
+          cached: false,
+          verificationToken: preflight.id,
+          extraction,
+        });
       }
 
       return json({ ok: true, cached: false, extraction });
