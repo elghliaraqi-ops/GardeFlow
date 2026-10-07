@@ -107,6 +107,17 @@ type Conflict = {
   a: unknown;
   b: unknown;
   c?: unknown;
+  resolution?: unknown;
+};
+
+type ManualResolution = {
+  date: string;
+  shift: string;
+  action: 'use_b' | 'use_c' | 'manual' | 'remove';
+  final_date?: string;
+  final_shift?: string;
+  doctors?: unknown[];
+  red_names?: unknown[];
 };
 
 function normalizeDoctor(raw: any): Doctor | null {
@@ -539,6 +550,171 @@ function minimumConfidence(read: Read): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function parseManualResolutions(raw: unknown): ManualResolution[] {
+  if (!Array.isArray(raw)) return [];
+  const result: ManualResolution[] = [];
+  for (const value of raw.slice(0, 120)) {
+    const date = String(value?.date ?? '').trim();
+    const shift = String(value?.shift ?? '').trim();
+    const action = String(value?.action ?? '').trim();
+    if (
+      !validIsoDate(date) ||
+      !SHIFTS.has(shift) ||
+      !['use_b', 'use_c', 'manual', 'remove'].includes(action)
+    ) {
+      continue;
+    }
+    result.push({
+      date,
+      shift,
+      action: action as ManualResolution['action'],
+      final_date:
+        typeof value?.final_date === 'string'
+          ? value.final_date.trim()
+          : undefined,
+      final_shift:
+        typeof value?.final_shift === 'string'
+          ? value.final_shift.trim()
+          : undefined,
+      doctors: Array.isArray(value?.doctors) ? value.doctors : undefined,
+      red_names: Array.isArray(value?.red_names) ? value.red_names : undefined,
+    });
+  }
+  return result;
+}
+
+function validatedManualRow(
+  resolution: ManualResolution,
+  source: Row | undefined,
+): Row | null {
+  const date = resolution.final_date || resolution.date;
+  const shift = resolution.final_shift || resolution.shift;
+  if (!validIsoDate(date) || !SHIFTS.has(shift)) return null;
+
+  const rawDoctors =
+    resolution.action === 'manual'
+      ? resolution.doctors
+      : source?.doctors;
+  const doctors = mergeDoctors(rawDoctors).map((doctor) => ({
+    ...doctor,
+    confidence: 1,
+  }));
+  const redNames = normalizeNameList(
+    resolution.action === 'manual'
+      ? resolution.red_names
+      : source?.red_names,
+  );
+
+  if (
+    doctors.some(
+      (doctor) =>
+        !normalizeText(doctor.first_name) ||
+        !normalizeText(doctor.last_name),
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    date,
+    shift: shift as Row['shift'],
+    doctors,
+    names: doctors.map((doctor) => doctor.full_name),
+    red_names: redNames,
+    page_number: source?.page_number ?? null,
+    zone: source?.zone ?? 'Correction admin ciblée',
+  };
+}
+
+function applyManualResolutions(
+  readB: Read,
+  readC: Read | null,
+  conflicts: Conflict[],
+  resolutions: ManualResolution[],
+): {
+  read: Read;
+  conflicts: Conflict[];
+} | null {
+  if (resolutions.length === 0) return null;
+
+  const requiredKeys = new Set<string>();
+  for (const conflict of conflicts) {
+    if (!conflict.date || !conflict.shift) {
+      // Une anomalie purement structurelle sans cellule localisable ne peut
+      // jamais être masquée par une correction manuelle.
+      return null;
+    }
+    requiredKeys.add(conflict.date + '|' + conflict.shift);
+  }
+
+  const byResolution = new Map(
+    resolutions.map((resolution) => [
+      resolution.date + '|' + resolution.shift,
+      resolution,
+    ]),
+  );
+  for (const key of requiredKeys) {
+    if (!byResolution.has(key)) return null;
+  }
+
+  const base =
+    readC != null && readC.rows.length >= readB.rows.length ? readC : readB;
+  const rows = new Map(
+    base.rows.map((row) => [row.date + '|' + row.shift, { ...row }]),
+  );
+  const bRows = new Map(
+    readB.rows.map((row) => [row.date + '|' + row.shift, row]),
+  );
+  const cRows = new Map(
+    (readC?.rows ?? []).map((row) => [row.date + '|' + row.shift, row]),
+  );
+
+  for (const key of requiredKeys) {
+    const resolution = byResolution.get(key)!;
+    rows.delete(key);
+    if (resolution.action === 'remove') continue;
+
+    const source = resolution.action === 'use_b'
+      ? bRows.get(key)
+      : resolution.action === 'use_c'
+        ? cRows.get(key)
+        : undefined;
+    if (
+      (resolution.action === 'use_b' && !source) ||
+      (resolution.action === 'use_c' && !source)
+    ) {
+      return null;
+    }
+
+    const row = validatedManualRow(resolution, source);
+    if (!row) return null;
+    rows.set(row.date + '|' + row.shift, row);
+  }
+
+  const normalized = normalizeExtraction({
+    month: base.month,
+    year: base.year,
+    confidence: 1,
+    warnings: [
+      ...base.warnings,
+      'Correction humaine ciblée appliquée aux zones litigieuses.',
+    ],
+    rows: [...rows.values()],
+  });
+  if (!readIsReliable(normalized)) return null;
+
+  const resolvedConflicts = conflicts.map((conflict) => {
+    const key = conflict.date + '|' + conflict.shift;
+    const resolution = byResolution.get(key);
+    return {
+      ...conflict,
+      resolution: resolution ?? null,
+    };
+  });
+
+  return { read: normalized, conflicts: resolvedConflicts };
+}
+
 function attachC(
   conflicts: Conflict[],
   c: Read,
@@ -845,6 +1021,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
+    const manualResolutions = parseManualResolutions(body?.manualResolutions);
     const resourceId =
       typeof body?.resourceId === 'string' ? body.resourceId.trim() : '';
     const tempStoragePath =
@@ -1116,6 +1293,19 @@ Deno.serve(async (req: Request) => {
               c: conflict.b,
             })),
           ];
+
+          const manual = applyManualResolutions(
+            readB,
+            readC,
+            conflicts,
+            manualResolutions,
+          );
+          if (manual != null) {
+            chosen = manual.read;
+            conflicts = manual.conflicts;
+            status = 'orange';
+            agreement = 'ADMIN';
+          }
         }
       }
 
@@ -1195,7 +1385,12 @@ Deno.serve(async (req: Request) => {
         slot,
         month: chosen.month,
         year: chosen.year,
-        warnings: chosen.warnings,
+        warnings: agreement === 'ADMIN'
+          ? [
+              ...chosen.warnings,
+              'Publication autorisée après correction humaine ciblée.',
+            ]
+          : chosen.warnings,
         rows: chosen.rows,
         conflicts,
         validation_errors: [],
