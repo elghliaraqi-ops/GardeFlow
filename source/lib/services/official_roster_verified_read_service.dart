@@ -101,7 +101,10 @@ class OfficialRosterVerifiedReadService {
   }) {
     final validationErrors = <String>[];
     final confidence = (extraction['confidence'] as num?)?.toDouble() ?? 0.0;
-    final status = extraction['status']?.toString().toLowerCase() ?? 'red';
+    final revision = extraction['parser_revision']?.toString() ?? '';
+    final isR6Extraction = _revisionRank(revision) >= 6;
+    final status = extraction['status']?.toString().toLowerCase() ??
+        (extraction['verified'] == true && !isR6Extraction ? 'green' : 'red');
 
     if (extraction['verified'] != true || status == 'red') {
       validationErrors.add(
@@ -137,10 +140,6 @@ class OfficialRosterVerifiedReadService {
     final unmatched = <Map<String, dynamic>>[];
     final disciplinaryMarks = <OfficialRosterDisciplinaryMark>[];
     final rawOfficialGuards = <OfficialRosterGuard>[];
-
-    final revision = extraction['parser_revision']?.toString() ?? '';
-    final isR6Extraction =
-        _revisionRank(revision) >= 6;
 
     final rawRows = extraction['rows'];
     final rows = rawRows is List ? rawRows : const <dynamic>[];
