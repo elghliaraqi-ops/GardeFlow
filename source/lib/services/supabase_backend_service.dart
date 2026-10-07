@@ -950,6 +950,7 @@ class SupabaseBackendService {
   Future<Map<String, dynamic>> analyzeOfficialRosterResource(
     String resourceId, {
     String parserRevision = 'v12.0.2-r5',
+    String? verificationToken,
   }) async {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
@@ -959,6 +960,8 @@ class SupabaseBackendService {
       body: {
         'resourceId': resourceId,
         'parserRevision': parserRevision,
+        if (verificationToken != null && verificationToken.isNotEmpty)
+          'verificationToken': verificationToken,
       },
     );
     return _officialRosterExtractionFromFunction(response.data);
@@ -1033,7 +1036,13 @@ class SupabaseBackendService {
 
   Map<String, dynamic> _officialRosterExtractionFromFunction(dynamic raw) {
     if (raw is Map && raw['ok'] == true && raw['extraction'] is Map) {
-      return Map<String, dynamic>.from(raw['extraction'] as Map);
+      final extraction =
+          Map<String, dynamic>.from(raw['extraction'] as Map);
+      final token = raw['verificationToken']?.toString();
+      if (token != null && token.isNotEmpty) {
+        extraction['_verification_token'] = token;
+      }
+      return extraction;
     }
 
     final error = raw is Map ? raw['error']?.toString() : null;
@@ -1056,6 +1065,10 @@ class SupabaseBackendService {
       case 'cache_failed':
         throw StateError(
           'La lecture du PDF a réussi mais sa vérification n’a pas pu être enregistrée.',
+        );
+      case 'preflight_cache_failed':
+        throw StateError(
+          'La lecture du PDF a réussi mais son jeton de vérification n’a pas pu être créé.',
         );
       default:
         throw StateError(
