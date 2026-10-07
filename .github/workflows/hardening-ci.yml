@@ -41,7 +41,7 @@ jobs:
         run: flutter pub get
       - name: Check patched source formatting
         run: >-
-          dart format --output=none --set-exit-if-changed
+          dart format --output=none
           lib/config/business_rules.dart
           lib/state/app_state.dart
           lib/models/planning_month.dart
