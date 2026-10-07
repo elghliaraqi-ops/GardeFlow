@@ -4,7 +4,9 @@ import '../theme/screen_decor.dart';
 import 'clinical_cases_section.dart';
 
 class ClinicalCasesScreen extends StatelessWidget {
-  const ClinicalCasesScreen({super.key});
+  final Future<void> Function(String practiceCaseId)? onEditCase;
+
+  const ClinicalCasesScreen({super.key, this.onEditCase});
 
   static const _background = Color(0xFF071526);
   static const _purple = Color(0xFF8B6CFF);
@@ -33,7 +35,7 @@ class ClinicalCasesScreen extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        child: const ClinicalCasesSection(),
+        child: ClinicalCasesSection(onEditCase: onEditCase),
       ),
     );
   }
