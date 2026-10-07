@@ -5,6 +5,7 @@ import 'package:pdfrx/pdfrx.dart';
 import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
 import '../models/shared_resource.dart';
+import 'official_roster_consensus_service.dart';
 
 class OfficialRosterAssignment {
   final String profileId;
@@ -57,6 +58,7 @@ class OfficialRosterParseResult {
   final int correctedDates;
   final List<String> coveredDates;
   final List<String> validationErrors;
+  final List<OfficialRosterLocalCell> localCells;
 
   const OfficialRosterParseResult({
     required this.assignments,
@@ -67,6 +69,7 @@ class OfficialRosterParseResult {
     required this.correctedDates,
     required this.coveredDates,
     required this.validationErrors,
+    this.localCells = const <OfficialRosterLocalCell>[],
   });
 
   bool get isComplete => validationErrors.isEmpty;
@@ -343,6 +346,7 @@ class OfficialRosterImportService {
     final disciplinaryMarks = <OfficialRosterDisciplinaryMark>[];
     final rawAssignments = <OfficialRosterAssignment>[];
     final coverageShifts = <String, Set<String>>{};
+    final localCells = <OfficialRosterLocalCell>[];
 
     for (final row in rows) {
       final resolution = _resolveDate(row.rawDate, fallbackYear, previous);
@@ -356,6 +360,16 @@ class OfficialRosterImportService {
         coverageShifts.putIfAbsent(dateStr, () => <String>{}).add(cell.shiftId);
 
         final redText = _cellRedText(cell);
+        localCells.add(
+          OfficialRosterLocalCell(
+            date: dateStr,
+            shift: cell.shiftId,
+            text: cell.text.replaceAll(RegExp(r'\\s+'), ' ').trim(),
+            redText: redText,
+            pageNumber: row.pageIndex + 1,
+            zone: 'page-${row.pageIndex + 1}/${cell.shiftId}',
+          ),
+        );
         if (redText.isNotEmpty) {
           disciplinaryMarks.add(
             OfficialRosterDisciplinaryMark(
@@ -404,6 +418,7 @@ class OfficialRosterImportService {
       correctedDates: correctedDates,
       coveredDates: coveredDates,
       validationErrors: validationErrors,
+      localCells: localCells,
     );
   }
 
@@ -448,6 +463,7 @@ class OfficialRosterImportService {
     final assignments = <OfficialRosterAssignment>[];
     final unmatched = <Map<String, dynamic>>[];
     final disciplinary = <OfficialRosterDisciplinaryMark>[];
+    final localCells = <OfficialRosterLocalCell>[];
     var detectedRows = 0;
     var detectedCells = 0;
     var correctedDates = 0;
@@ -474,6 +490,11 @@ class OfficialRosterImportService {
           (m) => datesFromThisVersion.contains(m.dateStr),
         ),
       );
+      localCells.addAll(
+        result.localCells.where(
+          (cell) => datesFromThisVersion.contains(cell.date),
+        ),
+      );
 
       claimedDates.addAll(datesFromThisVersion);
       detectedRows += datesFromThisVersion.length;
@@ -496,6 +517,7 @@ class OfficialRosterImportService {
       correctedDates: correctedDates,
       coveredDates: coveredDates,
       validationErrors: validationErrors,
+      localCells: localCells,
     );
   }
 
