@@ -291,6 +291,8 @@ async function uploadOpenAIFile(
 ): Promise<string> {
   const form = new FormData();
   form.append('purpose', 'user_data');
+  form.append('expires_after[anchor]', 'created_at');
+  form.append('expires_after[seconds]', '3600');
   form.append(
     'file',
     new Blob([bytes], { type: 'application/pdf' }),
