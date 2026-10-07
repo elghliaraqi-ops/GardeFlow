@@ -206,6 +206,9 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       }
     }
 
+    final identityLinks =
+        await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
+
     final parsed =
         await OfficialRosterVerifiedReadService.readVersionHistory(
       versionsNewestFirst: versions,
@@ -230,6 +233,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       hospital: slot.hospital,
       profiles: profiles,
       suppliedBytes: suppliedBytes,
+      identityLinks: identityLinks,
     );
 
     if (parsed.detectedRows == 0 || !parsed.isComplete) {
@@ -374,6 +378,8 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       // C = lecture d'arbitrage déclenchée seulement si A/B ou les contrôles
       // de complétude signalent un désaccord.
       final profiles = await _backend.fetchVisibleProfiles();
+      final identityLinks =
+          await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
       OfficialRosterParseResult? localPreflight;
       try {
         localPreflight = await OfficialRosterImportService.parse(
@@ -400,6 +406,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         extraction: verifiedPayload,
         hospital: slot.hospital,
         profiles: profiles,
+        identityLinks: identityLinks,
       );
       if (preflight.detectedRows == 0 || !preflight.isComplete) {
         final details = preflight.validationErrors.take(5).join(' • ');
@@ -438,6 +445,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         extraction: publishedVerification,
         hospital: slot.hospital,
         profiles: profiles,
+        identityLinks: identityLinks,
       );
       if (!publishedRead.isComplete ||
           !OfficialRosterVerifiedReadService.sameCoreAssignments(
@@ -449,6 +457,13 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
           'prélecture. Synchronisation automatique bloquée.',
         );
       }
+      await _backend.saveOfficialRosterAnalysisR6(
+        resource: resource,
+        extraction: publishedVerification,
+        guards: publishedRead.officialGuards,
+        unmatchedCells: publishedRead.unmatchedCells,
+      );
+
       Map<String, dynamic>? importResult;
       Object? importError;
       try {
