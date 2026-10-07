@@ -4,6 +4,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
+import '../models/shared_resource.dart';
 
 class OfficialRosterAssignment {
   final String profileId;
@@ -89,6 +90,61 @@ class OfficialRosterImportService {
     r'\b([0-3]?\d)[/.\-]([01]?\d)(?:[/.\-](20\d{2}|\d{2}))?\b',
     caseSensitive: false,
   );
+
+  static Future<OfficialRosterParseResult> parseVersionHistory({
+    required List<SharedResource> versionsNewestFirst,
+    required Future<Uint8List> Function(String storagePath) loadBytes,
+    required String hospital,
+    required List<AppUser> profiles,
+    Map<String, Uint8List> suppliedBytes = const <String, Uint8List>{},
+  }) async {
+    final ordered = [...versionsNewestFirst]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    final seen = <String>{};
+    final parsedResults = <OfficialRosterParseResult>[];
+
+    for (final version in ordered) {
+      final key =
+          '${version.storagePath}|${version.updatedAt.toUtc().toIso8601String()}';
+      if (!seen.add(key)) continue;
+
+      try {
+        final bytes =
+            suppliedBytes[version.storagePath] ??
+            await loadBytes(version.storagePath);
+        final parsed = await parse(
+          bytes: bytes,
+          displayName: version.displayName,
+          hospital: hospital,
+          profiles: profiles,
+          resourceUpdatedAt: version.updatedAt,
+        );
+        parsedResults.add(parsed);
+      } catch (_) {
+        // Une archive plus ancienne peut être absente/corrompue sans rendre
+        // inutilisable une version récente complète. La fusion finale reste
+        // fail-closed sur sa propre couverture.
+      }
+    }
+
+    if (parsedResults.isEmpty) {
+      return const OfficialRosterParseResult(
+        assignments: <OfficialRosterAssignment>[],
+        unmatchedCells: <Map<String, dynamic>>[],
+        disciplinaryMarks: <OfficialRosterDisciplinaryMark>[],
+        detectedRows: 0,
+        detectedCells: 0,
+        correctedDates: 0,
+        coveredDates: <String>[],
+        validationErrors: <String>[
+          'Aucune version exploitable du planning officiel.'
+        ],
+      );
+    }
+
+    return mergeNewestFirst(parsedResults);
+  }
 
   static Future<OfficialRosterParseResult> parse({
     required Uint8List bytes,
