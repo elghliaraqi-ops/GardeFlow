@@ -976,6 +976,8 @@ class SupabaseBackendService {
     required String fileName,
     required String slot,
     required List<Map<String, dynamic>> localEvidence,
+    List<Map<String, dynamic>> manualResolutions =
+        const <Map<String, dynamic>>[],
     String parserRevision = 'v12.0.2-r6',
   }) async {
     final uid = client.auth.currentUser?.id;
@@ -1010,6 +1012,7 @@ class SupabaseBackendService {
           'displayName': fileName,
           'parserRevision': parserRevision,
           'localEvidence': localEvidence,
+          'manualResolutions': manualResolutions,
         },
       );
       return _officialRosterExtractionFromFunction(response.data);
