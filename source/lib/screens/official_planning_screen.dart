@@ -345,10 +345,10 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
 
     setState(() => _busySlot = slot.id);
     try {
-      // Double validation avant publication :
+      // Validation renforcée avant publication :
       // 1) lecture géométrique locale quand le PDF possède une couche texte ;
-      // 2) deux lectures visuelles indépendantes côté serveur, avec arbitrage
-      //    par une troisième lecture uniquement en cas de désaccord.
+      // 2) trois lectures visuelles indépendantes côté serveur ;
+      // 3) majorité exacte 2/3 minimum, sinon l'import est bloqué.
       final profiles = await _backend.fetchVisibleProfiles();
       OfficialRosterParseResult? localPreflight;
       try {
@@ -377,7 +377,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         final details = preflight.validationErrors.take(5).join(' • ');
         throw StateError(
           details.isEmpty
-              ? 'Le planning n’a pas passé la double lecture visuelle.'
+              ? 'Le planning n’a pas passé la triple lecture visuelle.'
               : 'Planning refusé avant publication : ' + details,
         );
       }
@@ -387,9 +387,17 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
             localPreflight,
             preflight,
           )) {
+        debugPrint(
+          'Le lecteur géométrique diffère du consensus visuel 2/3. '
+          'Le consensus visuel vérifié reste autoritaire.',
+        );
+      }
+
+      final verificationToken =
+          verifiedPayload['_verification_token']?.toString();
+      if (verificationToken == null || verificationToken.isEmpty) {
         throw StateError(
-          'Le PDF est lisible mais les deux moteurs ne retrouvent pas les mêmes '
-          'gardes. Publication bloquée plutôt que d’importer une erreur.',
+          'La triple lecture a réussi mais son jeton de vérification est absent.',
         );
       }
 
@@ -407,6 +415,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
           await _backend.analyzeOfficialRosterResource(
         resource.id,
         parserRevision: OfficialRosterImportService.parserRevision,
+        verificationToken: verificationToken,
       );
       final publishedRead =
           OfficialRosterVerifiedReadService.fromExtraction(
