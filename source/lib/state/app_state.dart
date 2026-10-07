@@ -223,13 +223,19 @@ class AppState extends ChangeNotifier {
       visibleProfiles.add(profile);
     }
 
-    final bytes = await backend.downloadSharedResource(resource.storagePath);
-    final parsed = await OfficialRosterImportService.parse(
-      bytes: bytes,
-      displayName: resource.displayName,
+    final versions = await backend.fetchOfficialRosterVersions(slot);
+    final hasCurrentVersion = versions.any(
+      (v) =>
+          v.storagePath == resource.storagePath &&
+          v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
+    );
+    if (!hasCurrentVersion) versions.insert(0, resource);
+
+    final parsed = await OfficialRosterImportService.parseVersionHistory(
+      versionsNewestFirst: versions,
+      loadBytes: backend.downloadSharedResource,
       hospital: profile.hospital,
       profiles: visibleProfiles,
-      resourceUpdatedAt: resource.updatedAt,
     );
     if (parsed.detectedRows == 0) {
       throw StateError(
