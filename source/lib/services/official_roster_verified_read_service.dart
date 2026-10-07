@@ -585,15 +585,7 @@ class OfficialRosterVerifiedReadService {
   }
 
   static int _revisionRank(String revision) {
-    final match = RegExp(r'r(\d+)
-    return date.year.toString().padLeft(4, '0') +
-        '-' +
-        date.month.toString().padLeft(2, '0') +
-        '-' +
-        date.day.toString().padLeft(2, '0');
-  }
-}
-).firstMatch(revision.trim());
+    final match = RegExp(r'r(\d+)$').firstMatch(revision.trim());
     return int.tryParse(match?.group(1) ?? '') ?? 0;
   }
 
