@@ -54,8 +54,8 @@ jobs:
           test -f tool/install_alarm_activity.py
           test -f tool/install_system_alarm_bridge.py
           test -f tool/harden_alarm_fallback.py
-          grep -Fq 'version: 12.0.0+300' pubspec.yaml
-          echo 'Canonical source verified: GardeFlow 12.0.0+300'
+          grep -Fq 'version: 12.0.1+301' pubspec.yaml
+          echo 'Canonical source verified: GardeFlow 12.0.1+301'
 
       - name: Recover Firebase Android configuration
         shell: bash
@@ -117,7 +117,7 @@ jobs:
         run: flutter analyze lib tool --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
-        run: flutter build apk --release --build-name 12.0.0 --build-number 300
+        run: flutter build apk --release --build-name 12.0.1 --build-number 301
 
       - name: Verify APK
         shell: bash
@@ -129,7 +129,7 @@ jobs:
       - name: Upload GardeFlow V12 APK
         uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-v12.0.0-apk
+          name: GardeFlow-v12.0.1-apk
           path: source/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
