@@ -23,6 +23,7 @@ import '../models/shift_type.dart';
 import '../services/local_storage_service.dart';
 import '../services/notification_service.dart';
 import '../services/official_roster_import_service.dart';
+import '../services/official_roster_verified_read_service.dart';
 import '../services/password_service.dart';
 import '../services/push_notification_service.dart';
 import '../services/supabase_backend_service.dart';
@@ -223,20 +224,65 @@ class AppState extends ChangeNotifier {
       visibleProfiles.add(profile);
     }
 
-    final versions = await backend.fetchOfficialRosterVersions(slot);
-    final hasCurrentVersion = versions.any(
-      (v) =>
-          v.storagePath == resource.storagePath &&
-          v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
+    final verifiedPayload = await backend.fetchOfficialRosterVerifiedRead(
+      resource: resource,
+      parserRevision: OfficialRosterImportService.parserRevision,
     );
-    if (!hasCurrentVersion) versions.insert(0, resource);
 
-    final parsed = await OfficialRosterImportService.parseVersionHistory(
-      versionsNewestFirst: versions,
-      loadBytes: backend.downloadSharedResource,
-      hospital: profile.hospital,
-      profiles: visibleProfiles,
-    );
+    OfficialRosterParseResult parsed;
+    if (verifiedPayload != null) {
+      final currentVerified =
+          OfficialRosterVerifiedReadService.fromExtraction(
+        extraction: verifiedPayload,
+        hospital: profile.hospital,
+        profiles: visibleProfiles,
+      );
+      if (!currentVerified.isComplete || currentVerified.detectedRows == 0) {
+        throw StateError(
+          'La lecture visuelle vérifiée du planning officiel est incomplète.',
+        );
+      }
+
+      final versions = await backend.fetchOfficialRosterVersions(slot);
+      final olderVersions = versions
+          .where(
+            (v) =>
+                v.storagePath != resource.storagePath ||
+                v.updatedAt.toUtc() != resource.updatedAt.toUtc(),
+          )
+          .toList(growable: false);
+      if (olderVersions.isEmpty) {
+        parsed = currentVerified;
+      } else {
+        final older = await OfficialRosterImportService.parseVersionHistory(
+          versionsNewestFirst: olderVersions,
+          loadBytes: backend.downloadSharedResource,
+          hospital: profile.hospital,
+          profiles: visibleProfiles,
+        );
+        parsed = older.detectedRows == 0
+            ? currentVerified
+            : OfficialRosterImportService.mergeNewestFirst([
+                currentVerified,
+                older,
+              ]);
+      }
+    } else {
+      final versions = await backend.fetchOfficialRosterVersions(slot);
+      final hasCurrentVersion = versions.any(
+        (v) =>
+            v.storagePath == resource.storagePath &&
+            v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
+      );
+      if (!hasCurrentVersion) versions.insert(0, resource);
+
+      parsed = await OfficialRosterImportService.parseVersionHistory(
+        versionsNewestFirst: versions,
+        loadBytes: backend.downloadSharedResource,
+        hospital: profile.hospital,
+        profiles: visibleProfiles,
+      );
+    }
     if (parsed.detectedRows == 0) {
       throw StateError(
         'Le planning officiel ${resource.displayName} ne contient aucune ligne Urgences reconnue.',
