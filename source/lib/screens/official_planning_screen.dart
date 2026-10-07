@@ -216,6 +216,12 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       if (parsed.detectedRows == 0) {
         throw StateError('Aucune ligne de garde 08h-20h / 20h-08h reconnue dans ce PDF.');
       }
+      if (!parsed.isComplete) {
+        throw StateError(
+          'Lecture refusée : planning incomplet. ' +
+              parsed.validationErrors.take(5).join(' • '),
+        );
+      }
       if (parsed.assignments.isEmpty) {
         throw StateError('Le tableau est lisible mais aucun nom ne correspond aux médecins inscrits de ${slot.title}.');
       }
