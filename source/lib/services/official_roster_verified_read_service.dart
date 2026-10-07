@@ -61,27 +61,6 @@ class OfficialRosterVerifiedReadService {
           results.add(verified);
           continue;
         }
-        if (local != null &&
-            local.isComplete &&
-            local.detectedRows > 0 &&
-            !sameCoreAssignments(local, verified)) {
-          results.add(
-            OfficialRosterParseResult(
-              assignments: verified.assignments,
-              unmatchedCells: verified.unmatchedCells,
-              disciplinaryMarks: verified.disciplinaryMarks,
-              detectedRows: verified.detectedRows,
-              detectedCells: verified.detectedCells,
-              correctedDates: verified.correctedDates,
-              coveredDates: verified.coveredDates,
-              validationErrors: [
-                ...verified.validationErrors,
-                'Les lectures géométrique et visuelle ne concordent pas.',
-              ],
-            ),
-          );
-          continue;
-        }
         results.add(verified);
         continue;
       }
