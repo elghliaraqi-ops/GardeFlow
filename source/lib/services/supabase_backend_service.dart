@@ -9,6 +9,7 @@ import '../models/directory_contact.dart';
 import '../models/audit_event.dart';
 import '../models/exchange_request.dart';
 import '../models/leave_request.dart';
+import '../models/official_roster_guard.dart';
 import '../models/planning_entry.dart';
 import '../models/planning_month.dart';
 import '../models/password_reset_request.dart';
@@ -1164,6 +1165,188 @@ class SupabaseBackendService {
       },
     );
     return Map<String, dynamic>.from(result as Map);
+  }
+
+  Future<Map<String, String>> fetchOfficialRosterIdentityLinks({
+    required String hospital,
+  }) async {
+    if (!enabled || client.auth.currentUser == null) {
+      return const <String, String>{};
+    }
+    final raw = await client
+        .from('official_roster_identity_links')
+        .select(
+          'normalized_first_name,normalized_last_name,profile_id,active',
+        )
+        .eq('hospital', hospital)
+        .eq('active', true);
+    final result = <String, String>{};
+    for (final item in (raw as List)) {
+      final row = Map<String, dynamic>.from(item as Map);
+      final first = (row['normalized_first_name'] ?? '').toString().trim();
+      final last = (row['normalized_last_name'] ?? '').toString().trim();
+      final profileId = (row['profile_id'] ?? '').toString().trim();
+      if (first.isNotEmpty && last.isNotEmpty && profileId.isNotEmpty) {
+        result['$first|$last'] = profileId;
+      }
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> saveOfficialRosterAnalysisR6({
+    required SharedResource resource,
+    required Map<String, dynamic> extraction,
+    required List<OfficialRosterGuard> guards,
+    required List<Map<String, dynamic>> unmatchedCells,
+  }) async {
+    final raw = await client.rpc(
+      'save_official_roster_analysis_r6',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at':
+            resource.updatedAt.toUtc().toIso8601String(),
+        'p_extraction': extraction,
+        'p_guards': guards.map((guard) => guard.toJson()).toList(growable: false),
+        'p_unmatched_cells': unmatchedCells,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterImportReports({
+    int limit = 50,
+  }) async {
+    final raw = await client
+        .from('official_roster_import_reports')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterGuards({
+    required String reportId,
+  }) async {
+    final raw = await client
+        .from('official_roster_guards')
+        .select()
+        .eq('report_id', reportId)
+        .order('date_str')
+        .order('source_ordinal');
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterAnomalies({
+    required String reportId,
+  }) async {
+    final raw = await client
+        .from('official_roster_anomalies')
+        .select()
+        .eq('report_id', reportId)
+        .order('date_str')
+        .order('created_at');
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterIdentityLinkRows({
+    String? hospital,
+  }) async {
+    var query = client
+        .from('official_roster_identity_links')
+        .select(
+          'id,hospital,official_first_name,official_last_name,'
+          'official_full_name,normalized_first_name,normalized_last_name,'
+          'profile_id,active,created_at,updated_at,reason',
+        )
+        .eq('active', true);
+    if (hospital != null && hospital.trim().isNotEmpty) {
+      query = query.eq('hospital', hospital);
+    }
+    final raw = await query.order('official_full_name');
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> setOfficialRosterIdentityLink({
+    required String hospital,
+    required String firstName,
+    required String lastName,
+    required String fullName,
+    required String profileId,
+    String? reason,
+  }) async {
+    final raw = await client.rpc(
+      'admin_set_official_roster_identity_link',
+      params: {
+        'p_hospital': hospital,
+        'p_first_name': firstName,
+        'p_last_name': lastName,
+        'p_full_name': fullName,
+        'p_profile_id': profileId,
+        'p_reason': reason,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<void> deleteOfficialRosterIdentityLink({
+    required String linkId,
+    String? reason,
+  }) async {
+    await client.rpc(
+      'admin_delete_official_roster_identity_link',
+      params: {
+        'p_link_id': linkId,
+        'p_reason': reason,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> correctOfficialRosterGuard({
+    required String guardId,
+    required Map<String, dynamic> patch,
+    required String reason,
+  }) async {
+    final raw = await client.rpc(
+      'admin_correct_official_roster_guard',
+      params: {
+        'p_guard_id': guardId,
+        'p_patch': patch,
+        'p_reason': reason,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> previewOfficialRosterRecalculation(
+    String profileId,
+  ) async {
+    final raw = await client.rpc(
+      'admin_preview_official_roster_recalculation',
+      params: {'p_profile_id': profileId},
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> applyOfficialRosterRecalculation({
+    required String profileId,
+    required String previewToken,
+  }) async {
+    final raw = await client.rpc(
+      'admin_apply_official_roster_recalculation',
+      params: {
+        'p_profile_id': profileId,
+        'p_expected_preview_token': previewToken,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
   }
 
   Future<Map<String, dynamic>> registerOfficialDisciplinaryMarks({
