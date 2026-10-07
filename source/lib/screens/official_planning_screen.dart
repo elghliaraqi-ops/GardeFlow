@@ -108,16 +108,17 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       }
     }
     if (resource == null || _guardCountLoading.contains(slot.id)) return;
+    final currentResource = resource;
     setState(() => _guardCountLoading.add(slot.id));
     try {
       final profiles = await _backend.fetchVisibleProfiles();
       final versions = await _backend.fetchOfficialRosterVersions(slot.id);
       final hasCurrentVersion = versions.any(
         (v) =>
-            v.storagePath == resource.storagePath &&
-            v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
+            v.storagePath == currentResource.storagePath &&
+            v.updatedAt.toUtc() == currentResource.updatedAt.toUtc(),
       );
-      if (!hasCurrentVersion) versions.insert(0, resource);
+      if (!hasCurrentVersion) versions.insert(0, currentResource);
       final parsed = await OfficialRosterImportService.parseVersionHistory(
         versionsNewestFirst: versions,
         loadBytes: _backend.downloadSharedResource,
@@ -140,7 +141,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       // On conserve donc le maximum entre la lecture directe du PDF et le
       // registre serveur.
       final summary =
-          await _backend.officialRosterMySummary(resource: resource);
+          await _backend.officialRosterMySummary(resource: currentResource);
       final serverDisciplinaryCount =
           (summary['disciplinary'] as num?)?.toInt() ?? 0;
       final disciplinaryCount =
