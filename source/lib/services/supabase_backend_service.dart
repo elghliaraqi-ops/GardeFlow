@@ -876,6 +876,18 @@ class SupabaseBackendService {
   Future<List<SharedResource>> fetchOfficialPlanningPdfs() =>
       fetchSharedResources(kind: 'official_pdf');
 
+  Future<List<SharedResource>> fetchOfficialRosterVersions(
+    String slot,
+  ) async {
+    final rows = await client.rpc(
+      'list_official_roster_versions',
+      params: {'p_slot': slot},
+    );
+    return (rows as List)
+        .map((e) => SharedResource.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
   Future<Uint8List> downloadSharedResource(String storagePath) async {
     return client.storage.from(sharedBucket).download(storagePath);
   }
