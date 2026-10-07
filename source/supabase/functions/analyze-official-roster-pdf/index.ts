@@ -473,6 +473,50 @@ function canonical(read: Read): string {
     .join('\n');
 }
 
+function canonicalRow(row: Row): string {
+  const doctors = row.doctors
+    .map((doctor) =>
+      normalizeText(doctor.first_name) + '|' +
+      normalizeText(doctor.last_name) + '|' +
+      normalizeText(doctor.full_name)
+    )
+    .sort()
+    .join(',');
+  const red = row.red_names.map(normalizeText).sort().join(',');
+  return row.date + '|' + row.shift + '|' + doctors + '|red:' + red;
+}
+
+function compareVisualReads(
+  first: Row[],
+  second: Row[],
+  code: string,
+): Conflict[] {
+  const left = new Map(first.map((row) => [row.date + '|' + row.shift, row]));
+  const right = new Map(second.map((row) => [row.date + '|' + row.shift, row]));
+  const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
+  const conflicts: Conflict[] = [];
+  for (const key of keys) {
+    const aRow = left.get(key);
+    const bRow = right.get(key);
+    if (
+      !aRow ||
+      !bRow ||
+      canonicalRow(aRow) !== canonicalRow(bRow)
+    ) {
+      const parts = key.split('|');
+      conflicts.push({
+        code,
+        date: parts[0] ?? null,
+        shift: parts[1] ?? null,
+        message: 'Les deux lectures visuelles ne concordent pas.',
+        a: aRow ?? {},
+        b: bRow ?? {},
+      });
+    }
+  }
+  return conflicts;
+}
+
 function readIsReliable(read: Read): boolean {
   return read.validationErrors.length === 0 &&
     read.confidence >= MIN_CONFIDENCE &&
@@ -953,35 +997,27 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (local.validationErrors.length > 0) {
-      return json({
-        ok: true,
-        cached: false,
-        extraction: {
-          verified: false,
-          parser_revision: PARSER_REVISION,
-          engine: 'pdfrx_geometry+openai_visual_conditional',
-          status: 'red',
-          confidence: 0,
-          agreement: 'A_invalid',
-          hospital,
-          slot,
-          warnings: [],
-          rows: [],
-          conflicts: [],
-          validation_errors: local.validationErrors,
-          read_summary: {
-            a_cells: local.cells.length,
-            b_executed: false,
-            c_executed: false,
-          },
-        },
-      });
-    }
-
     let openAiFileId = '';
     try {
       openAiFileId = await uploadOpenAIFile(bytes, displayName, openAiKey);
+
+      const useLocalA =
+        local.validationErrors.length === 0 && local.cells.length > 0;
+      let readAVisual: Read | null = null;
+      if (!useLocalA) {
+        readAVisual = await runRead(
+          openAiFileId,
+          openAiKey,
+          [
+            'LECTURE A VISUELLE DE SECOURS.',
+            'La couche texte/lecture géométrique locale est absente ou structurellement incomplète.',
+            'Lis le document depuis zéro sans connaître les comptes GardeFlow.',
+            'Utilise une stratégie de lecture globale par lignes puis colonnes et vérifie toutes les cellules.',
+          ].join('\n'),
+          'official_roster_read_a_fallback_r6',
+          'OPENAI_VISION_MODEL_A',
+        );
+      }
 
       const readB = await runRead(
         openAiFileId,
@@ -989,15 +1025,26 @@ Deno.serve(async (req: Request) => {
         [
           'LECTURE B INDÉPENDANTE.',
           'Lis le document depuis zéro.',
-          'Ne suppose aucune sortie de la lecture locale A.',
-          'Vérifie particulièrement chaque identité complète, chaque date et chaque cellule.',
+          'Ne suppose aucune sortie de la lecture A.',
+          'Utilise une stratégie centrée sur chaque date et chaque cellule, puis vérifie les identités complètes.',
+          'Vérifie particulièrement chaque prénom, nom, date et créneau.',
         ].join('\n'),
         'official_roster_read_b_r6',
         'OPENAI_VISION_MODEL_B',
       );
 
-      const abConflicts = compareLocalVisual(local.cells, readB.rows);
+      const aReliable = useLocalA
+        ? true
+        : (readAVisual != null && readIsReliable(readAVisual));
       const bReliable = readIsReliable(readB);
+      const abConflicts = useLocalA
+        ? compareLocalVisual(local.cells, readB.rows)
+        : compareVisualReads(
+            readAVisual?.rows ?? [],
+            readB.rows,
+            'a_b_mismatch',
+          );
+
       let chosen: Read | null = null;
       let status = 'red';
       let agreement = 'none';
@@ -1005,10 +1052,7 @@ Deno.serve(async (req: Request) => {
       let conflicts = abConflicts;
       let readC: Read | null = null;
 
-      if (
-        bReliable &&
-        abConflicts.length === 0
-      ) {
+      if (aReliable && bReliable && abConflicts.length === 0) {
         chosen = readB;
         status = 'green';
         agreement = 'A=B';
@@ -1028,9 +1072,9 @@ Deno.serve(async (req: Request) => {
           openAiKey,
           [
             'LECTURE C CONDITIONNELLE — ARBITRAGE.',
-            'Un désaccord a été détecté entre la lecture structurée A et la lecture visuelle B.',
+            'Un désaccord ou un contrôle incomplet a été détecté entre A et B.',
             'Analyse en priorité les zones litigieuses ci-dessous.',
-            'Si le désaccord semble structurel ou si une zone dépend du reste du tableau, relis tout le document.',
+            'Si le désaccord semble structurel, si une date manque ou si une zone dépend du reste du tableau, relis tout le document.',
             'Ne choisis jamais par majorité aveugle : rends uniquement ce qui est réellement visible.',
             'Zones litigieuses: ' + disputeSummary,
           ].join('\n'),
@@ -1039,15 +1083,25 @@ Deno.serve(async (req: Request) => {
         );
 
         const cReliable = readIsReliable(readC);
-        const acConflicts = compareLocalVisual(local.cells, readC.rows);
-        const bcSame = canonical(readB) === canonical(readC);
+        const acConflicts = useLocalA
+          ? compareLocalVisual(local.cells, readC.rows)
+          : compareVisualReads(
+              readAVisual?.rows ?? [],
+              readC.rows,
+              'a_c_mismatch',
+            );
+        const bcConflicts = compareVisualReads(
+          readB.rows,
+          readC.rows,
+          'b_c_mismatch',
+        );
 
-        if (cReliable && acConflicts.length === 0) {
+        if (aReliable && cReliable && acConflicts.length === 0) {
           chosen = readC;
           status = 'orange';
           agreement = 'A=C';
           conflicts = attachC(abConflicts, readC);
-        } else if (bReliable && cReliable && bcSame) {
+        } else if (bReliable && cReliable && bcConflicts.length === 0) {
           chosen = readC;
           status = 'orange';
           agreement = 'B=C';
@@ -1055,38 +1109,12 @@ Deno.serve(async (req: Request) => {
         } else {
           status = 'red';
           agreement = 'none';
-          const bcConflicts: Conflict[] = [];
-          const bRows = new Map(
-            readB.rows.map((row) => [row.date + '|' + row.shift, row]),
-          );
-          const cRows = new Map(
-            readC.rows.map((row) => [row.date + '|' + row.shift, row]),
-          );
-          for (const key of [...new Set([...bRows.keys(), ...cRows.keys()])].sort()) {
-            const bRow = bRows.get(key);
-            const cRow = cRows.get(key);
-            if (
-              !bRow ||
-              !cRow ||
-              JSON.stringify(bRow) !== JSON.stringify(cRow)
-            ) {
-              const parts = key.split('|');
-              bcConflicts.push({
-                code: 'b_c_mismatch',
-                date: parts[0] ?? null,
-                shift: parts[1] ?? null,
-                message: 'Les lectures B et C ne concordent pas.',
-                a: local.cells.find(
-                  (cell) => cell.date + '|' + cell.shift === key,
-                ) ?? {},
-                b: bRow ?? {},
-                c: cRow ?? {},
-              });
-            }
-          }
           conflicts = [
             ...attachC(abConflicts, readC),
-            ...bcConflicts,
+            ...bcConflicts.map((conflict) => ({
+              ...conflict,
+              c: conflict.b,
+            })),
           ];
         }
       }
@@ -1098,7 +1126,9 @@ Deno.serve(async (req: Request) => {
           extraction: {
             verified: false,
             parser_revision: PARSER_REVISION,
-            engine: 'pdfrx_geometry+openai_visual_conditional',
+            engine: useLocalA
+              ? 'pdfrx_geometry+openai_visual_conditional'
+              : 'openai_visual_a+openai_visual_b+conditional_c',
             status: 'red',
             confidence: Math.min(
               minimumConfidence(readB),
@@ -1120,12 +1150,17 @@ Deno.serve(async (req: Request) => {
             conflicts,
             validation_errors: [
               ...new Set([
+                ...(useLocalA
+                  ? local.validationErrors
+                  : (readAVisual?.validationErrors ?? [])),
                 ...readB.validationErrors,
                 ...(readC?.validationErrors ?? []),
               ]),
             ],
             read_summary: {
+              a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
               a_cells: local.cells.length,
+              a_confidence: readAVisual?.confidence ?? null,
               b_executed: true,
               b_confidence: readB.confidence,
               c_executed: cExecuted,
@@ -1136,16 +1171,23 @@ Deno.serve(async (req: Request) => {
       }
 
       const confidence =
-        agreement === 'B=C' && readC
+        agreement === 'A=B' && readAVisual
           ? Math.min(
+              minimumConfidence(readAVisual),
               minimumConfidence(readB),
-              minimumConfidence(readC),
             )
-          : minimumConfidence(chosen);
+          : agreement === 'B=C' && readC
+            ? Math.min(
+                minimumConfidence(readB),
+                minimumConfidence(readC),
+              )
+            : minimumConfidence(chosen);
       const extraction = {
         verified: true,
         parser_revision: PARSER_REVISION,
-        engine: 'pdfrx_geometry+openai_visual_conditional',
+        engine: useLocalA
+          ? 'pdfrx_geometry+openai_visual_conditional'
+          : 'openai_visual_a+openai_visual_b+conditional_c',
         status,
         confidence,
         agreement,
@@ -1158,7 +1200,9 @@ Deno.serve(async (req: Request) => {
         conflicts,
         validation_errors: [],
         read_summary: {
+          a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
           a_cells: local.cells.length,
+          a_confidence: readAVisual?.confidence ?? null,
           b_executed: true,
           b_confidence: readB.confidence,
           c_executed: cExecuted,
