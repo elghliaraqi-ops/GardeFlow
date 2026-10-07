@@ -1352,6 +1352,24 @@ class SupabaseBackendService {
     return Map<String, dynamic>.from(raw as Map);
   }
 
+
+  Future<String> logOfficialRosterGlobalRecalculation({
+    required List<Map<String, dynamic>> previews,
+    required Map<String, dynamic> result,
+  }) async {
+    final raw = await client.rpc(
+      'admin_log_official_roster_global_recalculation',
+      params: {
+        'p_preview': {
+          'items': previews,
+          'count': previews.length,
+        },
+        'p_result': result,
+      },
+    );
+    return raw.toString();
+  }
+
   Future<String> logGlobalOfficialRosterRecalculation({
     required List<Map<String, dynamic>> previews,
     required Map<String, dynamic> result,
