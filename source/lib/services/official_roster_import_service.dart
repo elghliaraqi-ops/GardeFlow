@@ -364,7 +364,7 @@ class OfficialRosterImportService {
           OfficialRosterLocalCell(
             date: dateStr,
             shift: cell.shiftId,
-            text: cell.text.replaceAll(RegExp(r'\\s+'), ' ').trim(),
+            text: cell.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
             redText: redText,
             pageNumber: row.pageIndex + 1,
             zone: 'page-${row.pageIndex + 1}/${cell.shiftId}',
