@@ -223,8 +223,9 @@ class OfficialRosterVerifiedReadService {
         final fullName = doctor['full_name']?.toString().trim() ??
             (firstName + ' ' + lastName).trim();
         final doctorConfidence =
-            ((doctor['confidence'] as num?)?.toDouble() ?? 0.0)
-                .clamp(0.0, 1.0);
+            (((doctor['confidence'] as num?)?.toDouble() ?? 0.0)
+                    .clamp(0.0, 1.0))
+                .toDouble();
         final guardConfidence =
             doctorConfidence < confidence ? doctorConfidence : confidence;
         final identityKey = OfficialRosterIdentityService.identityKey(
