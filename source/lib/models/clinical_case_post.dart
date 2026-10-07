@@ -61,24 +61,28 @@ class ClinicalCaseQcm {
     int? mySelectedIndex,
     bool? myIsCorrect,
     DateTime? answeredAt,
+    bool clearAnswer = false,
   }) =>
       ClinicalCaseQcm(
         id: id,
         position: position,
         question: question,
         options: options,
-        correctIndex: correctIndex ?? this.correctIndex,
-        correction: correction ?? this.correction,
+        correctIndex: clearAnswer ? null : (correctIndex ?? this.correctIndex),
+        correction: clearAnswer ? '' : (correction ?? this.correction),
         topic: topic,
         generationSource: generationSource,
-        mySelectedIndex: mySelectedIndex ?? this.mySelectedIndex,
-        myIsCorrect: myIsCorrect ?? this.myIsCorrect,
-        answeredAt: answeredAt ?? this.answeredAt,
+        mySelectedIndex:
+            clearAnswer ? null : (mySelectedIndex ?? this.mySelectedIndex),
+        myIsCorrect: clearAnswer ? null : (myIsCorrect ?? this.myIsCorrect),
+        answeredAt: clearAnswer ? null : (answeredAt ?? this.answeredAt),
       );
 }
 
 class ClinicalCasePost {
   final String id;
+  final String? practiceCaseId;
+  final bool canEdit;
   final String? ageBand;
   final String? sex;
   final String presentation;
@@ -106,6 +110,8 @@ class ClinicalCasePost {
 
   const ClinicalCasePost({
     required this.id,
+    this.practiceCaseId,
+    this.canEdit = false,
     this.ageBand,
     this.sex,
     this.presentation = '',
@@ -181,6 +187,8 @@ class ClinicalCasePost {
 
     return ClinicalCasePost(
       id: '${map['id'] ?? ''}',
+      practiceCaseId: _nullable(map['practice_case_id']),
+      canEdit: map['can_edit'] == true,
       ageBand: _nullable(map['age_band']),
       sex: _nullable(map['sex']),
       presentation: '${map['presentation'] ?? ''}'.trim(),
