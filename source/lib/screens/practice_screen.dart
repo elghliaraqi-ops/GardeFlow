@@ -176,6 +176,35 @@ class _PracticeScreenState extends State<PracticeScreen> {
     if (result == 'addAnother') _newCase();
   }
 
+  Future<void> _editPublishedCase(String practiceCaseId) async {
+    try {
+      final existing = await _service.fetchCaseById(practiceCaseId);
+      if (!mounted) return;
+      if (existing == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ce cas ne peut pas être modifié depuis ce compte.')),
+        );
+        return;
+      }
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PracticeCaseFormScreen(
+            appState: widget.appState,
+            guard: null,
+            existing: existing,
+          ),
+        ),
+      );
+      if (mounted) await _load(silent: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir ce cas en modification.')),
+      );
+    }
+  }
+
   Future<void> _editGoal() async {
     final controller = TextEditingController(
       text: _prefs.guardGoal?.toString() ?? '',
@@ -282,7 +311,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const ClinicalCasesScreen(),
+                          builder: (_) => ClinicalCasesScreen(
+                            onEditCase: _editPublishedCase,
+                          ),
                         ),
                       ),
                     ),
