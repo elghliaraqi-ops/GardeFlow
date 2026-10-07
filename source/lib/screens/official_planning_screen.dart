@@ -183,6 +183,28 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     final suppliedBytes = <String, Uint8List>{
       if (currentBytes != null) resource.storagePath: currentBytes,
     };
+    var currentLocalEvidence = const <Map<String, dynamic>>[];
+    if (allowRemoteVerification) {
+      try {
+        final bytesForA =
+            currentBytes ?? await _backend.downloadSharedResource(resource.storagePath);
+        suppliedBytes[resource.storagePath] = bytesForA;
+        final localA = await OfficialRosterImportService.parse(
+          bytes: bytesForA,
+          displayName: resource.displayName,
+          hospital: slot.hospital,
+          profiles: profiles,
+          resourceUpdatedAt: resource.updatedAt,
+        );
+        currentLocalEvidence = localA.localCells
+            .map((cell) => cell.toJson())
+            .toList(growable: false);
+      } catch (e) {
+        // Les PDF scannés peuvent ne pas exposer une couche texte exploitable.
+        // Le serveur utilisera alors une Lecture A visuelle de secours distincte.
+        debugPrint('Lecture A géométrique indisponible: $e');
+      }
+    }
 
     final parsed =
         await OfficialRosterVerifiedReadService.readVersionHistory(
@@ -200,6 +222,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
           cached = await _backend.analyzeOfficialRosterResource(
             resource.id,
             parserRevision: OfficialRosterImportService.parserRevision,
+            localEvidence: currentLocalEvidence,
           );
         }
         return cached;
@@ -346,9 +369,10 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     setState(() => _busySlot = slot.id);
     try {
       // Validation renforcée avant publication :
-      // 1) lecture géométrique locale quand le PDF possède une couche texte ;
-      // 2) trois lectures visuelles indépendantes côté serveur ;
-      // 3) majorité exacte 2/3 minimum, sinon l'import est bloqué.
+      // A = lecture géométrique locale indépendante quand elle est exploitable ;
+      // B = lecture visuelle distante sans connaissance des comptes ;
+      // C = lecture d'arbitrage déclenchée seulement si A/B ou les contrôles
+      // de complétude signalent un désaccord.
       final profiles = await _backend.fetchVisibleProfiles();
       OfficialRosterParseResult? localPreflight;
       try {
@@ -366,6 +390,10 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         bytes: bytes,
         fileName: file.name,
         slot: slot.id,
+        localEvidence: localPreflight?.localCells
+                .map((cell) => cell.toJson())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[],
         parserRevision: OfficialRosterImportService.parserRevision,
       );
       final preflight = OfficialRosterVerifiedReadService.fromExtraction(
@@ -377,27 +405,15 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         final details = preflight.validationErrors.take(5).join(' • ');
         throw StateError(
           details.isEmpty
-              ? 'Le planning n’a pas passé la triple lecture visuelle.'
+              ? 'Le planning n’a pas passé la vérification indépendante A/B/C.'
               : 'Planning refusé avant publication : ' + details,
         );
       }
-      if (localPreflight != null &&
-          localPreflight.isComplete &&
-          !OfficialRosterVerifiedReadService.sameCoreAssignments(
-            localPreflight,
-            preflight,
-          )) {
-        debugPrint(
-          'Le lecteur géométrique diffère du consensus visuel 2/3. '
-          'Le consensus visuel vérifié reste autoritaire.',
-        );
-      }
-
       final verificationToken =
           verifiedPayload['_verification_token']?.toString();
       if (verificationToken == null || verificationToken.isEmpty) {
         throw StateError(
-          'La triple lecture a réussi mais son jeton de vérification est absent.',
+          'La vérification A/B/C a réussi mais son jeton de vérification est absent.',
         );
       }
 
