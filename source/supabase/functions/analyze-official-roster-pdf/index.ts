@@ -1290,6 +1290,8 @@ Deno.serve(async (req: Request) => {
             ...attachC(abConflicts, readC),
             ...bcConflicts.map((conflict) => ({
               ...conflict,
+              a: {},
+              b: conflict.a,
               c: conflict.b,
             })),
           ];
