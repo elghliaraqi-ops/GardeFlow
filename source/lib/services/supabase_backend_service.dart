@@ -969,12 +969,16 @@ class SupabaseBackendService {
     return SharedResource.fromJson(Map<String, dynamic>.from(row));
   }
 
-  Future<bool> officialRosterImportIsCurrent(SharedResource resource) async {
+  Future<bool> officialRosterImportIsCurrent(
+    SharedResource resource, {
+    required String parserRevision,
+  }) async {
     final result = await client.rpc(
-      'official_roster_import_is_current',
+      'official_roster_import_is_current_v2',
       params: {
         'p_resource_id': resource.id,
         'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
+        'p_parser_revision': parserRevision,
       },
     );
     return result == true;
@@ -984,13 +988,15 @@ class SupabaseBackendService {
     required SharedResource resource,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
+    required String parserRevision,
   }) async {
     final result = await client.rpc(
-      'import_official_emergency_roster',
+      'import_official_emergency_roster_v2',
       params: {
         'p_resource_id': resource.id,
         'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
         'p_assignments': assignments,
+        'p_parser_revision': parserRevision,
         'p_unmatched_cells': unmatchedCells,
       },
     );
@@ -1045,13 +1051,15 @@ class SupabaseBackendService {
   Future<bool> officialRosterProfileSyncIsCurrent({
     required SharedResource resource,
     required String profileId,
+    required String parserRevision,
   }) async {
     final result = await client.rpc(
-      'official_roster_profile_sync_is_current',
+      'official_roster_profile_sync_is_current_v2',
       params: {
         'p_resource_id': resource.id,
         'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
         'p_profile_id': profileId,
+        'p_parser_revision': parserRevision,
       },
     );
     return result == true;
@@ -1062,14 +1070,16 @@ class SupabaseBackendService {
     required String profileId,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
+    required String parserRevision,
   }) async {
     final result = await client.rpc(
-      'import_official_emergency_roster_for_profile',
+      'import_official_emergency_roster_for_profile_v2',
       params: {
         'p_resource_id': resource.id,
         'p_resource_updated_at': resource.updatedAt.toUtc().toIso8601String(),
         'p_profile_id': profileId,
         'p_assignments': assignments,
+        'p_parser_revision': parserRevision,
         'p_unmatched_cells': unmatchedCells,
       },
     );
