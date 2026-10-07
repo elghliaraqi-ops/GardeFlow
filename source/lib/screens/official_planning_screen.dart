@@ -11,6 +11,7 @@ import '../data/hospitals.dart';
 import '../models/app_user.dart';
 import '../models/shared_resource.dart';
 import '../services/official_roster_import_service.dart';
+import '../services/official_roster_verified_read_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -112,18 +113,10 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     setState(() => _guardCountLoading.add(slot.id));
     try {
       final profiles = await _backend.fetchVisibleProfiles();
-      final versions = await _backend.fetchOfficialRosterVersions(slot.id);
-      final hasCurrentVersion = versions.any(
-        (v) =>
-            v.storagePath == currentResource.storagePath &&
-            v.updatedAt.toUtc() == currentResource.updatedAt.toUtc(),
-      );
-      if (!hasCurrentVersion) versions.insert(0, currentResource);
-      final parsed = await OfficialRosterImportService.parseVersionHistory(
-        versionsNewestFirst: versions,
-        loadBytes: _backend.downloadSharedResource,
-        hospital: slot.hospital,
-        profiles: profiles,
+      final parsed = await _readVerifiedRoster(
+        slot,
+        currentResource,
+        profiles,
       );
       // Le résumé affiché doit refléter ce qui est réellement retrouvé
       // dans le PDF, pas seulement les lignes déjà transposées en base.
@@ -172,6 +165,103 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     return null;
   }
 
+  Future<OfficialRosterParseResult> _readVerifiedRoster(
+    _OfficialSlot slot,
+    SharedResource resource,
+    List<AppUser> profiles, {
+    Uint8List? currentBytes,
+    bool allowRemoteVerification = false,
+  }) async {
+    OfficialRosterParseResult? localCurrent;
+    try {
+      final bytes =
+          currentBytes ?? await _backend.downloadSharedResource(resource.storagePath);
+      localCurrent = await OfficialRosterImportService.parse(
+        bytes: bytes,
+        displayName: resource.displayName,
+        hospital: slot.hospital,
+        profiles: profiles,
+        resourceUpdatedAt: resource.updatedAt,
+      );
+    } catch (e) {
+      debugPrint('Lecture géométrique locale impossible: ' + e.toString());
+    }
+
+    Map<String, dynamic>? verifiedPayload =
+        await _backend.fetchOfficialRosterVerifiedRead(
+      resource: resource,
+      parserRevision: OfficialRosterImportService.parserRevision,
+    );
+    if (verifiedPayload == null && allowRemoteVerification) {
+      verifiedPayload = await _backend.analyzeOfficialRosterResource(
+        resource.id,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      );
+    }
+
+    OfficialRosterParseResult? currentResult = localCurrent;
+    if (verifiedPayload != null) {
+      final visual = OfficialRosterVerifiedReadService.fromExtraction(
+        extraction: verifiedPayload,
+        hospital: slot.hospital,
+        profiles: profiles,
+      );
+      if (visual.detectedRows == 0 || !visual.isComplete) {
+        throw StateError(
+          'Double lecture visuelle refusée : ' +
+              visual.validationErrors.take(5).join(' • '),
+        );
+      }
+      if (localCurrent != null &&
+          localCurrent.isComplete &&
+          !OfficialRosterVerifiedReadService.sameCoreAssignments(
+            localCurrent,
+            visual,
+          )) {
+        throw StateError(
+          'Les lectures géométrique et visuelle ne concordent pas. '
+          'Import automatique bloqué pour éviter une garde erronée.',
+        );
+      }
+      currentResult = visual;
+    }
+
+    if (currentResult == null ||
+        currentResult.detectedRows == 0 ||
+        !currentResult.isComplete) {
+      final details = currentResult?.validationErrors.take(5).join(' • ') ?? '';
+      throw StateError(
+        details.isEmpty
+            ? 'Aucune lecture fiable du planning officiel.'
+            : 'Lecture du planning incomplète : ' + details,
+      );
+    }
+
+    final versions = await _backend.fetchOfficialRosterVersions(slot.id);
+    final olderVersions = versions
+        .where(
+          (v) =>
+              v.storagePath != resource.storagePath ||
+              v.updatedAt.toUtc() != resource.updatedAt.toUtc(),
+        )
+        .toList(growable: false);
+
+    if (olderVersions.isEmpty) return currentResult;
+
+    final older = await OfficialRosterImportService.parseVersionHistory(
+      versionsNewestFirst: olderVersions,
+      loadBytes: _backend.downloadSharedResource,
+      hospital: slot.hospital,
+      profiles: profiles,
+    );
+    if (older.detectedRows == 0) return currentResult;
+
+    return OfficialRosterImportService.mergeNewestFirst([
+      currentResult,
+      older,
+    ]);
+  }
+
   Future<void> _autoImportExisting(List<SharedResource> resources) async {
     for (final resource in resources) {
       if (!mounted) return;
@@ -211,23 +301,12 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     }
     try {
       final profiles = await _backend.fetchVisibleProfiles();
-      final versions = await _backend.fetchOfficialRosterVersions(slot.id);
-      final hasCurrentVersion = versions.any(
-        (v) =>
-            v.storagePath == resource.storagePath &&
-            v.updatedAt.toUtc() == resource.updatedAt.toUtc(),
-      );
-      if (!hasCurrentVersion) versions.insert(0, resource);
-
-      final supplied = <String, Uint8List>{
-        if (bytes != null) resource.storagePath: bytes,
-      };
-      final parsed = await OfficialRosterImportService.parseVersionHistory(
-        versionsNewestFirst: versions,
-        loadBytes: _backend.downloadSharedResource,
-        hospital: slot.hospital,
-        profiles: profiles,
-        suppliedBytes: supplied,
+      final parsed = await _readVerifiedRoster(
+        slot,
+        resource,
+        profiles,
+        currentBytes: bytes,
+        allowRemoteVerification: true,
       );
       if (parsed.detectedRows == 0) {
         throw StateError('Aucune ligne de garde 08h-20h / 20h-08h reconnue dans ce PDF.');
@@ -308,12 +387,31 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
 
     setState(() => _busySlot = slot.id);
     try {
-      // Validation avant publication : un PDF partiellement lisible ne doit
-      // jamais remplacer la source officielle déjà en production.
+      // Double validation avant publication :
+      // 1) lecture géométrique locale quand le PDF possède une couche texte ;
+      // 2) deux lectures visuelles indépendantes côté serveur, avec arbitrage
+      //    par une troisième lecture uniquement en cas de désaccord.
       final profiles = await _backend.fetchVisibleProfiles();
-      final preflight = await OfficialRosterImportService.parse(
+      OfficialRosterParseResult? localPreflight;
+      try {
+        localPreflight = await OfficialRosterImportService.parse(
+          bytes: bytes,
+          displayName: file.name,
+          hospital: slot.hospital,
+          profiles: profiles,
+        );
+      } catch (e) {
+        debugPrint('Prélecture locale non exploitable: ' + e.toString());
+      }
+
+      final verifiedPayload = await _backend.analyzeOfficialRosterPreflight(
         bytes: bytes,
-        displayName: file.name,
+        fileName: file.name,
+        slot: slot.id,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      );
+      final preflight = OfficialRosterVerifiedReadService.fromExtraction(
+        extraction: verifiedPayload,
         hospital: slot.hospital,
         profiles: profiles,
       );
@@ -321,8 +419,19 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         final details = preflight.validationErrors.take(5).join(' • ');
         throw StateError(
           details.isEmpty
-              ? 'Le planning ne contient aucune ligne Urgences exploitable.'
+              ? 'Le planning n’a pas passé la double lecture visuelle.'
               : 'Planning refusé avant publication : ' + details,
+        );
+      }
+      if (localPreflight != null &&
+          localPreflight.isComplete &&
+          !OfficialRosterVerifiedReadService.sameCoreAssignments(
+            localPreflight,
+            preflight,
+          )) {
+        throw StateError(
+          'Le PDF est lisible mais les deux moteurs ne retrouvent pas les mêmes '
+          'gardes. Publication bloquée plutôt que d’importer une erreur.',
         );
       }
 
@@ -333,6 +442,30 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         coveredDates: preflight.coveredDates,
         parserRevision: OfficialRosterImportService.parserRevision,
       );
+
+      // Relecture de la version réellement publiée : elle est mise en cache
+      // et devient la référence vérifiée utilisée ensuite par tous les comptes.
+      final publishedVerification =
+          await _backend.analyzeOfficialRosterResource(
+        resource.id,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      );
+      final publishedRead =
+          OfficialRosterVerifiedReadService.fromExtraction(
+        extraction: publishedVerification,
+        hospital: slot.hospital,
+        profiles: profiles,
+      );
+      if (!publishedRead.isComplete ||
+          !OfficialRosterVerifiedReadService.sameCoreAssignments(
+            preflight,
+            publishedRead,
+          )) {
+        throw StateError(
+          'La vérification de la version publiée ne concorde pas avec la '
+          'prélecture. Synchronisation automatique bloquée.',
+        );
+      }
       Map<String, dynamic>? importResult;
       Object? importError;
       try {
