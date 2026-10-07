@@ -1353,7 +1353,7 @@ class SupabaseBackendService {
   }
 
 
-  Future<String> logOfficialRosterGlobalRecalculation({
+  Future<String> logGlobalOfficialRosterRecalculation({
     required List<Map<String, dynamic>> previews,
     required Map<String, dynamic> result,
   }) async {
