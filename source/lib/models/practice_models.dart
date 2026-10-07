@@ -7,6 +7,10 @@ const practiceEmergencyShiftIds = <String>{
   'urg-24h',
 };
 
+const practiceEmergencyEncounterContext = 'emergency_guard';
+const practiceStandaloneEncounterContext = 'standalone';
+const practiceStandaloneLocalGuardId = 'standalone';
+
 class PracticeGuard {
   final PlanningEntry entry;
   final DateTime start;
@@ -96,6 +100,7 @@ class PracticeGuard {
 class PracticeCase {
   final String? id;
   final String userId;
+  final String encounterContext;
   final String guardId;
   final String guardDate;
   final String guardShiftId;
@@ -135,6 +140,7 @@ class PracticeCase {
   const PracticeCase({
     this.id,
     required this.userId,
+    this.encounterContext = practiceEmergencyEncounterContext,
     required this.guardId,
     required this.guardDate,
     required this.guardShiftId,
@@ -172,7 +178,11 @@ class PracticeCase {
     this.pendingSync = false,
   });
 
-  String get patientLabel => 'Patient #${patientNumber.toString().padLeft(3, '0')}';
+  bool get isStandalone => encounterContext == practiceStandaloneEncounterContext;
+
+  String get patientLabel => isStandalone
+      ? 'Cas clinique'
+      : 'Patient #${patientNumber.toString().padLeft(3, '0')}';
 
   bool get isValid {
     if (consultationReason.trim().isEmpty) return false;
@@ -203,9 +213,10 @@ class PracticeCase {
   Map<String, dynamic> toMap({bool includeId = true}) => <String, dynamic>{
         if (includeId && id != null) 'id': id,
         'user_id': userId,
-        'guard_id': guardId,
+        'encounter_context': encounterContext,
+        'guard_id': isStandalone ? null : guardId,
         'guard_date': guardDate,
-        'guard_shift_id': guardShiftId,
+        'guard_shift_id': isStandalone ? null : guardShiftId,
         'client_id': clientId,
         'patient_number': patientNumber,
         'age': age,
@@ -238,12 +249,20 @@ class PracticeCase {
       };
 
   factory PracticeCase.fromMap(Map<String, dynamic> map, {bool pendingSync = false}) {
+    final context = map['encounter_context']?.toString() ??
+        practiceEmergencyEncounterContext;
+    final standalone = context == practiceStandaloneEncounterContext;
     return PracticeCase(
       id: map['id']?.toString(),
       userId: map['user_id']?.toString() ?? '',
-      guardId: map['guard_id']?.toString() ?? '',
+      encounterContext: context,
+      guardId: standalone
+          ? practiceStandaloneLocalGuardId
+          : (map['guard_id']?.toString() ?? ''),
       guardDate: map['guard_date']?.toString() ?? '',
-      guardShiftId: map['guard_shift_id']?.toString() ?? '',
+      guardShiftId: standalone
+          ? practiceStandaloneEncounterContext
+          : (map['guard_shift_id']?.toString() ?? ''),
       clientId: map['client_id']?.toString() ?? '',
       patientNumber: _asInt(map['patient_number']),
       age: map['age'] == null ? null : _asInt(map['age']),
@@ -288,6 +307,7 @@ class PracticeCase {
   }) => PracticeCase(
         id: id ?? this.id,
         userId: userId,
+        encounterContext: encounterContext,
         guardId: guardId,
         guardDate: guardDate,
         guardShiftId: guardShiftId,
