@@ -138,6 +138,10 @@ class OfficialRosterVerifiedReadService {
     final disciplinaryMarks = <OfficialRosterDisciplinaryMark>[];
     final rawOfficialGuards = <OfficialRosterGuard>[];
 
+    final revision = extraction['parser_revision']?.toString() ?? '';
+    final isR6Extraction =
+        OfficialRosterImportService._revisionRankForCompatibility(revision) >= 6;
+
     final rawRows = extraction['rows'];
     final rows = rawRows is List ? rawRows : const <dynamic>[];
     var detectedCells = 0;
@@ -198,19 +202,83 @@ class OfficialRosterVerifiedReadService {
                 .where((value) => value.isNotEmpty)
                 .toList(growable: false)
             : const <String>[];
-        for (final name in legacyNames) {
-          unmatched.add({
-            'date': dateStr,
-            'shift_id': shiftId,
-            'text': name,
-            'reason': 'identity_components_missing',
-          });
+
+        if (isR6Extraction) {
+          for (final name in legacyNames) {
+            unmatched.add({
+              'date': dateStr,
+              'shift_id': shiftId,
+              'text': name,
+              'reason': 'identity_components_missing',
+            });
+          }
+          if (legacyNames.isNotEmpty) {
+            validationErrors.add(
+              'Identité R6 incomplète ' + dateStr + ' ' + shiftId +
+                  ' : prénom et nom séparés requis.',
+            );
+          }
+          continue;
         }
-        if (legacyNames.isNotEmpty) {
-          validationErrors.add(
-            'Identité R6 incomplète ' + dateStr + ' ' + shiftId +
-                ' : prénom et nom séparés requis.',
-          );
+
+        // Compatibilité lecture vérifiée R5 historique uniquement.
+        // La valeur complète n'est jamais fuzzy-matchée : elle doit correspondre
+        // exactement à un unique profil après normalisation typographique.
+        for (final name in legacyNames) {
+          final normalized =
+              OfficialRosterIdentityService.normalizeConservative(name);
+          final exactProfiles = candidateProfiles.where((profile) {
+            final direct = OfficialRosterIdentityService.normalizeConservative(
+              '${profile.prenom} ${profile.nom}',
+            );
+            final reverse = OfficialRosterIdentityService.normalizeConservative(
+              '${profile.nom} ${profile.prenom}',
+            );
+            return normalized == direct || normalized == reverse;
+          }).toList(growable: false);
+
+          if (exactProfiles.length == 1) {
+            final profile = exactProfiles.single;
+            final normalizedFull =
+                OfficialRosterIdentityService.normalizeConservative(name);
+            final isRed = redNames.contains(normalizedFull);
+            rawAssignments.add(
+              OfficialRosterAssignment(
+                profileId: profile.id,
+                dateStr: dateStr,
+                shiftId: shiftId,
+                isDisciplinary: isRed,
+              ),
+            );
+            rawOfficialGuards.add(
+              OfficialRosterGuard(
+                dateStr: dateStr,
+                shiftId: shiftId,
+                hospital: hospital,
+                identity: OfficialRosterDoctorIdentity(
+                  firstName: profile.prenom,
+                  lastName: profile.nom,
+                  fullName: name,
+                ),
+                confidence: confidence,
+                reviewStatus: OfficialRosterReviewStatus.green,
+                pageNumber: (row['page_number'] as num?)?.toInt(),
+                zone: row['zone']?.toString(),
+                isDisciplinary: isRed,
+                matchedProfileId: profile.id,
+                matchStatus: OfficialDoctorMatchStatus.matched,
+              ),
+            );
+          } else {
+            unmatched.add({
+              'date': dateStr,
+              'shift_id': shiftId,
+              'text': name,
+              'reason': exactProfiles.length > 1
+                  ? 'legacy_identity_ambiguous'
+                  : 'legacy_identity_unmatched',
+            });
+          }
         }
         continue;
       }
