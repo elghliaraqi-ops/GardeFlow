@@ -712,7 +712,7 @@ Deno.serve(async (req: Request) => {
           extraction: {
             verified: false,
             parser_revision: PARSER_REVISION,
-            engine: 'openai_pdf_double_read',
+            engine: 'openai_pdf_triple_read',
             confidence: chosen?.confidence ?? 0,
             agreement,
             warnings: [
