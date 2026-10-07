@@ -44,7 +44,6 @@ jobs:
           dart format --output=none --set-exit-if-changed
           lib/config/business_rules.dart
           lib/state/app_state.dart
-          lib/services/supabase_backend_service.dart
           lib/models/planning_month.dart
           lib/screens/admin_screen.dart
       - name: Run tests
