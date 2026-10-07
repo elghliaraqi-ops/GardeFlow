@@ -176,6 +176,23 @@ class _PracticeScreenState extends State<PracticeScreen> {
     if (result == 'addAnother') _newCase();
   }
 
+  Future<void> _newStandaloneCase() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PracticeCaseFormScreen(
+          appState: widget.appState,
+          standalone: true,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _load(silent: true);
+    if (result == 'addAnother') {
+      await _newStandaloneCase();
+    }
+  }
+
   Future<void> _editPublishedCase(String practiceCaseId) async {
     try {
       final existing = await _service.fetchCaseById(practiceCaseId);
@@ -335,6 +352,16 @@ class _PracticeScreenState extends State<PracticeScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 9),
+              _PracticePrimaryActionCard(
+                icon: Icons.add_circle_outline_rounded,
+                title: 'Ajouter un cas clinique',
+                subtitle:
+                    'Documenter un cas rencontré en dehors d’une garde aux urgences',
+                meta: 'Hors garde',
+                accent: PracticeColors.specialist,
+                onTap: _newStandaloneCase,
               ),
 
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
@@ -1900,12 +1927,14 @@ class PracticeCaseFormScreen extends StatefulWidget {
   final PracticeGuard? guard;
   final PracticeCase? existing;
   final int? suggestedNumber;
+  final bool standalone;
   const PracticeCaseFormScreen({
     super.key,
     required this.appState,
     this.guard,
     this.existing,
     this.suggestedNumber,
+    this.standalone = false,
   });
 
   @override
@@ -2002,6 +2031,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   String? _hospitalizationService;
   late String _clientId;
   late int _patientNumber;
+  late DateTime _standaloneDate;
 
   List<TextEditingController> get _controllers => [
     _age,
@@ -2022,6 +2052,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   ];
 
   AppUser? get _me => widget.appState.currentUser;
+  bool get _isStandalone =>
+      widget.standalone || widget.existing?.isStandalone == true;
 
   @override
   void initState() {
@@ -2031,6 +2063,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         existing?.clientId ??
         '${DateTime.now().microsecondsSinceEpoch}-${_me?.id ?? 'local'}';
     _patientNumber = existing?.patientNumber ?? widget.suggestedNumber ?? 1;
+    _standaloneDate = DateTime.tryParse(existing?.guardDate ?? '') ??
+        DateTime.now();
     if (existing != null) _apply(existing);
     for (final controller in _controllers) {
       controller.addListener(_changed);
@@ -2055,7 +2089,9 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
 
   Future<void> _restoreDraft() async {
     final me = _me;
-    final guardId = widget.existing?.guardId ?? widget.guard?.id;
+    final guardId = widget.existing?.guardId ??
+        widget.guard?.id ??
+        (_isStandalone ? practiceStandaloneLocalGuardId : null);
     if (me == null || guardId == null) {
       if (mounted) setState(() => _restoring = false);
       return;
@@ -2484,17 +2520,28 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
 
   PracticeCase? _buildCase({required bool isDraft}) {
     final me = _me;
-    final guardId = widget.existing?.guardId ?? widget.guard?.id;
-    final guardDate = widget.existing?.guardDate ?? widget.guard?.dateStr;
-    final guardShiftId = widget.existing?.guardShiftId ?? widget.guard?.shiftId;
+    final standalone = _isStandalone;
+    final guardId = widget.existing?.guardId ??
+        widget.guard?.id ??
+        (standalone ? practiceStandaloneLocalGuardId : null);
+    final guardDate = widget.existing?.guardDate ??
+        widget.guard?.dateStr ??
+        (standalone ? DateFormat('yyyy-MM-dd').format(_standaloneDate) : null);
+    final guardShiftId = widget.existing?.guardShiftId ??
+        widget.guard?.shiftId ??
+        (standalone ? practiceStandaloneEncounterContext : null);
     if (me == null ||
         guardId == null ||
         guardDate == null ||
-        guardShiftId == null)
+        guardShiftId == null) {
       return null;
+    }
     return PracticeCase(
       id: widget.existing?.id,
       userId: me.id,
+      encounterContext: standalone
+          ? practiceStandaloneEncounterContext
+          : practiceEmergencyEncounterContext,
       guardId: guardId,
       guardDate: guardDate,
       guardShiftId: guardShiftId,
@@ -2562,8 +2609,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         SnackBar(
           content: Text(
             result.pendingSync
-                ? 'Observation enregistrée localement · À synchroniser'
-                : 'Observation enregistrée : +10 XP$completeBonus',
+                ? (_isStandalone
+                    ? 'Cas clinique enregistré localement · À synchroniser'
+                    : 'Observation enregistrée localement · À synchroniser')
+                : (_isStandalone
+                    ? 'Cas clinique ajouté à Practice'
+                    : 'Observation enregistrée : +10 XP$completeBonus'),
           ),
         ),
       );
@@ -2605,6 +2656,29 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     if (mounted) Navigator.pop(context, 'deleted');
   }
 
+  Future<void> _pickStandaloneDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _standaloneDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _standaloneDate = picked;
+      if (_arrivalTime != null) {
+        _arrivalTime = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _arrivalTime!.hour,
+          _arrivalTime!.minute,
+        );
+      }
+    });
+    _changed();
+  }
+
   Future<void> _pickArrivalTime() async {
     final initial = _arrivalTime ?? DateTime.now();
     final picked = await showTimePicker(
@@ -2612,7 +2686,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       initialTime: TimeOfDay.fromDateTime(initial),
     );
     if (picked == null || !mounted) return;
-    final day = DateTime.now();
+    final day = _isStandalone ? _standaloneDate : DateTime.now();
     setState(
       () => _arrivalTime = DateTime(
         day.year,
@@ -2635,7 +2709,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         backgroundColor: PracticeColors.background,
         foregroundColor: Colors.white,
         title: Text(
-          widget.existing == null ? 'Nouveau malade' : 'Patient #$number',
+          _isStandalone
+              ? (widget.existing == null
+                  ? 'Nouveau cas clinique'
+                  : 'Modifier le cas clinique')
+              : (widget.existing == null ? 'Nouveau malade' : 'Patient #$number'),
         ),
         actions: [
           if (widget.existing != null)
@@ -2659,8 +2737,35 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                     patientNumber: number,
                     syncLabel: _syncLabel,
                     pending: widget.existing?.pendingSync == true,
+                    standalone: _isStandalone,
                   ),
                   const SizedBox(height: 10),
+                  if (_isStandalone) ...[
+                    const _PracticeNotice(
+                      icon: Icons.add_circle_outline_rounded,
+                      text:
+                          'Ce cas est indépendant de vos gardes aux urgences. Il apparaîtra dans les cas cliniques Practice sans modifier vos patients, statistiques ou objectifs de garde.',
+                    ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: _pickStandaloneDate,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InputDecorator(
+                        decoration: _practiceInputDecoration(
+                          'Date de la rencontre',
+                          Icons.calendar_month_rounded,
+                        ),
+                        child: Text(
+                          DateFormat('dd/MM/yyyy').format(_standaloneDate),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   const _PracticeNotice(
                     icon: Icons.mic_rounded,
                     text: 'Dictée vocale : touchez le micro d’une rubrique puis dictez. Le texte s’ajoute à ce qui est déjà saisi. GardeFlow ne conserve aucun enregistrement audio.',
@@ -2711,7 +2816,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                           Expanded(
                             child: _field(
                               _location,
-                              'Box / zone',
+                              _isStandalone ? 'Service / lieu' : 'Box / zone',
                               icon: Icons.place_outlined,
                             ),
                           ),
@@ -2884,9 +2989,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.save_rounded),
-                    label: const Text(
-                      'Enregistrer le malade',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                    label: Text(
+                      _isStandalone
+                          ? 'Ajouter le cas clinique'
+                          : 'Enregistrer le malade',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                   const SizedBox(height: 9),
@@ -2901,9 +3008,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                       ),
                     ),
                     icon: const Icon(Icons.add_circle_outline_rounded),
-                    label: const Text(
-                      'Enregistrer et ajouter un autre',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                    label: Text(
+                      _isStandalone
+                          ? 'Ajouter et saisir un autre cas'
+                          : 'Enregistrer et ajouter un autre',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
@@ -4854,10 +4963,12 @@ class _FormHeader extends StatelessWidget {
   final String patientNumber;
   final String syncLabel;
   final bool pending;
+  final bool standalone;
   const _FormHeader({
     required this.patientNumber,
     required this.syncLabel,
     required this.pending,
+    this.standalone = false,
   });
 
   @override
@@ -4911,7 +5022,7 @@ class _FormHeader extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                'Patient #$patientNumber',
+                standalone ? 'Cas clinique hors garde' : 'Patient #$patientNumber',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 19,
