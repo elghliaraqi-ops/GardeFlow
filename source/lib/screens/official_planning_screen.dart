@@ -172,94 +172,52 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     Uint8List? currentBytes,
     bool allowRemoteVerification = false,
   }) async {
-    OfficialRosterParseResult? localCurrent;
-    try {
-      final bytes =
-          currentBytes ?? await _backend.downloadSharedResource(resource.storagePath);
-      localCurrent = await OfficialRosterImportService.parse(
-        bytes: bytes,
-        displayName: resource.displayName,
-        hospital: slot.hospital,
-        profiles: profiles,
-        resourceUpdatedAt: resource.updatedAt,
-      );
-    } catch (e) {
-      debugPrint('Lecture géométrique locale impossible: ' + e.toString());
-    }
-
-    Map<String, dynamic>? verifiedPayload =
-        await _backend.fetchOfficialRosterVerifiedRead(
-      resource: resource,
-      parserRevision: OfficialRosterImportService.parserRevision,
+    final versions = await _backend.fetchOfficialRosterVersions(slot.id);
+    final hasCurrentVersion = versions.any(
+      (version) =>
+          version.storagePath == resource.storagePath &&
+          version.updatedAt.toUtc() == resource.updatedAt.toUtc(),
     );
-    if (verifiedPayload == null && allowRemoteVerification) {
-      verifiedPayload = await _backend.analyzeOfficialRosterResource(
-        resource.id,
-        parserRevision: OfficialRosterImportService.parserRevision,
-      );
-    }
+    if (!hasCurrentVersion) versions.insert(0, resource);
 
-    OfficialRosterParseResult? currentResult = localCurrent;
-    if (verifiedPayload != null) {
-      final visual = OfficialRosterVerifiedReadService.fromExtraction(
-        extraction: verifiedPayload,
-        hospital: slot.hospital,
-        profiles: profiles,
-      );
-      if (visual.detectedRows == 0 || !visual.isComplete) {
-        throw StateError(
-          'Double lecture visuelle refusée : ' +
-              visual.validationErrors.take(5).join(' • '),
-        );
-      }
-      if (localCurrent != null &&
-          localCurrent.isComplete &&
-          !OfficialRosterVerifiedReadService.sameCoreAssignments(
-            localCurrent,
-            visual,
-          )) {
-        throw StateError(
-          'Les lectures géométrique et visuelle ne concordent pas. '
-          'Import automatique bloqué pour éviter une garde erronée.',
-        );
-      }
-      currentResult = visual;
-    }
+    final suppliedBytes = <String, Uint8List>{
+      if (currentBytes != null) resource.storagePath: currentBytes,
+    };
 
-    if (currentResult == null ||
-        currentResult.detectedRows == 0 ||
-        !currentResult.isComplete) {
-      final details = currentResult?.validationErrors.take(5).join(' • ') ?? '';
+    final parsed =
+        await OfficialRosterVerifiedReadService.readVersionHistory(
+      versionsNewestFirst: versions,
+      loadBytes: _backend.downloadSharedResource,
+      loadVerified: (version) async {
+        var cached = await _backend.fetchOfficialRosterVerifiedRead(
+          resource: version,
+          parserRevision: OfficialRosterImportService.parserRevision,
+        );
+        final isCurrent =
+            version.storagePath == resource.storagePath &&
+            version.updatedAt.toUtc() == resource.updatedAt.toUtc();
+        if (cached == null && allowRemoteVerification && isCurrent) {
+          cached = await _backend.analyzeOfficialRosterResource(
+            resource.id,
+            parserRevision: OfficialRosterImportService.parserRevision,
+          );
+        }
+        return cached;
+      },
+      hospital: slot.hospital,
+      profiles: profiles,
+      suppliedBytes: suppliedBytes,
+    );
+
+    if (parsed.detectedRows == 0 || !parsed.isComplete) {
+      final details = parsed.validationErrors.take(5).join(' • ');
       throw StateError(
         details.isEmpty
             ? 'Aucune lecture fiable du planning officiel.'
             : 'Lecture du planning incomplète : ' + details,
       );
     }
-
-    final versions = await _backend.fetchOfficialRosterVersions(slot.id);
-    final olderVersions = versions
-        .where(
-          (v) =>
-              v.storagePath != resource.storagePath ||
-              v.updatedAt.toUtc() != resource.updatedAt.toUtc(),
-        )
-        .toList(growable: false);
-
-    if (olderVersions.isEmpty) return currentResult;
-
-    final older = await OfficialRosterImportService.parseVersionHistory(
-      versionsNewestFirst: olderVersions,
-      loadBytes: _backend.downloadSharedResource,
-      hospital: slot.hospital,
-      profiles: profiles,
-    );
-    if (older.detectedRows == 0) return currentResult;
-
-    return OfficialRosterImportService.mergeNewestFirst([
-      currentResult,
-      older,
-    ]);
+    return parsed;
   }
 
   Future<void> _autoImportExisting(List<SharedResource> resources) async {
