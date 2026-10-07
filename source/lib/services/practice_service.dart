@@ -331,7 +331,7 @@ class PracticeService {
     if (savedId.isNotEmpty) {
       ClinicalCaseService.instance.notifyChanged();
       unawaited(ClinicalCaseService.instance.enrichQcmForPracticeCase(savedId));
-      if (isNew) {
+      if (isNew && !saved.isStandalone) {
         unawaited(_notifyAfterNewCase(saved, beforeAll, activityStartedAt));
       }
     }
@@ -442,13 +442,15 @@ class PracticeService {
           final syncedCase = item.copyWith(id: insertedId, pendingSync: false);
           unawaited(ClinicalCaseService.instance
               .enrichQcmForPracticeCase(insertedId));
-          unawaited(
-            _notifyAfterNewCase(
-              syncedCase,
-              null,
-              DateTime.now(),
-            ),
-          );
+          if (!syncedCase.isStandalone) {
+            unawaited(
+              _notifyAfterNewCase(
+                syncedCase,
+                null,
+                DateTime.now(),
+              ),
+            );
+          }
         }
         synced++;
       } catch (_) {
@@ -546,7 +548,7 @@ class PracticeService {
     final pending = await pendingCases();
     final now = DateTime.now();
     final applicable = pending.where((item) {
-      if (item.isDraft || !item.isValid) return false;
+      if (item.isStandalone || item.isDraft || !item.isValid) return false;
       if (scope == 'guard') return guardId != null && item.guardId == guardId;
       final date = DateTime.tryParse(item.guardDate);
       if (scope == 'month')
