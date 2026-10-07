@@ -25,8 +25,9 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
 
   final _service = ClinicalCaseService.instance;
   String _period = 'month';
-  bool _promotionOnly = true;
+  bool _promotionOnly = false;
   bool _loading = true;
+  String? _error;
   QcmRanks _ranks = const QcmRanks();
   List<QcmLeaderboardEntry> _entries = const [];
 
@@ -37,7 +38,10 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final ranks = await _service.qcmRanks(period: _period);
       final entries = await _service.qcmLeaderboard(
@@ -52,7 +56,11 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error =
+            'Le classement QCM est momentanément indisponible. Tirez vers le bas pour réessayer.';
+      });
     }
   }
 
@@ -235,6 +243,8 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
                 padding: EdgeInsets.all(24),
                 child: Center(child: CircularProgressIndicator(color: _accent)),
               )
+            else if (_error != null)
+              _Empty(message: _error!)
             else if (!_ranks.leaderboardOptIn)
               const _Empty(message: 'Activez votre participation au classement dans Practice pour apparaître dans les classements.')
             else if (_entries.isEmpty)
@@ -246,7 +256,7 @@ class _PracticeQcmScreenState extends State<PracticeQcmScreen> {
               ],
             const SizedBox(height: 14),
             const Text(
-              'Le classement QCM reflète uniquement l’activité et les réponses aux exercices pédagogiques. Il ne mesure ni la compétence clinique ni la qualité des soins.',
+              'Le classement QCM retient la première tentative de chaque question pour éviter de gonfler le score en refaisant un QCM. Il ne mesure ni la compétence clinique ni la qualité des soins.',
               textAlign: TextAlign.center,
               style: TextStyle(color: _secondary, fontSize: 10.5, height: 1.4, fontWeight: FontWeight.w600),
             ),
