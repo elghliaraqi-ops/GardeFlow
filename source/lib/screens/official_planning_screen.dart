@@ -292,6 +292,24 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
 
     setState(() => _busySlot = slot.id);
     try {
+      // Validation avant publication : un PDF partiellement lisible ne doit
+      // jamais remplacer la source officielle déjà en production.
+      final profiles = await _backend.fetchVisibleProfiles();
+      final preflight = await OfficialRosterImportService.parse(
+        bytes: bytes,
+        displayName: file.name,
+        hospital: slot.hospital,
+        profiles: profiles,
+      );
+      if (preflight.detectedRows == 0 || !preflight.isComplete) {
+        final details = preflight.validationErrors.take(5).join(' • ');
+        throw StateError(
+          details.isEmpty
+              ? 'Le planning ne contient aucune ligne Urgences exploitable.'
+              : 'Planning refusé avant publication : ' + details,
+        );
+      }
+
       final resource = await _backend.uploadOfficialPlanningPdf(slot: slot.id, bytes: bytes, fileName: file.name);
       Map<String, dynamic>? importResult;
       Object? importError;
