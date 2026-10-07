@@ -58,7 +58,7 @@ class OfficialRosterVisualDoctor {
       lastName: (json['last_name'] ?? '').toString().trim(),
       fullName: (json['full_name'] ?? '').toString().trim(),
       confidence: ((json['confidence'] as num?)?.toDouble() ?? 0)
-          .clamp(0.0, 1.0),
+          .clamp(0.0, 1.0).toDouble(),
     );
   }
 }
@@ -526,7 +526,7 @@ class OfficialRosterConsensusService {
   }
 
   static double _minimumGuardConfidence(OfficialRosterVisualRead read) {
-    var value = read.confidence.clamp(0.0, 1.0);
+    var value = read.confidence.clamp(0.0, 1.0).toDouble();
     for (final row in read.rows) {
       for (final doctor in row.doctors) {
         if (doctor.confidence < value) value = doctor.confidence;
