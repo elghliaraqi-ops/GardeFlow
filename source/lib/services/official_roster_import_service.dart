@@ -23,7 +23,7 @@ class OfficialRosterAssignment {
         'date': dateStr,
         'shift_id': shiftId,
         'is_disciplinary': isDisciplinary,
-        'parser_revision': 'v11.6.70-r2',
+        'parser_revision': 'v12.0.1-r3',
       };
 }
 
@@ -43,7 +43,7 @@ class OfficialRosterDisciplinaryMark {
         'date': dateStr,
         'shift_id': shiftId,
         'red_text': redText,
-        'parser_revision': 'v11.6.70-r2',
+        'parser_revision': 'v12.0.1-r3',
       };
 }
 
@@ -263,24 +263,28 @@ class OfficialRosterImportService {
         }
 
         final matched = _matchProfiles(cell.text, candidateProfiles);
-        if (matched.length != 1) {
+        if (matched.isEmpty) {
           unmatched.add({
             'date': dateStr,
             'shift_id': cell.shiftId,
             'text': cell.text,
-            'reason': matched.isEmpty ? 'no_match' : 'ambiguous_match',
-            if (matched.length > 1)
-              'candidate_profile_ids': matched.map((p) => p.id).toList(),
+            'reason': 'no_match',
           });
           continue;
         }
-        final profile = matched.single;
-        rawAssignments.add(OfficialRosterAssignment(
-          profileId: profile.id,
-          dateStr: dateStr,
-          shiftId: cell.shiftId,
-          isDisciplinary: _profileMarkedRed(profile, cell.fragments),
-        ));
+
+        // Une cellule du planning officiel peut contenir plusieurs internes
+        // pour le même créneau. Chaque profil reconnu doit devenir une
+        // affectation distincte : plusieurs correspondances sont normales et
+        // ne constituent pas une ambiguïté de parsing.
+        for (final profile in matched) {
+          rawAssignments.add(OfficialRosterAssignment(
+            profileId: profile.id,
+            dateStr: dateStr,
+            shiftId: cell.shiftId,
+            isDisciplinary: _profileMarkedRed(profile, cell.fragments),
+          ));
+        }
       }
     }
 
