@@ -6,6 +6,7 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
       - 'source/supabase/functions/analyze-official-roster-pdf/**'
+      - 'source/supabase/functions/analyze-senior-roster-photo/**'
   push:
     branches:
       - hardening-20261003
@@ -32,6 +33,19 @@ jobs:
         run: deno test --allow-read --allow-env --node-modules-dir=auto source/supabase/functions/analyze-official-roster-pdf/groq_vision_test.ts
       - name: Validate selected PDF only and manual Groq consent
         run: deno test source/supabase/functions/analyze-official-roster-pdf/groq_request_scope_test.ts
+
+  senior-pdfrx-evidence-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate precise PDF text and source identity
+        run: deno test source/supabase/functions/analyze-senior-roster-photo/pdf_evidence_test.ts
+      - name: Typecheck senior roster PDF/photo analysis
+        run: deno check --node-modules-dir=auto source/supabase/functions/analyze-senior-roster-photo/index.ts
 
   sql-static-checks:
     runs-on: ubuntu-latest
