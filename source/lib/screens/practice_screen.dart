@@ -10,6 +10,7 @@ import '../models/practice_models.dart';
 import '../models/qcm_models.dart';
 import '../services/practice_service.dart';
 import '../services/clinical_case_service.dart';
+import '../services/random_clinical_case_service.dart';
 import '../state/app_state.dart';
 import '../widgets/profile_avatar.dart';
 import 'practice_qcm_screen.dart';
@@ -193,6 +194,22 @@ class _PracticeScreenState extends State<PracticeScreen> {
     }
   }
 
+  Future<void> _newRandomClinicalCase() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PracticeCaseFormScreen(
+          appState: widget.appState,
+          standalone: true,
+          autoGenerateRandomCase: true,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _load(silent: true);
+    if (result == 'addAnother') await _newStandaloneCase();
+  }
+
   Future<void> _editPublishedCase(String practiceCaseId) async {
     try {
       final existing = await _service.fetchCaseById(practiceCaseId);
@@ -362,6 +379,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 meta: 'Hors garde',
                 accent: PracticeColors.specialist,
                 onTap: _newStandaloneCase,
+              ),
+              const SizedBox(height: 9),
+              _PracticePrimaryActionCard(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Génère-moi un cas au hasard',
+                subtitle: 'Cas fictif créé par IA, modifiable avant publication',
+                meta: 'IA · Aléatoire',
+                accent: PracticeColors.gameGold,
+                onTap: _newRandomClinicalCase,
               ),
 
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
@@ -1928,6 +1954,7 @@ class PracticeCaseFormScreen extends StatefulWidget {
   final PracticeCase? existing;
   final int? suggestedNumber;
   final bool standalone;
+  final bool autoGenerateRandomCase;
   const PracticeCaseFormScreen({
     super.key,
     required this.appState,
@@ -1935,6 +1962,7 @@ class PracticeCaseFormScreen extends StatefulWidget {
     this.existing,
     this.suggestedNumber,
     this.standalone = false,
+    this.autoGenerateRandomCase = false,
   });
 
   @override
@@ -2018,6 +2046,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   Timer? _autosave;
   bool _saving = false;
   bool _restoring = true;
+  bool _generatingRandomCase = false;
+  bool _generatedByAi = false;
   String _syncLabel = 'Brouillon local';
   String? _sex;
   DateTime? _arrivalTime;
@@ -2112,6 +2142,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       }
     }
     if (mounted) setState(() => _restoring = false);
+    if (widget.autoGenerateRandomCase && widget.existing == null &&
+        _isStandalone && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_generateRandomCase());
+      });
+    }
   }
 
   void _apply(PracticeCase value) {
@@ -2130,6 +2166,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     _imaging.text = value.imagingConclusion;
     _assessment.text = value.assessment;
     _plan.text = value.plan;
+    _generatedByAi = value.consultationReason.startsWith('[SIMULATION IA]');
     _sex = value.sex;
     _arrivalTime = value.arrivalTime;
     _specialist = value.specialistOpinionRequested;
@@ -2140,6 +2177,90 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     _discharged = value.discharged;
     _hospitalized = value.hospitalized;
     _hospitalizationService = value.hospitalizationService;
+  }
+
+  Future<void> _generateRandomCase() async {
+    if (_generatingRandomCase || _saving || _restoring ||
+        !_isStandalone || widget.existing != null) return;
+
+    // Never silently overwrite a restored or user-edited draft.
+    if (_controllers.any((field) => field.text.trim().isNotEmpty)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Remplacer le contenu actuel ?'),
+          content: const Text(
+            'Le nouveau cas remplacera les rubriques déjà remplies. '
+            'La génération ne publie aucun dossier automatiquement.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Générer'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() => _generatingRandomCase = true);
+    try {
+      final generated = await RandomClinicalCaseService.instance.generate();
+      if (!mounted) return;
+      _restoring = true;
+      try {
+        _age.text = generated.age.toString();
+        _sex = generated.sex;
+        _location.text = generated.text('location');
+        _chiefComplaint.text = generated.text('chief_complaint');
+        _interrogatoire.text = generated.text('interrogatoire');
+        _personalSurgical.text = generated.text('personal_surgical_history');
+        _personalMedical.text = generated.text('personal_medical_history');
+        _familySurgical.text = generated.text('family_surgical_history');
+        _familyMedical.text = generated.text('family_medical_history');
+        _consultationReason.text = generated.text('consultation_reason');
+        _illnessHistory.text = generated.text('illness_history');
+        _clinicalExam.text = generated.text('clinical_exam');
+        _complementary.text = generated.text('complementary_exams');
+        _imaging.text = generated.text('imaging_conclusion');
+        _assessment.text = generated.text('assessment');
+        _plan.text = generated.text('plan');
+        _arrivalTime = null;
+        _specialist = generated.flag('specialist_opinion_requested');
+        final specialty = generated.text('specialist_service');
+        _specialistService = _specialist
+            ? (practiceSpecialties.contains(specialty) ? specialty : 'Autre')
+            : null;
+        _specialistDone = _specialist &&
+            generated.flag('specialist_opinion_done');
+        _waiting = generated.flag('waiting');
+        _prescription = generated.flag('prescription_done');
+        _discharged = generated.flag('discharged');
+        _hospitalized = generated.flag('hospitalized');
+        final destination = generated.text('hospitalization_service');
+        _hospitalizationService = _hospitalized
+            ? (practiceSpecialties.contains(destination) ? destination : 'Autre')
+            : null;
+      } finally {
+        _restoring = false;
+      }
+      setState(() {
+        _generatedByAi = true;
+        _syncLabel = 'Cas fictif IA · à relire';
+      });
+      _changed(); // Draft-only until the physician saves it manually.
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Génération impossible : $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _generatingRandomCase = false);
+    }
   }
 
   Future<bool> _ensureSpeechReady() async {
@@ -2579,6 +2700,18 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   Future<void> _save({required bool addAnother}) async {
     if (_saving) return;
     FocusScope.of(context).unfocus();
+    if (_generatedByAi && _isStandalone) {
+      // A physician may edit the narrative but must not silently turn an
+      // AI simulation into a patient observation in the public feed.
+      if (!_consultationReason.text.trim().startsWith('[SIMULATION IA]')) {
+        _consultationReason.text =
+            '[SIMULATION IA] ${_consultationReason.text.trim()}';
+      }
+      if (!_chiefComplaint.text.trim().startsWith('[CAS FICTIF')) {
+        _chiefComplaint.text =
+            '[CAS FICTIF – IA] ${_chiefComplaint.text.trim()}';
+      }
+    }
     final value = _buildCase(isDraft: false);
     if (value == null) return;
     if (!value.isValid) {
@@ -2763,6 +2896,37 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                           ),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  if (_isStandalone && widget.existing == null) ...[
+                    OutlinedButton.icon(
+                      onPressed: _saving || _generatingRandomCase
+                          ? null : _generateRandomCase,
+                      icon: _generatingRandomCase
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome_rounded),
+                      label: Text(_generatingRandomCase
+                          ? 'Génération du cas clinique…'
+                          : 'Générer un autre cas clinique au hasard'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: PracticeColors.gameGold,
+                        minimumSize: const Size.fromHeight(52),
+                        side: const BorderSide(color: PracticeColors.gameGold),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  if (_generatedByAi) ...[
+                    const _PracticeNotice(
+                      icon: Icons.science_outlined,
+                      text: 'Simulation IA entièrement fictive : relisez '
+                          'les données et les décisions avant publication. '
+                          'Aucun patient réel n’est associé à ce dossier.',
                     ),
                     const SizedBox(height: 10),
                   ],
