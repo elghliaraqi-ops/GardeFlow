@@ -239,6 +239,48 @@ begin
         'confidence',0.99,
         'parser_revision','v12.0.2-r6',
         'rows',jsonb_build_array(
+          jsonb_build_object(
+            'date',(current_date+8)::text,
+            'shift','service-jour'
+          )
+        ),
+        'conflicts','[]'::jsonb,
+        'validation_errors','[]'::jsonb
+      ),
+      jsonb_build_array(
+        jsonb_build_object(
+          'date',(current_date+8)::text,
+          'shift_id','service-jour',
+          'hospital','Test Hospital',
+          'first_name','Service',
+          'last_name','Rejected',
+          'full_name','Service Rejected',
+          'confidence',0.99,
+          'review_status','green',
+          'matched_profile_id',null,
+          'match_status','unregistered'
+        )
+      ),
+      '[]'::jsonb
+    );
+    raise exception 'Service shift unexpectedly accepted by Urgences-only R6';
+  exception
+    when others then
+      if sqlerrm = 'Service shift unexpectedly accepted by Urgences-only R6' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.save_official_roster_analysis_r6(
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      v_resource_updated_at,
+      jsonb_build_object(
+        'verified',true,
+        'status','green',
+        'confidence',0.99,
+        'parser_revision','v12.0.2-r6',
+        'rows',jsonb_build_array(
           jsonb_build_object('date',(current_date+7)::text,'shift','urg-jour')
         ),
         'conflicts','[]'::jsonb,
