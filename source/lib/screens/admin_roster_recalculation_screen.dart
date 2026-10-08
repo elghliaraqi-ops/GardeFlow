@@ -81,20 +81,39 @@ class _AdminRosterRecalculationScreenState
                 const SizedBox(height: 8),
                 Text(
                   'Un rapport R6 vérifié est obligatoire avant le recalcul. '
-                  'La relecture du PDF officiel se trouve dans '
-                  '« Documents officiels » et ne modifie pas les '
-                  'superpositions personnelles.',
+                  'Lecture 1 avec pdfrx sans IA ; lecture 2 avec Groq sur votre demande. '
+                  'Choisissez ensuite l’établissement dans Documents officiels. '
+                  'Le recalcul exige toujours une source R6 vérifiée.',
                   style: TextStyle(color: AppColors.inkSoft),
                 ),
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const OfficialPlanningScreen(),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const OfficialPlanningScreen(
+                            preferredReader: OfficialPlanningReader.pdfrx,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.document_scanner_rounded),
+                      label: const Text('Relire avec pdfrx'),
                     ),
-                  ),
-                  icon: const Icon(Icons.picture_as_pdf_rounded),
-                  label: const Text('Ouvrir les PDF • Relire avec R6 (Groq)'),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const OfficialPlanningScreen(
+                            preferredReader: OfficialPlanningReader.groq,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.fact_check_rounded),
+                      label: const Text('Relire avec Groq'),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -609,14 +628,33 @@ class _GlobalPreviewCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const OfficialPlanningScreen(),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const OfficialPlanningScreen(
+                        preferredReader: OfficialPlanningReader.pdfrx,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.document_scanner_rounded),
+                  label: const Text('Relire avec pdfrx'),
                 ),
-              ),
-              icon: const Icon(Icons.fact_check_rounded),
-              label: const Text('Ouvrir la relecture R6 des PDF'),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const OfficialPlanningScreen(
+                        preferredReader: OfficialPlanningReader.groq,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.fact_check_rounded),
+                  label: const Text('Relire avec Groq'),
+                ),
+              ],
             ),
           ],
           if (errors > missingVerified) ...[
