@@ -24,6 +24,25 @@ void main() {
     expect(screen, contains('forceReread: true'));
   });
 
+  test('Groq targets the one selected official PDF, not every hospital', () {
+    final screen = File('lib/screens/official_planning_screen.dart')
+        .readAsStringSync();
+    final backend = File('lib/services/supabase_backend_service.dart')
+        .readAsStringSync();
+    final edge = File('supabase/functions/analyze-official-roster-pdf/index.ts')
+        .readAsStringSync();
+    expect(screen, contains('final selected = _resourceFor(slot.id);'));
+    expect(screen, contains('selected.id != resource.id'));
+    expect(screen, contains('Lire ce PDF avec Groq'));
+    expect(screen, contains('selectedSlot: slot.id'));
+    expect(screen, contains('selectedUpdatedAt: resource.updatedAt'));
+    expect(screen, contains('manualGroqConfirmed: true'));
+    expect(backend, contains("'selectedResourceId': resourceId"));
+    expect(backend, contains("'manualGroqConfirmed': manualGroqConfirmed"));
+    expect(edge, contains('validateGroqStoredSelection('));
+    expect(edge, contains('validateGroqPreflightSelection('));
+  });
+
   test('Backend bypasses Groq cache only for admin-requested correction', () {
     final backend = File('lib/services/supabase_backend_service.dart')
         .readAsStringSync();
