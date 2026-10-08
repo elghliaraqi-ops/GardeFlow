@@ -1209,9 +1209,9 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               qcm.options.length >= 2,
         )
         .toList(growable: false);
-    _qcms = valid.length >= 5
-        ? valid.take(5).toList(growable: false)
-        : <ClinicalCaseQcm>[];
+    // Afficher tous les QCM validés : les questions ajoutées à un cas
+    // ne doivent jamais disparaître derrière l'ancienne limite de cinq.
+    _qcms = valid.length >= 5 ? valid : <ClinicalCaseQcm>[];
 
     for (final qcm in _qcms) {
       _explanationExpanded.putIfAbsent(qcm.id, () => false);
@@ -2191,10 +2191,16 @@ class _GuidelineCorrection extends StatelessWidget {
       if (parts.length != 3) continue;
       final preview = Uri.tryParse(parts[1].trim());
       final source = Uri.tryParse(parts[2].trim());
+      // Ne jamais charger une URL arbitraire fournie dans une correction IA.
+      // Les images et pages sources sont celles déjà vérifiées côté backend.
       if (preview == null ||
           source == null ||
           preview.scheme != 'https' ||
-          source.scheme != 'https') {
+          source.scheme != 'https' ||
+          preview.host.toLowerCase() != 'upload.wikimedia.org' ||
+          source.host.toLowerCase() != 'commons.wikimedia.org' ||
+          preview.userInfo.isNotEmpty ||
+          source.userInfo.isNotEmpty) {
         continue;
       }
       images.add(
@@ -2228,6 +2234,84 @@ class _GuidelineCorrection extends StatelessWidget {
       explanation: explanation,
       images: images,
       references: references,
+    );
+  }
+
+  Future<void> _expandExternalImage(
+    BuildContext context,
+    _ExternalImageReference image,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: _PracticeGame.surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 22),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(dialogContext).height * .72,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 5, 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          image.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _PracticeGame.text,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        tooltip: 'Fermer',
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: _PracticeGame.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 5,
+                    child: Center(
+                      child: Image.network(
+                        image.previewUrl.toString(),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Text(
+                          'Aperçu indisponible. Ouvrez la page source.',
+                          style: TextStyle(color: _PracticeGame.secondary),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: TextButton.icon(
+                    onPressed: () => launchUrl(
+                      image.sourceUrl,
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: const Text('Voir la source et les droits de réutilisation'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2361,10 +2445,7 @@ class _GuidelineCorrection extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => launchUrl(
-                  imageRef.sourceUrl,
-                  mode: LaunchMode.externalApplication,
-                ),
+                onTap: () => _expandExternalImage(context, imageRef),
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
