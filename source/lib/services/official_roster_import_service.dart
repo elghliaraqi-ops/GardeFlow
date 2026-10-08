@@ -90,7 +90,7 @@ class OfficialRosterParseResult {
 class OfficialRosterImportService {
   OfficialRosterImportService._();
 
-  static const String parserRevision = 'v12.0.2-r6';
+  static const String parserRevision = 'v12.0.3-r6-groq';
 
   static final RegExp _datePattern = RegExp(
     r'\b([0-3]?\d)[/.\-]([01]?\d)(?:[/.\-](20\d{2}|\d{2}))?\b',
