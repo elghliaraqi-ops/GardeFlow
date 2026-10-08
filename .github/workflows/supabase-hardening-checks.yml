@@ -53,6 +53,12 @@ jobs:
           grep -Fq "admin_preview_official_roster_recalculation" "$R6"
           grep -Fq "admin_apply_official_roster_recalculation" "$R6"
           grep -Fq "set search_path = ''" "$R6"
+          grep -Fq "g.date_str as date_str" "$R6"
+          if grep -Fq "g.date_str::text as date_str" "$R6"; then
+            echo 'ERROR: R6 preview must keep DATE typed for joins.' >&2
+            exit 1
+          fi
+          test "$(grep -Fc 'from anon;' "$R6")" -ge 7
 
           AS_COUNT="$(grep -Fxc 'as $$' "$R6")"
           END_COUNT="$(grep -Fxc '$$;' "$R6")"
