@@ -70,7 +70,13 @@ jobs:
             exit 1
           fi
 
-          grep -Fq "const PARSER_REVISION = 'v12.0.2-r6'" "$EDGE"
+          grep -Fq "const PARSER_REVISION = 'v12.0.3-r6-groq'" "$EDGE"
+          grep -Fq "GroqRosterVision" "$EDGE"
+          grep -Fq "groq_vision_a+groq_vision_b+conditional_c" "$EDGE"
+          if grep -Eq 'api\\.openai\\.com|OPENAI_API_KEY' "$EDGE"; then
+            echo 'ERROR: Emergency R6 parser must use Groq, not OpenAI.' >&2
+            exit 1
+          fi
           grep -Fq "const readB = await runRead" "$EDGE"
           grep -Fq "cExecuted = true" "$EDGE"
           grep -Fq "manualResolutions" "$EDGE"
