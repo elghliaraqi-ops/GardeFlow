@@ -1491,6 +1491,28 @@ revoke all on function public.admin_log_official_roster_global_recalculation(
   jsonb,jsonb
 ) from public;
 
+revoke execute on function public.save_official_roster_analysis_r6(
+  uuid,timestamptz,jsonb,jsonb,jsonb
+) from anon;
+revoke execute on function public.admin_set_official_roster_identity_link(
+  text,text,text,text,uuid,text
+) from anon;
+revoke execute on function public.admin_delete_official_roster_identity_link(
+  uuid,text
+) from anon;
+revoke execute on function public.admin_correct_official_roster_guard(
+  uuid,jsonb,text
+) from anon;
+revoke execute on function public.admin_preview_official_roster_recalculation(
+  uuid
+) from anon;
+revoke execute on function public.admin_apply_official_roster_recalculation(
+  uuid,text
+) from anon;
+revoke execute on function public.admin_log_official_roster_global_recalculation(
+  jsonb,jsonb
+) from anon;
+
 grant execute on function public.save_official_roster_analysis_r6(
   uuid,timestamptz,jsonb,jsonb,jsonb
 ) to authenticated;
