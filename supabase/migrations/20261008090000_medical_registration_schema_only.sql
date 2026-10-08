@@ -24,7 +24,7 @@ alter table public.profiles
   add constraint profiles_training_language_check
   check (
     (medical_position is null and training_language is null)
-    or (medical_position is not null and training_language in ('francophone', 'anglophone'))
+    or (medical_position is not null and training_language is not null and training_language in ('francophone', 'anglophone'))
   );
 
 alter table public.profiles
