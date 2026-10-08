@@ -63,7 +63,7 @@ class _AdminRosterRecalculationScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
                     Icon(Icons.verified_rounded, color: AppColors.brand),
                     SizedBox(width: 9),
