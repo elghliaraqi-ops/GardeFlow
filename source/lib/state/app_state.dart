@@ -1276,10 +1276,13 @@ class AppState extends ChangeNotifier {
     required String rawPhone,
     required String password,
     required String service,
-    required MedicalGrade grade,
+    required MedicalPosition medicalPosition,
+    required TrainingLanguage trainingLanguage,
     required String hospital,
     int? promotionNumber,
+    int? trainingYear,
   }) async {
+    final grade = medicalPosition.grade;
     final phone = normalizePhone(rawPhone);
     if (nom.trim().isEmpty ||
         prenom.trim().isEmpty ||
@@ -1287,11 +1290,18 @@ class AppState extends ChangeNotifier {
         password.isEmpty) return 'Merci de remplir tous les champs.';
     if (password.length < 8)
       return 'Le mot de passe doit contenir au moins 8 caractères.';
-    if (grade == MedicalGrade.junior &&
+    if (!medicalPosition.acceptsTrainingYear(trainingYear)) {
+      return 'Sélectionnez une année d’étude valide pour ce statut.';
+    }
+    if (medicalPosition.requiresPromotion &&
         (promotionNumber == null ||
             promotionNumber < 1 ||
-            promotionNumber > 999))
+            promotionNumber > 999)) {
       return 'Renseignez un numéro de promotion valide.';
+    }
+    if (!medicalPosition.requiresPromotion && promotionNumber != null) {
+      return 'La promotion est réservée aux médecins internes.';
+    }
     if (backendEnabled) {
       try {
         final backend = SupabaseBackendService.instance;
@@ -1301,9 +1311,11 @@ class AppState extends ChangeNotifier {
           rawPhone: rawPhone,
           password: password,
           service: service,
-          grade: grade,
+          medicalPosition: medicalPosition,
+          trainingLanguage: trainingLanguage,
           hospital: hospital,
           promotionNumber: promotionNumber,
+          trainingYear: trainingYear,
         );
         try {
           await backend.triggerPush('account_created', pending.id);
@@ -1330,6 +1342,9 @@ class AppState extends ChangeNotifier {
       passwordSalt: salt,
       service: service,
       grade: grade,
+      medicalPosition: medicalPosition,
+      trainingLanguage: trainingLanguage,
+      trainingYear: trainingYear,
       hospital: hospital,
       promotionNumber: promotionNumber,
     );
