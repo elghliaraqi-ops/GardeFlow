@@ -254,21 +254,29 @@ function validateCoverage(
       ) {
         errors.push('Mois/année principal requis pour une couverture mensuelle.');
       } else {
-        const first = new Date(Date.UTC(year, month - 1, 1))
+        const monthStart = new Date(Date.UTC(year, month - 1, 1))
           .toISOString()
           .slice(0, 10);
-        const last = new Date(Date.UTC(year, month, 0))
+        const monthEnd = new Date(Date.UTC(year, month, 0))
           .toISOString()
           .slice(0, 10);
-        if (declaredStart !== first || declaredEnd !== last) {
-          errors.push(
-            'Couverture full_month incohérente: attendu ' +
-              first + ' → ' + last + '.',
-          );
+        let monthCursor = new Date(monthStart + 'T00:00:00Z');
+        const monthLast = new Date(monthEnd + 'T00:00:00Z');
+        while (monthCursor <= monthLast) {
+          const key = monthCursor.toISOString().slice(0, 10);
+          if (!byDate.has(key)) {
+            errors.push('Jour du mois principal absent: ' + key);
+          }
+          monthCursor.setUTCDate(monthCursor.getUTCDate() + 1);
         }
-        expectedStart = first;
-        expectedEnd = last;
       }
+    } else if (
+      coverageMode === 'explicit_range' &&
+      (options?.month != null || options?.year != null)
+    ) {
+      errors.push(
+        'month/year doivent être null pour une plage explicite non mensuelle.',
+      );
     }
   }
 
@@ -280,6 +288,9 @@ function validateCoverage(
     }
     if (lastObserved < expectedEnd) {
       errors.push('Fin de planning non interprétée: ' + expectedEnd);
+    }
+    if (firstObserved < expectedStart || lastObserved > expectedEnd) {
+      errors.push('Date détectée hors de la plage officielle déclarée.');
     }
 
     let cursor = new Date(expectedStart + 'T00:00:00Z');
@@ -955,52 +966,13 @@ const extractionSchema = {
     },
     coverage_start: {
       type: 'string',
-      pattern: '^\\d{4}-\\d{2}-\\d{2} { type: 'number', minimum: 0, maximum: 1 },
-    warnings: {
-      type: 'array',
-      maxItems: 50,
-      items: { type: 'string' },
+      pattern: '^\d{4}-\d{2}-\d{2}$',
     },
-    rows: {
-      type: 'array',
-      maxItems: 100,
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: [
-          'date',
-          'shift',
-          'doctors',
-          'red_names',
-          'page_number',
-          'zone',
-        ],
-        properties: {
-          date: {
-            type: 'string',
-            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-          },
-          shift: {
-            type: 'string',
-            enum: ['urg-jour', 'urg-nuit', 'urg-24h'],
-          },
-          doctors: {
-            type: 'array',
-            maxItems: 16,
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              required: [
-                'first_name',
-                'last_name',
-                'full_name',
-                'confidence',
-              ],
-              properties: {
-                first_name: { type: 'string' },
-                last_name: { type: 'string' },
-                full_name: { type: 'string' },
-                confidence: {
+    coverage_end: {
+      type: 'string',
+      pattern: '^\d{4}-\d{2}-\d{2}$',
+    },
+    confidence: {
                   type: 'number',
                   minimum: 0,
                   maximum: 1,
@@ -1057,9 +1029,10 @@ const basePrompt = [
   '- page_number est la page PDF où se trouve la cellule.',
   "- zone décrit brièvement la zone utile (ex. 'ligne 26 octobre / colonne Nuit').",
   '- Respecte les changements de mois et d’année.',
-  '- coverage_start et coverage_end sont les première et dernière dates OFFICIELLEMENT couvertes par le tableau visible, pas simplement les premières/dernières lignes que tu as réussi à lire.',
-  "- coverage_mode='full_month' uniquement si le document couvre explicitement tout un mois civil ; sinon coverage_mode='explicit_range'.",
-  "- En full_month, month/year sont obligatoires et coverage_start/coverage_end doivent correspondre au premier/dernier jour du mois.",
+  '- coverage_start et coverage_end sont les première et dernière dates OFFICIELLEMENT couvertes par tout le tableau visible, y compris les éventuels jours de débord avant/après le mois principal.',
+  "- coverage_mode='full_month' uniquement si le document couvre explicitement tous les jours d’un mois civil principal ; sinon coverage_mode='explicit_range'.",
+  "- En full_month, month/year désignent ce mois principal et sont obligatoires, même si le tableau affiche aussi quelques jours avant/après.",
+  "- En explicit_range, month et year doivent être null : la plage officielle est uniquement coverage_start → coverage_end.",
 ].join('\n');
 
 async function uploadOpenAIFile(
