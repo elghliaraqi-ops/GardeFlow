@@ -209,7 +209,13 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       _specialtyLabel(post).toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
   Map<String, _SpecialtyGroup> _groupedCases() {
-    final groups = <String, _SpecialtyGroup>{};
+    // Visible even when no synthetic case has been published yet.
+    final groups = <String, _SpecialtyGroup>{
+      'cas fictifs': _SpecialtyGroup(
+        key: 'cas fictifs',
+        label: 'Cas fictifs',
+      ),
+    };
     for (final post in _items) {
       final key = _specialtyKey(post);
       final label = _specialtyLabel(post);
@@ -317,13 +323,6 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
               actionLabel: 'Réessayer',
               onAction: () => _loadAll(),
             )
-          else if (_items.isEmpty)
-            const _InfoCard(
-              icon: Icons.school_outlined,
-              title: 'Aucun cas publié pour le moment',
-              body:
-                  'Les patients validés dans Practice apparaîtront ici automatiquement dans leur spécialité avec leurs QCM pédagogiques.',
-            )
           else if (selectedCase != null)
             _buildCaseView(selectedCase)
           else if (selectedGroup != null)
@@ -377,7 +376,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
             Expanded(
               child: _BrowseToggle(
                 icon: Icons.folder_copy_outlined,
-                label: 'Spécialités',
+                label: 'Catégories',
                 selected: !_browseByDate,
                 onTap: () => setState(() => _browseByDate = false),
               ),
@@ -532,10 +531,17 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty)
-          const _InfoCard(
-            icon: Icons.search_off_rounded,
-            title: 'Aucun cas trouvé',
-            body: 'Essayez un autre mot-clé.',
+          _InfoCard(
+            icon: group.label == 'Cas fictifs'
+                ? Icons.auto_awesome_rounded
+                : Icons.search_off_rounded,
+            title: group.label == 'Cas fictifs'
+                ? 'Aucun cas fictif pour le moment'
+                : 'Aucun cas trouvé',
+            body: group.label == 'Cas fictifs'
+                ? 'Depuis Practice, utilisez « Génère-moi un cas au hasard » '
+                    'puis validez-le pour le retrouver ici.'
+                : 'Essayez un autre mot-clé.',
           )
         else
           for (var i = 0; i < filtered.length; i++) ...[
