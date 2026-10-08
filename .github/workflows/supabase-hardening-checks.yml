@@ -18,6 +18,19 @@ permissions:
   contents: read
 
 jobs:
+  groq-r6-vision-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck combined R6 Groq Edge Function
+        run: deno check --node-modules-dir=auto source/supabase/functions/analyze-official-roster-pdf/index.ts
+      - name: Validate trusted PDF rasterization and Groq page merging
+        run: deno test --allow-read --allow-env --node-modules-dir=auto source/supabase/functions/analyze-official-roster-pdf/groq_vision_test.ts
+
   sql-static-checks:
     runs-on: ubuntu-latest
     steps:
