@@ -36,7 +36,7 @@ class OfficialRosterDoctorIdentity {
 class OfficialRosterGuard {
   final String dateStr;
   final String shiftId;
-  final String dutyArea;
+  final String dutyArea = 'urgences';
   final String hospital;
   final OfficialRosterDoctorIdentity identity;
   final double confidence;
@@ -55,7 +55,6 @@ class OfficialRosterGuard {
     required this.confidence,
     required this.reviewStatus,
     required this.matchStatus,
-    this.dutyArea = 'urgences',
     this.pageNumber,
     this.zone,
     this.isDisciplinary = false,
