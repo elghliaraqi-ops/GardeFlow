@@ -105,6 +105,14 @@ class OfficialRosterVerifiedReadService {
     final isR6Extraction = _revisionRank(revision) >= 6;
     final status = extraction['status']?.toString().toLowerCase() ??
         (extraction['verified'] == true && !isR6Extraction ? 'green' : 'red');
+    final documentScope =
+        extraction['document_scope']?.toString().trim().toLowerCase();
+
+    if (isR6Extraction && documentScope != 'urgences') {
+      validationErrors.add(
+        'Le moteur R6 accepte uniquement les plannings officiels des Urgences.',
+      );
+    }
 
     if (extraction['verified'] != true || status == 'red') {
       validationErrors.add(
