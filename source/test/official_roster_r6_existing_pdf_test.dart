@@ -47,7 +47,7 @@ void main() {
   test('remote R6 relecture supports targeted manual corrections', () {
     final backend = File('lib/services/supabase_backend_service.dart')
         .readAsStringSync();
-    expect(backend, contains('manualResolutions:'));
+    expect(backend, contains('manualResolutions ='));
     expect(backend, contains("'manualResolutions': manualResolutions"));
     expect(backend, contains('saveOfficialRosterAnalysisR6('));
   });
