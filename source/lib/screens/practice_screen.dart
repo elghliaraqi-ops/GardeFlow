@@ -2887,6 +2887,37 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                     ),
                     const SizedBox(height: 10),
                   ],
+                  if (_isStandalone && widget.existing == null) ...[
+                    OutlinedButton.icon(
+                      onPressed: _saving || _generatingRandomCase
+                          ? null : _generateRandomCase,
+                      icon: _generatingRandomCase
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome_rounded),
+                      label: Text(_generatingRandomCase
+                          ? 'Génération du cas clinique…'
+                          : 'Générer un autre cas clinique au hasard'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: PracticeColors.gameGold,
+                        minimumSize: const Size.fromHeight(52),
+                        side: const BorderSide(color: PracticeColors.gameGold),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  if (_generatedByAi) ...[
+                    const _PracticeNotice(
+                      icon: Icons.science_outlined,
+                      text: 'Simulation IA entièrement fictive : relisez '
+                          'les données et les décisions avant publication. '
+                          'Aucun patient réel n’est associé à ce dossier.',
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   const _PracticeNotice(
                     icon: Icons.mic_rounded,
                     text: 'Dictée vocale : touchez le micro d’une rubrique puis dictez. Le texte s’ajoute à ce qui est déjà saisi. GardeFlow ne conserve aucun enregistrement audio.',
