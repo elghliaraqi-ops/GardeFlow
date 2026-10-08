@@ -5,7 +5,8 @@ import { PDFiumLibrary } from 'npm:@hyzyla/pdfium@2.1.13';
 import UPNG from 'npm:upng-js@2.1.0';
 
 type Page = { pageNumber: number; imageUrl: string };
-const DEFAULT_MODEL = 'qwen/qwen3.6-27b';
+// Qwen 3.6 was retired for standard Groq accounts on 14 Sep 2026.
+const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
 const CHUNK_SIZE = 5; // Limite d'images de ce modèle vision Groq.
 
 function b64(raw: Uint8Array): string {
