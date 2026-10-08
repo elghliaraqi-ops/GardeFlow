@@ -84,6 +84,7 @@ type Row = {
 type Read = {
   month: number | null;
   year: number | null;
+  document_scope: 'urgences' | 'non_urgences' | 'mixed_or_uncertain';
   coverage_mode: 'full_month' | 'explicit_range';
   coverage_start: string;
   coverage_end: string;
@@ -329,6 +330,23 @@ function normalizeExtraction(raw: any): Read {
     Number.isInteger(raw?.year) && raw.year >= 2020 && raw.year <= 2100
       ? raw.year
       : null;
+  const documentScope =
+    raw?.document_scope === 'urgences' ||
+      raw?.document_scope === 'non_urgences' ||
+      raw?.document_scope === 'mixed_or_uncertain'
+      ? raw.document_scope as
+          | 'urgences'
+          | 'non_urgences'
+          | 'mixed_or_uncertain'
+      : 'mixed_or_uncertain';
+  if (documentScope !== 'urgences') {
+    validationErrors.push(
+      documentScope === 'non_urgences'
+        ? 'Le document fourni n’est pas un planning officiel des Urgences.'
+        : 'Le périmètre du document est mixte ou incertain : import Urgences bloqué.',
+    );
+  }
+
   const coverageMode =
     raw?.coverage_mode === 'full_month' ||
       raw?.coverage_mode === 'explicit_range'
@@ -452,6 +470,7 @@ function normalizeExtraction(raw: any): Read {
   return {
     month,
     year,
+    document_scope: documentScope,
     coverage_mode: coverageMode,
     coverage_start: coverageStart,
     coverage_end: coverageEnd,
@@ -678,6 +697,7 @@ function compareVisualReads(
   const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
   const conflicts: Conflict[] = [];
   if (
+    first.document_scope !== second.document_scope ||
     first.coverage_mode !== second.coverage_mode ||
     first.coverage_start !== second.coverage_start ||
     first.coverage_end !== second.coverage_end ||
@@ -691,6 +711,7 @@ function compareVisualReads(
       message:
         'Les lectures ne concordent pas sur la plage officielle du document.',
       a: {
+        document_scope: first.document_scope,
         coverage_mode: first.coverage_mode,
         coverage_start: first.coverage_start,
         coverage_end: first.coverage_end,
@@ -698,6 +719,7 @@ function compareVisualReads(
         year: first.year,
       },
       b: {
+        document_scope: second.document_scope,
         coverage_mode: second.coverage_mode,
         coverage_start: second.coverage_start,
         coverage_end: second.coverage_end,
@@ -926,6 +948,7 @@ function applyManualResolutions(
   const normalized = normalizeExtraction({
     month: base.month,
     year: base.year,
+    document_scope: base.document_scope,
     coverage_mode: base.coverage_mode,
     coverage_start: base.coverage_start,
     coverage_end: base.coverage_end,
@@ -973,6 +996,7 @@ const extractionSchema = {
   required: [
     'month',
     'year',
+    'document_scope',
     'coverage_mode',
     'coverage_start',
     'coverage_end',
@@ -992,6 +1016,10 @@ const extractionSchema = {
         { type: 'integer', minimum: 2020, maximum: 2100 },
         { type: 'null' },
       ],
+    },
+    document_scope: {
+      type: 'string',
+      enum: ['urgences', 'non_urgences', 'mixed_or_uncertain'],
     },
     coverage_mode: {
       type: 'string',
@@ -1086,7 +1114,8 @@ const extractionSchema = {
 };
 
 const basePrompt = [
-  "Tu es le lecteur visuel indépendant d'un planning officiel de gardes d'Urgences pour GardeFlow.",
+  "Tu es le lecteur visuel indépendant d'un planning officiel de gardes d'Urgences pour GardeFlow.", 
+  "Le moteur R6 est STRICTEMENT réservé aux Urgences : n'interprète jamais un planning Service comme un planning Urgences.",
   '',
   'OBJECTIF',
   "Lire le PDF VISUELLEMENT, sans utiliser ni supposer la base des comptes GardeFlow.",
@@ -1111,6 +1140,9 @@ const basePrompt = [
   '- page_number est la page PDF où se trouve la cellule.',
   "- zone décrit brièvement la zone utile (ex. 'ligne 26 octobre / colonne Nuit').",
   '- Respecte les changements de mois et d’année.',
+  "- document_scope='urgences' seulement si le document est clairement un planning officiel des Urgences.",
+  "- document_scope='non_urgences' si le document concerne le Service ou un autre type de garde.",
+  "- document_scope='mixed_or_uncertain' si le périmètre est mixte ou impossible à déterminer avec certitude.",
   "- PÉRIMÈTRE STRICT : ce moteur traite uniquement les gardes des URGENCES. N’interprète jamais une garde de Service comme une garde Urgences.",
   '- coverage_start et coverage_end sont les première et dernière dates OFFICIELLEMENT couvertes par tout le tableau visible, y compris les éventuels jours de débord avant/après le mois principal.',
   "- coverage_mode='full_month' uniquement si le document couvre explicitement tous les jours d’un mois civil principal ; sinon coverage_mode='explicit_range'.",
@@ -1596,6 +1628,7 @@ Deno.serve(async (req: Request) => {
             slot,
             month: readC?.month ?? readB.month,
             year: readC?.year ?? readB.year,
+            document_scope: readC?.document_scope ?? readB.document_scope,
             coverage_mode: readC?.coverage_mode ?? readB.coverage_mode,
             coverage_start: readC?.coverage_start ?? readB.coverage_start,
             coverage_end: readC?.coverage_end ?? readB.coverage_end,
@@ -1655,6 +1688,7 @@ Deno.serve(async (req: Request) => {
         slot,
         month: chosen.month,
         year: chosen.year,
+        document_scope: chosen.document_scope,
         coverage_mode: chosen.coverage_mode,
         coverage_start: chosen.coverage_start,
         coverage_end: chosen.coverage_end,
