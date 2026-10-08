@@ -2179,6 +2179,90 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     _hospitalizationService = value.hospitalizationService;
   }
 
+  Future<void> _generateRandomCase() async {
+    if (_generatingRandomCase || _saving || _restoring ||
+        !_isStandalone || widget.existing != null) return;
+
+    // Never silently overwrite a restored or user-edited draft.
+    if (_controllers.any((field) => field.text.trim().isNotEmpty)) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Remplacer le contenu actuel ?'),
+          content: const Text(
+            'Le nouveau cas remplacera les rubriques déjà remplies. '
+            'La génération ne publie aucun dossier automatiquement.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Générer'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() => _generatingRandomCase = true);
+    try {
+      final generated = await RandomClinicalCaseService.instance.generate();
+      if (!mounted) return;
+      _restoring = true;
+      try {
+        _age.text = generated.age.toString();
+        _sex = generated.sex;
+        _location.text = generated.text('location');
+        _chiefComplaint.text = generated.text('chief_complaint');
+        _interrogatoire.text = generated.text('interrogatoire');
+        _personalSurgical.text = generated.text('personal_surgical_history');
+        _personalMedical.text = generated.text('personal_medical_history');
+        _familySurgical.text = generated.text('family_surgical_history');
+        _familyMedical.text = generated.text('family_medical_history');
+        _consultationReason.text = generated.text('consultation_reason');
+        _illnessHistory.text = generated.text('illness_history');
+        _clinicalExam.text = generated.text('clinical_exam');
+        _complementary.text = generated.text('complementary_exams');
+        _imaging.text = generated.text('imaging_conclusion');
+        _assessment.text = generated.text('assessment');
+        _plan.text = generated.text('plan');
+        _arrivalTime = null;
+        _specialist = generated.flag('specialist_opinion_requested');
+        final specialty = generated.text('specialist_service');
+        _specialistService = _specialist
+            ? (practiceSpecialties.contains(specialty) ? specialty : 'Autre')
+            : null;
+        _specialistDone = _specialist &&
+            generated.flag('specialist_opinion_done');
+        _waiting = generated.flag('waiting');
+        _prescription = generated.flag('prescription_done');
+        _discharged = generated.flag('discharged');
+        _hospitalized = generated.flag('hospitalized');
+        final destination = generated.text('hospitalization_service');
+        _hospitalizationService = _hospitalized
+            ? (practiceSpecialties.contains(destination) ? destination : 'Autre')
+            : null;
+      } finally {
+        _restoring = false;
+      }
+      setState(() {
+        _generatedByAi = true;
+        _syncLabel = 'Cas fictif IA · à relire';
+      });
+      _changed(); // Draft-only until the physician saves it manually.
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Génération impossible : $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _generatingRandomCase = false);
+    }
+  }
+
   Future<bool> _ensureSpeechReady() async {
     if (_speechReady) return true;
     if (_speechInitializing) return false;
