@@ -1015,6 +1015,7 @@ class SupabaseBackendService {
     String resourceId, {
     String parserRevision = 'v12.0.3-groq-r6',
     String? verificationToken,
+    bool forceReread = false,
     List<Map<String, dynamic>> localEvidence =
         const <Map<String, dynamic>>[],
   }) async {
@@ -1025,6 +1026,7 @@ class SupabaseBackendService {
         'resourceId': resourceId,
         'parserRevision': parserRevision,
         'localEvidence': localEvidence,
+        if (forceReread) 'forceReread': true,
         if (verificationToken != null && verificationToken.isNotEmpty)
           'verificationToken': verificationToken,
     });
