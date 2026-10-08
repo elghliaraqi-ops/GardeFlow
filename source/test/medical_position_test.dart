@@ -7,6 +7,7 @@ AppUser profile({
   MedicalGrade grade = MedicalGrade.junior,
   int? promotion,
   int? trainingYear,
+  TrainingLanguage? trainingLanguage,
 }) =>
     AppUser(
       id: 'test-user',
@@ -19,6 +20,7 @@ AppUser profile({
       grade: grade,
       medicalPosition: medicalPosition,
       trainingYear: trainingYear,
+      trainingLanguage: trainingLanguage,
       hospital: 'Test',
       promotionNumber: promotion,
     );
@@ -32,6 +34,32 @@ void main() {
       'Médecin Résident',
       'Professeur',
     ]);
+  });
+
+  test('language selector has only Francophone and Anglophone', () {
+    expect(
+      TrainingLanguage.values.map((language) => language.label).toList(),
+      ['Francophone', 'Anglophone'],
+    );
+  });
+
+  test('training language survives local JSON roundtrip', () {
+    final selected = profile(
+      medicalPosition: MedicalPosition.interne,
+      promotion: 7,
+      trainingLanguage: TrainingLanguage.anglophone,
+    );
+    final loaded = AppUser.fromJson(selected.toJson());
+    expect(loaded.trainingLanguage, TrainingLanguage.anglophone);
+    expect(loaded.medicalPosition, MedicalPosition.interne);
+    expect(loaded.promotionNumber, 7);
+  });
+
+  test('existing profiles without training language remain readable', () {
+    final legacy = profile();
+    final loaded = AppUser.fromJson(legacy.toJson());
+    expect(loaded.trainingLanguage, isNull);
+    expect(loaded.grade, MedicalGrade.junior);
   });
 
   test('all positions except professor retain junior permissions', () {
