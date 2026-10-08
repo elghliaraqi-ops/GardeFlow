@@ -77,6 +77,11 @@ jobs:
           grep -Fq "coverage_end" "$EDGE"
           grep -Fq "coverage_scope_mismatch" "$EDGE"
           grep -Fq "Jour du mois principal absent" "$EDGE"
+          grep -Fq "const SHIFTS = new Set(['urg-jour', 'urg-nuit', 'urg-24h']);" "$EDGE"
+          if grep -Eq "service-(jour|nuit|24h)" "$EDGE"; then
+            echo 'ERROR: R6 official roster must remain Urgences-only.' >&2
+            exit 1
+          fi
           grep -Fq "Page non localisée" "$EDGE"
           grep -Fq "Zone non localisée" "$EDGE"
           grep -Fq "status = 'green'" "$EDGE"
