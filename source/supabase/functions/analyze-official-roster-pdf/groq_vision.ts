@@ -7,7 +7,7 @@ import UPNG from 'npm:upng-js@2.1.0';
 type Page = { pageNumber: number; imageUrl: string };
 // Qwen 3.6 was retired for standard Groq accounts on 14 Sep 2026.
 const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
-const CHUNK_SIZE = 5; // Limite d'images de ce modèle vision Groq.
+export const GROQ_MAX_IMAGES_PER_REQUEST = 3; // Qwen 3.8 accepte au plus trois images par requête.
 
 function b64(raw: Uint8Array): string {
   const parts: string[] = [];
@@ -166,11 +166,15 @@ export class GroqRosterVision {
   }
 
   async read(key: string, prompt: string, modelEnv: string): Promise<any> {
-    const model = Deno.env.get(modelEnv) || Deno.env.get('GROQ_VISION_MODEL') ||
-      DEFAULT_MODEL;
+    const configuredModel =
+      (Deno.env.get(modelEnv) || Deno.env.get('GROQ_VISION_MODEL') || '').trim();
+    // Avoid stale server configuration pointing at the retired Groq model.
+    const model = !configuredModel || configuredModel === 'qwen/qwen3.6-27b'
+      ? DEFAULT_MODEL
+      : configuredModel;
     const chunks: any[] = [];
-    for (let index = 0; index < this.pages.length; index += CHUNK_SIZE) {
-      const group = this.pages.slice(index, index + CHUNK_SIZE);
+    for (let index = 0; index < this.pages.length; index += GROQ_MAX_IMAGES_PER_REQUEST) {
+      const group = this.pages.slice(index, index + GROQ_MAX_IMAGES_PER_REQUEST);
       const extraction = await scanChunk(group, key, prompt, model);
       if (extraction.rows.length === 0) {
         throw new Error('groq_page_without_cells');
