@@ -106,6 +106,7 @@ void main() {
         'verified': true,
         'parser_revision': 'v12.0.2-r6',
         'status': 'green',
+        'document_scope': 'urgences',
         'confidence': 0.99,
         'validation_errors': <String>[],
         'rows': [
@@ -162,6 +163,7 @@ void main() {
         'verified': true,
         'parser_revision': 'v12.0.2-r6',
         'status': 'green',
+        'document_scope': 'urgences',
         'confidence': 0.99,
         'validation_errors': <String>[],
         'rows': [
@@ -209,6 +211,7 @@ void main() {
         'verified': true,
         'parser_revision': 'v12.0.2-r6',
         'status': 'green',
+        'document_scope': 'urgences',
         'confidence': 0.99,
         'validation_errors': <String>[],
         'rows': [
@@ -242,6 +245,46 @@ void main() {
     expect(
       result.unmatchedCells.single['reason'],
       'potential_identity_requires_admin',
+    );
+  });
+
+  test('R6 rejects a non-emergency official roster scope', () {
+    final result = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.2-r6',
+        'status': 'green',
+        'document_scope': 'non_urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': [
+          {
+            'date': '2026-10-12',
+            'shift': 'urg-24h',
+            'doctors': [
+              {
+                'first_name': 'Alice',
+                'last_name': 'Service',
+                'full_name': 'Alice Service',
+                'confidence': 0.99,
+              },
+            ],
+            'red_names': <String>[],
+            'page_number': 1,
+            'zone': '12 octobre / Service',
+          },
+        ],
+      },
+      hospital: 'Test Hospital',
+      profiles: [doctor('a', 'SERVICE', 'Alice')],
+    );
+
+    expect(result.isComplete, isFalse);
+    expect(
+      result.validationErrors.any(
+        (error) => error.contains('uniquement les plannings officiels des Urgences'),
+      ),
+      isTrue,
     );
   });
 
