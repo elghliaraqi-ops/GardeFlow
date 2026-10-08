@@ -11,6 +11,7 @@ class SeniorRosterPdfEvidence {
   final String resourceUpdatedAt;
   final int pageCount;
   final int pagesRead;
+  final int extractedFragments;
   final String structuredText;
   final bool truncated;
 
@@ -19,17 +20,19 @@ class SeniorRosterPdfEvidence {
     required this.resourceUpdatedAt,
     required this.pageCount,
     required this.pagesRead,
+    required this.extractedFragments,
     required this.structuredText,
     required this.truncated,
   });
 
-  bool get hasSelectableText => structuredText.trim().isNotEmpty;
+  bool get hasSelectableText => extractedFragments > 0;
 
   Map<String, dynamic> toJson() => {
         'sourceResourceId': resourceId,
         'sourceUpdatedAt': resourceUpdatedAt,
         'pageCount': pageCount,
         'pagesRead': pagesRead,
+        'extractedFragments': extractedFragments,
         'structuredText': structuredText,
         'truncated': truncated,
         'extractor': 'pdfrx-2.6.5',
@@ -57,6 +60,7 @@ class SeniorRosterPdfEvidenceService {
     var truncated = false;
     var read = 0;
     var usedChars = 0;
+    var extractedFragments = 0;
 
     try {
       final pageCount = document.pages.length;
@@ -83,7 +87,7 @@ class SeniorRosterPdfEvidenceService {
         buffer.write(heading);
         usedChars += heading.length;
         for (final fragment in fragments) {
-          final clean = fragment.text.replaceAll(RegExp(r'\\s+'), ' ').trim();
+          final clean = fragment.text.replaceAll(RegExp(r'\s+'), ' ').trim();
           if (clean.isEmpty) continue;
           final left = fragment.bounds.left.toStringAsFixed(1);
           final top = fragment.bounds.top.toStringAsFixed(1);
@@ -94,6 +98,7 @@ class SeniorRosterPdfEvidenceService {
           }
           buffer.write(entry);
           usedChars += entry.length;
+          extractedFragments++;
         }
         if (truncated) break;
       }
@@ -102,6 +107,7 @@ class SeniorRosterPdfEvidenceService {
         resourceUpdatedAt: resourceUpdatedAt.toUtc().toIso8601String(),
         pageCount: pageCount,
         pagesRead: read,
+        extractedFragments: extractedFragments,
         structuredText: buffer.toString(),
         truncated: truncated,
       );
