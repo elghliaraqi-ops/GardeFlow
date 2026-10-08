@@ -5,6 +5,7 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'source/supabase/functions/analyze-official-roster-pdf/**'
   push:
     branches:
       - hardening-20261003
@@ -33,3 +34,45 @@ jobs:
           grep -Fq "auto_validation_blocked" "$FILE"
           grep -Fq "v_involves_emergency" "$FILE"
           echo 'Hardening migration static invariants verified.'
+
+      - name: Verify Garde R6 fail-closed invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          R6='supabase/migrations/20261007231000_garde_functional_lock_r6.sql'
+          EDGE='source/supabase/functions/analyze-official-roster-pdf/index.ts'
+
+          test -f "$R6"
+          test -f "$EDGE"
+
+          grep -Fq "official_roster_import_reports" "$R6"
+          grep -Fq "official_roster_guards" "$R6"
+          grep -Fq "official_roster_identity_links" "$R6"
+          grep -Fq "official_roster_anomalies" "$R6"
+          grep -Fq "official_roster_recalculation_runs" "$R6"
+          grep -Fq "admin_preview_official_roster_recalculation" "$R6"
+          grep -Fq "admin_apply_official_roster_recalculation" "$R6"
+          grep -Fq "set search_path = ''" "$R6"
+
+          AS_COUNT="$(grep -Ec '^as \$\$' "$R6")"
+          END_COUNT="$(grep -Ec '^\$\$; "$R6")"
+          test "$AS_COUNT" -gt 0
+          test "$AS_COUNT" -eq "$END_COUNT"
+          if grep -Eq '^as \$|^\$; "$R6"; then
+            echo 'ERROR: malformed SQL dollar-quote delimiter in R6 migration.' >&2
+            exit 1
+          fi
+
+          grep -Fq "const PARSER_REVISION = 'v12.0.2-r6'" "$EDGE"
+          grep -Fq "const readB = await runRead" "$EDGE"
+          grep -Fq "cExecuted = true" "$EDGE"
+          grep -Fq "manualResolutions" "$EDGE"
+          grep -Fq "status = 'green'" "$EDGE"
+          grep -Fq "status = 'orange'" "$EDGE"
+          grep -Fq "status = 'red'" "$EDGE"
+          if grep -Fq "profileContext" "$EDGE"; then
+            echo 'ERROR: the visual reader must not be seeded with account/profile context.' >&2
+            exit 1
+          fi
+
+          echo 'Garde R6 fail-closed static invariants verified.'
