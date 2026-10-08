@@ -171,8 +171,9 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
         final picker = ImagePicker();
         final file = await picker.pickImage(
           source: ImageSource.camera,
-          imageQuality: 70,
-          maxWidth: 1600,
+          // Conserver les caractères fins des plannings avant OCR.
+          imageQuality: 85,
+          maxWidth: 2400,
         );
         if (file != null) {
           uploads.add(
@@ -186,8 +187,9 @@ class _AstreinteScreenState extends State<AstreinteScreen> {
       } else if (action == _AstreintePickAction.gallery) {
         final picker = ImagePicker();
         final selected = await picker.pickMultiImage(
-          imageQuality: 70,
-          maxWidth: 1600,
+          // L'OCR serveur ne peut pas retrouver un nom perdu au redimensionnement.
+          imageQuality: 85,
+          maxWidth: 2400,
         );
         for (final file in selected) {
           uploads.add(
