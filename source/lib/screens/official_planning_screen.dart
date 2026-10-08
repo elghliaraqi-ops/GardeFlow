@@ -346,6 +346,155 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     }
   }
 
+
+  /// R6 reanalysis of a previously published official PDF.
+  /// Never overwrites PDF versions or changes personal calendars.
+  Future<void> _reverifyExistingPdfR6(
+    _OfficialSlot slot,
+    SharedResource resource,
+  ) async {
+    if (_busySlot != null || _autoImportingSlots.contains(slot.id)) return;
+    if (context.read<AppState>().currentUser?.role != UserRole.admin ||
+        resource.slot != slot.id) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Relire ce PDF avec R6 ?'),
+        content: Text(
+          'Planning : ${resource.displayName}\n'
+          'Établissement : ${slot.title}\n\n'
+          'Le moteur analysera exclusivement les Urgences : lecture A/B '
+          'indépendante, puis C si nécessaire. Les gardes Service, le PDF '
+          'd’origine et les calendriers des médecins resteront inchangés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Lancer la lecture R6'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _busySlot = slot.id;
+      _importStatus[slot.id] = 'Lecture A/B R6 des Urgences en cours…';
+    });
+    try {
+      final bytes = await _backend.downloadSharedResource(resource.storagePath);
+      final profiles = await _backend.fetchVisibleProfiles();
+      final identityLinks =
+          await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
+
+      var localEvidence = const <Map<String, dynamic>>[];
+      try {
+        final localRead = await OfficialRosterImportService.parse(
+          bytes: bytes,
+          displayName: resource.displayName,
+          hospital: slot.hospital,
+          profiles: profiles,
+          resourceUpdatedAt: resource.updatedAt,
+        );
+        localEvidence = localRead.localCells
+            .map((cell) => cell.toJson())
+            .toList(growable: false);
+      } catch (e) {
+        // A scanned PDF can still use the independent visual-A fallback.
+        debugPrint('R6 : géométrie PDF indisponible, recours à A visuel : $e');
+      }
+
+      var extraction = await _backend.analyzeOfficialRosterResource(
+        resource.id,
+        parserRevision: OfficialRosterImportService.parserRevision,
+        localEvidence: localEvidence,
+      );
+
+      if (extraction['verified'] != true &&
+          extraction['status']?.toString().toLowerCase() == 'red') {
+        final rawConflicts = extraction['conflicts'];
+        final conflicts = rawConflicts is List
+            ? rawConflicts
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList(growable: false)
+            : const <Map<String, dynamic>>[];
+        if (conflicts.isNotEmpty && mounted) {
+          final resolutions = await showDialog<List<Map<String, dynamic>>>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) =>
+                _OfficialRosterConflictReviewDialog(conflicts: conflicts),
+          );
+          if (resolutions == null) {
+            throw StateError(
+              'Relecture annulée : les anomalies R6 restent non résolues.',
+            );
+          }
+          extraction = await _backend.analyzeOfficialRosterResource(
+            resource.id,
+            parserRevision: OfficialRosterImportService.parserRevision,
+            localEvidence: localEvidence,
+            manualResolutions: resolutions,
+          );
+        }
+      }
+
+      final verified = OfficialRosterVerifiedReadService.fromExtraction(
+        extraction: extraction,
+        hospital: slot.hospital,
+        profiles: profiles,
+        identityLinks: identityLinks,
+      );
+      if (extraction['verified'] != true ||
+          extraction['document_scope'] != 'urgences' ||
+          verified.detectedRows == 0 ||
+          verified.officialGuards.isEmpty ||
+          !verified.isComplete) {
+        final details = verified.validationErrors.take(5).join(' • ');
+        throw StateError(
+          'Lecture R6 refusée (fail-closed). '
+          '${details.isEmpty ? 'Couverture ou identités non vérifiées.' : details} '
+          'Aucun calendrier modifié.',
+        );
+      }
+
+      final report = await _backend.saveOfficialRosterAnalysisR6(
+        resource: resource,
+        extraction: extraction,
+        guards: verified.officialGuards,
+        unmatchedCells: verified.unmatchedCells,
+      );
+      if (!mounted) return;
+      final total = (report['total_guards'] as num?)?.toInt() ??
+          verified.officialGuards.length;
+      setState(() => _importStatus[slot.id] =
+          'R6 validé : $total garde(s) Urgences. Aperçu admin disponible.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$total gardes Urgences relues avec R6. '
+            'Les calendriers sont inchangés ; préparez les superpositions.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _importStatus[slot.id] =
+          'Relecture R6 bloquée : calendriers inchangés.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Relecture R6 impossible : $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busySlot = null);
+    }
+  }
+
   Future<void> _upload(_OfficialSlot slot) async {
     if (_busySlot != null) return;
     final result = await FilePicker.platform.pickFiles(
@@ -669,6 +818,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
                           onOpen: (r) => _open(r),
                           onResync: (r) => _resyncMyRoster(_slots[i], r),
                           onUpload: () => _upload(_slots[i]),
+                           onReverify: (r) => _reverifyExistingPdfR6(_slots[i], r),
                           onDelete: (r) => _delete(_slots[i], r),
                         ),
                         if (i != _slots.length - 1) const SizedBox(height: AppSpace.md),
@@ -1199,6 +1349,7 @@ class _OfficialPdfCard extends StatelessWidget {
   final ValueChanged<SharedResource> onOpen;
   final ValueChanged<SharedResource> onResync;
   final VoidCallback onUpload;
+  final ValueChanged<SharedResource> onReverify;
   final ValueChanged<SharedResource> onDelete;
 
   const _OfficialPdfCard({
@@ -1215,6 +1366,7 @@ class _OfficialPdfCard extends StatelessWidget {
     required this.onOpen,
     required this.onResync,
     required this.onUpload,
+    required this.onReverify,
     required this.onDelete,
   });
 
@@ -1345,6 +1497,12 @@ class _OfficialPdfCard extends StatelessWidget {
                         )
                       : Icon(Icons.sync_rounded, size: 18),
                   label: Text('Refaire la superposition'),
+                ),
+              if (isAdmin && r != null)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => onReverify(r),
+                  icon: const Icon(Icons.fact_check_rounded, size: 18),
+                  label: const Text('Relire avec R6'),
                 ),
               if (isAdmin)
                 OutlinedButton.icon(
