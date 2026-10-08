@@ -1,8 +1,13 @@
-import { GroqRosterVision, mergeChunkReads } from './groq_vision.ts';
+import { GROQ_MAX_IMAGES_PER_REQUEST, GroqRosterVision, mergeChunkReads } from './groq_vision.ts';
 
 function assert(ok: boolean, message: string): void {
   if (!ok) throw new Error(message);
 }
+
+Deno.test('Groq vision limits one image per request to reduce token pressure', () => {
+  assert(GROQ_MAX_IMAGES_PER_REQUEST === 1,
+    'A/B/C must request one PDF page per Groq call at free-tier token limits');
+});
 
 function samplePdf(): Uint8Array {
   // PDF généré en mémoire pour tester le moteur PDFium (pas d'API Groq).

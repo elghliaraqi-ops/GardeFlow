@@ -1702,7 +1702,7 @@ Deno.serve(async (req: Request) => {
     if ([
       'groq_read_failed', 'groq_request_invalid', 'groq_invalid_response',
       'groq_pdf_render_failed', 'groq_invalid_page_reference',
-      'groq_page_without_cells',
+      'groq_page_without_cells', 'groq_response_truncated',
     ].includes(code)) {
       return json({ ok: false, error: code }, 503);
     }

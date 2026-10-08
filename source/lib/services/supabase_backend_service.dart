@@ -987,6 +987,7 @@ class SupabaseBackendService {
         case 'groq_invalid_response':
         case 'groq_invalid_page_reference':
         case 'groq_page_without_cells':
+        case 'groq_response_truncated':
         case 'groq_pdf_render_failed':
         case 'groq_read_failed':
           throw StateError(

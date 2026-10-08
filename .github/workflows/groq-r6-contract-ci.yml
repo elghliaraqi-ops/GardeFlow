@@ -1,0 +1,30 @@
+name: GardeFlow Groq R6 contract checks
+
+on:
+  pull_request:
+    paths:
+      - 'source/supabase/functions/analyze-official-roster-pdf/**'
+      - '.github/workflows/groq-r6-contract-ci.yml'
+  push:
+    branches:
+      - fix/groq-r6-token-budget-20261008
+    paths:
+      - 'source/supabase/functions/analyze-official-roster-pdf/**'
+      - '.github/workflows/groq-r6-contract-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deno-r6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Deno typecheck visual reader
+        run: deno check source/supabase/functions/analyze-official-roster-pdf/groq_vision.ts
+      - name: Groq R6 contract tests
+        run: deno test --allow-read source/supabase/functions/analyze-official-roster-pdf/groq_vision_test.ts
