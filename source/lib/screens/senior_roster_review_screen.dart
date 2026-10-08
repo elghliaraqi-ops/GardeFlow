@@ -521,6 +521,28 @@ class _SeniorRosterReviewScreenState extends State<SeniorRosterReviewScreen> {
             ),
           ),
         ],
+        if (import.rawText.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.md),
+          AppCard(
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text(
+                'Texte auxiliaire extrait (pdfrx / OCR)',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Pour comparaison avec le document original ; '
+                'ne remplace pas la validation des lignes.',
+              ),
+              children: [
+                SelectableText(
+                  import.rawText,
+                  style: const TextStyle(fontSize: 12, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpace.lg),
         Row(
           children: [
