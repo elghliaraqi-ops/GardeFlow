@@ -278,13 +278,13 @@ Deno.serve(async(req)=>{
   const started=Date.now();
   const requestId=crypto.randomUUID();
   const executionId=codeValue(Deno.env.get('SB_EXECUTION_ID'),'edge');
-  let admin=null; let claimed=''; let postLog=''; let hash='';
+  let admin=null; let claimed=''; let postLog=''; let hash=''; let append=false;
   const meta=()=>({request_id:requestId,execution_id:executionId,post_id:postLog||undefined,user_hash:hash||undefined,duration_ms:Date.now()-started});
   const fail=(status,error,retryable,extra={})=>reply(req,{ok:false,error,retryable,...extra},status);
   const finish=async(success,error)=>{
     if(!admin||!claimed)return;
     try{
-      await admin.rpc('clinical_case_finish_qcm_generation',{
+      await admin.rpc(append?'clinical_case_finish_qcm_extension':'clinical_case_finish_qcm_generation',{
         p_post_id:claimed,
         p_success:success,
         p_error_code:error?codeValue(error,'generation_failed'):null
@@ -349,6 +349,8 @@ Deno.serve(async(req)=>{
     const practiceId=String(body.practice_case_id??'').trim();
     const requestedPost=String(body.post_id??'').trim();
     const force=body.force_regenerate===true;
+    append=body.append_qcms===true;
+    if(append&&force)return fail(400,'incompatible_modes',false);
     const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if((!practiceId&&!requestedPost)||(practiceId&&requestedPost)) return fail(400,'exactly_one_case_identifier_required',false);
@@ -381,22 +383,19 @@ Deno.serve(async(req)=>{
     postLog=String(post.id);
     log('qcm_generation_started',{...meta(),provider:'groq'});
 
-    const existing=await admin.from('clinical_case_qcms').select('id,generation_source').eq('post_id',post.id);
+    const existing=await admin.from('clinical_case_qcms').select('id,generation_source,position,question').eq('post_id',post.id);
     if(existing.error){
       log('database_read_failed',meta());
       return fail(503,'database_unavailable',true);
     }
-    if((existing.data??[]).length===5&&(existing.data??[]).every(q=>q.generation_source==='openai')){
+    if(!append&&(existing.data??[]).filter(q=>Number(q.position)<=5).length===5&&(existing.data??[]).filter(q=>Number(q.position)<=5).every(q=>q.generation_source==='openai')){
       return reply(req,{ok:true,generated:false,status:'ready',count:5,post_id:post.id});
     }
 
     const isAdmin=String(profile.role??'').toLowerCase()==='admin';
     const canForce=force&&(isAdmin||post.author_id===uid);
-    const claimResult=await admin.rpc('clinical_case_claim_qcm_generation',{
-      p_post_id:post.id,
-      p_user_id:uid,
-      p_force:canForce
-    });
+    if(append&&!isAdmin&&post.author_id!==uid)return fail(403,'authorization_failed',false);
+    const claimResult=await admin.rpc(append?'clinical_case_claim_qcm_extension':'clinical_case_claim_qcm_generation',append?{p_post_id:post.id,p_user_id:uid}:{p_post_id:post.id,p_user_id:uid,p_force:canForce});
 
     if(claimResult.error||!Array.isArray(claimResult.data)||claimResult.data.length===0){
       log('generation_guard_unavailable',meta());
@@ -409,6 +408,8 @@ Deno.serve(async(req)=>{
       const err=codeValue(c.error_code,'retry_later');
       const retry=c.retry_after??null;
       const seconds=retrySeconds(retry);
+      if(append&&err==='extension_cooldown')return fail(429,err,true,{retry_after:retry,retry_after_seconds:seconds});
+      if(append&&['initial_qcms_required','qcm_limit_reached'].includes(err))return fail(409,err,false);
       if(status==='ready') return reply(req,{ok:true,generated:false,status:'ready',count:5,post_id:post.id});
       if(status==='running'){
         log(err==='provider_queue_busy'?'generation_provider_queued':'generation_already_running',meta());
@@ -460,6 +461,7 @@ Deno.serve(async(req)=>{
       return `[${i+1}] TYPE=${s.kind}\nTitre=${s.title}\nOrganisation/Revue=${s.organization}\nAnnée=${s.year}\nURL=${s.url}${abstract}`;
     }).join('\n\n');
 
+    const previousQuestions=append?(existing.data??[]).map(q=>scrub(q.question,260)).filter(Boolean).join('\n').slice(0,12000):'';
     const generationModel=String(Deno.env.get('GROQ_TEXT_MODEL')??'').trim()||'openai/gpt-oss-120b';
     const effortRaw=String(Deno.env.get('GROQ_REASONING_EFFORT')??'medium').trim().toLowerCase();
     const reasoningEffort=['low','medium','high'].includes(effortRaw)?effortRaw:'medium';
@@ -480,7 +482,8 @@ CAS ANONYMISÉ :
 ${cleanJson}
 
 CATALOGUE DOCUMENTAIRE EUROPE PMC :
-${sourceCatalog}`;
+${sourceCatalog}
+${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEAUX ET DIFFÉRENTS) :\n${previousQuestions}`:''}`;
 
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),timeoutMs);
@@ -680,9 +683,10 @@ ${sourceCatalog}`;
       }));
 
       const persisted=enriched.map(({axis:_axis,raw_correction:_raw,references:_refs,image_search_query:_imageQuery,...q})=>q);
-      const commit=await admin.rpc('clinical_case_commit_generated_qcms',{
+      const commit=await admin.rpc(append?'clinical_case_append_generated_qcms':'clinical_case_commit_generated_qcms',{
         p_post_id:post.id,
-        p_qcms:persisted
+        p_qcms:persisted,
+        ...(append?{p_user_id:uid}:{})
       });
 
       if(commit.error){
@@ -692,6 +696,7 @@ ${sourceCatalog}`;
         return fail(503,'database_unavailable',true);
       }
 
+      if(!append){
       const [qcmProviderUpdate,postProviderUpdate]=await Promise.all([
         admin.from('clinical_case_qcms').update({ai_provider:'groq'}).eq('post_id',post.id),
         admin.from('clinical_case_posts').update({qcm_ai_provider:'groq'}).eq('id',post.id)
@@ -703,6 +708,7 @@ ${sourceCatalog}`;
           qcm_error:codeValue(qcmProviderUpdate.error?.code,'none'),
           post_error:codeValue(postProviderUpdate.error?.code,'none')
         });
+      }
       }
     } catch(e) {
       const reason=codeValue(e?.message,'qcm_validation_failed');
@@ -718,7 +724,7 @@ ${sourceCatalog}`;
     log('qcm_generation_success',{
       ...meta(),
       provider:'groq',
-      qcm_count:5,
+      qcm_count:append?(existing.data??[]).length+5:5,
       literature_provider:'europe_pmc',
       literature_source_count:sources.length,
       provider_request_id:providerId,
@@ -729,7 +735,8 @@ ${sourceCatalog}`;
       ok:true,
       generated:true,
       status:'ready',
-      count:5,
+      count:append?(existing.data??[]).length+5:5,
+      added:append?5:0,
       provider:'groq',
       model:generationModel,
       post_id:post.id,

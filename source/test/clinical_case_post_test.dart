@@ -37,4 +37,30 @@ void main() {
     expect(post.demographicLabel, 'Patient anonymisé');
     expect(post.topicLabel, 'Motif');
   });
+  test('preserves all ten AI questions in chronological position order', () {
+    final row = <String, dynamic>{
+      'id': 'post-more-qcms',
+      'can_edit': true,
+      'qcm_question': 'Question historique',
+      'qcm_options': <String>['A', 'B', 'C', 'D'],
+      'qcms': List<Map<String, dynamic>>.generate(10, (index) {
+        return <String, dynamic>{
+          'id': 'question-$index',
+          'position': 10 - index,
+          'question': 'Question pédagogique numéro $index',
+          'options': <String>['A', 'B', 'C', 'D'],
+          'topic': 'imagerie',
+          'generation_source': 'openai',
+          'my_selected_index': index == 0 ? 2 : null,
+          'my_is_correct': index == 0 ? true : null,
+        };
+      }),
+    };
+    final post = ClinicalCasePost.fromMap(row);
+    expect(post.canEdit, isTrue);
+    expect(post.qcms, hasLength(10));
+    expect(post.qcms.map((q) => q.position).toList(),
+        List<int>.generate(10, (i) => i + 1));
+    expect(post.qcms.where((q) => q.answered), hasLength(1));
+  });
 }

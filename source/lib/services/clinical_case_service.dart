@@ -57,7 +57,8 @@ class ClinicalCaseService {
     // deduplicated in memory and backed by a persisted, bounded cooldown.
     final now = DateTime.now().toUtc();
     for (final post in posts) {
-      final needsAi = post.qcms.length < 5 ||
+      final needsAi =
+          post.qcms.length < 5 ||
           post.qcms.any((qcm) => qcm.generationSource != 'openai');
       if (!needsAi || !_canAutoAttempt(post.id, now)) continue;
       if (!_enrichmentInFlight.add(post.id)) continue;
@@ -185,6 +186,44 @@ class ClinicalCaseService {
     return count;
   }
 
+  /// Ajoute cinq nouvelles questions uniquement : ne relance jamais la
+  /// génération initiale et ne supprime ni réponses ni statistiques.
+  Future<int> addQcmsToClinicalCase({required String postId}) async {
+    final id = postId.trim();
+    if (!_backend.enabled ||
+        _backend.client.auth.currentUser == null ||
+        id.isEmpty) {
+      throw StateError('Authentification requise.');
+    }
+    try {
+      final response = await _backend.client.functions.invoke(
+        'generate-clinical-case-qcm',
+        body: <String, dynamic>{'post_id': id, 'append_qcms': true},
+      );
+      final data = response.data;
+      if (data is Map && data['ok'] == true && data['added'] == 5) {
+        notifyChanged();
+        return int.tryParse('${data['count']}') ?? 0;
+      }
+      final code = data is Map ? '${data['error'] ?? ''}' : '';
+      if (code == 'generation_in_progress') {
+        throw StateError('Une génération est déjà en cours pour ce cas.');
+      }
+      if (code == 'extension_cooldown') {
+        throw StateError('Réessayez dans quelques minutes.');
+      }
+      if (code == 'qcm_limit_reached') {
+        throw StateError('Ce cas a atteint sa limite de 100 QCM.');
+      }
+      throw StateError('Ajout des QCM indisponible pour le moment.');
+    } catch (error) {
+      if (error is StateError) rethrow;
+      throw StateError(
+        'Échec de la génération. Vérifiez la connexion puis réessayez.',
+      );
+    }
+  }
+
   Future<void> enrichQcmForPracticeCase(String practiceCaseId) async {
     if (!_backend.enabled ||
         _backend.client.auth.currentUser == null ||
@@ -261,7 +300,8 @@ class ClinicalCaseService {
       }
       await _registerFailure(
         postId,
-        retryable: retryable &&
+        retryable:
+            retryable &&
             !QcmGenerationRetryPolicy.isPermanentHttpStatus(status),
         retryAfter: retryAfter,
         errorCode: code,
@@ -276,7 +316,8 @@ class ClinicalCaseService {
           '${details['error'] ?? details['reason'] ?? 'network_or_function_error'}';
       await _registerFailure(
         postId,
-        retryable: retryable &&
+        retryable:
+            retryable &&
             !QcmGenerationRetryPolicy.isPermanentHttpStatus(status),
         retryAfter: _parseRetryAfter(details),
         errorCode: code,
@@ -368,7 +409,9 @@ class ClinicalCaseService {
   }
 
   Future<void> _deferWithoutFailure(
-      String postId, DateTime? serverRetry) async {
+    String postId,
+    DateTime? serverRetry,
+  ) async {
     final now = DateTime.now().toUtc();
     final current = _retryStates[postId];
     final next = serverRetry != null && serverRetry.isAfter(now)
@@ -393,7 +436,8 @@ class ClinicalCaseService {
   }) async {
     final now = DateTime.now().toUtc();
     final previous = _retryStates[postId];
-    final withinWindow = previous != null &&
+    final withinWindow =
+        previous != null &&
         now.difference(previous.firstFailureAt) <=
             QcmGenerationRetryPolicy.resetWindow;
     final failureCount = (withinWindow ? previous.failureCount : 0) + 1;
@@ -408,8 +452,9 @@ class ClinicalCaseService {
       permanent: !retryable,
       automaticSuspended:
           failureCount >= QcmGenerationRetryPolicy.maxAutomaticFailures,
-      lastErrorCode:
-          errorCode.length <= 80 ? errorCode : errorCode.substring(0, 80),
+      lastErrorCode: errorCode.length <= 80
+          ? errorCode
+          : errorCode.substring(0, 80),
     );
     await _persistRetryState();
   }
@@ -494,8 +539,8 @@ class ClinicalCaseService {
       final rows = await _backend.client.rpc('practice_my_achievements');
       if (rows is List) {
         for (final raw in rows.whereType<Map>()) {
-          final unlockedAt =
-              DateTime.tryParse('${raw['unlocked_at'] ?? ''}')?.toLocal();
+          final unlockedAt = DateTime.tryParse('${raw['unlocked_at'] ?? ''}')
+              ?.toLocal();
           final key = '${raw['key'] ?? ''}'.trim();
           if (key.isEmpty || unlockedAt == null) continue;
           if (unlockedAt.isAfter(
@@ -535,17 +580,17 @@ class _QcmRetryState {
   });
 
   Map<String, dynamic> toMap() => <String, dynamic>{
-        'failure_count': failureCount,
-        'first_failure_at': firstFailureAt.toUtc().toIso8601String(),
-        'next_attempt_at': nextAttemptAt.toUtc().toIso8601String(),
-        'permanent': permanent,
-        'automatic_suspended': automaticSuspended,
-        'last_error_code': lastErrorCode,
-      };
+    'failure_count': failureCount,
+    'first_failure_at': firstFailureAt.toUtc().toIso8601String(),
+    'next_attempt_at': nextAttemptAt.toUtc().toIso8601String(),
+    'permanent': permanent,
+    'automatic_suspended': automaticSuspended,
+    'last_error_code': lastErrorCode,
+  };
 
   static _QcmRetryState? fromMap(Map<String, dynamic> map) {
-    final first =
-        DateTime.tryParse('${map['first_failure_at'] ?? ''}')?.toUtc();
+    final first = DateTime.tryParse('${map['first_failure_at'] ?? ''}')
+        ?.toUtc();
     final next = DateTime.tryParse('${map['next_attempt_at'] ?? ''}')?.toUtc();
     if (first == null || next == null) return null;
     return _QcmRetryState(

@@ -1171,6 +1171,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   bool _expanded = false;
   bool _submitting = false;
   bool _resetting = false;
+  bool _addingQcms = false;
   int _currentQcm = 0;
   List<ClinicalCaseQcm> _qcms = <ClinicalCaseQcm>[];
   final Map<String, bool> _explanationExpanded = <String, bool>{};
@@ -1314,6 +1315,32 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     }
   }
 
+  Future<void> _addFiveQcms() async {
+    if (_addingQcms || _submitting || _resetting) return;
+    setState(() => _addingQcms = true);
+    try {
+      await ClinicalCaseService.instance.addQcmsToClinicalCase(
+        postId: widget.post.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('5 nouveaux QCM ajoutés sans effacer les précédents.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is StateError
+          ? error.message.toString()
+          : 'Impossible de générer les nouveaux QCM.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) setState(() => _addingQcms = false);
+    }
+  }
+
   void _moveQcm(int delta) {
     if (_qcms.isEmpty) return;
     final next = (_currentQcm + delta).clamp(0, _qcms.length - 1);
@@ -1448,6 +1475,20 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
             onNext: _currentQcm < _qcms.length - 1 ? () => _moveQcm(1) : null,
             onSelect: (index) => setState(() => _currentQcm = index),
           ),
+          if (post.canEdit && _qcms.length >= 5 && _qcms.length <= 95) ...[
+            const SizedBox(height: 8),
+            Center(
+              child: _GamingTextButton(
+                icon: Icons.add_circle_outline_rounded,
+                label: _addingQcms
+                    ? 'Génération des 5 QCM en cours…'
+                    : 'Ajouter 5 nouveaux QCM avec l’IA',
+                onPressed: (_addingQcms || _submitting || _resetting)
+                    ? null
+                    : _addFiveQcms,
+              ),
+            ),
+          ],
           const SizedBox(height: 7),
           Center(
             child: Text(
