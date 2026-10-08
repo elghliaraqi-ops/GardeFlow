@@ -973,19 +973,26 @@ class SupabaseBackendService {
       final details = error.details;
       final code = details is Map ? details['error']?.toString() : null;
       switch (code) {
-        case 'openai_api_credits_exhausted':
+        case 'groq_not_configured':
+          throw StateError('Le lecteur Groq des plannings n’est pas configuré. Calendriers inchangés.');
+        case 'groq_rate_limited':
           throw StateError(
-            'Crédits API OpenAI épuisés : rechargez le solde API avant de '
-            'relire le PDF. Aucune garde n’a été modifiée.',
+            'Le lecteur Groq est limité temporairement : réessayez plus tard. '
+            'Aucune garde n’a été modifiée.',
           );
-        case 'openai_rate_limited':
+        case 'groq_request_invalid':
+        case 'groq_invalid_response':
+        case 'groq_invalid_page_reference':
+        case 'groq_page_without_cells':
+        case 'groq_pdf_render_failed':
+        case 'groq_read_failed':
           throw StateError(
-            'Le lecteur visuel est temporairement limité. '
-            'Réessayez plus tard : calendriers inchangés.',
+            'La lecture Groq n’a pas pu vérifier tout le PDF. '
+            'Calendriers inchangés : contactez l’administrateur technique.',
           );
-        case 'openai_authentication_failed':
+        case 'groq_authentication_failed':
           throw StateError(
-            'Le vérificateur visuel OpenAI ne peut pas s’authentifier. '
+            'Le vérificateur visuel Groq ne peut pas s’authentifier. '
             'Contactez l’administrateur technique : calendriers inchangés.',
           );
       }
@@ -1099,9 +1106,10 @@ class SupabaseBackendService {
         throw StateError(
           'La vérification des plannings officiels est réservée aux administrateurs.',
         );
+      case 'groq_not_configured':
       case 'verifier_not_configured':
         throw StateError(
-          'Le vérificateur visuel sécurisé du planning n’est pas configuré.',
+          'Le lecteur Groq du planning n’est pas configuré.',
         );
       case 'resource_not_found':
       case 'invalid_preflight_resource':
