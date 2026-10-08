@@ -1129,8 +1129,8 @@ class _ConflictReadPreview extends StatelessWidget {
       ),
       child: Text(
         'Lecture $label\n'
-        '\${row['date'] ?? '—'} • \${row['shift'] ?? '—'}\n'
-        '\${doctors.isEmpty ? 'Aucun médecin lu' : doctors}',
+        "${row['date'] ?? '—'} • ${row['shift'] ?? '—'}\n"
+        "${doctors.isEmpty ? 'Aucun médecin lu' : doctors}",
         style: TextStyle(
           color: AppColors.inkSoft,
           fontSize: 11.5,
