@@ -248,6 +248,7 @@ Résultats obtenus :
 - confiance 0,89 refusée ;
 - utilisateur non-admin refusé sur RPC admin ;
 - jeton d'aperçu périmé/refusé.
+- planning Service injecté au pipeline R6 refusé explicitement ;
 
 ### Tests PostgreSQL reproductibles dans GitHub Actions
 
