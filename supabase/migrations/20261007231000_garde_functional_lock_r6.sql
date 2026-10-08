@@ -1249,6 +1249,7 @@ declare
   v_run_id uuid;
   v_actor_name text;
   v_profile_name text;
+  v_error text;
 begin
   if not public.is_admin() then
     raise exception 'Réservé à l’administrateur';
@@ -1303,36 +1304,6 @@ begin
   )
   returning id into v_run_id;
 
-  -- Force a fresh profile-level derivation while keeping the R4/R5 import
-  -- implementation and all its protection rules.
-  delete from public.official_roster_profile_sync
-  where resource_id = v_resource_id
-    and resource_updated_at = v_resource_updated_at
-    and profile_id = p_profile_id;
-
-  begin
-    v_result := public.import_official_emergency_roster_for_profile_v2(
-      v_resource_id,
-      v_resource_updated_at,
-      p_profile_id,
-      v_assignments,
-      'v12.0.2-r6',
-      '[]'::jsonb
-    );
-
-    update public.official_roster_recalculation_runs
-    set
-      applied = true,
-      result = v_result,
-      applied_at = now()
-    where id = v_run_id;
-  exception when others then
-    update public.official_roster_recalculation_runs
-    set error = sqlerrm
-    where id = v_run_id;
-    raise;
-  end;
-
   select trim(coalesce(p.prenom,'') || ' ' || coalesce(p.nom,''))
   into v_actor_name
   from public.profiles p
@@ -1342,6 +1313,68 @@ begin
   into v_profile_name
   from public.profiles p
   where p.id = p_profile_id;
+
+  begin
+    -- The sync marker deletion and the existing R4/R5 import run inside a
+    -- PL/pgSQL subtransaction. Any failure restores the previous derived
+    -- calendar automatically, while the outer run can still record the error.
+    delete from public.official_roster_profile_sync
+    where resource_id = v_resource_id
+      and resource_updated_at = v_resource_updated_at
+      and profile_id = p_profile_id;
+
+    v_result := public.import_official_emergency_roster_for_profile_v2(
+      v_resource_id,
+      v_resource_updated_at,
+      p_profile_id,
+      v_assignments,
+      'v12.0.2-r6',
+      '[]'::jsonb
+    );
+  exception when others then
+    v_error := sqlerrm;
+
+    update public.official_roster_recalculation_runs
+    set
+      applied = false,
+      error = v_error
+    where id = v_run_id;
+
+    insert into public.audit_log(
+      actor_id, actor_name, action, entity_type, entity_id,
+      subject_id, subject_name, reason, details
+    ) values (
+      auth.uid(),
+      coalesce(nullif(v_actor_name,''),'Administrateur'),
+      'official_roster_recalculation_failed',
+      'official_roster_recalculation',
+      v_run_id::text,
+      p_profile_id,
+      v_profile_name,
+      v_error,
+      jsonb_build_object(
+        'preview', v_preview,
+        'error', v_error,
+        'source_unchanged', true,
+        'derived_state_restored', true
+      )
+    );
+
+    return jsonb_build_object(
+      'ok', false,
+      'run_id', v_run_id,
+      'preview', v_preview,
+      'error', v_error
+    );
+  end;
+
+  update public.official_roster_recalculation_runs
+  set
+    applied = true,
+    result = v_result,
+    error = null,
+    applied_at = now()
+  where id = v_run_id;
 
   insert into public.audit_log(
     actor_id, actor_name, action, entity_type, entity_id,
@@ -1363,6 +1396,7 @@ begin
   );
 
   return jsonb_build_object(
+    'ok', true,
     'run_id', v_run_id,
     'preview', v_preview,
     'result', v_result
@@ -1378,7 +1412,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 declare
   v_run_id uuid;
   v_token text;
@@ -1433,7 +1467,7 @@ begin
 
   return v_run_id;
 end;
-$;
+$$;
 
 revoke all on function public.save_official_roster_analysis_r6(
   uuid,timestamptz,jsonb,jsonb,jsonb
