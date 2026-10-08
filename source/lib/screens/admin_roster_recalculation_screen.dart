@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/app_user.dart';
 import '../services/supabase_backend_service.dart';
 import '../state/app_state.dart';
+import 'official_planning_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/screen_decor.dart';
 import '../theme/widgets.dart';
@@ -56,6 +57,47 @@ class _AdminRosterRecalculationScreenState
                 'Le PDF et les gardes officielles ne sont jamais modifiés. '
                 'Seule la couche personnelle dérivée est reconstruite.',
             icon: Icons.layers_rounded,
+          ),
+          const SizedBox(height: 16),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.verified_rounded, color: AppColors.brand),
+                    SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Étape 1 — Vérifier le PDF Urgences avec R6',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Un rapport R6 vérifié est obligatoire avant le recalcul. '
+                  'La relecture du PDF officiel se trouve dans '
+                  '« Documents officiels » et ne modifie pas les '
+                  'superpositions personnelles.',
+                  style: TextStyle(color: AppColors.inkSoft),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const OfficialPlanningScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_rounded),
+                  label: const Text('Ouvrir les PDF • Relire avec R6 (Groq)'),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           AppCard(
@@ -497,7 +539,15 @@ class _GlobalPreviewCard extends StatelessWidget {
               sum +
               (preview[key] is List ? (preview[key] as List).length : 0),
         );
-    final errors = previews.where((preview) => preview['error'] != null).length;
+    final failed = previews.where((preview) => preview['error'] != null).toList();
+    final errors = failed.length;
+    final missingVerified = failed.where((preview) =>
+        preview['error'].toString().contains('Aucune lecture R6 vérifiée'),
+    ).length;
+    final applicableCount = previews.where((preview) =>
+        preview['error'] == null &&
+        (preview['preview_token']?.toString().isNotEmpty ?? false),
+    ).length;
 
     return AppCard(
       child: Column(
@@ -545,22 +595,61 @@ class _GlobalPreviewCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          ...previews.where((preview) => preview['error'] != null).map(
-                (preview) => Padding(
-                  padding: const EdgeInsets.only(bottom: 5),
-                  child: Text(
-                    '${preview['profile_name']} : ${preview['error']}',
-                    style: const TextStyle(
-                      color: AppColors.danger,
-                      fontSize: 12,
-                    ),
-                  ),
+          if (missingVerified > 0) ...[
+            const SizedBox(height: 12),
+            Text(
+              '$missingVerified médecin(s) : aucune lecture R6 vérifiée '
+              'des Urgences pour leur établissement. Relisez et validez '
+              'le PDF officiel avant ce recalcul. '
+              'Les calendriers restent inchangés.',
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const OfficialPlanningScreen(),
                 ),
               ),
+              icon: const Icon(Icons.fact_check_rounded),
+              label: const Text('Ouvrir la relecture R6 des PDF'),
+            ),
+          ],
+          if (errors > missingVerified) ...[
+            const SizedBox(height: 12),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text(
+                'Autres erreurs (${errors - missingVerified})',
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              children: failed
+                  .where((preview) => !preview['error']
+                      .toString()
+                      .contains('Aucune lecture R6 vérifiée'))
+                  .map((preview) => Padding(
+                        padding: const EdgeInsets.only(bottom: 5),
+                        child: Text(
+                          "${preview['profile_name']} : ${preview['error']}",
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ))
+                  .toList(growable: false),
+            ),
+          ],
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: busy ? null : onApply,
+            onPressed: busy || applicableCount == 0 ? null : onApply,
             icon: busy
                 ? const SizedBox(
                     width: 17,
