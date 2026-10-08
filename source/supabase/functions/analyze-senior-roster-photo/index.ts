@@ -258,7 +258,8 @@ function enhanceForOcr(bytes: Uint8Array): Uint8Array {
       img.resize(2200, Math.max(1, Math.round(img.height * ratio)));
     }
     img.autoLevel();
-    img.adaptiveSharpen(0, 1.1);
+    // The pinned magick-wasm build has no adaptiveSharpen method; keep
+    // the validated autolevel/resizing path instead of failing the whole OCR.
     img.format = MagickFormat.Png;
     return img.write((data) => data);
   });
@@ -303,7 +304,7 @@ async function runOcr(bytes: Uint8Array) {
     const combined = [
       '=== OCR SPARSE TEXT ===',
       sparseText,
-      blockText.trim().isEmpty ? '' : '=== OCR SINGLE BLOCK ===',
+      blockText.trim().length === 0 ? '' : '=== OCR SINGLE BLOCK ===',
       blockText,
     ].filter(Boolean).join('\n');
 
@@ -415,7 +416,7 @@ async function analyzeImageWithOpenAI(
 ) {
   const originalData = `data:${mimeType};base64,${toBase64(original)}`;
   const enhancedData = `data:image/png;base64,${toBase64(enhanced)}`;
-  const ocrAssist = ocrText.trim().isEmpty
+  const ocrAssist = ocrText.trim().length === 0
     ? 'Aucun texte OCR auxiliaire disponible.'
     : `Texte OCR auxiliaire (peut contenir des erreurs; l'image reste la source de vérité):\n${ocrText.slice(0, 26000)}`;
 
@@ -597,7 +598,7 @@ Deno.serve(async (req: Request) => {
     let engine = 'manual_review_required';
 
     if (resourceType === 'image') {
-      let enhanced = original;
+      let enhanced: Uint8Array = original;
       try {
         enhanced = enhanceForOcr(original);
         enhancedImage = enhanced !== original;
@@ -651,7 +652,7 @@ Deno.serve(async (req: Request) => {
           confidence:
             ocrConfidence > 0 ? Math.min(0.49, ocrConfidence / 100) : 0,
           warnings: [
-            rawText.trim().isEmpty
+            rawText.trim().length === 0
               ? 'Aucun texte OCR exploitable n’a été reconnu automatiquement.'
               : 'Le texte OCR est conservé comme aide, mais aucune affectation n’est créée sans analyse structurée.',
           ],
@@ -748,7 +749,7 @@ Deno.serve(async (req: Request) => {
           year: null,
           confidence: 0,
           warnings: [
-            rawText.trim().isEmpty
+            rawText.trim().length === 0
               ? 'Aucune donnée de tableur exploitable n’a été détectée.'
               : 'Les cellules Excel ont été lues, mais aucune affectation n’est créée automatiquement sans analyse structurée.',
           ],
