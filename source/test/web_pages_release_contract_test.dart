@@ -10,11 +10,18 @@ void main() {
     final screen =
         File('lib/screens/official_planning_screen.dart').readAsStringSync();
 
-    expect(pubspec, contains('version: 12.0.6+306'));
-    expect(workflow, contains('APP_VERSION: 12.0.6'));
-    expect(workflow, contains('BUILD_NUMBER: "306"'));
-    expect(workflow,
-        contains(r"grep -q '^version: 12.0.6+306$' pubspec.yaml"));
+    // Resolve the canonical version from the pubspec. The release contract
+    // must remain valid when preparing the next maintenance version.
+    final match = RegExp(r'^version: (\d+\.\d+\.\d+)\+(\d+)$',
+            multiLine: true)
+        .firstMatch(pubspec);
+    expect(match, isNotNull);
+    final appVersion = match!.group(1)!;
+    final buildNumber = match.group(2)!;
+
+    expect(workflow, contains('APP_VERSION: $appVersion'));
+    expect(workflow, contains('BUILD_NUMBER: "$buildNumber"'));
+    expect(workflow, contains('version: $appVersion+$buildNumber'));
     expect(RegExp(r'^  deploy-pages:', multiLine: true)
         .allMatches(workflow).length, 1);
     expect(RegExp(r'^  build-web:', multiLine: true)
