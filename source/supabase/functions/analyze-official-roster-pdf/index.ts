@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const PARSER_REVISION = 'v12.0.3-r6-groq';
+const PARSER_REVISION = 'v12.0.3-groq-r6';
 const SHIFTS = new Set(['urg-jour', 'urg-nuit', 'urg-24h']);
 const MIN_CONFIDENCE = 0.90;
 
