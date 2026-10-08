@@ -140,7 +140,7 @@ class _ProfileContent extends StatelessWidget {
                         ),
                         SizedBox(height: 7),
                         Text(
-                          '${user.medicalPosition?.label ?? user.gradeLabel}${user.trainingYear == null ? '' : ' · ${user.trainingYear == 1 ? '1re' : '${user.trainingYear}e'} année'} · ${user.service}',
+                          '${user.positionDisplayLabel} · ${user.service}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
