@@ -5,6 +5,16 @@ enum MedicalGrade { junior, senior }
 /// Statut affiché à l'inscription. Le grade junior/senior reste le droit métier.
 enum MedicalPosition { externe, ffi, interne, resident, professeur }
 
+/// Filière linguistique suivie par le médecin : indépendante de la langue de l'UI.
+enum TrainingLanguage { francophone, anglophone }
+
+extension TrainingLanguageDetails on TrainingLanguage {
+  String get label => switch (this) {
+        TrainingLanguage.francophone => 'Francophone',
+        TrainingLanguage.anglophone => 'Anglophone',
+      };
+}
+
 extension MedicalPositionDetails on MedicalPosition {
   String get label => switch (this) {
         MedicalPosition.externe => 'Médecin Externe',
@@ -42,6 +52,7 @@ class AppUser {
   final String service;
   final MedicalGrade grade;
   final MedicalPosition? medicalPosition;
+  final TrainingLanguage? trainingLanguage;
   final int? trainingYear;
   final String hospital;
   final int? promotionNumber;
@@ -59,6 +70,7 @@ class AppUser {
     required this.service,
     required this.grade,
     this.medicalPosition,
+    this.trainingLanguage,
     this.trainingYear,
     required this.hospital,
     this.promotionNumber,
@@ -77,6 +89,8 @@ class AppUser {
     MedicalGrade? grade,
     MedicalPosition? medicalPosition,
     bool clearMedicalPosition = false,
+    TrainingLanguage? trainingLanguage,
+    bool clearTrainingLanguage = false,
     int? trainingYear,
     bool clearTrainingYear = false,
     String? hospital,
@@ -96,6 +110,7 @@ class AppUser {
       service: service ?? this.service,
       grade: grade ?? this.grade,
       medicalPosition: clearMedicalPosition ? null : (medicalPosition ?? this.medicalPosition),
+      trainingLanguage: clearTrainingLanguage ? null : (trainingLanguage ?? this.trainingLanguage),
       trainingYear: clearTrainingYear ? null : (trainingYear ?? this.trainingYear),
       hospital: hospital ?? this.hospital,
       promotionNumber: clearPromotionNumber
@@ -138,6 +153,7 @@ class AppUser {
     'service': service,
     'grade': grade.name,
     'medicalPosition': medicalPosition?.name,
+    'trainingLanguage': trainingLanguage?.name,
     'trainingYear': trainingYear,
     'hospital': hospital,
     'promotionNumber': promotionNumber,
@@ -161,6 +177,15 @@ class AppUser {
         break;
       }
     }
+    final rawTrainingLanguage =
+        (json['trainingLanguage'] ?? json['training_language'])?.toString();
+    TrainingLanguage? trainingLanguage;
+    for (final value in TrainingLanguage.values) {
+      if (value.name == rawTrainingLanguage) {
+        trainingLanguage = value;
+        break;
+      }
+    }
     final rawAppearance =
         (json['appearanceTheme'] as String?) ??
         (json['appearance_theme'] as String?);
@@ -178,6 +203,7 @@ class AppUser {
       service: json['service'] as String,
       grade: grade,
       medicalPosition: medicalPosition,
+      trainingLanguage: trainingLanguage,
       trainingYear: ((json['trainingYear'] ?? json['training_year']) as num?)?.toInt(),
       hospital: json['hospital'] as String,
       promotionNumber:
