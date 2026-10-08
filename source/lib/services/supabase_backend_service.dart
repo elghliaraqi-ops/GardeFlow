@@ -1349,7 +1349,13 @@ class SupabaseBackendService {
         'p_expected_preview_token': previewToken,
       },
     );
-    return Map<String, dynamic>.from(raw as Map);
+    final result = Map<String, dynamic>.from(raw as Map);
+    if (result['ok'] == false) {
+      throw StateError(
+        result['error']?.toString() ?? 'Le recalcul a échoué.',
+      );
+    }
+    return result;
   }
 
 
