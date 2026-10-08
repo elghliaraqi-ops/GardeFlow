@@ -2,6 +2,34 @@ enum UserRole { medecin, admin }
 
 enum MedicalGrade { junior, senior }
 
+/// Statut affiché à l'inscription. Le grade junior/senior reste le droit métier.
+enum MedicalPosition { externe, ffi, interne, resident, professeur }
+
+extension MedicalPositionDetails on MedicalPosition {
+  String get label => switch (this) {
+        MedicalPosition.externe => 'Médecin Externe',
+        MedicalPosition.ffi => 'Médecin FFI',
+        MedicalPosition.interne => 'Médecin Interne',
+        MedicalPosition.resident => 'Médecin Résident',
+        MedicalPosition.professeur => 'Professeur',
+      };
+
+  MedicalGrade get grade =>
+      this == MedicalPosition.professeur ? MedicalGrade.senior : MedicalGrade.junior;
+
+  bool get requiresPromotion => this == MedicalPosition.interne;
+
+  List<int> get trainingYears => switch (this) {
+        MedicalPosition.externe || MedicalPosition.resident => const [1, 2, 3, 4, 5],
+        MedicalPosition.ffi => const [6, 7],
+        MedicalPosition.interne || MedicalPosition.professeur => const [],
+      };
+
+  bool acceptsTrainingYear(int? year) =>
+      trainingYears.isEmpty ? year == null : trainingYears.contains(year);
+}
+
+
 enum AccountStatus { pending, active, suspended }
 
 class AppUser {
@@ -13,6 +41,8 @@ class AppUser {
   final String passwordSalt;
   final String service;
   final MedicalGrade grade;
+  final MedicalPosition? medicalPosition;
+  final int? trainingYear;
   final String hospital;
   final int? promotionNumber;
   final UserRole role;
@@ -28,6 +58,8 @@ class AppUser {
     required this.passwordSalt,
     required this.service,
     required this.grade,
+    this.medicalPosition,
+    this.trainingYear,
     required this.hospital,
     this.promotionNumber,
     this.role = UserRole.medecin,
@@ -43,6 +75,10 @@ class AppUser {
     String? passwordSalt,
     String? service,
     MedicalGrade? grade,
+    MedicalPosition? medicalPosition,
+    bool clearMedicalPosition = false,
+    int? trainingYear,
+    bool clearTrainingYear = false,
     String? hospital,
     int? promotionNumber,
     bool clearPromotionNumber = false,
@@ -59,6 +95,8 @@ class AppUser {
       passwordSalt: passwordSalt ?? this.passwordSalt,
       service: service ?? this.service,
       grade: grade ?? this.grade,
+      medicalPosition: clearMedicalPosition ? null : (medicalPosition ?? this.medicalPosition),
+      trainingYear: clearTrainingYear ? null : (trainingYear ?? this.trainingYear),
       hospital: hospital ?? this.hospital,
       promotionNumber: clearPromotionNumber
           ? null
@@ -91,6 +129,8 @@ class AppUser {
     'passwordSalt': passwordSalt,
     'service': service,
     'grade': grade.name,
+    'medicalPosition': medicalPosition?.name,
+    'trainingYear': trainingYear,
     'hospital': hospital,
     'promotionNumber': promotionNumber,
     'role': role.name,
@@ -104,6 +144,15 @@ class AppUser {
     final grade = rawGrade == 'senior' || legacyFonction == 'senior'
         ? MedicalGrade.senior
         : MedicalGrade.junior;
+    final rawMedicalPosition =
+        (json['medicalPosition'] ?? json['medical_position'])?.toString();
+    MedicalPosition? medicalPosition;
+    for (final value in MedicalPosition.values) {
+      if (value.name == rawMedicalPosition) {
+        medicalPosition = value;
+        break;
+      }
+    }
     final rawAppearance =
         (json['appearanceTheme'] as String?) ??
         (json['appearance_theme'] as String?);
@@ -120,6 +169,8 @@ class AppUser {
       passwordSalt: (json['passwordSalt'] as String?) ?? '',
       service: json['service'] as String,
       grade: grade,
+      medicalPosition: medicalPosition,
+      trainingYear: ((json['trainingYear'] ?? json['training_year']) as num?)?.toInt(),
       hospital: json['hospital'] as String,
       promotionNumber:
           (json['promotionNumber'] as num?)?.toInt() ??
