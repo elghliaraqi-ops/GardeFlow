@@ -27,4 +27,4 @@ jobs:
       - name: Deno typecheck visual reader
         run: deno check source/supabase/functions/analyze-official-roster-pdf/groq_vision.ts
       - name: Groq R6 contract tests
-        run: deno test source/supabase/functions/analyze-official-roster-pdf/groq_vision_test.ts
+        run: deno test --allow-read source/supabase/functions/analyze-official-roster-pdf/groq_vision_test.ts
