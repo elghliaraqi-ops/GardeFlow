@@ -5,6 +5,14 @@
 
 begin;
 
+-- Copie de sécurité strictement privée des profils avant migration.
+-- Aucun accès au rôle anon/authenticated.
+create table private.gardeflow_profiles_pre_medical_20261008 as
+select * from public.profiles;
+alter table private.gardeflow_profiles_pre_medical_20261008 enable row level security;
+revoke all on table private.gardeflow_profiles_pre_medical_20261008
+  from public, anon, authenticated;
+
 alter table public.profiles
   add column if not exists medical_position text,
   add column if not exists training_year smallint,
@@ -176,5 +184,119 @@ begin
   return new;
 end;
 $function$;
+
+
+-- Reprise explicite des 16 profils existants, sans toucher aux gardes ni aux rôles.
+-- Comptes créés avant le 07/10 : internes francophones, promotions 5-7.
+-- Exception contrôlée : Driss Douni était inscrit à tort en Promo 1 ;
+-- le référentiel et la fonction d'inférence officielle le classent en Promo 7.
+-- Les 4 nouveaux profils : 3 externes anglophones 4e année, 1 interne FR.
+do $backfill$
+declare
+  v_first_promo smallint;
+  v_count integer;
+begin
+  select current_first_year_promotion into v_first_promo
+    from public.internship_promotion_config where id = 1;
+  if v_first_promo is distinct from 7 then
+    raise exception 'La promotion de première année a changé (%)', v_first_promo;
+  end if;
+  if (select count(*) from private.gardeflow_profiles_pre_medical_20261008) <> 16
+     or (select count(*) from public.profiles) <> 16 then
+    raise exception 'Nombre de profils inattendu : sauvegarde ou base';
+  end if;
+  if (select count(*) from public.profiles
+        where (created_at at time zone 'Africa/Casablanca')::date < date '2026-10-07') <> 12 then
+    raise exception 'Le lot de 12 anciens inscrits ne correspond pas';
+  end if;
+  if (select count(*) from public.profiles
+        where (created_at at time zone 'Africa/Casablanca')::date = date '2026-10-07') <> 4 then
+    raise exception 'Le lot des 4 nouveaux inscrits ne correspond pas';
+  end if;
+  if exists(
+      select 1 from public.profiles where medical_grade <> 'junior'
+        or fonction <> 'junior' or account_status <> 'active'
+  ) then
+    raise exception 'Les grades ou statuts des comptes ont changé : arrêt';
+  end if;
+  if exists (
+      select 1 from public.profiles
+      where (created_at at time zone 'Africa/Casablanca')::date < date '2026-10-07'
+        and promotion_number not in (5,6,7)
+        and not (
+          lower(btrim(nom)) = 'douni'
+          and lower(btrim(prenom)) = 'driss'
+          and promotion_number = 1
+          and public.infer_intern_promotion(nom,prenom) = 7
+        )
+  ) then
+    raise exception 'Promotion ancienne hors 1re-3e année non reconnue';
+  end if;
+  if (select count(*) from public.profiles
+        where lower(btrim(nom))='douni'
+          and lower(btrim(prenom))='driss'
+          and promotion_number=1) <> 1 then
+    raise exception 'Le profil Driss Douni inattendu : arrêt';
+  end if;
+  if exists (
+      select 1 from public.profiles
+      where (created_at at time zone 'Africa/Casablanca')::date = date '2026-10-07'
+        and not (
+          (lower(btrim(nom))='meral' and lower(btrim(prenom))='taha')
+          or (lower(btrim(nom))='miftah' and lower(btrim(prenom))='sara')
+          or (lower(btrim(nom))='majjad' and lower(btrim(prenom))='wissal')
+          or (lower(btrim(nom))='oukkas' and lower(btrim(prenom))='marwa')
+        )
+  ) then
+    raise exception 'Inscription récente inconnue détectée : arrêt';
+  end if;
+
+  update public.profiles
+  set medical_position = 'interne',
+      training_language = 'francophone',
+      training_year = null,
+      promotion_number = case
+        when lower(btrim(nom)) = 'douni'
+         and lower(btrim(prenom)) = 'driss' then 7
+        else promotion_number end
+  where (created_at at time zone 'Africa/Casablanca')::date < date '2026-10-07';
+  get diagnostics v_count = row_count;
+  if v_count <> 12 then raise exception 'Anciens inscrits mis à jour : % sur 12', v_count; end if;
+
+  update public.profiles
+  set medical_position = 'externe',
+      training_language = 'anglophone',
+      training_year = 4,
+      promotion_number = null
+  where (created_at at time zone 'Africa/Casablanca')::date = date '2026-10-07'
+    and (
+        (lower(btrim(nom))='meral' and lower(btrim(prenom))='taha')
+        or (lower(btrim(nom))='miftah' and lower(btrim(prenom))='sara')
+        or (lower(btrim(nom))='majjad' and lower(btrim(prenom))='wissal')
+    );
+  get diagnostics v_count = row_count;
+  if v_count <> 3 then raise exception 'Externes mis à jour : % sur 3', v_count; end if;
+
+  update public.profiles
+  set medical_position = 'interne',
+      training_language = 'francophone',
+      training_year = null,
+      promotion_number = v_first_promo
+  where (created_at at time zone 'Africa/Casablanca')::date = date '2026-10-07'
+    and lower(btrim(nom))='oukkas' and lower(btrim(prenom))='marwa';
+  get diagnostics v_count = row_count;
+  if v_count <> 1 then raise exception 'Internes mis à jour : % sur 1', v_count; end if;
+
+  if exists(
+      select 1 from public.profiles
+      where medical_position is null or training_language is null
+      or (medical_position='interne' and promotion_number not in (5,6,7))
+      or (medical_position='externe'
+          and (training_year <> 4 or promotion_number is not null))
+  ) then
+    raise exception 'Incohérence détectée après modification : rollback';
+  end if;
+end;
+$backfill$;
 
 commit;
