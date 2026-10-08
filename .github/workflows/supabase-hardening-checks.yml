@@ -54,11 +54,11 @@ jobs:
           grep -Fq "admin_apply_official_roster_recalculation" "$R6"
           grep -Fq "set search_path = ''" "$R6"
 
-          AS_COUNT="$(grep -Ec '^as \$\$' "$R6")"
-          END_COUNT="$(grep -Ec '^\$\$; "$R6")"
+          AS_COUNT="$(grep -Fxc 'as $$' "$R6")"
+          END_COUNT="$(grep -Fxc '$$;' "$R6")"
           test "$AS_COUNT" -gt 0
           test "$AS_COUNT" -eq "$END_COUNT"
-          if grep -Eq '^as \$|^\$; "$R6"; then
+          if grep -Fxq 'as $' "$R6" || grep -Fxq '$;' "$R6"; then
             echo 'ERROR: malformed SQL dollar-quote delimiter in R6 migration.' >&2
             exit 1
           fi
