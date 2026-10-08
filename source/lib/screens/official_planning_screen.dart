@@ -518,6 +518,31 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
                   'sans correspondance.',
                 ),
                 const SizedBox(height: 12),
+                if (localPreflight != null)
+                  ExpansionTile(
+                    initiallyExpanded: !localComplete,
+                    tilePadding: EdgeInsets.zero,
+                    title: Text(
+                      'Détail des cellules détectées '
+                      '(${localPreflight.localCells.length})',
+                    ),
+                    children: [
+                      for (final cell in localPreflight.localCells)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${cell.date} • ${cell.shift} : '
+                              '${cell.text.trim().isEmpty ? "(vide)" : cell.text}'
+                              '${cell.redText.trim().isEmpty ? "" : " • ROUGE : ${cell.redText}"}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
                 if (!localComplete)
                   const Text(
                     'Lecture locale incomplète : publication avec pdfrx '
