@@ -541,10 +541,16 @@ class SupabaseBackendService {
     return SeniorOnCallImport.fromJson(Map<String, dynamic>.from(row));
   }
 
-  Future<SeniorOnCallImport> analyzeSeniorRosterPhoto(String resourceId) async {
+  Future<SeniorOnCallImport> analyzeSeniorRosterPhoto(
+    String resourceId, {
+    Map<String, dynamic>? pdfEvidence,
+  }) async {
     final response = await client.functions.invoke(
       'analyze-senior-roster-photo',
-      body: {'resourceId': resourceId},
+      body: {
+        'resourceId': resourceId,
+        if (pdfEvidence != null) 'pdfEvidence': pdfEvidence,
+      },
     );
     final raw = response.data;
     if (raw is! Map || raw['ok'] != true || raw['import'] is! Map) {

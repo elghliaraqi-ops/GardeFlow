@@ -10,11 +10,11 @@ void main() {
     final screen =
         File('lib/screens/official_planning_screen.dart').readAsStringSync();
 
-    expect(pubspec, contains('version: 12.0.5+305'));
-    expect(workflow, contains('APP_VERSION: 12.0.5'));
-    expect(workflow, contains('BUILD_NUMBER: "305"'));
+    expect(pubspec, contains('version: 12.0.6+306'));
+    expect(workflow, contains('APP_VERSION: 12.0.6'));
+    expect(workflow, contains('BUILD_NUMBER: "306"'));
     expect(workflow,
-        contains(r"grep -q '^version: 12.0.5+305$' pubspec.yaml"));
+        contains(r"grep -q '^version: 12.0.6+306$' pubspec.yaml"));
     expect(RegExp(r'^  deploy-pages:', multiLine: true)
         .allMatches(workflow).length, 1);
     expect(RegExp(r'^  build-web:', multiLine: true)

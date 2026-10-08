@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/senior_oncall_import.dart';
 import '../models/shared_resource.dart';
+import '../services/senior_roster_pdf_evidence_service.dart';
 import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
@@ -50,7 +51,34 @@ class _SeniorRosterReviewScreenState extends State<SeniorRosterReviewScreen> {
           widget.resource.id,
         );
       }
-      import ??= await _backend.analyzeSeniorRosterPhoto(widget.resource.id);
+      if (import == null) {
+        Map<String, dynamic>? pdfEvidence;
+        final isPdf = widget.resource.mimeType.toLowerCase() ==
+                'application/pdf' ||
+            widget.resource.displayName.toLowerCase().endsWith('.pdf');
+        if (isPdf) {
+          try {
+            final bytes = await _backend.downloadSharedResource(
+              widget.resource.storagePath,
+            );
+            final evidence = await SeniorRosterPdfEvidenceService.extract(
+              bytes: bytes,
+              resourceId: widget.resource.id,
+              resourceUpdatedAt: widget.resource.updatedAt,
+              displayName: widget.resource.displayName,
+            );
+            pdfEvidence = evidence.toJson();
+          } catch (error) {
+            // Une page scannée ou un PDF sans couche texte reste lisible
+            // par la vision côté serveur ; ce prétraitement est facultatif.
+            debugPrint('Prélecture pdfrx sénior indisponible : $error');
+          }
+        }
+        import = await _backend.analyzeSeniorRosterPhoto(
+          widget.resource.id,
+          pdfEvidence: pdfEvidence,
+        );
+      }
       if (!mounted) return;
       setState(() {
         _import = import;
@@ -270,6 +298,12 @@ class _SeniorRosterReviewScreenState extends State<SeniorRosterReviewScreen> {
     switch (value) {
       case 'openai_vision':
         return 'Analyse visuelle';
+      case 'pdfrx_pdf_openai':
+        return 'pdfrx 2.6.5 + vérification visuelle';
+      case 'openai_pdf':
+        return 'Lecture visuelle du PDF';
+      case 'pdf_manual_review':
+        return 'PDF : vérification manuelle';
       case 'tesseract_supabase_ai':
         return 'OCR + analyse structurée';
       case 'manual_review_required':
@@ -287,7 +321,7 @@ class _SeniorRosterReviewScreenState extends State<SeniorRosterReviewScreen> {
         title: GardeFlowTitle('Vérifier l’analyse'),
         actions: [
           IconButton(
-            tooltip: 'Réanalyser la photo',
+            tooltip: 'Réanalyser ce document',
             onPressed: _loading || _reanalyzing || _publishing
                 ? null
                 : () => _load(forceAnalyze: true),
@@ -483,6 +517,28 @@ class _SeniorRosterReviewScreenState extends State<SeniorRosterReviewScreen> {
                       ),
                     ),
                   ),
+              ],
+            ),
+          ),
+        ],
+        if (import.rawText.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.md),
+          AppCard(
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text(
+                'Texte auxiliaire extrait (pdfrx / OCR)',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Pour comparaison avec le document original ; '
+                'ne remplace pas la validation des lignes.',
+              ),
+              children: [
+                SelectableText(
+                  import.rawText,
+                  style: const TextStyle(fontSize: 12, height: 1.4),
+                ),
               ],
             ),
           ),
