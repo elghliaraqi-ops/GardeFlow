@@ -23,7 +23,10 @@ alter table public.profiles
   drop constraint if exists profiles_training_language_check;
 alter table public.profiles
   add constraint profiles_training_language_check
-  check (training_language is null or training_language in ('francophone', 'anglophone'));
+  check (
+    (medical_position is null and training_language is null)
+    or (medical_position is not null and training_language in ('francophone', 'anglophone'))
+  );
 
 alter table public.profiles
   drop constraint if exists profiles_training_year_by_position_check;
@@ -31,8 +34,8 @@ alter table public.profiles
   add constraint profiles_training_year_by_position_check
   check (
     (medical_position is null and training_year is null)
-    or (medical_position in ('externe', 'resident') and training_year between 1 and 5)
-    or (medical_position = 'ffi' and training_year in (6, 7))
+    or (medical_position in ('externe', 'resident') and training_year is not null and training_year between 1 and 5)
+    or (medical_position = 'ffi' and training_year is not null and training_year in (6, 7))
     or (medical_position in ('interne', 'professeur') and training_year is null)
   );
 
@@ -62,6 +65,14 @@ begin
   return new;
 end;
 $function$;
+
+-- Le statut médical modifié doit déclencher le recalcul/effacement de la
+-- promotion, même si promotion_number n'est pas explicitement mis à jour.
+drop trigger if exists profiles_sync_promotion on public.profiles;
+create trigger profiles_sync_promotion
+before insert or update of nom, prenom, promotion_number, medical_position
+on public.profiles
+for each row execute function public.sync_profile_promotion();
 
 -- Conserver le workflow existant : rôle medecin, statut pending, validation admin.
 -- Le grade est calculé côté serveur depuis le statut médical déclaré ; les
