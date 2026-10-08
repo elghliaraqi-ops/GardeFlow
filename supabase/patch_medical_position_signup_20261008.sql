@@ -1,5 +1,5 @@
 -- GardeFlow — statuts médicaux à l'inscription (2026-10-08)
--- Déployer AVANT les builds Flutter qui lisent medical_position / training_year.
+-- Déployer AVANT les builds Flutter qui lisent medical_position / training_year / training_language.
 -- Non destructif : les anciens comptes conservent leurs grades et promotions.
 -- Prévu pour le projet PlanningHM6 après vérification de la version du trigger.
 
@@ -7,7 +7,8 @@ begin;
 
 alter table public.profiles
   add column if not exists medical_position text,
-  add column if not exists training_year smallint;
+  add column if not exists training_year smallint,
+  add column if not exists training_language text;
 
 alter table public.profiles
   drop constraint if exists profiles_medical_position_check;
@@ -17,6 +18,12 @@ alter table public.profiles
     medical_position is null
     or medical_position in ('externe', 'ffi', 'interne', 'resident', 'professeur')
   );
+
+alter table public.profiles
+  drop constraint if exists profiles_training_language_check;
+alter table public.profiles
+  add constraint profiles_training_language_check
+  check (training_language is null or training_language in ('francophone', 'anglophone'));
 
 alter table public.profiles
   drop constraint if exists profiles_training_year_by_position_check;
@@ -68,6 +75,7 @@ as $function$
 declare
   g text;
   v_position text;
+  v_training_language text;
   v_training_year smallint;
   v_raw_training_year text;
   v_promotion smallint;
@@ -86,6 +94,15 @@ begin
     if g not in ('junior', 'senior') then g := 'junior'; end if;
   else
     g := case when v_position = 'professeur' then 'senior' else 'junior' end;
+  end if;
+
+  v_training_language := nullif(
+    trim(coalesce(new.raw_user_meta_data->>'training_language', '')), ''
+  );
+  if (v_position is not null and coalesce(v_training_language, '') not in ('francophone', 'anglophone'))
+      or (v_position is null and v_training_language is not null
+          and v_training_language not in ('francophone', 'anglophone')) then
+    raise exception 'Langue de formation obligatoire : Francophone ou Anglophone';
   end if;
 
   v_training_year := null;
@@ -128,7 +145,7 @@ begin
 
   insert into public.profiles (
     id, phone, nom, prenom, service, fonction, medical_grade, hospital,
-    role, account_status, promotion_number, medical_position, training_year
+    role, account_status, promotion_number, medical_position, training_year, training_language
   ) values (
     new.id,
     coalesce(new.phone, new.raw_user_meta_data->>'phone'),
@@ -141,7 +158,8 @@ begin
     'pending',
     v_promotion,
     v_position,
-    v_training_year
+    v_training_year,
+    v_training_language
   )
   on conflict (id) do nothing;
   return new;
