@@ -968,6 +968,8 @@ class SupabaseBackendService {
     String? verificationToken,
     List<Map<String, dynamic>> localEvidence =
         const <Map<String, dynamic>>[],
+    List<Map<String, dynamic>> manualResolutions =
+        const <Map<String, dynamic>>[],
   }) async {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
@@ -978,6 +980,8 @@ class SupabaseBackendService {
         'resourceId': resourceId,
         'parserRevision': parserRevision,
         'localEvidence': localEvidence,
+        if (manualResolutions.isNotEmpty)
+          'manualResolutions': manualResolutions,
         if (verificationToken != null && verificationToken.isNotEmpty)
           'verificationToken': verificationToken,
       },
