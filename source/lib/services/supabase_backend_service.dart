@@ -1016,6 +1016,9 @@ class SupabaseBackendService {
     String parserRevision = 'v12.0.3-groq-r6',
     String? verificationToken,
     bool forceReread = false,
+    required String selectedSlot,
+    required DateTime selectedUpdatedAt,
+    required bool manualGroqConfirmed,
     List<Map<String, dynamic>> localEvidence =
         const <Map<String, dynamic>>[],
   }) async {
@@ -1024,6 +1027,10 @@ class SupabaseBackendService {
     }
     final response = await _invokeOfficialRosterPdf({
         'resourceId': resourceId,
+        'selectedResourceId': resourceId,
+        'selectedSlot': selectedSlot,
+        'selectedUpdatedAt': selectedUpdatedAt.toUtc().toIso8601String(),
+        'manualGroqConfirmed': manualGroqConfirmed,
         'parserRevision': parserRevision,
         'localEvidence': localEvidence,
         if (forceReread) 'forceReread': true,
@@ -1037,6 +1044,7 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required String slot,
+    required bool manualGroqConfirmed,
     required List<Map<String, dynamic>> localEvidence,
     List<Map<String, dynamic>> manualResolutions =
         const <Map<String, dynamic>>[],
@@ -1069,6 +1077,8 @@ class SupabaseBackendService {
       final response = await _invokeOfficialRosterPdf({
           'tempStoragePath': path,
           'slot': slot,
+          'selectedSlot': slot,
+          'manualGroqConfirmed': manualGroqConfirmed,
           'displayName': fileName,
           'parserRevision': parserRevision,
           'localEvidence': localEvidence,
