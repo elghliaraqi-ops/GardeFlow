@@ -18,6 +18,9 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../theme/screen_decor.dart';
 
+// Le choix de la seconde lecture appartient exclusivement à l'admin.
+enum _OfficialRosterReadChoice { pdfrx, groq }
+
 class OfficialPlanningScreen extends StatefulWidget {
   const OfficialPlanningScreen({super.key});
 
@@ -170,7 +173,6 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     SharedResource resource,
     List<AppUser> profiles, {
     Uint8List? currentBytes,
-    bool allowRemoteVerification = false,
   }) async {
     final versions = await _backend.fetchOfficialRosterVersions(slot.id);
     final hasCurrentVersion = versions.any(
@@ -183,29 +185,6 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     final suppliedBytes = <String, Uint8List>{
       if (currentBytes != null) resource.storagePath: currentBytes,
     };
-    var currentLocalEvidence = const <Map<String, dynamic>>[];
-    if (allowRemoteVerification) {
-      try {
-        final bytesForA =
-            currentBytes ?? await _backend.downloadSharedResource(resource.storagePath);
-        suppliedBytes[resource.storagePath] = bytesForA;
-        final localA = await OfficialRosterImportService.parse(
-          bytes: bytesForA,
-          displayName: resource.displayName,
-          hospital: slot.hospital,
-          profiles: profiles,
-          resourceUpdatedAt: resource.updatedAt,
-        );
-        currentLocalEvidence = localA.localCells
-            .map((cell) => cell.toJson())
-            .toList(growable: false);
-      } catch (e) {
-        // Les PDF scannés peuvent ne pas exposer une couche texte exploitable.
-        // Le serveur utilisera alors une Lecture A visuelle de secours distincte.
-        debugPrint('Lecture A géométrique indisponible: $e');
-      }
-    }
-
     final identityLinks =
         await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
 
@@ -213,23 +192,11 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         await OfficialRosterVerifiedReadService.readVersionHistory(
       versionsNewestFirst: versions,
       loadBytes: _backend.downloadSharedResource,
-      loadVerified: (version) async {
-        var cached = await _backend.fetchOfficialRosterVerifiedRead(
-          resource: version,
-          parserRevision: OfficialRosterImportService.parserRevision,
-        );
-        final isCurrent =
-            version.storagePath == resource.storagePath &&
-            version.updatedAt.toUtc() == resource.updatedAt.toUtc();
-        if (cached == null && allowRemoteVerification && isCurrent) {
-          cached = await _backend.analyzeOfficialRosterResource(
-            resource.id,
-            parserRevision: OfficialRosterImportService.parserRevision,
-            localEvidence: currentLocalEvidence,
-          );
-        }
-        return cached;
-      },
+      // Cache déjà validé consultable, mais aucun Groq déclenché ici.
+      loadVerified: (version) => _backend.fetchOfficialRosterVerifiedRead(
+        resource: version,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      ),
       hospital: slot.hospital,
       profiles: profiles,
       suppliedBytes: suppliedBytes,
@@ -291,7 +258,6 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         resource,
         profiles,
         currentBytes: bytes,
-        allowRemoteVerification: true,
       );
       if (parsed.detectedRows == 0) {
         throw StateError('Aucune ligne de garde 08h-20h / 20h-08h reconnue dans ce PDF.');
@@ -364,35 +330,30 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       final identityLinks = await _backend.fetchOfficialRosterIdentityLinks(
         hospital: slot.hospital,
       );
-      // Cache de la version EXACTE (ID + updated_at + révision Groq R6).
-      var extraction = await _backend.fetchOfficialRosterVerifiedRead(
-        resource: resource,
-        parserRevision: OfficialRosterImportService.parserRevision,
-      );
-      if (extraction == null) {
-        var localEvidence = const <Map<String, dynamic>>[];
-        try {
-          final bytes = await _backend.downloadSharedResource(resource.storagePath);
-          final local = await OfficialRosterImportService.parse(
-            bytes: bytes,
-            displayName: resource.displayName,
-            hospital: slot.hospital,
-            profiles: profiles,
-            resourceUpdatedAt: resource.updatedAt,
-          );
-          localEvidence = local.localCells
-              .map((cell) => cell.toJson())
-              .toList(growable: false);
-        } catch (error) {
-          // PDF scanné : le serveur peut faire une lecture A visuelle de secours.
-          debugPrint('Lecture A locale indisponible : $error');
-        }
-        extraction = await _backend.analyzeOfficialRosterResource(
-          resource.id,
-          parserRevision: OfficialRosterImportService.parserRevision,
-          localEvidence: localEvidence,
+      // Déclenchement EXPLICITE de B : ne pas réutiliser un cache
+      // potentiellement erroné lorsque l'admin constate une mauvaise lecture.
+      var localEvidence = const <Map<String, dynamic>>[];
+      try {
+        final bytes = await _backend.downloadSharedResource(resource.storagePath);
+        final local = await OfficialRosterImportService.parse(
+          bytes: bytes,
+          displayName: resource.displayName,
+          hospital: slot.hospital,
+          profiles: profiles,
+          resourceUpdatedAt: resource.updatedAt,
         );
+        localEvidence = local.localCells
+            .map((cell) => cell.toJson())
+            .toList(growable: false);
+      } catch (error) {
+        debugPrint('Lecture pdfrx initiale indisponible : $error');
       }
+      final extraction = await _backend.analyzeOfficialRosterResource(
+        resource.id,
+        parserRevision: OfficialRosterImportService.parserRevision,
+        localEvidence: localEvidence,
+        forceReread: true,
+      );
       final read = OfficialRosterVerifiedReadService.fromExtraction(
         extraction: extraction,
         hospital: slot.hospital,
@@ -490,6 +451,142 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         debugPrint('Prélecture locale non exploitable: ' + e.toString());
       }
 
+      if (!mounted) return;
+      final localComplete = localPreflight != null &&
+          localPreflight.isComplete &&
+          localPreflight.detectedRows > 0 &&
+          localPreflight.coveredDates.isNotEmpty;
+      final choice = await showDialog<_OfficialRosterReadChoice>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Lecture du planning Urgences'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Lecture 1 : pdfrx 2.6.5 (locale, sans appel IA). '
+                  'Vérifiez le PDF et les gardes détectées avant de publier.',
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${localPreflight?.detectedRows ?? 0} jour(s), '
+                  '${localPreflight?.detectedCells ?? 0} cellule(s), '
+                  '${localPreflight?.assignments.length ?? 0} affectation(s) '
+                  'reconnue(s), '
+                  '${localPreflight?.unmatchedCells.length ?? 0} élément(s) '
+                  'sans correspondance.',
+                ),
+                const SizedBox(height: 12),
+                if (localPreflight != null)
+                  ExpansionTile(
+                    initiallyExpanded: !localComplete,
+                    tilePadding: EdgeInsets.zero,
+                    title: Text(
+                      'Détail des cellules détectées '
+                      '(${localPreflight.localCells.length})',
+                    ),
+                    children: [
+                      for (final cell in localPreflight.localCells)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${cell.date} • ${cell.shift} : '
+                              '${cell.text.trim().isEmpty ? "(vide)" : cell.text}'
+                              '${cell.redText.trim().isEmpty ? "" : " • ROUGE : ${cell.redText}"}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                if (!localComplete)
+                  const Text(
+                    'Lecture locale incomplète : publication avec pdfrx '
+                    'bloquée. Vous pouvez déclencher Groq manuellement.',
+                    style: TextStyle(color: Colors.deepOrange),
+                  ),
+                if (localPreflight?.validationErrors.isNotEmpty ?? false)
+                  Text(
+                    localPreflight!.validationErrors.take(5).join(' • '),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Lecture 2 : Groq uniquement si vous le demandez. '
+                  'Lecture 3 : arbitrage R6 automatique uniquement '
+                  'en cas de désaccord ou de lecture insuffisante.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Annuler'),
+            ),
+            TextButton.icon(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                _OfficialRosterReadChoice.groq,
+              ),
+              icon: const Icon(Icons.auto_fix_high_rounded),
+              label: const Text('Corriger avec Groq'),
+            ),
+            FilledButton(
+              onPressed: !localComplete
+                  ? null
+                  : () => Navigator.pop(
+                        dialogContext,
+                        _OfficialRosterReadChoice.pdfrx,
+                      ),
+              child: const Text('Valider la lecture pdfrx'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+      if (choice == _OfficialRosterReadChoice.pdfrx) {
+        final accepted = localPreflight!;
+        // Aucun Groq invoqué dans ce parcours. Import de la seule
+        // extraction locale complète, après validation explicite de l'admin.
+        final resource = await _backend.uploadOfficialPlanningPdf(
+          slot: slot.id,
+          bytes: bytes,
+          fileName: file.name,
+          coveredDates: accepted.coveredDates,
+          parserRevision: OfficialRosterImportService.parserRevision,
+        );
+        Map<String, dynamic>? imported;
+        Object? importError;
+        try {
+          imported = await _processOfficialRoster(slot, resource, bytes: bytes);
+        } catch (error) {
+          importError = error;
+        }
+        await _load();
+        if (mounted) {
+          final count = ((imported?['inserted'] as num?)?.toInt() ?? 0) +
+              ((imported?['updated'] as num?)?.toInt() ?? 0);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(importError == null
+                ? 'PDF publié avec pdfrx : $count garde(s) Urgences '
+                  'synchronisée(s). Groq non appelé.'
+                : 'PDF publié. Import local à vérifier : $importError. '
+                  'Vous pouvez lancer Groq manuellement.'),
+          ));
+        }
+        return;
+      }
+
+      // Groq B est exclusivement déclenché par cette action administrateur.
+      // Le moteur R6 déclenche C si A/B divergent, sans jamais écraser une
+      // lecture non validée.
       final localEvidence = localPreflight?.localCells
               .map((cell) => cell.toJson())
               .toList(growable: false) ??
@@ -1445,7 +1542,7 @@ class _OfficialPdfCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.fact_check_rounded, size: 18),
-                  label: const Text('Relire avec R6 (Groq)'),
+                  label: const Text('Corriger avec Groq (lecture 2)'),
                 ),
               if (r != null && isMyHospital && canResync)
                 OutlinedButton.icon(

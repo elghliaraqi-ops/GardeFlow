@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,8 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // PdfDocument.openData is used before PDF viewer widgets by the R6 importer.
+  pdfrxFlutterInitialize();
   await initializeDateFormatting('fr_FR', null);
   await NotificationService.instance.init();
   await SupabaseBackendService.instance.initialize();
