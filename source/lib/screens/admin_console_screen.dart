@@ -225,6 +225,32 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> {
                 onTap: () => _open(context, const OfficialPlanningScreen()),
               ),
               _ConsoleAction(
+                title: 'Relire avec pdfrx',
+                subtitle: 'Lecture 1 locale : choisir un PDF, relancer '
+                    'l’extraction et contrôler toutes ses cellules',
+                icon: Icons.document_scanner_rounded,
+                color: AppColors.info,
+                onTap: () => _open(
+                  context,
+                  const OfficialPlanningScreen(
+                    preferredReader: OfficialPlanningReader.pdfrx,
+                  ),
+                ),
+              ),
+              _ConsoleAction(
+                title: 'Relire avec Groq',
+                subtitle: 'Lecture 2 manuelle : envoyer uniquement '
+                    'le PDF choisi après confirmation',
+                icon: Icons.fact_check_rounded,
+                color: AppColors.success,
+                onTap: () => _open(
+                  context,
+                  const OfficialPlanningScreen(
+                    preferredReader: OfficialPlanningReader.groq,
+                  ),
+                ),
+              ),
+              _ConsoleAction(
                 title: 'Lecture PDF / Import',
                 subtitle: 'Statuts VERT / ORANGE, conflits et scores',
                 icon: Icons.document_scanner_rounded,
