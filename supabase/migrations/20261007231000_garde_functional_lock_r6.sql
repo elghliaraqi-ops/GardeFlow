@@ -1126,7 +1126,7 @@ begin
   with target as (
     select
       g.id,
-      g.date_str::text as date_str,
+      g.date_str as date_str,
       g.shift_id,
       g.confidence,
       g.review_status,
