@@ -50,6 +50,7 @@ class _AuthScreenState extends State<AuthScreen>
   int? _regPromotion;
   String _regService = kServices.first;
   MedicalPosition? _regPosition;
+  TrainingLanguage? _regTrainingLanguage;
   int? _regTrainingYear;
 
   @override
@@ -106,6 +107,10 @@ class _AuthScreenState extends State<AuthScreen>
 
   Future<void> _submitRegister() async {
     final position = _regPosition;
+    if (_regTrainingLanguage == null) {
+      setState(() => _error = 'Sélectionnez votre langue de formation.');
+      return;
+    }
     if (position == null) {
       setState(() => _error = 'Sélectionnez votre statut médical.');
       return;
@@ -118,6 +123,7 @@ class _AuthScreenState extends State<AuthScreen>
       password: _regPasswordCtrl.text,
       service: _regService,
       medicalPosition: position,
+      trainingLanguage: _regTrainingLanguage!,
       trainingYear: position.requiresPromotion ? null : _regTrainingYear,
       hospital: _hospital,
       promotionNumber: position.requiresPromotion
@@ -736,6 +742,37 @@ class _AuthScreenState extends State<AuthScreen>
             _regPosition = value;
             _regTrainingYear = null;
             _regPromotion = null;
+            _error = null;
+          }),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Langue de formation',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: AppColors.inkSoft,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<TrainingLanguage>(
+          value: _regTrainingLanguage,
+          isExpanded: true,
+          decoration: _glassInputDecoration(
+            hint: 'Anglophone ou Francophone',
+            icon: Icons.language_rounded,
+          ),
+          items: TrainingLanguage.values
+              .map((language) => DropdownMenuItem<TrainingLanguage>(
+                    value: language,
+                    child: Text(
+                      language.label,
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                  ))
+              .toList(),
+          onChanged: (value) => setState(() {
+            _regTrainingLanguage = value;
             _error = null;
           }),
         ),
