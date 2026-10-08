@@ -140,7 +140,7 @@ class _ProfileContent extends StatelessWidget {
                         ),
                         SizedBox(height: 7),
                         Text(
-                          '${user.gradeLabel} · ${user.service}',
+                          '${user.positionDisplayLabel}${user.trainingLanguage == null ? '' : ' · ${user.trainingLanguage!.label}'} · ${user.service}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

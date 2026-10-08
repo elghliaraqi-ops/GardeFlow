@@ -1162,7 +1162,10 @@ async function uploadOpenAIFile(
   form.append(
     'file',
     new Blob([bytes], { type: 'application/pdf' }),
-    fileName || 'planning-officiel.pdf',
+    // OpenAI valide l'extension de façon sensible à la casse (.PDF rejeté).
+    /\.pdf$/i.test(fileName)
+      ? fileName.replace(/\.pdf$/i, '.pdf')
+      : 'planning-officiel.pdf',
   );
   const response = await fetch('https://api.openai.com/v1/files', {
     method: 'POST',
@@ -1237,6 +1240,17 @@ async function runRead(
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error('OpenAI roster read failed', response.status, payload);
+    if (response.status === 429 &&
+        (payload?.error?.code === 'credit_balance_exhausted' ||
+         payload?.error?.type === 'insufficient_quota')) {
+      throw new Error('openai_api_credits_exhausted');
+    }
+    if (response.status === 429) {
+      throw new Error('openai_rate_limited');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('openai_authentication_failed');
+    }
     throw new Error('openai_read_failed');
   }
   return normalizeExtraction(parseJsonLoose(extractResponseText(payload)));
@@ -1771,6 +1785,16 @@ Deno.serve(async (req: Request) => {
     }
   } catch (error) {
     console.error('analyze-official-roster-pdf error', error);
+    const code = error instanceof Error ? error.message : '';
+    if (code === 'openai_api_credits_exhausted') {
+      return json({ ok: false, error: code }, 503);
+    }
+    if (code === 'openai_rate_limited') {
+      return json({ ok: false, error: code }, 429);
+    }
+    if (code === 'openai_authentication_failed') {
+      return json({ ok: false, error: code }, 503);
+    }
     return json({ ok: false, error: 'server_error' }, 500);
   }
 });

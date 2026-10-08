@@ -2,6 +2,44 @@ enum UserRole { medecin, admin }
 
 enum MedicalGrade { junior, senior }
 
+/// Statut affiché à l'inscription. Le grade junior/senior reste le droit métier.
+enum MedicalPosition { externe, ffi, interne, resident, professeur }
+
+/// Filière linguistique suivie par le médecin : indépendante de la langue de l'UI.
+enum TrainingLanguage { francophone, anglophone }
+
+extension TrainingLanguageDetails on TrainingLanguage {
+  String get label => switch (this) {
+        TrainingLanguage.francophone => 'Francophone',
+        TrainingLanguage.anglophone => 'Anglophone',
+      };
+}
+
+extension MedicalPositionDetails on MedicalPosition {
+  String get label => switch (this) {
+        MedicalPosition.externe => 'Médecin Externe',
+        MedicalPosition.ffi => 'Médecin FFI',
+        MedicalPosition.interne => 'Médecin Interne',
+        MedicalPosition.resident => 'Médecin Résident',
+        MedicalPosition.professeur => 'Professeur',
+      };
+
+  MedicalGrade get grade =>
+      this == MedicalPosition.professeur ? MedicalGrade.senior : MedicalGrade.junior;
+
+  bool get requiresPromotion => this == MedicalPosition.interne;
+
+  List<int> get trainingYears => switch (this) {
+        MedicalPosition.externe || MedicalPosition.resident => const [1, 2, 3, 4, 5],
+        MedicalPosition.ffi => const [6, 7],
+        MedicalPosition.interne || MedicalPosition.professeur => const [],
+      };
+
+  bool acceptsTrainingYear(int? year) =>
+      trainingYears.isEmpty ? year == null : trainingYears.contains(year);
+}
+
+
 enum AccountStatus { pending, active, suspended }
 
 class AppUser {
@@ -13,6 +51,9 @@ class AppUser {
   final String passwordSalt;
   final String service;
   final MedicalGrade grade;
+  final MedicalPosition? medicalPosition;
+  final TrainingLanguage? trainingLanguage;
+  final int? trainingYear;
   final String hospital;
   final int? promotionNumber;
   final UserRole role;
@@ -28,6 +69,9 @@ class AppUser {
     required this.passwordSalt,
     required this.service,
     required this.grade,
+    this.medicalPosition,
+    this.trainingLanguage,
+    this.trainingYear,
     required this.hospital,
     this.promotionNumber,
     this.role = UserRole.medecin,
@@ -43,6 +87,12 @@ class AppUser {
     String? passwordSalt,
     String? service,
     MedicalGrade? grade,
+    MedicalPosition? medicalPosition,
+    bool clearMedicalPosition = false,
+    TrainingLanguage? trainingLanguage,
+    bool clearTrainingLanguage = false,
+    int? trainingYear,
+    bool clearTrainingYear = false,
     String? hospital,
     int? promotionNumber,
     bool clearPromotionNumber = false,
@@ -59,6 +109,9 @@ class AppUser {
       passwordSalt: passwordSalt ?? this.passwordSalt,
       service: service ?? this.service,
       grade: grade ?? this.grade,
+      medicalPosition: clearMedicalPosition ? null : (medicalPosition ?? this.medicalPosition),
+      trainingLanguage: clearTrainingLanguage ? null : (trainingLanguage ?? this.trainingLanguage),
+      trainingYear: clearTrainingYear ? null : (trainingYear ?? this.trainingYear),
       hospital: hospital ?? this.hospital,
       promotionNumber: clearPromotionNumber
           ? null
@@ -79,6 +132,14 @@ class AppUser {
     return values.isEmpty ? '?' : values.join();
   }
 
+  String get positionDisplayLabel {
+    final base = medicalPosition?.label ?? gradeLabel;
+    final year = trainingYear;
+    if (year == null) return base;
+    if (year == 1) return '$base · 1re année';
+    return '$base · ${year}e année';
+  }
+
   String get gradeLabel => grade == MedicalGrade.senior ? 'Senior' : 'Junior';
   String get roleLabel => role == UserRole.admin ? 'Administrateur' : 'Médecin';
 
@@ -91,6 +152,9 @@ class AppUser {
     'passwordSalt': passwordSalt,
     'service': service,
     'grade': grade.name,
+    'medicalPosition': medicalPosition?.name,
+    'trainingLanguage': trainingLanguage?.name,
+    'trainingYear': trainingYear,
     'hospital': hospital,
     'promotionNumber': promotionNumber,
     'role': role.name,
@@ -104,6 +168,24 @@ class AppUser {
     final grade = rawGrade == 'senior' || legacyFonction == 'senior'
         ? MedicalGrade.senior
         : MedicalGrade.junior;
+    final rawMedicalPosition =
+        (json['medicalPosition'] ?? json['medical_position'])?.toString();
+    MedicalPosition? medicalPosition;
+    for (final value in MedicalPosition.values) {
+      if (value.name == rawMedicalPosition) {
+        medicalPosition = value;
+        break;
+      }
+    }
+    final rawTrainingLanguage =
+        (json['trainingLanguage'] ?? json['training_language'])?.toString();
+    TrainingLanguage? trainingLanguage;
+    for (final value in TrainingLanguage.values) {
+      if (value.name == rawTrainingLanguage) {
+        trainingLanguage = value;
+        break;
+      }
+    }
     final rawAppearance =
         (json['appearanceTheme'] as String?) ??
         (json['appearance_theme'] as String?);
@@ -120,6 +202,9 @@ class AppUser {
       passwordSalt: (json['passwordSalt'] as String?) ?? '',
       service: json['service'] as String,
       grade: grade,
+      medicalPosition: medicalPosition,
+      trainingLanguage: trainingLanguage,
+      trainingYear: ((json['trainingYear'] ?? json['training_year']) as num?)?.toInt(),
       hospital: json['hospital'] as String,
       promotionNumber:
           (json['promotionNumber'] as num?)?.toInt() ??

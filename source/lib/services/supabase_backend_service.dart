@@ -66,10 +66,13 @@ class SupabaseBackendService {
     required String rawPhone,
     required String password,
     required String service,
-    required MedicalGrade grade,
+    required MedicalPosition medicalPosition,
+    required TrainingLanguage trainingLanguage,
     required String hospital,
     int? promotionNumber,
+    int? trainingYear,
   }) async {
+    final grade = medicalPosition.grade;
     final phone = authPhone(rawPhone);
     final email = technicalEmail(phone);
     final res = await client.auth.signUp(
@@ -82,8 +85,12 @@ class SupabaseBackendService {
         'service': service,
         'medical_grade': grade.name,
         'fonction': grade.name,
+        'medical_position': medicalPosition.name,
+        'training_language': trainingLanguage.name,
+        if (trainingYear != null) 'training_year': trainingYear,
         'hospital': hospital,
-        if (promotionNumber != null) 'promotion_number': promotionNumber,
+        if (medicalPosition.requiresPromotion && promotionNumber != null)
+          'promotion_number': promotionNumber,
       },
     );
     if (res.user == null) throw StateError('Création du compte impossible.');
@@ -273,7 +280,7 @@ class SupabaseBackendService {
       final rows = await client
           .from('profiles')
           .select(
-            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,appearance_theme',
+            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,medical_position,training_year,training_language,appearance_theme',
           )
           .order('prenom')
           .order('nom')
@@ -429,6 +436,13 @@ class SupabaseBackendService {
       passwordSalt: '',
       service: j['service'] as String,
       grade: grade,
+      medicalPosition: MedicalPosition.values.where(
+        (p) => p.name == j['medical_position'],
+      ).firstOrNull,
+      trainingLanguage: TrainingLanguage.values.where(
+        (l) => l.name == j['training_language'],
+      ).firstOrNull,
+      trainingYear: (j['training_year'] as num?)?.toInt(),
       hospital: j['hospital'] as String,
       promotionNumber: (j['promotion_number'] as num?)?.toInt(),
       appearanceTheme: const <String>{
@@ -948,6 +962,37 @@ class SupabaseBackendService {
     }
   }
 
+  // Retourne des erreurs métier compréhensibles, sans masquer le fail-closed.
+  Future<dynamic> _invokeOfficialRosterPdf(Map<String, dynamic> body) async {
+    try {
+      return await client.functions.invoke(
+        'analyze-official-roster-pdf',
+        body: body,
+      );
+    } on FunctionException catch (error) {
+      final details = error.details;
+      final code = details is Map ? details['error']?.toString() : null;
+      switch (code) {
+        case 'openai_api_credits_exhausted':
+          throw StateError(
+            'Crédits API OpenAI épuisés : rechargez le solde API avant de '
+            'relire le PDF. Aucune garde n’a été modifiée.',
+          );
+        case 'openai_rate_limited':
+          throw StateError(
+            'Le lecteur visuel est temporairement limité. '
+            'Réessayez plus tard : calendriers inchangés.',
+          );
+        case 'openai_authentication_failed':
+          throw StateError(
+            'Le vérificateur visuel OpenAI ne peut pas s’authentifier. '
+            'Contactez l’administrateur technique : calendriers inchangés.',
+          );
+      }
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> analyzeOfficialRosterResource(
     String resourceId, {
     String parserRevision = 'v12.0.2-r6',
@@ -958,16 +1003,13 @@ class SupabaseBackendService {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
     }
-    final response = await client.functions.invoke(
-      'analyze-official-roster-pdf',
-      body: {
+    final response = await _invokeOfficialRosterPdf({
         'resourceId': resourceId,
         'parserRevision': parserRevision,
         'localEvidence': localEvidence,
         if (verificationToken != null && verificationToken.isNotEmpty)
           'verificationToken': verificationToken,
-      },
-    );
+    });
     return _officialRosterExtractionFromFunction(response.data);
   }
 
@@ -1004,17 +1046,14 @@ class SupabaseBackendService {
         );
 
     try {
-      final response = await client.functions.invoke(
-        'analyze-official-roster-pdf',
-        body: {
+      final response = await _invokeOfficialRosterPdf({
           'tempStoragePath': path,
           'slot': slot,
           'displayName': fileName,
           'parserRevision': parserRevision,
           'localEvidence': localEvidence,
           'manualResolutions': manualResolutions,
-        },
-      );
+      });
       return _officialRosterExtractionFromFunction(response.data);
     } finally {
       try {
