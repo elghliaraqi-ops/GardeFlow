@@ -10,6 +10,7 @@ class SeniorOnCallImport {
   final String analysisEngine;
   final List<Map<String, dynamic>> draftRows;
   final List<String> warnings;
+  final String rawText;
   final DateTime updatedAt;
 
   const SeniorOnCallImport({
@@ -24,6 +25,7 @@ class SeniorOnCallImport {
     required this.analysisEngine,
     required this.draftRows,
     required this.warnings,
+    this.rawText = '',
     required this.updatedAt,
   });
 
@@ -48,6 +50,7 @@ class SeniorOnCallImport {
       warnings: rawWarnings is List
           ? rawWarnings.map((e) => e.toString()).toList(growable: false)
           : const <String>[],
+      rawText: (json['raw_text'] as String?) ?? '',
       updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
           DateTime.now(),
     );
