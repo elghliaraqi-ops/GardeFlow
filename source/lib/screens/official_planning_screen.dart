@@ -321,6 +321,48 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
   ) async {
     if (_busySlot != null || _autoImportingSlots.contains(slot.id)) return;
     if (context.read<AppState>().currentUser?.role != UserRole.admin) return;
+
+    // Ne relire QUE le document sélectionné. La liste des autres
+    // établissements n'entre jamais dans cette requête réseau.
+    final selected = _resourceFor(slot.id);
+    if (selected == null ||
+        selected.id != resource.id ||
+        selected.slot != slot.id ||
+        selected.updatedAt.toUtc() != resource.updatedAt.toUtc()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ce PDF a changé : actualisez la liste avant de lancer Groq.',
+          ),
+        ),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Relecture Groq ciblée'),
+        content: Text(
+          'Envoyer uniquement « ${resource.displayName} » '
+          '(${slot.title}) à Groq ? '
+          'Aucun PDF des autres établissements ne sera envoyé. '
+          'La lecture peut comporter plusieurs pages du même PDF. '
+          'Les calendriers restent inchangés jusqu’à validation.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Lire ce PDF avec Groq'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    if (_busySlot != null || _autoImportingSlots.contains(slot.id)) return;
     setState(() {
       _busySlot = slot.id;
       _importStatus[slot.id] = 'Relecture R6 / Groq en cours…';
@@ -351,6 +393,9 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       final extraction = await _backend.analyzeOfficialRosterResource(
         resource.id,
         parserRevision: OfficialRosterImportService.parserRevision,
+        selectedSlot: slot.id,
+        selectedUpdatedAt: resource.updatedAt,
+        manualGroqConfirmed: true,
         localEvidence: localEvidence,
         forceReread: true,
       );
@@ -595,6 +640,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         bytes: bytes,
         fileName: file.name,
         slot: slot.id,
+        manualGroqConfirmed: true,
         localEvidence: localEvidence,
         parserRevision: OfficialRosterImportService.parserRevision,
       );
@@ -624,6 +670,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
             bytes: bytes,
             fileName: file.name,
             slot: slot.id,
+            manualGroqConfirmed: true,
             localEvidence: localEvidence,
             manualResolutions: resolutions,
             parserRevision: OfficialRosterImportService.parserRevision,
@@ -667,6 +714,9 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
           await _backend.analyzeOfficialRosterResource(
         resource.id,
         parserRevision: OfficialRosterImportService.parserRevision,
+        selectedSlot: slot.id,
+        selectedUpdatedAt: resource.updatedAt,
+        manualGroqConfirmed: true,
         verificationToken: verificationToken,
       );
       final publishedRead =
