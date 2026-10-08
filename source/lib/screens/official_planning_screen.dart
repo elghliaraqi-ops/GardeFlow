@@ -173,7 +173,6 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     SharedResource resource,
     List<AppUser> profiles, {
     Uint8List? currentBytes,
-    bool allowRemoteVerification = false,
   }) async {
     final versions = await _backend.fetchOfficialRosterVersions(slot.id);
     final hasCurrentVersion = versions.any(
@@ -186,29 +185,6 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     final suppliedBytes = <String, Uint8List>{
       if (currentBytes != null) resource.storagePath: currentBytes,
     };
-    var currentLocalEvidence = const <Map<String, dynamic>>[];
-    if (allowRemoteVerification) {
-      try {
-        final bytesForA =
-            currentBytes ?? await _backend.downloadSharedResource(resource.storagePath);
-        suppliedBytes[resource.storagePath] = bytesForA;
-        final localA = await OfficialRosterImportService.parse(
-          bytes: bytesForA,
-          displayName: resource.displayName,
-          hospital: slot.hospital,
-          profiles: profiles,
-          resourceUpdatedAt: resource.updatedAt,
-        );
-        currentLocalEvidence = localA.localCells
-            .map((cell) => cell.toJson())
-            .toList(growable: false);
-      } catch (e) {
-        // Les PDF scannés peuvent ne pas exposer une couche texte exploitable.
-        // Le serveur utilisera alors une Lecture A visuelle de secours distincte.
-        debugPrint('Lecture A géométrique indisponible: $e');
-      }
-    }
-
     final identityLinks =
         await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
 
@@ -216,23 +192,11 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         await OfficialRosterVerifiedReadService.readVersionHistory(
       versionsNewestFirst: versions,
       loadBytes: _backend.downloadSharedResource,
-      loadVerified: (version) async {
-        var cached = await _backend.fetchOfficialRosterVerifiedRead(
-          resource: version,
-          parserRevision: OfficialRosterImportService.parserRevision,
-        );
-        final isCurrent =
-            version.storagePath == resource.storagePath &&
-            version.updatedAt.toUtc() == resource.updatedAt.toUtc();
-        if (cached == null && allowRemoteVerification && isCurrent) {
-          cached = await _backend.analyzeOfficialRosterResource(
-            resource.id,
-            parserRevision: OfficialRosterImportService.parserRevision,
-            localEvidence: currentLocalEvidence,
-          );
-        }
-        return cached;
-      },
+      // Cache déjà validé consultable, mais aucun Groq déclenché ici.
+      loadVerified: (version) => _backend.fetchOfficialRosterVerifiedRead(
+        resource: version,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      ),
       hospital: slot.hospital,
       profiles: profiles,
       suppliedBytes: suppliedBytes,
@@ -294,8 +258,6 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         resource,
         profiles,
         currentBytes: bytes,
-        // Aucune relecture Groq automatique : pdfrx reste la lecture initiale.
-        allowRemoteVerification: false,
       );
       if (parsed.detectedRows == 0) {
         throw StateError('Aucune ligne de garde 08h-20h / 20h-08h reconnue dans ce PDF.');
