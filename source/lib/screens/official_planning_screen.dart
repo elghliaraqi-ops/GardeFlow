@@ -21,8 +21,13 @@ import '../theme/screen_decor.dart';
 // Le choix de la seconde lecture appartient exclusivement à l'admin.
 enum _OfficialRosterReadChoice { pdfrx, groq }
 
+/// Navigation hint only; selecting a reader never starts Groq automatically.
+enum OfficialPlanningReader { pdfrx, groq }
+
 class OfficialPlanningScreen extends StatefulWidget {
-  const OfficialPlanningScreen({super.key});
+  const OfficialPlanningScreen({super.key, this.preferredReader});
+
+  final OfficialPlanningReader? preferredReader;
 
   @override
   State<OfficialPlanningScreen> createState() => _OfficialPlanningScreenState();
@@ -309,6 +314,138 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       return result;
     } finally {
       if (mounted) setState(() => _autoImportingSlots.remove(slot.id));
+    }
+  }
+
+  /// Relit à nouveau le PDF choisi avec pdfrx, sans cache ni appel IA.
+  /// Les calendriers et le rapport R6 certifié ne sont jamais écrasés.
+  Future<void> _rereadPdfrx(
+    _OfficialSlot slot,
+    SharedResource resource,
+  ) async {
+    if (_busySlot != null || _autoImportingSlots.contains(slot.id)) return;
+    if (context.read<AppState>().currentUser?.role != UserRole.admin) return;
+
+    final selected = _resourceFor(slot.id);
+    if (selected == null ||
+        selected.id != resource.id ||
+        selected.slot != slot.id ||
+        selected.updatedAt.toUtc() != resource.updatedAt.toUtc()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Le PDF sélectionné a changé : actualisez avant de relire avec pdfrx.',
+        )),
+      );
+      return;
+    }
+
+    setState(() {
+      _busySlot = slot.id;
+      _importStatus[slot.id] = 'Lecture locale pdfrx en cours…';
+    });
+    try {
+      // Télécharger et relire uniquement la version exacte du PDF sélectionné.
+      final bytes = await _backend.downloadSharedResource(resource.storagePath);
+      final profiles = await _backend.fetchVisibleProfiles();
+      final parsed = await OfficialRosterImportService.parse(
+        bytes: bytes,
+        displayName: resource.displayName,
+        hospital: slot.hospital,
+        profiles: profiles,
+        resourceUpdatedAt: resource.updatedAt,
+      );
+      if (!mounted) return;
+      final complete = parsed.isComplete &&
+          parsed.detectedRows > 0 &&
+          parsed.coveredDates.isNotEmpty;
+      setState(() {
+        _importStatus[slot.id] = complete
+            ? 'pdfrx relu : ${parsed.detectedCells} cellule(s), '
+              '${parsed.assignments.length} garde(s) attribuable(s). '
+              'Résultat à contrôler, calendriers inchangés.'
+            : 'pdfrx : lecture incomplète, aucune modification. '
+              'Vérifiez le détail ou lancez Groq manuellement.';
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Lecture 1 — pdfrx : ${slot.title}'),
+          content: SizedBox(
+            width: 610,
+            height: MediaQuery.sizeOf(dialogContext).height * 0.58,
+            child: ListView(
+              children: [
+                Text(resource.displayName,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 9),
+                Text(
+                  '${parsed.detectedRows} date(s) • '
+                  '${parsed.detectedCells} cellule(s) • '
+                  '${parsed.assignments.length} affectation(s) reconnue(s) • '
+                  '${parsed.unmatchedCells.length} cellule(s) non attribuée(s)',
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  complete
+                      ? 'Extraction locale terminée. Contrôlez les noms et les '
+                        'créneaux avant une éventuelle correction Groq.'
+                      : 'Extraction locale incomplète. Aucune garde modifiée. '
+                        'Vous pouvez relire ce PDF avec Groq.',
+                  style: TextStyle(
+                    color: complete ? AppColors.success : AppColors.danger,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (parsed.validationErrors.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  for (final error in parsed.validationErrors)
+                    Text('• $error',
+                        style: const TextStyle(color: AppColors.danger)),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Dates, créneaux et noms extraits',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (parsed.localCells.isEmpty)
+                  const Text('Aucune cellule exploitable dans ce PDF.'),
+                for (final cell in parsed.localCells)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      '${cell.date} • ${cell.shift} : '
+                      '${cell.text.trim().isEmpty ? "(vide)" : cell.text}'
+                      '${cell.redText.trim().isEmpty ? "" : " • ROUGE : ${cell.redText}"}',
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Cette relecture ne publie pas de rapport R6 vérifié et '
+                  'ne modifie pas les calendriers. Le recalcul des '
+                  'superpositions exige toujours une source R6 validée.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Fermer'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _importStatus[slot.id] =
+            'Lecture pdfrx impossible : aucune garde modifiée.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Échec de la relecture pdfrx : $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busySlot = null);
     }
   }
 
@@ -898,6 +1035,15 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
                     padding: EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, 100),
                     children: [
                       _IntroCard(isAdmin: isAdmin),
+                      if (isAdmin && widget.preferredReader != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.preferredReader == OfficialPlanningReader.pdfrx
+                              ? 'Choisissez l’établissement puis « Relire avec pdfrx ».'
+                              : 'Choisissez l’établissement puis « Relire avec Groq ».',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
                       SizedBox(height: AppSpace.lg),
                       for (var i = 0; i < _slots.length; i++) ...[
                         _OfficialPdfCard(
@@ -913,6 +1059,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
                           isMyHospital: currentUser?.hospital == _slots[i].hospital,
                           onOpen: (r) => _open(r),
                           onResync: (r) => _resyncMyRoster(_slots[i], r),
+                          onRereadPdfrx: (r) => _rereadPdfrx(_slots[i], r),
                           onRereadR6: (r) => _rereadR6(_slots[i], r),
                           onUpload: () => _upload(_slots[i]),
                           onDelete: (r) => _delete(_slots[i], r),
@@ -1444,6 +1591,7 @@ class _OfficialPdfCard extends StatelessWidget {
   final bool isMyHospital;
   final ValueChanged<SharedResource> onOpen;
   final ValueChanged<SharedResource> onResync;
+  final ValueChanged<SharedResource> onRereadPdfrx;
   final ValueChanged<SharedResource> onRereadR6;
   final VoidCallback onUpload;
   final ValueChanged<SharedResource> onDelete;
@@ -1461,6 +1609,7 @@ class _OfficialPdfCard extends StatelessWidget {
     required this.isMyHospital,
     required this.onOpen,
     required this.onResync,
+    required this.onRereadPdfrx,
     required this.onRereadR6,
     required this.onUpload,
     required this.onDelete,
@@ -1584,6 +1733,12 @@ class _OfficialPdfCard extends StatelessWidget {
                 ),
               if (isAdmin && r != null)
                 OutlinedButton.icon(
+                  onPressed: busy ? null : () => onRereadPdfrx(r),
+                  icon: const Icon(Icons.document_scanner_rounded, size: 18),
+                  label: const Text('Relire avec pdfrx'),
+                ),
+              if (isAdmin && r != null)
+                OutlinedButton.icon(
                   onPressed: busy ? null : () => onRereadR6(r),
                   icon: busy
                       ? const SizedBox(
@@ -1592,7 +1747,7 @@ class _OfficialPdfCard extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.fact_check_rounded, size: 18),
-                  label: const Text('Corriger avec Groq (lecture 2)'),
+                  label: const Text('Relire avec Groq'),
                 ),
               if (r != null && isMyHospital && canResync)
                 OutlinedButton.icon(
