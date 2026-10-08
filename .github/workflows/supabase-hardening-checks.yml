@@ -82,3 +82,57 @@ jobs:
           fi
 
           echo 'Garde R6 fail-closed static invariants verified.'
+
+  garde-r6-db-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply disposable R6 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/garde_r6_validation_baseline.sql
+
+      - name: Apply real R6 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261007231000_garde_functional_lock_r6.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008060000_garde_r6_preview_date_type_fix.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008061500_garde_r6_rpc_anon_lockdown.sql
+
+      - name: Run R6 integration assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/garde_r6_integration_assertions.sql
+
