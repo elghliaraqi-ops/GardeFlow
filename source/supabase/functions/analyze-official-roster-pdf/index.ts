@@ -786,6 +786,7 @@ function parseManualResolutions(raw: unknown): ManualResolution[] {
 function validatedManualRow(
   resolution: ManualResolution,
   source: Row | undefined,
+  locationSource?: any,
 ): Row | null {
   const date = resolution.final_date || resolution.date;
   const shift = resolution.final_shift || resolution.shift;
@@ -815,14 +816,24 @@ function validatedManualRow(
     return null;
   }
 
+  const locationPage =
+    Number.isInteger(locationSource?.page_number) &&
+      locationSource.page_number > 0
+      ? locationSource.page_number as number
+      : null;
+  const locationZone =
+    typeof locationSource?.zone === 'string' && locationSource.zone.trim()
+      ? locationSource.zone.trim()
+      : null;
+
   return {
     date,
     shift: shift as Row['shift'],
     doctors,
     names: doctors.map((doctor) => doctor.full_name),
     red_names: redNames,
-    page_number: source?.page_number ?? null,
-    zone: source?.zone ?? 'Correction admin ciblée',
+    page_number: source?.page_number ?? locationPage,
+    zone: source?.zone ?? locationZone ?? 'Correction admin ciblée',
   };
 }
 
@@ -886,7 +897,28 @@ function applyManualResolutions(
       return null;
     }
 
-    const row = validatedManualRow(resolution, source);
+    const matchingConflict = conflicts.find(
+      (conflict) =>
+        conflict.date === resolution.date &&
+        conflict.shift === resolution.shift,
+    );
+    const locationCandidates = [
+      matchingConflict?.c,
+      matchingConflict?.b,
+      matchingConflict?.a,
+    ];
+    const locationSource = locationCandidates.find(
+      (candidate: any) =>
+        candidate != null &&
+        typeof candidate === 'object' &&
+        (
+          (Number.isInteger(candidate?.page_number) &&
+            candidate.page_number > 0) ||
+          (typeof candidate?.zone === 'string' && candidate.zone.trim())
+        ),
+    );
+
+    const row = validatedManualRow(resolution, source, locationSource);
     if (!row) return null;
     rows.set(row.date + '|' + row.shift, row);
   }
