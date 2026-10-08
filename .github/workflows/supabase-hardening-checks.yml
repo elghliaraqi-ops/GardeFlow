@@ -154,3 +154,15 @@ jobs:
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 -f supabase/tests/garde_r6_integration_assertions.sql
 
+      - name: Apply registration schema onto disposable R6 database
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008090000_medical_registration_schema_only.sql
+
+      - name: Assert R6 and registration compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/medical_registration_r6_assertions.sql
+
