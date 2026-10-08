@@ -1370,20 +1370,6 @@ class SupabaseBackendService {
     return raw.toString();
   }
 
-  Future<String> logGlobalOfficialRosterRecalculation({
-    required List<Map<String, dynamic>> previews,
-    required Map<String, dynamic> result,
-  }) async {
-    final raw = await client.rpc(
-      'admin_log_official_roster_global_recalculation',
-      params: {
-        'p_preview': {'profiles': previews},
-        'p_result': result,
-      },
-    );
-    return raw?.toString() ?? '';
-  }
-
   Future<Map<String, dynamic>> registerOfficialDisciplinaryMarks({
     required SharedResource resource,
     required List<Map<String, dynamic>> marks,
