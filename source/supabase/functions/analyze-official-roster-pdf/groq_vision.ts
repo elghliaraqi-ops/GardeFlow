@@ -146,6 +146,13 @@ function decodeGroqResult(value: any, pages: Page[]): any {
   return value;
 }
 
+export class GroqRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number | null) {
+    super('groq_rate_limited');
+    this.name = 'GroqRateLimitError';
+  }
+}
+
 const GROQ_MAX_WAIT_MS = 35000;
 const GROQ_READING_DEADLINE_MS = 105000;
 
@@ -157,12 +164,13 @@ function retryAfterMs(response: Response): number | null {
   return Math.ceil(n * 1000) + 300;
 }
 
-async function scanChunk(
+export async function scanChunk(
   pages: Page[],
   key: string,
   prompt: string,
   model: string,
   deadline: number,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<any> {
   const schemaHint = [
     'Réponds en JSON MINIFIÉ uniquement. Format COMPACT OBLIGATOIRE (pas les noms de champs longs).',
@@ -183,42 +191,54 @@ async function scanChunk(
     'Page PDF analysée : ' + pages.map(p => p.pageNumber).join(', ') + '.',
     'Le serveur attribue lui-même le numéro de page (ne retourne pas page_number).',
   ].join('\n');
-  // Une erreur 429 ponctuelle peut être retentée si le serveur annonce un
-  // délai bref. Pas de boucle longue au sein d'une Edge Function.
+
+  // Groq may return 400/json_validate_failed when server-enforced JSON mode
+  // rejects an answer. One fallback without response_format remains subject
+  // to the same strict downstream R6 validation.
   let result: Response | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    result = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + key,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.1,
-      stream: false,
-      // Format JSON compact, une page par appel; toute troncature reste bloquante.
-      max_completion_tokens: 4096,
-      reasoning_effort: 'none',
-      response_format: { type: 'json_object' },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt + '\n\n' + schemaHint },
-          ...pages.map(page => ({
-            type: 'image_url',
-            image_url: { url: page.imageUrl },
-          })),
-        ],
-      }],
-    }),
-  });
-    if (result.status === 429 && attempt === 0) {
+  let relaxedJson = false;
+  let retriedRateLimit = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    result = await fetchImpl('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.1,
+        stream: false,
+        max_completion_tokens: 4096,
+        reasoning_effort: 'none',
+        ...(relaxedJson ? {} : { response_format: { type: 'json_object' } }),
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt + '\n\n' + schemaHint },
+            ...pages.map(page => ({
+              type: 'image_url',
+              image_url: { url: page.imageUrl },
+            })),
+          ],
+        }],
+      }),
+    });
+
+    if (result.status === 400 && !relaxedJson) {
+      const body = await result.clone().json().catch(() => ({}));
+      if (body?.error?.code === 'json_validate_failed' &&
+          attempt < 2 && Date.now() < deadline) {
+        relaxedJson = true;
+        console.warn('Groq R6 JSON validation rejected; retrying as plain text');
+        continue;
+      }
+    }
+    if (result.status === 429 && !retriedRateLimit) {
       const delayMs = retryAfterMs(result);
-      // Le fournisseur demande souvent 19-22s, pas 8s. Réessayer une seule
-      // fois si le budget total d'exécution Edge le permet.
       if (delayMs != null && delayMs <= GROQ_MAX_WAIT_MS &&
-          Date.now() + delayMs < deadline) {
+          Date.now() + delayMs < deadline && attempt < 2) {
+        retriedRateLimit = true;
         console.info('Groq R6 rate limit: retry after seconds', Math.ceil(delayMs / 1000));
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
@@ -237,7 +257,10 @@ async function scanChunk(
       retry_after_seconds: result.headers.get('retry-after') ?? null,
       remaining_tokens: result.headers.get('x-ratelimit-remaining-tokens') ?? null,
     });
-    if (result.status === 429) throw new Error('groq_rate_limited');
+    if (result.status === 429) {
+      const delayMs = retryAfterMs(result);
+      throw new GroqRateLimitError(delayMs == null ? null : Math.ceil(delayMs / 1000));
+    }
     if ([401, 403].includes(result.status)) throw new Error('groq_authentication_failed');
     if ([400, 404, 422].includes(result.status)) throw new Error('groq_request_invalid');
     throw new Error('groq_read_failed');
