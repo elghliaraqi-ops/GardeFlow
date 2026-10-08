@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 
-import '../data/intern_promotions.dart';
 import '../models/app_user.dart';
+import '../models/official_roster_guard.dart';
 import '../models/shared_resource.dart';
+import 'official_roster_identity_service.dart';
 import 'official_roster_import_service.dart';
 
 class OfficialRosterVerifiedReadService {
@@ -16,6 +17,7 @@ class OfficialRosterVerifiedReadService {
     required String hospital,
     required List<AppUser> profiles,
     Map<String, Uint8List> suppliedBytes = const <String, Uint8List>{},
+    Map<String, String> identityLinks = const <String, String>{},
   }) async {
     final ordered = [...versionsNewestFirst]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -56,15 +58,15 @@ class OfficialRosterVerifiedReadService {
           extraction: payload,
           hospital: hospital,
           profiles: profiles,
+          identityLinks: identityLinks,
         );
-        if (!verified.isComplete || verified.detectedRows == 0) {
-          results.add(verified);
-          continue;
-        }
         results.add(verified);
         continue;
       }
 
+      // Historical R4/R5 archives can still be used as coverage fallback.
+      // New R6 publications always prefer the account-independent verified
+      // extraction when it exists.
       if (local != null) results.add(local);
     }
 
@@ -84,7 +86,7 @@ class OfficialRosterVerifiedReadService {
     }
 
     final invalid = results.where((result) => !result.isComplete).toList();
-    if (invalid.isNotEmpty && results.first == invalid.first) {
+    if (invalid.isNotEmpty && identical(results.first, invalid.first)) {
       return invalid.first;
     }
 
@@ -95,12 +97,26 @@ class OfficialRosterVerifiedReadService {
     required Map<String, dynamic> extraction,
     required String hospital,
     required List<AppUser> profiles,
+    Map<String, String> identityLinks = const <String, String>{},
   }) {
     final validationErrors = <String>[];
     final confidence = (extraction['confidence'] as num?)?.toDouble() ?? 0.0;
-    if (extraction['verified'] != true) {
+    final revision = extraction['parser_revision']?.toString() ?? '';
+    final isR6Extraction = _revisionRank(revision) >= 6;
+    final status = extraction['status']?.toString().toLowerCase() ??
+        (extraction['verified'] == true && !isR6Extraction ? 'green' : 'red');
+    final documentScope =
+        extraction['document_scope']?.toString().trim().toLowerCase();
+
+    if (isR6Extraction && documentScope != 'urgences') {
       validationErrors.add(
-        'La double lecture visuelle du PDF n’a pas été validée.',
+        'Le moteur R6 accepte uniquement les plannings officiels des Urgences.',
+      );
+    }
+
+    if (extraction['verified'] != true || status == 'red') {
+      validationErrors.add(
+        'La vérification indépendante A/B/C du PDF n’a pas été validée.',
       );
     }
     if (confidence < 0.90) {
@@ -111,11 +127,19 @@ class OfficialRosterVerifiedReadService {
       );
     }
 
+    final serverErrors = extraction['validation_errors'];
+    if (serverErrors is List) {
+      for (final error in serverErrors) {
+        final text = error.toString().trim();
+        if (text.isNotEmpty) validationErrors.add(text);
+      }
+    }
+
     final candidateProfiles = profiles
         .where(
-          (p) =>
-              p.accountStatus == AccountStatus.active &&
-              p.hospital == hospital,
+          (profile) =>
+              profile.accountStatus == AccountStatus.active &&
+              profile.hospital == hospital,
         )
         .toList(growable: false);
 
@@ -123,6 +147,7 @@ class OfficialRosterVerifiedReadService {
     final rawAssignments = <OfficialRosterAssignment>[];
     final unmatched = <Map<String, dynamic>>[];
     final disciplinaryMarks = <OfficialRosterDisciplinaryMark>[];
+    final rawOfficialGuards = <OfficialRosterGuard>[];
 
     final rawRows = extraction['rows'];
     final rows = rawRows is List ? rawRows : const <dynamic>[];
@@ -154,21 +179,15 @@ class OfficialRosterVerifiedReadService {
       detectedCells++;
       coverageShifts.putIfAbsent(dateStr, () => <String>{}).add(shiftId);
 
-      final names = row['names'] is List
-          ? (row['names'] as List)
-              .map(
-                (e) => e
-                    .toString()
-                    .replaceAll(RegExp(r'\s+'), ' ')
-                    .trim(),
-              )
-              .where((e) => e.isNotEmpty)
-              .toList(growable: false)
-          : const <String>[];
       final redNames = row['red_names'] is List
           ? (row['red_names'] as List)
-              .map((e) => _normalizeName(e.toString()))
-              .where((e) => e.isNotEmpty)
+              .map(
+                (value) =>
+                    OfficialRosterIdentityService.normalizeConservative(
+                  value.toString(),
+                ),
+              )
+              .where((value) => value.isNotEmpty)
               .toSet()
           : <String>{};
 
@@ -182,48 +201,217 @@ class OfficialRosterVerifiedReadService {
         );
       }
 
-      for (final name in names) {
-        final matched = _matchProfiles(name, candidateProfiles);
-        if (matched.length != 1) {
-          unmatched.add({
-            'date': dateStr,
-            'shift_id': shiftId,
-            'text': name,
-            'reason': matched.isEmpty
-                ? 'verified_no_match'
-                : 'verified_ambiguous_match',
-          });
+      final rawDoctors = row['doctors'];
+      if (rawDoctors is! List) {
+        final legacyNames = row['names'] is List
+            ? (row['names'] as List)
+                .map((value) => value.toString().trim())
+                .where((value) => value.isNotEmpty)
+                .toList(growable: false)
+            : const <String>[];
+
+        if (isR6Extraction) {
+          for (final name in legacyNames) {
+            unmatched.add({
+              'date': dateStr,
+              'shift_id': shiftId,
+              'text': name,
+              'reason': 'identity_components_missing',
+            });
+          }
+          if (legacyNames.isNotEmpty) {
+            validationErrors.add(
+              'Identité R6 incomplète ' + dateStr + ' ' + shiftId +
+                  ' : prénom et nom séparés requis.',
+            );
+          }
           continue;
         }
 
-        final normalizedName = _normalizeName(name);
-        final isRed = redNames.any(
-          (red) =>
-              red == normalizedName ||
-              _approximatelyContains(red, normalizedName) ||
-              _approximatelyContains(normalizedName, red),
+        // Compatibilité lecture vérifiée R5 historique uniquement.
+        // La valeur complète n'est jamais fuzzy-matchée : elle doit correspondre
+        // exactement à un unique profil après normalisation typographique.
+        for (final name in legacyNames) {
+          final normalized =
+              OfficialRosterIdentityService.normalizeConservative(name);
+          final exactProfiles = candidateProfiles.where((profile) {
+            final direct = OfficialRosterIdentityService.normalizeConservative(
+              '${profile.prenom} ${profile.nom}',
+            );
+            final reverse = OfficialRosterIdentityService.normalizeConservative(
+              '${profile.nom} ${profile.prenom}',
+            );
+            return normalized == direct || normalized == reverse;
+          }).toList(growable: false);
+
+          if (exactProfiles.length == 1) {
+            final profile = exactProfiles.single;
+            final normalizedFull =
+                OfficialRosterIdentityService.normalizeConservative(name);
+            final isRed = redNames.contains(normalizedFull);
+            rawAssignments.add(
+              OfficialRosterAssignment(
+                profileId: profile.id,
+                dateStr: dateStr,
+                shiftId: shiftId,
+                isDisciplinary: isRed,
+              ),
+            );
+            rawOfficialGuards.add(
+              OfficialRosterGuard(
+                dateStr: dateStr,
+                shiftId: shiftId,
+                hospital: hospital,
+                identity: OfficialRosterDoctorIdentity(
+                  firstName: profile.prenom,
+                  lastName: profile.nom,
+                  fullName: name,
+                ),
+                confidence: confidence,
+                reviewStatus: OfficialRosterReviewStatus.green,
+                pageNumber: (row['page_number'] as num?)?.toInt(),
+                zone: row['zone']?.toString(),
+                isDisciplinary: isRed,
+                matchedProfileId: profile.id,
+                matchStatus: OfficialDoctorMatchStatus.matched,
+              ),
+            );
+          } else {
+            unmatched.add({
+              'date': dateStr,
+              'shift_id': shiftId,
+              'text': name,
+              'reason': exactProfiles.length > 1
+                  ? 'legacy_identity_ambiguous'
+                  : 'legacy_identity_unmatched',
+            });
+          }
+        }
+        continue;
+      }
+
+      for (final rawDoctor in rawDoctors) {
+        if (rawDoctor is! Map) continue;
+        final doctor = Map<String, dynamic>.from(rawDoctor);
+        final firstName = doctor['first_name']?.toString().trim() ?? '';
+        final lastName = doctor['last_name']?.toString().trim() ?? '';
+        final fullName = doctor['full_name']?.toString().trim() ??
+            (firstName + ' ' + lastName).trim();
+        final doctorConfidence =
+            (((doctor['confidence'] as num?)?.toDouble() ?? 0.0)
+                    .clamp(0.0, 1.0))
+                .toDouble();
+        final guardConfidence =
+            doctorConfidence < confidence ? doctorConfidence : confidence;
+        final identityKey = OfficialRosterIdentityService.identityKey(
+          firstName: firstName,
+          lastName: lastName,
         );
-        rawAssignments.add(
-          OfficialRosterAssignment(
-            profileId: matched.single.id,
-            dateStr: dateStr,
-            shiftId: shiftId,
-            isDisciplinary: isRed,
+        final persistentProfileId = identityLinks[identityKey];
+
+        final resolution = OfficialRosterIdentityService.resolve(
+          firstName: firstName,
+          lastName: lastName,
+          profiles: candidateProfiles,
+          persistentProfileId: persistentProfileId,
+        );
+
+        final suggestions = resolution.suggestions
+            .map(
+              (candidate) => <String, dynamic>{
+                'profile_id': candidate.profile.id,
+                'name': candidate.profile.fullName,
+                'score': candidate.score,
+                'exact': candidate.exact,
+              },
+            )
+            .toList(growable: false);
+
+        OfficialDoctorMatchStatus matchStatus;
+        if (resolution.matched) {
+          matchStatus = OfficialDoctorMatchStatus.matched;
+        } else if (resolution.ambiguous || suggestions.length > 1) {
+          matchStatus = OfficialDoctorMatchStatus.ambiguous;
+        } else if (suggestions.isNotEmpty) {
+          matchStatus = OfficialDoctorMatchStatus.manualReview;
+        } else {
+          matchStatus = OfficialDoctorMatchStatus.unregistered;
+        }
+
+        final normalizedFull =
+            OfficialRosterIdentityService.normalizeConservative(fullName);
+        final isRed = redNames.contains(normalizedFull);
+
+        final reviewStatus = status == 'orange'
+            ? OfficialRosterReviewStatus.orange
+            : status == 'green'
+                ? OfficialRosterReviewStatus.green
+                : OfficialRosterReviewStatus.red;
+
+        final guard = OfficialRosterGuard(
+          dateStr: dateStr,
+          shiftId: shiftId,
+          hospital: hospital,
+          identity: OfficialRosterDoctorIdentity(
+            firstName: firstName,
+            lastName: lastName,
+            fullName: fullName,
           ),
+          confidence: guardConfidence,
+          reviewStatus: reviewStatus,
+          pageNumber: (row['page_number'] as num?)?.toInt(),
+          zone: row['zone']?.toString(),
+          isDisciplinary: isRed,
+          matchedProfileId: resolution.profileId,
+          matchStatus: matchStatus,
         );
+        rawOfficialGuards.add(guard);
+
+        if (firstName.isEmpty || lastName.isEmpty) {
+          validationErrors.add(
+            'Prénom/nom incomplet ' + dateStr + ' ' + shiftId +
+                ' : ' + fullName,
+          );
+        }
+        if (guardConfidence < 0.90) {
+          validationErrors.add(
+            'Confiance insuffisante ' + dateStr + ' ' + shiftId +
+                ' : ' + fullName,
+          );
+        }
+
+        if (resolution.matched && guardConfidence >= 0.90) {
+          rawAssignments.add(
+            OfficialRosterAssignment(
+              profileId: resolution.profileId!,
+              dateStr: dateStr,
+              shiftId: shiftId,
+              isDisciplinary: isRed,
+            ),
+          );
+        } else {
+          unmatched.add({
+            'date': dateStr,
+            'shift_id': shiftId,
+            'text': fullName,
+            'first_name': firstName,
+            'last_name': lastName,
+            'full_name': fullName,
+            'confidence': guardConfidence,
+            'page_number': (row['page_number'] as num?)?.toInt(),
+            'zone': row['zone']?.toString(),
+            'reason': matchStatus == OfficialDoctorMatchStatus.ambiguous
+                ? 'ambiguous_identity'
+                : matchStatus == OfficialDoctorMatchStatus.manualReview
+                    ? 'potential_identity_requires_admin'
+                    : 'doctor_not_registered',
+            'candidates': suggestions,
+          });
+        }
       }
     }
 
     validationErrors.addAll(_validateCoverage(coverageShifts));
-    final warnings = extraction['warnings'];
-    if (warnings is List) {
-      for (final warning in warnings.take(6)) {
-        final text = warning.toString().trim();
-        if (text.isNotEmpty && text.toLowerCase().contains('ambigu')) {
-          validationErrors.add('Vérification visuelle : ' + text);
-        }
-      }
-    }
 
     return OfficialRosterParseResult(
       assignments: _coalesceAssignments(rawAssignments),
@@ -233,7 +421,8 @@ class OfficialRosterVerifiedReadService {
       detectedCells: detectedCells,
       correctedDates: 0,
       coveredDates: coverageShifts.keys.toList()..sort(),
-      validationErrors: validationErrors,
+      validationErrors: [...validationErrors.toSet()],
+      officialGuards: _coalesceOfficialGuards(rawOfficialGuards),
     );
   }
 
@@ -285,16 +474,7 @@ class OfficialRosterVerifiedReadService {
       if (separator <= 0) continue;
       final profileId = entry.key.substring(0, separator);
       final dateStr = entry.key.substring(separator + 1);
-      final shifts = entry.value;
-      String shiftId;
-      if (shifts.contains('urg-24h') ||
-          (shifts.contains('urg-jour') && shifts.contains('urg-nuit'))) {
-        shiftId = 'urg-24h';
-      } else if (shifts.contains('urg-jour')) {
-        shiftId = 'urg-jour';
-      } else {
-        shiftId = 'urg-nuit';
-      }
+      final shiftId = _coalescedShift(entry.value);
       output.add(
         OfficialRosterAssignment(
           profileId: profileId,
@@ -310,6 +490,64 @@ class OfficialRosterVerifiedReadService {
       return byDate != 0 ? byDate : a.profileId.compareTo(b.profileId);
     });
     return output;
+  }
+
+  static List<OfficialRosterGuard> _coalesceOfficialGuards(
+    List<OfficialRosterGuard> input,
+  ) {
+    final byKey = <String, List<OfficialRosterGuard>>{};
+    for (final guard in input) {
+      final identity = OfficialRosterIdentityService.identityKey(
+        firstName: guard.identity.firstName,
+        lastName: guard.identity.lastName,
+      );
+      final key = identity + '|' + guard.dateStr;
+      byKey.putIfAbsent(key, () => <OfficialRosterGuard>[]).add(guard);
+    }
+
+    final output = <OfficialRosterGuard>[];
+    for (final values in byKey.values) {
+      if (values.isEmpty) continue;
+      final first = values.first;
+      final shifts = values.map((guard) => guard.shiftId).toSet();
+      var confidence = first.confidence;
+      var disciplinary = false;
+      for (final guard in values) {
+        if (guard.confidence < confidence) confidence = guard.confidence;
+        disciplinary = disciplinary || guard.isDisciplinary;
+      }
+      output.add(
+        OfficialRosterGuard(
+          dateStr: first.dateStr,
+          shiftId: _coalescedShift(shifts),
+          hospital: first.hospital,
+          identity: first.identity,
+          confidence: confidence,
+          reviewStatus: first.reviewStatus,
+          pageNumber: first.pageNumber,
+          zone: values.map((guard) => guard.zone).whereType<String>().join(' / '),
+          isDisciplinary: disciplinary,
+          matchedProfileId: first.matchedProfileId,
+          matchStatus: first.matchStatus,
+        ),
+      );
+    }
+
+    output.sort((a, b) {
+      final byDate = a.dateStr.compareTo(b.dateStr);
+      if (byDate != 0) return byDate;
+      return a.displayName.compareTo(b.displayName);
+    });
+    return output;
+  }
+
+  static String _coalescedShift(Set<String> shifts) {
+    if (shifts.contains('urg-24h') ||
+        (shifts.contains('urg-jour') && shifts.contains('urg-nuit'))) {
+      return 'urg-24h';
+    }
+    if (shifts.contains('urg-jour')) return 'urg-jour';
+    return 'urg-nuit';
   }
 
   static List<String> _validateCoverage(
@@ -353,158 +591,9 @@ class OfficialRosterVerifiedReadService {
     return errors;
   }
 
-  static List<AppUser> _matchProfiles(
-    String cellText,
-    List<AppUser> profiles,
-  ) {
-    final normalizedCell = _normalizeName(cellText);
-    if (normalizedCell.isEmpty) return const <AppUser>[];
-    final padded = ' ' + normalizedCell + ' ';
-    final matches = <AppUser>[];
-
-    for (final profile in profiles) {
-      final variants = <String>{
-        _normalizeName(profile.prenom + ' ' + profile.nom),
-        _normalizeName(profile.nom + ' ' + profile.prenom),
-        ...InternPromotions.officialRosterAliasesFor(profile)
-            .map(_normalizeName),
-      }..removeWhere((value) => value.isEmpty);
-
-      var found = false;
-      for (final variant in variants) {
-        if (padded.contains(' ' + variant + ' ') ||
-            _approximatelyContains(normalizedCell, variant)) {
-          found = true;
-          break;
-        }
-      }
-
-      if (!found && _identityFallbackMatch(normalizedCell, profile)) {
-        found = true;
-      }
-      if (found) matches.add(profile);
-    }
-
-    return matches;
-  }
-
-  static bool _identityFallbackMatch(String cell, AppUser profile) {
-    final nom = _normalizeName(profile.nom);
-    final prenom = _normalizeName(profile.prenom);
-    if (nom.isEmpty || prenom.isEmpty) return false;
-
-    final prenomTokens =
-        prenom.split(' ').where((token) => token.length >= 2).toSet();
-    for (final token in prenomTokens) {
-      if (_approximatelyContains(cell, nom + ' ' + token) ||
-          _approximatelyContains(cell, token + ' ' + nom)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static bool _approximatelyContains(String cell, String variant) {
-    final cellTokens = cell.split(' ').where((t) => t.isNotEmpty).toList();
-    final variantTokens =
-        variant.split(' ').where((t) => t.isNotEmpty).toList();
-    if (variantTokens.length < 2 ||
-        cellTokens.length < variantTokens.length) {
-      return false;
-    }
-
-    final windowLength = variantTokens.length;
-    final allowedDistance = variant.length >= 18 ? 2 : 1;
-    for (var i = 0; i <= cellTokens.length - windowLength; i++) {
-      final window = cellTokens.sublist(i, i + windowLength).join(' ');
-      final distance =
-          _levenshtein(window, variant, cutoff: allowedDistance);
-      if (distance <= allowedDistance) {
-        final maxLen =
-            window.length > variant.length ? window.length : variant.length;
-        if (maxLen == 0 || 1 - distance / maxLen >= 0.90) return true;
-      }
-    }
-    return false;
-  }
-
-  static int _levenshtein(
-    String a,
-    String b, {
-    required int cutoff,
-  }) {
-    if (a == b) return 0;
-    if ((a.length - b.length).abs() > cutoff) return cutoff + 1;
-
-    var previous = List<int>.generate(b.length + 1, (i) => i);
-    for (var i = 1; i <= a.length; i++) {
-      final current = List<int>.filled(b.length + 1, 0);
-      current[0] = i;
-      for (var j = 1; j <= b.length; j++) {
-        final insertion = current[j - 1] + 1;
-        final deletion = previous[j] + 1;
-        final substitution = previous[j - 1] +
-            (a.codeUnitAt(i - 1) == b.codeUnitAt(j - 1) ? 0 : 1);
-        var value = insertion < deletion ? insertion : deletion;
-        if (substitution < value) value = substitution;
-        current[j] = value;
-      }
-      previous = current;
-    }
-    return previous[b.length];
-  }
-
-  static String _normalizeName(String input) {
-    var value = input.toLowerCase();
-    const replacements = <String, String>{
-      'à': 'a',
-      'á': 'a',
-      'â': 'a',
-      'ä': 'a',
-      'ã': 'a',
-      'å': 'a',
-      'ç': 'c',
-      'è': 'e',
-      'é': 'e',
-      'ê': 'e',
-      'ë': 'e',
-      'ì': 'i',
-      'í': 'i',
-      'î': 'i',
-      'ï': 'i',
-      'ñ': 'n',
-      'ò': 'o',
-      'ó': 'o',
-      'ô': 'o',
-      'ö': 'o',
-      'õ': 'o',
-      'œ': 'oe',
-      'ù': 'u',
-      'ú': 'u',
-      'û': 'u',
-      'ü': 'u',
-      'ý': 'y',
-      'ÿ': 'y',
-      'æ': 'ae',
-      '’': ' ',
-      "'": ' ',
-      '-': ' ',
-      '–': ' ',
-      '—': ' ',
-    };
-
-    for (final entry in replacements.entries) {
-      value = value.replaceAll(entry.key, entry.value);
-    }
-
-    value = value.replaceAll(
-      RegExp(r'\b(?:dr|docteur)\b', caseSensitive: false),
-      ' ',
-    );
-    return value
-        .replaceAll(RegExp(r'[^a-z0-9 ]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+  static int _revisionRank(String revision) {
+    final match = RegExp(r'r(\d+)$').firstMatch(revision.trim());
+    return int.tryParse(match?.group(1) ?? '') ?? 0;
   }
 
   static String _dateKey(DateTime date) {

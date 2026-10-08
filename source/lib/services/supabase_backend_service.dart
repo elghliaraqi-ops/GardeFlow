@@ -9,6 +9,7 @@ import '../models/directory_contact.dart';
 import '../models/audit_event.dart';
 import '../models/exchange_request.dart';
 import '../models/leave_request.dart';
+import '../models/official_roster_guard.dart';
 import '../models/planning_entry.dart';
 import '../models/planning_month.dart';
 import '../models/password_reset_request.dart';
@@ -65,10 +66,13 @@ class SupabaseBackendService {
     required String rawPhone,
     required String password,
     required String service,
-    required MedicalGrade grade,
+    required MedicalPosition medicalPosition,
+    required TrainingLanguage trainingLanguage,
     required String hospital,
     int? promotionNumber,
+    int? trainingYear,
   }) async {
+    final grade = medicalPosition.grade;
     final phone = authPhone(rawPhone);
     final email = technicalEmail(phone);
     final res = await client.auth.signUp(
@@ -81,8 +85,12 @@ class SupabaseBackendService {
         'service': service,
         'medical_grade': grade.name,
         'fonction': grade.name,
+        'medical_position': medicalPosition.name,
+        'training_language': trainingLanguage.name,
+        if (trainingYear != null) 'training_year': trainingYear,
         'hospital': hospital,
-        if (promotionNumber != null) 'promotion_number': promotionNumber,
+        if (medicalPosition.requiresPromotion && promotionNumber != null)
+          'promotion_number': promotionNumber,
       },
     );
     if (res.user == null) throw StateError('Création du compte impossible.');
@@ -272,7 +280,7 @@ class SupabaseBackendService {
       final rows = await client
           .from('profiles')
           .select(
-            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,appearance_theme',
+            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,medical_position,training_year,training_language,appearance_theme',
           )
           .order('prenom')
           .order('nom')
@@ -428,6 +436,13 @@ class SupabaseBackendService {
       passwordSalt: '',
       service: j['service'] as String,
       grade: grade,
+      medicalPosition: MedicalPosition.values.where(
+        (p) => p.name == j['medical_position'],
+      ).firstOrNull,
+      trainingLanguage: TrainingLanguage.values.where(
+        (l) => l.name == j['training_language'],
+      ).firstOrNull,
+      trainingYear: (j['training_year'] as num?)?.toInt(),
       hospital: j['hospital'] as String,
       promotionNumber: (j['promotion_number'] as num?)?.toInt(),
       appearanceTheme: const <String>{
@@ -949,8 +964,12 @@ class SupabaseBackendService {
 
   Future<Map<String, dynamic>> analyzeOfficialRosterResource(
     String resourceId, {
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
     String? verificationToken,
+    List<Map<String, dynamic>> localEvidence =
+        const <Map<String, dynamic>>[],
+    List<Map<String, dynamic>> manualResolutions =
+        const <Map<String, dynamic>>[],
   }) async {
     if (!enabled || client.auth.currentUser == null) {
       throw StateError('Connexion administrateur requise.');
@@ -960,6 +979,9 @@ class SupabaseBackendService {
       body: {
         'resourceId': resourceId,
         'parserRevision': parserRevision,
+        'localEvidence': localEvidence,
+        if (manualResolutions.isNotEmpty)
+          'manualResolutions': manualResolutions,
         if (verificationToken != null && verificationToken.isNotEmpty)
           'verificationToken': verificationToken,
       },
@@ -971,7 +993,10 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required String slot,
-    String parserRevision = 'v12.0.2-r5',
+    required List<Map<String, dynamic>> localEvidence,
+    List<Map<String, dynamic>> manualResolutions =
+        const <Map<String, dynamic>>[],
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (!enabled || uid == null) {
@@ -1004,6 +1029,8 @@ class SupabaseBackendService {
           'slot': slot,
           'displayName': fileName,
           'parserRevision': parserRevision,
+          'localEvidence': localEvidence,
+          'manualResolutions': manualResolutions,
         },
       );
       return _officialRosterExtractionFromFunction(response.data);
@@ -1018,7 +1045,7 @@ class SupabaseBackendService {
 
   Future<Map<String, dynamic>?> fetchOfficialRosterVerifiedRead({
     required SharedResource resource,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final raw = await client.rpc(
       'get_official_roster_verified_read',
@@ -1072,7 +1099,7 @@ class SupabaseBackendService {
         );
       default:
         throw StateError(
-          'La double lecture du planning est momentanément indisponible.',
+          'La vérification indépendante A/B/C du planning est momentanément indisponible.',
         );
     }
   }
@@ -1082,7 +1109,7 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required List<String> coveredDates,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
@@ -1129,7 +1156,7 @@ class SupabaseBackendService {
 
   Future<bool> officialRosterImportIsCurrent(
     SharedResource resource, {
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'official_roster_import_is_current_v2',
@@ -1146,7 +1173,7 @@ class SupabaseBackendService {
     required SharedResource resource,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_v2',
@@ -1159,6 +1186,212 @@ class SupabaseBackendService {
       },
     );
     return Map<String, dynamic>.from(result as Map);
+  }
+
+  Future<Map<String, String>> fetchOfficialRosterIdentityLinks({
+    required String hospital,
+  }) async {
+    if (!enabled || client.auth.currentUser == null) {
+      return const <String, String>{};
+    }
+    final raw = await client
+        .from('official_roster_identity_links')
+        .select(
+          'normalized_first_name,normalized_last_name,profile_id,active',
+        )
+        .eq('hospital', hospital)
+        .eq('active', true);
+    final result = <String, String>{};
+    for (final item in (raw as List)) {
+      final row = Map<String, dynamic>.from(item as Map);
+      final first = (row['normalized_first_name'] ?? '').toString().trim();
+      final last = (row['normalized_last_name'] ?? '').toString().trim();
+      final profileId = (row['profile_id'] ?? '').toString().trim();
+      if (first.isNotEmpty && last.isNotEmpty && profileId.isNotEmpty) {
+        result['$first|$last'] = profileId;
+      }
+    }
+    return result;
+  }
+
+  Future<Map<String, dynamic>> saveOfficialRosterAnalysisR6({
+    required SharedResource resource,
+    required Map<String, dynamic> extraction,
+    required List<OfficialRosterGuard> guards,
+    required List<Map<String, dynamic>> unmatchedCells,
+  }) async {
+    final raw = await client.rpc(
+      'save_official_roster_analysis_r6',
+      params: {
+        'p_resource_id': resource.id,
+        'p_resource_updated_at':
+            resource.updatedAt.toUtc().toIso8601String(),
+        'p_extraction': extraction,
+        'p_guards': guards.map((guard) => guard.toJson()).toList(growable: false),
+        'p_unmatched_cells': unmatchedCells,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterImportReports({
+    int limit = 50,
+  }) async {
+    final raw = await client
+        .from('official_roster_import_reports')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterGuards({
+    required String reportId,
+  }) async {
+    final raw = await client
+        .from('official_roster_guards')
+        .select()
+        .eq('report_id', reportId)
+        .order('date_str')
+        .order('source_ordinal');
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterAnomalies({
+    required String reportId,
+  }) async {
+    final raw = await client
+        .from('official_roster_anomalies')
+        .select()
+        .eq('report_id', reportId)
+        .order('date_str')
+        .order('created_at');
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchOfficialRosterIdentityLinkRows({
+    String? hospital,
+  }) async {
+    var query = client
+        .from('official_roster_identity_links')
+        .select(
+          'id,hospital,official_first_name,official_last_name,'
+          'official_full_name,normalized_first_name,normalized_last_name,'
+          'profile_id,active,created_at,updated_at,reason',
+        )
+        .eq('active', true);
+    if (hospital != null && hospital.trim().isNotEmpty) {
+      query = query.eq('hospital', hospital);
+    }
+    final raw = await query.order('official_full_name');
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> setOfficialRosterIdentityLink({
+    required String hospital,
+    required String firstName,
+    required String lastName,
+    required String fullName,
+    required String profileId,
+    String? reason,
+  }) async {
+    final raw = await client.rpc(
+      'admin_set_official_roster_identity_link',
+      params: {
+        'p_hospital': hospital,
+        'p_first_name': firstName,
+        'p_last_name': lastName,
+        'p_full_name': fullName,
+        'p_profile_id': profileId,
+        'p_reason': reason,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<void> deleteOfficialRosterIdentityLink({
+    required String linkId,
+    String? reason,
+  }) async {
+    await client.rpc(
+      'admin_delete_official_roster_identity_link',
+      params: {
+        'p_link_id': linkId,
+        'p_reason': reason,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> correctOfficialRosterGuard({
+    required String guardId,
+    required Map<String, dynamic> patch,
+    required String reason,
+  }) async {
+    final raw = await client.rpc(
+      'admin_correct_official_roster_guard',
+      params: {
+        'p_guard_id': guardId,
+        'p_patch': patch,
+        'p_reason': reason,
+      },
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> previewOfficialRosterRecalculation(
+    String profileId,
+  ) async {
+    final raw = await client.rpc(
+      'admin_preview_official_roster_recalculation',
+      params: {'p_profile_id': profileId},
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> applyOfficialRosterRecalculation({
+    required String profileId,
+    required String previewToken,
+  }) async {
+    final raw = await client.rpc(
+      'admin_apply_official_roster_recalculation',
+      params: {
+        'p_profile_id': profileId,
+        'p_expected_preview_token': previewToken,
+      },
+    );
+    final result = Map<String, dynamic>.from(raw as Map);
+    if (result['ok'] == false) {
+      throw StateError(
+        result['error']?.toString() ?? 'Le recalcul a échoué.',
+      );
+    }
+    return result;
+  }
+
+
+  Future<String> logGlobalOfficialRosterRecalculation({
+    required List<Map<String, dynamic>> previews,
+    required Map<String, dynamic> result,
+  }) async {
+    final raw = await client.rpc(
+      'admin_log_official_roster_global_recalculation',
+      params: {
+        'p_preview': {
+          'items': previews,
+          'count': previews.length,
+        },
+        'p_result': result,
+      },
+    );
+    return raw.toString();
   }
 
   Future<Map<String, dynamic>> registerOfficialDisciplinaryMarks({
@@ -1209,7 +1442,7 @@ class SupabaseBackendService {
   Future<bool> officialRosterProfileSyncIsCurrent({
     required SharedResource resource,
     required String profileId,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'official_roster_profile_sync_is_current_v2',
@@ -1228,7 +1461,7 @@ class SupabaseBackendService {
     required String profileId,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r5',
+    String parserRevision = 'v12.0.2-r6',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_for_profile_v2',
