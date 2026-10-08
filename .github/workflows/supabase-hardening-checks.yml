@@ -55,6 +55,10 @@ jobs:
           grep -Fq "set search_path = ''" "$R6"
           grep -Fq "g.date_str as date_str" "$R6"
           grep -Fq "check (duty_area = 'urgences')" "$R6"
+          SLOT_FIX='supabase/migrations/20261008085000_garde_r6_preview_slot_and_verified_source.sql'
+          grep -Fq "slot = 'hm6_bouskoura'" "$SLOT_FIX"
+          grep -Fq "r.total_guards > 0" "$SLOT_FIX"
+          grep -Fq "g.duty_area = 'urgences'" "$SLOT_FIX"
           if grep -Fq "g.date_str::text as date_str" "$R6"; then
             echo 'ERROR: R6 preview must keep DATE typed for joins.' >&2
             exit 1
@@ -147,6 +151,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008061500_garde_r6_rpc_anon_lockdown.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008063000_garde_r6_fk_indexes.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008064500_garde_r6_emergency_only_scope.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008085000_garde_r6_preview_slot_and_verified_source.sql
 
       - name: Run R6 integration assertions
         shell: bash
