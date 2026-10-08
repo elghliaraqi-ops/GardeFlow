@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { GroqRosterVision, GroqRateLimitError } from './groq_vision.ts';
+import { validateGroqStoredSelection, validateGroqPreflightSelection } from './groq_request_scope.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1292,20 +1293,16 @@ Deno.serve(async (req: Request) => {
         return json({ ok: false, error: 'resource_not_found' }, 404);
       }
 
-      if (!manualGroqConfirmed) {
-        return json({ ok: false, error: 'groq_manual_confirmation_required' }, 409);
-      }
-      // Précaution anti-décalage : ne jamais analyser le PDF d'un autre
-      // établissement ni une autre version de ce document sélectionné.
-      const selectedDate = Date.parse(selectedUpdatedAt);
-      const actualDate = Date.parse(String(resource.updated_at));
-      if (selectedResourceId !== resourceId ||
-          !['hm6_bouskoura', 'hm6_rabat', 'hck_casa'].includes(selectedSlot) ||
-          selectedSlot !== resource.slot ||
-          !Number.isFinite(selectedDate) ||
-          selectedDate !== actualDate) {
-        return json({ ok: false, error: 'groq_pdf_selection_mismatch' }, 409);
-      }
+      const scopeError = validateGroqStoredSelection({
+        manualGroqConfirmed,
+        selectedSlot,
+        selectedResourceId,
+        selectedUpdatedAt,
+        resourceId,
+        actualSlot: resource.slot,
+        actualUpdatedAt: resource.updated_at,
+      });
+      if (scopeError) return json({ ok: false, error: scopeError }, 409);
 
       // Lecture 2 explicitement demandée : ne jamais retourner une ancienne
       // lecture alors que l'administrateur souhaite corriger son résultat.
@@ -1335,12 +1332,14 @@ Deno.serve(async (req: Request) => {
     } else {
       slot = typeof body?.slot === 'string' ? body.slot.trim() : '';
       hospital = hospitalForSlot(slot) || '';
-      if (!manualGroqConfirmed) {
-        return json({ ok: false, error: 'groq_manual_confirmation_required' }, 409);
-      }
-      if (!['hm6_bouskoura', 'hm6_rabat', 'hck_casa'].includes(selectedSlot) ||
-          selectedSlot !== slot || selectedResourceId !== '') {
-        return json({ ok: false, error: 'groq_pdf_selection_mismatch' }, 409);
+      const preflightScopeError = validateGroqPreflightSelection({
+        manualGroqConfirmed,
+        selectedSlot,
+        selectedResourceId,
+        slot,
+      });
+      if (preflightScopeError) {
+        return json({ ok: false, error: preflightScopeError }, 409);
       }
       displayName =
         typeof body?.displayName === 'string' && body.displayName.trim()
