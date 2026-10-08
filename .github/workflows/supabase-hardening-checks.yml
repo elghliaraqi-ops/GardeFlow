@@ -73,6 +73,12 @@ jobs:
           grep -Fq "const readB = await runRead" "$EDGE"
           grep -Fq "cExecuted = true" "$EDGE"
           grep -Fq "manualResolutions" "$EDGE"
+          grep -Fq "coverage_start" "$EDGE"
+          grep -Fq "coverage_end" "$EDGE"
+          grep -Fq "coverage_scope_mismatch" "$EDGE"
+          grep -Fq "Jour du mois principal absent" "$EDGE"
+          grep -Fq "Page non localisée" "$EDGE"
+          grep -Fq "Zone non localisée" "$EDGE"
           grep -Fq "status = 'green'" "$EDGE"
           grep -Fq "status = 'orange'" "$EDGE"
           grep -Fq "status = 'red'" "$EDGE"
@@ -129,6 +135,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261007231000_garde_functional_lock_r6.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008060000_garde_r6_preview_date_type_fix.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008061500_garde_r6_rpc_anon_lockdown.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261008063000_garde_r6_fk_indexes.sql
 
       - name: Run R6 integration assertions
         shell: bash
