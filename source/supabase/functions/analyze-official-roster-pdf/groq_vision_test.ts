@@ -1,4 +1,4 @@
-import { GROQ_MAX_IMAGES_PER_REQUEST, GroqRosterVision, expandCompactRoster, mergeChunkReads } from './groq_vision.ts';
+import { GROQ_MAX_IMAGES_PER_REQUEST, GroqRosterVision, GroqRateLimitError, scanChunk, expandCompactRoster, mergeChunkReads } from './groq_vision.ts';
 
 function assert(ok: boolean, message: string): void {
   if (!ok) throw new Error(message);
@@ -132,4 +132,67 @@ Deno.test('Compact R6 : aucun numéro de promotion ou compte n’est inféré', 
   assert(result.rows[0].doctors[0].full_name === 'Lina Bennani',
     'Unknown doctors must be preserved');
   assert(!('owner_id' in result.rows[0]), 'No automatic identity link');
+});
+
+Deno.test('Groq R6 recovers json_validate_failed without weakening R6 validation', async () => {
+  const requests: any[] = [];
+  const result = {
+    m: null, y: null, scope: 'U', mode: 'R',
+    start: '2026-10-01', end: '2026-10-01', q: 0.98, w: [],
+    r: [['2026-10-01', 'J', [['Marwa', 'Oukkas', 'Marwa Oukkas', 0.98]], [], 'ligne 1/J']],
+  };
+  const replies = [
+    new Response(JSON.stringify({ error: { code: 'json_validate_failed' } }), { status: 400 }),
+    new Response(JSON.stringify({
+      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(result) } }],
+    }), { status: 200 }),
+  ];
+  const mockedFetch = async (_input: unknown, init?: RequestInit): Promise<Response> => {
+    requests.push(JSON.parse(String(init?.body)));
+    return replies.shift()!;
+  };
+  const read = await scanChunk(
+    [{ pageNumber: 1, imageUrl: 'data:image/png;base64,AA==' }],
+    'test-token', 'Lire le PDF officiel', 'test-model', Date.now() + 60000,
+    mockedFetch as typeof fetch,
+  );
+  assert(requests.length === 2, 'Only one fallback is allowed');
+  assert(requests[0].response_format?.type === 'json_object', 'Initial JSON mode preserved');
+  assert(!('response_format' in requests[1]), 'Fallback omits problematic provider mode');
+  assert(read.rows[0].doctors[0].full_name === 'Marwa Oukkas', 'Exact names preserved');
+  assert(read.rows[0].shift === 'urg-jour', 'Urgences only');
+  assert(read.rows[0].page_number === 1, 'Server PDF page retained');
+});
+
+Deno.test('Groq R6 does not retry unrelated 400 errors', async () => {
+  let count = 0;
+  const mockedFetch = async (): Promise<Response> => {
+    count++;
+    return new Response(JSON.stringify({ error: { code: 'invalid_model' } }), { status: 400 });
+  };
+  let rejected = false;
+  try {
+    await scanChunk([{ pageNumber: 1, imageUrl: 'data:image/png;base64,AA==' }],
+      'token', 'Lire', 'test-model', Date.now() + 60000, mockedFetch as typeof fetch);
+  } catch (e) {
+    rejected = e instanceof Error && e.message === 'groq_request_invalid';
+  }
+  assert(rejected && count === 1, 'Unrelated bad requests fail closed');
+});
+
+Deno.test('Groq R6 returns retry delay for rate limits too long for an Edge retry', async () => {
+  let count = 0;
+  const mockedFetch = async (): Promise<Response> => {
+    count++;
+    return new Response(JSON.stringify({ error: { code: 'rate_limit_exceeded' } }),
+      { status: 429, headers: { 'retry-after': '42' } });
+  };
+  let retryAfter: number | null = null;
+  try {
+    await scanChunk([{ pageNumber: 1, imageUrl: 'data:image/png;base64,AA==' }],
+      'token', 'Lire', 'test-model', Date.now() + 60000, mockedFetch as typeof fetch);
+  } catch (e) {
+    if (e instanceof GroqRateLimitError) retryAfter = e.retryAfterSeconds;
+  }
+  assert(count === 1 && retryAfter === 43, 'No long inline retry; delay propagated');
 });
