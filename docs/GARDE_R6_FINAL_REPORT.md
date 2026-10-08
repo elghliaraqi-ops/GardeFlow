@@ -1,6 +1,6 @@
 # GardeFlow — Rapport de verrouillage fonctionnel du module Garde R6
 
-**État : PRÉ-DÉPLOIEMENT — branche validée côté Flutter, non déployée en production**
+**État : PRÉ-DÉPLOIEMENT — Flutter + SQL/RPC + Edge Function validés en environnement isolé, non déployés en production**
 
 - Branche : `garde-functional-lock-r6-20261007`
 - PR : #79 (brouillon)
@@ -74,7 +74,13 @@ L'ancien `AdminScreen` n'est pas supprimé : il reste accessible comme module hi
 - Correction ciblée des seules cellules litigieuses en ROUGE.
 - Revalidation structurelle complète après correction humaine.
 - Score de confiance par médecin/garde.
-- Page + zone conservées pour les conflits.
+- Page + zone conservées pour les conflits et les corrections ciblées.
+- Contrôle de plage structurelle explicite : `coverage_start`, `coverage_end`, `coverage_mode`.
+- Un planning `full_month` doit contenir tous les jours du mois principal.
+- Un planning partiel/multi-mois peut déclarer une `explicit_range`, mais toutes les dates de cette plage doivent être présentes.
+- Détection des cellules visuelles dupliquées.
+- Page et zone obligatoires pour une lecture visuelle considérée fiable.
+- Une divergence A/B/C sur la plage officielle devient une anomalie structurelle non contournable par une simple correction de nom.
 - Le moteur ne dépend plus de la base utilisateurs pour reconstruire le document.
 
 ### Identité médecin
@@ -122,12 +128,24 @@ L'ancien `AdminScreen` n'est pas supprimé : il reste accessible comme module hi
 - `source/test/official_roster_r6_safety_test.dart`
 - `source/test/official_roster_verified_read_test.dart`
 - `supabase/migrations/20261007231000_garde_functional_lock_r6.sql`
+- `supabase/migrations/20261008060000_garde_r6_preview_date_type_fix.sql`
+- `supabase/migrations/20261008061500_garde_r6_rpc_anon_lockdown.sql`
+- `supabase/migrations/20261008063000_garde_r6_fk_indexes.sql`
+- `supabase/tests/garde_r6_validation_baseline.sql`
+- `supabase/tests/garde_r6_integration_assertions.sql`
+- `.github/workflows/supabase-hardening-checks.yml`
 
 ## 6. Migration base de données
 
-Migration additive uniquement :
+Migration principale additive :
 
 `supabase/migrations/20261007231000_garde_functional_lock_r6.sql`
+
+Hotfixes de validation également additifs :
+
+- `20261008060000_garde_r6_preview_date_type_fix.sql` : conserve `date_str` en type DATE dans l'aperçu de recalcul ;
+- `20261008061500_garde_r6_rpc_anon_lockdown.sql` : retire explicitement EXECUTE au rôle `anon` sur les RPC R6 ;
+- `20261008063000_garde_r6_fk_indexes.sql` : ajoute les index de couverture des FK signalées par l'advisor Supabase.
 
 Aucune suppression de table historique et aucune modification destructive prévue.
 
@@ -164,15 +182,14 @@ Les gardes officielles sont stockées indépendamment de `planning_entries`.
 
 ### CI Flutter
 
-Dernier CI de la branche :
+La branche a déjà validé :
 
-- **59 tests passés**
-- `flutter test` : succès
-- compilation des tests : succès
-- `flutter analyze lib test --no-fatal-infos --no-fatal-warnings` exécuté ;
-  le dépôt possède des warnings/info historiques, mais aucune erreur fatale n'a bloqué le pipeline.
+- **59 tests Flutter passés** ;
+- compilation des tests : succès ;
+- `flutter analyze lib test --no-fatal-infos --no-fatal-warnings` exécuté sans erreur fatale ;
+- tests de non-régression métier historiques toujours verts.
 
-### Tests R6 ajoutés
+### Tests R6 Flutter
 
 - normalisation prudente ;
 - exact prénom + nom ;
@@ -191,19 +208,64 @@ Dernier CI de la branche :
 - inventaire de la nouvelle console ;
 - maintien des points d'entrée historiques.
 
-### Tests métier historiques existants repassés
+### Validation Supabase isolée réelle
 
-- même hôpital ;
-- même service pour Service ;
-- promotion Urgences ;
-- protections et écrans mobiles concernés ;
-- tests Practice / autres modules existants : suite verte.
+Un projet Supabase séparé, sans données de production, a été créé exclusivement pour R6.
+
+Résultats obtenus :
+
+- migration R6 principale appliquée avec succès ;
+- hotfix DATE appliqué avec succès ;
+- hotfix ACL `anon` appliqué avec succès ;
+- index FK appliqués avec succès ;
+- Edge Function R6 bundlée et déployée avec `verify_jwt=true` ;
+- RLS testée avec session admin et session médecin non-admin ;
+- un non-admin voit 0 ligne dans les cinq tables R6 administratives ;
+- les sept RPC R6 admin ont `anon_execute=false` ;
+- import synthétique : 3 gardes sur 3 conservées, dont inscrit + non inscrit + ambigu ;
+- rattachement ultérieur d'un médecin non inscrit à un nouveau compte validé ;
+- suppression de liaison validée et auditée ;
+- correction ciblée d'une garde validée et auditée ;
+- recalcul individuel avec aperçu validé ;
+- second aperçu après recalcul = garde inchangée ;
+- hash de la source officielle identique avant/après recalcul ;
+- journal de recalcul global validé ;
+- statut ROUGE refusé ;
+- confiance 0,89 refusée ;
+- utilisateur non-admin refusé sur RPC admin ;
+- jeton d'aperçu périmé/refusé.
+
+### Tests PostgreSQL reproductibles dans GitHub Actions
+
+Le workflow Supabase lance désormais un PostgreSQL 16 éphémère et :
+
+1. construit un socle synthétique R4/R5 ;
+2. applique les vraies migrations R6 du dépôt ;
+3. exécute les assertions d'import, RLS/ACL, fail-closed et recalcul ;
+4. vérifie que la source officielle n'est pas modifiée.
+
+Ce job d'intégration DB a déjà été exécuté avec succès.
+
+### Défauts détectés avant production grâce à cette validation
+
+1. **Type DATE/TEXT dans l'aperçu de recalcul**  
+   `g.date_str::text` provoquait une comparaison `date = text`. Corrigé et protégé par CI.
+
+2. **EXECUTE hérité pour le rôle anon**  
+   Les RPC refusaient déjà l'action via `is_admin()`, mais `anon` disposait encore du droit SQL d'invocation. Le droit est désormais explicitement retiré et vérifié par CI.
+
+3. **Complétude de bord de planning**  
+   La continuité entre première/dernière date ne suffisait pas à prouver que les bords officiels avaient été lus. Les lectures visuelles déclarent désormais leur plage officielle et A/B/C comparent également cette structure.
+
+4. **Index FK R6**  
+   Les clés étrangères non couvertes signalées par Supabase ont reçu des index additifs. L'advisor ne signale plus de FK R6 non indexée sur le banc de validation.
 
 ### Garde-fous GitHub
 
-- GardeFlow hardening guardrails : succès
-- Supabase hardening checks : succès
-- GardeFlow hardening CI : succès
+- GardeFlow hardening guardrails : succès ;
+- Supabase hardening static checks : succès ;
+- PostgreSQL R6 integration : succès ;
+- GardeFlow hardening CI : succès sur la dernière révision entièrement terminée avant le renforcement de couverture ; chaque nouveau commit relance automatiquement la suite.
 
 ## 10. Résultats sur anciens plannings
 
@@ -231,21 +293,24 @@ Ils contiennent les cas difficiles recherchés :
 
 ## 11. Points restant à surveiller avant production
 
-Le travail n'est pas déclaré “fonctionnellement verrouillé en production” tant que les étapes suivantes ne sont pas terminées :
+La validation infrastructure/backend isolée est maintenant effectuée. Le dernier verrou avant production reste le corpus documentaire réel.
 
-1. appliquer la migration R6 dans un environnement Supabase de validation ou, à défaut, dans une fenêtre de déploiement contrôlée ;
-2. déployer l'Edge Function R6 ;
-3. exécuter au moins les cinq anciens PDF privés ci-dessus avec le vrai pipeline R6 ;
-4. établir pour chacun un golden result exact ;
-5. exiger :
+À terminer :
+
+1. fournir/configurer un `OPENAI_API_KEY` dans un environnement de validation autorisé pour exécuter la vraie Edge Function A/B/C ;
+2. faire passer au moins les cinq anciens PDF privés par ce pipeline réel ;
+3. établir/valider pour chacun un golden result exact ;
+4. exiger :
    - 0 garde manquante ;
    - 0 garde supplémentaire ;
    - 0 mauvaise attribution ;
    - 0 mauvaise date ;
    - 0 confusion Jour/Nuit/24H ;
    - 0 confusion Service/Urgences ;
-6. tester les RPC de recalcul et les RLS avec une session admin réelle ;
-7. seulement ensuite fusionner la PR et déployer.
+5. vérifier que les cas volontairement partiels sont identifiés comme `explicit_range` et que les mois complets sont identifiés comme `full_month` ;
+6. seulement après ces résultats, fusionner la PR et appliquer les migrations/Edge Function à la production.
+
+Le projet Supabase de validation ne contient aucune donnée de production et les PDF historiques privés ne sont pas copiés dans le dépôt GitHub public.
 
 ## 12. Confirmation de non-suppression
 
@@ -266,6 +331,8 @@ Le travail n'est pas déclaré “fonctionnellement verrouillé en production”
 
 **NO-GO production pour l'instant.**
 
-Motif : le code Flutter est vert et les garde-fous sont verts, mais la migration/Edge Function R6 et le corpus historique réel doivent encore être validés ensemble avant de toucher à la production.
+Le code Flutter, les migrations SQL, les RPC, les ACL/RLS, les recalculs et le bundle Edge R6 ont été validés hors production.
 
-C'est un blocage volontaire conforme au principe fail-closed demandé.
+Le seul blocage majeur restant est volontaire : exécuter le **vrai moteur visuel OpenAI A/B/C** sur les anciens PDF privés et comparer le résultat à des références exactes avant de fusionner ou déployer.
+
+C'est conforme au principe fail-closed demandé : aucune validation “fonctionnellement verrouillée” n'est déclarée sur la seule base d'une compilation ou de tests synthétiques.
