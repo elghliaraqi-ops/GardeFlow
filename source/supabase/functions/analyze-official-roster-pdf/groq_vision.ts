@@ -7,7 +7,9 @@ import UPNG from 'npm:upng-js@2.1.0';
 type Page = { pageNumber: number; imageUrl: string };
 // Qwen 3.6 was retired for standard Groq accounts on 14 Sep 2026.
 const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
-export const GROQ_MAX_IMAGES_PER_REQUEST = 3; // Qwen 3.8 accepte au plus trois images par requête.
+// Les trois images autorisées par Groq coûtent à elles seules 6144 tokens.
+// Une seule page réduit le risque de 429 dans les organisations à 8K TPM.
+export const GROQ_MAX_IMAGES_PER_REQUEST = 1;
 
 function b64(raw: Uint8Array): string {
   const parts: string[] = [];
@@ -80,7 +82,11 @@ async function scanChunk(
     'Numéros exacts des pages PDF : ' + pages.map(p => p.pageNumber).join(', ') + '. ' +
     'Seuls les créneaux urg-jour, urg-nuit, urg-24h sont autorisés. ' +
     'Si le document concerne le Service, document_scope vaut non_urgences.';
-  const result = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  // Une erreur 429 ponctuelle peut être retentée si le serveur annonce un
+  // délai bref. Pas de boucle longue au sein d'une Edge Function.
+  let result: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    result = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + key,
@@ -90,7 +96,10 @@ async function scanChunk(
       model,
       temperature: 0.1,
       stream: false,
-      max_completion_tokens: 16000,
+      // Réduire la réservation de tokens au lieu de demander 16000 tokens
+      // pour une seule page. Une sortie tronquée est rejetée plus bas.
+      max_completion_tokens: 4096,
+      reasoning_effort: 'none',
       response_format: { type: 'json_object' },
       messages: [{
         role: 'user',
@@ -104,6 +113,17 @@ async function scanChunk(
       }],
     }),
   });
+    if (result.status === 429 && attempt === 0) {
+      const retryAfter = Number(result.headers.get('retry-after'));
+      // Respecter Retry-After uniquement si une reprise courte est possible.
+      if (Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 8) {
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    break;
+  }
+  if (!result) throw new Error('groq_read_failed');
   const payload = await result.json().catch(() => ({}));
   if (!result.ok) {
     const error = payload?.error ?? {};
@@ -111,11 +131,16 @@ async function scanChunk(
       http_status: result.status,
       error_code: String(error.code ?? '').slice(0, 90),
       error_type: String(error.type ?? '').slice(0, 90),
+      retry_after_seconds: result.headers.get('retry-after') ?? null,
+      remaining_tokens: result.headers.get('x-ratelimit-remaining-tokens') ?? null,
     });
     if (result.status === 429) throw new Error('groq_rate_limited');
     if ([401, 403].includes(result.status)) throw new Error('groq_authentication_failed');
     if ([400, 404, 422].includes(result.status)) throw new Error('groq_request_invalid');
     throw new Error('groq_read_failed');
+  }
+  if (payload?.choices?.[0]?.finish_reason === 'length') {
+    throw new Error('groq_response_truncated');
   }
   const value = parseJSON(payload?.choices?.[0]?.message?.content);
   if (!Array.isArray(value?.rows) || !value?.document_scope) {
