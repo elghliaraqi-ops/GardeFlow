@@ -1,0 +1,44 @@
+name: Validate Random Clinical Case
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/screens/practice_screen.dart'
+      - 'source/lib/services/random_clinical_case_service.dart'
+      - 'source/test/random_clinical_case_service_test.dart'
+      - 'source/supabase/functions/generate-random-clinical-case/**'
+      - 'supabase/functions/generate-random-clinical-case/**'
+      - '.github/workflows/random-clinical-case-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  random-clinical-case:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Analyze new Flutter code
+        working-directory: source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/practice_screen.dart lib/services/random_clinical_case_service.dart test/random_clinical_case_service_test.dart
+      - name: Test generated case validation
+        working-directory: source
+        run: flutter test test/random_clinical_case_service_test.dart
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Groq Edge Function
+        run: deno check source/supabase/functions/generate-random-clinical-case/index.ts
