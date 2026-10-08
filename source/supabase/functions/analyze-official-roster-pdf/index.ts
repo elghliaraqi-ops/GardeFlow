@@ -1243,6 +1243,7 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json().catch(() => ({}));
     const manualResolutions = parseManualResolutions(body?.manualResolutions);
+    const forceReread = body?.forceReread === true;
     const resourceId =
       typeof body?.resourceId === 'string' ? body.resourceId.trim() : '';
     const tempStoragePath =
@@ -1279,13 +1280,17 @@ Deno.serve(async (req: Request) => {
         return json({ ok: false, error: 'resource_not_found' }, 404);
       }
 
-      const { data: cached } = await adminClient
-        .from('official_roster_verified_reads')
-        .select('extraction')
-        .eq('resource_id', resource.id)
-        .eq('resource_updated_at', resource.updated_at)
-        .eq('parser_revision', PARSER_REVISION)
-        .maybeSingle();
+      // Lecture 2 explicitement demandée : ne jamais retourner une ancienne
+      // lecture alors que l'administrateur souhaite corriger son résultat.
+      const cached = forceReread
+        ? null
+        : (await adminClient
+            .from('official_roster_verified_reads')
+            .select('extraction')
+            .eq('resource_id', resource.id)
+            .eq('resource_updated_at', resource.updated_at)
+            .eq('parser_revision', PARSER_REVISION)
+            .maybeSingle()).data;
       if (cached?.extraction?.verified === true) {
         return json({
           ok: true,
