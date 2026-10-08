@@ -16,6 +16,27 @@ AppUser doctor(String id, String nom, String prenom) => AppUser(
     );
 
 void main() {
+  test('Groq parser revision keeps strict R6 Urgences-only validation', () {
+    final parsed = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.3-groq-r6',
+        'status': 'green',
+        'document_scope': 'non_urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': <Map<String, dynamic>>[],
+      },
+      hospital: 'Test Hospital',
+      profiles: <AppUser>[],
+    );
+    expect(parsed.isComplete, isFalse);
+    expect(
+      parsed.validationErrors.any((message) => message.contains('Urgences')),
+      isTrue,
+    );
+  });
+
   test('verified read keeps every doctor in a multi-name cell', () {
     final profiles = [
       doctor('a', 'AKDIM', 'Aymen'),
