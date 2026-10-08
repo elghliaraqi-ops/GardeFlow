@@ -10,6 +10,7 @@ import '../models/practice_models.dart';
 import '../models/qcm_models.dart';
 import '../services/practice_service.dart';
 import '../services/clinical_case_service.dart';
+import '../services/random_clinical_case_service.dart';
 import '../state/app_state.dart';
 import '../widgets/profile_avatar.dart';
 import 'practice_qcm_screen.dart';
@@ -193,6 +194,22 @@ class _PracticeScreenState extends State<PracticeScreen> {
     }
   }
 
+  Future<void> _newRandomClinicalCase() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PracticeCaseFormScreen(
+          appState: widget.appState,
+          standalone: true,
+          autoGenerateRandomCase: true,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _load(silent: true);
+    if (result == 'addAnother') await _newStandaloneCase();
+  }
+
   Future<void> _editPublishedCase(String practiceCaseId) async {
     try {
       final existing = await _service.fetchCaseById(practiceCaseId);
@@ -362,6 +379,15 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 meta: 'Hors garde',
                 accent: PracticeColors.specialist,
                 onTap: _newStandaloneCase,
+              ),
+              const SizedBox(height: 9),
+              _PracticePrimaryActionCard(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Génère-moi un cas au hasard',
+                subtitle: 'Cas fictif créé par IA, modifiable avant publication',
+                meta: 'IA · Aléatoire',
+                accent: PracticeColors.gameGold,
+                onTap: _newRandomClinicalCase,
               ),
 
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
@@ -1928,6 +1954,7 @@ class PracticeCaseFormScreen extends StatefulWidget {
   final PracticeCase? existing;
   final int? suggestedNumber;
   final bool standalone;
+  final bool autoGenerateRandomCase;
   const PracticeCaseFormScreen({
     super.key,
     required this.appState,
@@ -1935,6 +1962,7 @@ class PracticeCaseFormScreen extends StatefulWidget {
     this.existing,
     this.suggestedNumber,
     this.standalone = false,
+    this.autoGenerateRandomCase = false,
   });
 
   @override
@@ -2018,6 +2046,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   Timer? _autosave;
   bool _saving = false;
   bool _restoring = true;
+  bool _generatingRandomCase = false;
+  bool _generatedByAi = false;
   String _syncLabel = 'Brouillon local';
   String? _sex;
   DateTime? _arrivalTime;
@@ -2112,6 +2142,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       }
     }
     if (mounted) setState(() => _restoring = false);
+    if (widget.autoGenerateRandomCase && widget.existing == null &&
+        _isStandalone && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_generateRandomCase());
+      });
+    }
   }
 
   void _apply(PracticeCase value) {
@@ -2130,6 +2166,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
     _imaging.text = value.imagingConclusion;
     _assessment.text = value.assessment;
     _plan.text = value.plan;
+    _generatedByAi = value.consultationReason.startsWith('[SIMULATION IA]');
     _sex = value.sex;
     _arrivalTime = value.arrivalTime;
     _specialist = value.specialistOpinionRequested;
