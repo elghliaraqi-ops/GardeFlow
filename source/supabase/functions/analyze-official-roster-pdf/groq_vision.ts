@@ -182,7 +182,7 @@ async function scanChunk(
     'start/end = dates de couverture officiellement affichées.',
     'Page PDF analysée : ' + pages.map(p => p.pageNumber).join(', ') + '.',
     'Le serveur attribue lui-même le numéro de page (ne retourne pas page_number).',
-  ].join('\\n');
+  ].join('\n');
   // Une erreur 429 ponctuelle peut être retentée si le serveur annonce un
   // délai bref. Pas de boucle longue au sein d'une Edge Function.
   let result: Response | null = null;
