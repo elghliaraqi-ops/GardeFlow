@@ -1,9 +1,9 @@
 name: huim6_planning
 description: "Planning des gardes, annuaire et échanges — Réseau Hôpitaux Universitaires Internationaux Mohammed VI & Cheikh Khalifa"
 publish_to: "none"
-version: 12.0.2+302
+version: 12.0.3+303
 
-# CI rebuild 12.0.2+302 — roster parser r4
+# CI rebuild 12.0.3+303 — roster parser r4
 
 # Splash branding refresh: force Web/Android rebuild with verified original assets.
 environment:
