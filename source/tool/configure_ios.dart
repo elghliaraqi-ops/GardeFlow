@@ -3,7 +3,8 @@
 import 'dart:io';
 
 const bundleId = 'com.huim6.gardeflow';
-const deploymentTarget = '13.0';
+// pdfrx 2.6.5 / PDFium native integration requires iOS 15+.
+const deploymentTarget = '15.0';
 
 String ensurePlistString(String source, String key, String value) {
   final pattern = RegExp(
