@@ -1150,6 +1150,14 @@ const basePrompt = [
   "- En explicit_range, month et year doivent être null : la plage officielle est uniquement coverage_start → coverage_end.",
 ].join('\n');
 
+// Deno/TypeScript 2.x DOM typings require an ArrayBuffer (not ArrayBufferLike)
+// for BlobPart and crypto.subtle. Copy to an owned buffer; PDF bytes unchanged.
+function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 async function uploadOpenAIFile(
   bytes: Uint8Array,
   fileName: string,
@@ -1161,7 +1169,7 @@ async function uploadOpenAIFile(
   form.append('expires_after[seconds]', '3600');
   form.append(
     'file',
-    new Blob([bytes], { type: 'application/pdf' }),
+    new Blob([ownedArrayBuffer(bytes)], { type: 'application/pdf' }),
     fileName || 'planning-officiel.pdf',
   );
   const response = await fetch('https://api.openai.com/v1/files', {
@@ -1243,7 +1251,7 @@ async function runRead(
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const digest = await crypto.subtle.digest('SHA-256', ownedArrayBuffer(bytes));
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('');
