@@ -185,6 +185,47 @@ class ClinicalCaseService {
     return count;
   }
 
+  /// Ajoute cinq nouvelles questions uniquement : ne relance jamais la
+  /// génération initiale et ne supprime ni réponses ni statistiques.
+  Future<int> addQcmsToClinicalCase({required String postId}) async {
+    final id = postId.trim();
+    if (!_backend.enabled ||
+        _backend.client.auth.currentUser == null ||
+        id.isEmpty) {
+      throw StateError('Authentification requise.');
+    }
+    try {
+      final response = await _backend.client.functions.invoke(
+        'generate-clinical-case-qcm',
+        body: <String, dynamic>{
+          'post_id': id,
+          'append_qcms': true,
+        },
+      );
+      final data = response.data;
+      if (data is Map && data['ok'] == true && data['added'] == 5) {
+        notifyChanged();
+        return int.tryParse('${data['count']}') ?? 0;
+      }
+      final code = data is Map ? '${data['error'] ?? ''}' : '';
+      if (code == 'generation_in_progress') {
+        throw StateError('Une génération est déjà en cours pour ce cas.');
+      }
+      if (code == 'extension_cooldown') {
+        throw StateError('Réessayez dans quelques minutes.');
+      }
+      if (code == 'qcm_limit_reached') {
+        throw StateError('Ce cas a atteint sa limite de 100 QCM.');
+      }
+      throw StateError('Ajout des QCM indisponible pour le moment.');
+    } catch (error) {
+      if (error is StateError) rethrow;
+      throw StateError(
+        'Échec de la génération. Vérifiez la connexion puis réessayez.',
+      );
+    }
+  }
+
   Future<void> enrichQcmForPracticeCase(String practiceCaseId) async {
     if (!_backend.enabled ||
         _backend.client.auth.currentUser == null ||
