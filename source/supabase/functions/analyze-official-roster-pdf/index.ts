@@ -1111,6 +1111,7 @@ const basePrompt = [
   '- page_number est la page PDF où se trouve la cellule.',
   "- zone décrit brièvement la zone utile (ex. 'ligne 26 octobre / colonne Nuit').",
   '- Respecte les changements de mois et d’année.',
+  "- PÉRIMÈTRE STRICT : ce moteur traite uniquement les gardes des URGENCES. N’interprète jamais une garde de Service comme une garde Urgences.",
   '- coverage_start et coverage_end sont les première et dernière dates OFFICIELLEMENT couvertes par tout le tableau visible, y compris les éventuels jours de débord avant/après le mois principal.',
   "- coverage_mode='full_month' uniquement si le document couvre explicitement tous les jours d’un mois civil principal ; sinon coverage_mode='explicit_range'.",
   "- En full_month, month/year désignent ce mois principal et sont obligatoires, même si le tableau affiche aussi quelques jours avant/après.",
