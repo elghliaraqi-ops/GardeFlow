@@ -966,13 +966,62 @@ const extractionSchema = {
     },
     coverage_start: {
       type: 'string',
-      pattern: '^\d{4}-\d{2}-\d{2}$',
+      pattern: '^\\d{4}-\\d{2}-\\d{2}$',
     },
     coverage_end: {
       type: 'string',
-      pattern: '^\d{4}-\d{2}-\d{2}$',
+      pattern: '^\\d{4}-\\d{2}-\\d{2}$',
     },
     confidence: {
+      type: 'number',
+      minimum: 0,
+      maximum: 1,
+    },
+    warnings: {
+      type: 'array',
+      maxItems: 50,
+      items: { type: 'string' },
+    },
+    rows: {
+      type: 'array',
+      maxItems: 160,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'date',
+          'shift',
+          'doctors',
+          'red_names',
+          'page_number',
+          'zone',
+        ],
+        properties: {
+          date: {
+            type: 'string',
+            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          },
+          shift: {
+            type: 'string',
+            enum: ['urg-jour', 'urg-nuit', 'urg-24h'],
+          },
+          doctors: {
+            type: 'array',
+            maxItems: 16,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: [
+                'first_name',
+                'last_name',
+                'full_name',
+                'confidence',
+              ],
+              properties: {
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+                full_name: { type: 'string' },
+                confidence: {
                   type: 'number',
                   minimum: 0,
                   maximum: 1,
