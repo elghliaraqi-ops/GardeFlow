@@ -346,6 +346,104 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     }
   }
 
+  /// R6/Groq : publie le rapport de lecture officiel uniquement.
+  /// Le recalcul des superpositions personnelles reste une étape séparée
+  /// soumise à un aperçu et à une validation administrateur.
+  Future<void> _rereadR6(
+    _OfficialSlot slot,
+    SharedResource resource,
+  ) async {
+    if (_busySlot != null || _autoImportingSlots.contains(slot.id)) return;
+    if (context.read<AppState>().currentUser?.role != UserRole.admin) return;
+    setState(() {
+      _busySlot = slot.id;
+      _importStatus[slot.id] = 'Relecture R6 / Groq en cours…';
+    });
+    try {
+      final profiles = await _backend.fetchVisibleProfiles();
+      final identityLinks = await _backend.fetchOfficialRosterIdentityLinks(
+        hospital: slot.hospital,
+      );
+      // Cache de la version EXACTE (ID + updated_at + révision Groq R6).
+      var extraction = await _backend.fetchOfficialRosterVerifiedRead(
+        resource: resource,
+        parserRevision: OfficialRosterImportService.parserRevision,
+      );
+      if (extraction == null) {
+        var localEvidence = const <Map<String, dynamic>>[];
+        try {
+          final bytes = await _backend.downloadSharedResource(resource.storagePath);
+          final local = await OfficialRosterImportService.parse(
+            bytes: bytes,
+            displayName: resource.displayName,
+            hospital: slot.hospital,
+            profiles: profiles,
+            resourceUpdatedAt: resource.updatedAt,
+          );
+          localEvidence = local.localCells
+              .map((cell) => cell.toJson())
+              .toList(growable: false);
+        } catch (error) {
+          // PDF scanné : le serveur peut faire une lecture A visuelle de secours.
+          debugPrint('Lecture A locale indisponible : $error');
+        }
+        extraction = await _backend.analyzeOfficialRosterResource(
+          resource.id,
+          parserRevision: OfficialRosterImportService.parserRevision,
+          localEvidence: localEvidence,
+        );
+      }
+      final read = OfficialRosterVerifiedReadService.fromExtraction(
+        extraction: extraction,
+        hospital: slot.hospital,
+        profiles: profiles,
+        identityLinks: identityLinks,
+      );
+      if (extraction['verified'] != true ||
+          extraction['document_scope'] != 'urgences' ||
+          !read.isComplete ||
+          read.detectedRows == 0) {
+        final details = read.validationErrors.take(3).join(' • ');
+        throw StateError(details.isEmpty
+            ? 'Lecture Urgences non vérifiée. Publication bloquée.'
+            : 'Vérification refusée : $details');
+      }
+
+      await _backend.saveOfficialRosterAnalysisR6(
+        resource: resource,
+        extraction: extraction,
+        guards: read.officialGuards,
+        unmatchedCells: read.unmatchedCells,
+      );
+      if (!mounted) return;
+      setState(() {
+        _importStatus[slot.id] =
+            'Source Urgences vérifiée avec R6/Groq : '
+            '${read.officialGuards.length} garde(s) officielle(s). '
+            'Calendriers inchangés. Lancez ensuite l’aperçu des superpositions.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Source R6 vérifiée et enregistrée. '
+            'Aucune superposition personnelle modifiée.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _importStatus[slot.id] =
+            'Relecture R6 refusée : aucune modification des calendriers.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Relecture R6 impossible : $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busySlot = null);
+    }
+  }
+
   Future<void> _upload(_OfficialSlot slot) async {
     if (_busySlot != null) return;
     final result = await FilePicker.platform.pickFiles(
@@ -668,6 +766,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
                           isMyHospital: currentUser?.hospital == _slots[i].hospital,
                           onOpen: (r) => _open(r),
                           onResync: (r) => _resyncMyRoster(_slots[i], r),
+                          onRereadR6: (r) => _rereadR6(_slots[i], r),
                           onUpload: () => _upload(_slots[i]),
                           onDelete: (r) => _delete(_slots[i], r),
                         ),
@@ -1198,6 +1297,7 @@ class _OfficialPdfCard extends StatelessWidget {
   final bool isMyHospital;
   final ValueChanged<SharedResource> onOpen;
   final ValueChanged<SharedResource> onResync;
+  final ValueChanged<SharedResource> onRereadR6;
   final VoidCallback onUpload;
   final ValueChanged<SharedResource> onDelete;
 
@@ -1214,6 +1314,7 @@ class _OfficialPdfCard extends StatelessWidget {
     required this.isMyHospital,
     required this.onOpen,
     required this.onResync,
+    required this.onRereadR6,
     required this.onUpload,
     required this.onDelete,
   });
@@ -1333,6 +1434,18 @@ class _OfficialPdfCard extends StatelessWidget {
                   onPressed: busy ? null : () => onOpen(r),
                   icon: Icon(Icons.visibility_rounded, size: 18),
                   label: Text('Visualiser'),
+                ),
+              if (isAdmin && r != null)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => onRereadR6(r),
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.fact_check_rounded, size: 18),
+                  label: const Text('Relire avec R6 (Groq)'),
                 ),
               if (r != null && isMyHospital && canResync)
                 OutlinedButton.icon(
