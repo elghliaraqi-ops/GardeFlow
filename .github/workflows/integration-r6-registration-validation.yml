@@ -31,7 +31,8 @@ jobs:
           channel: stable
           cache: true
       - name: Assert combined release version
-        run: grep -q '^version: 12.0.3+303$' pubspec.yaml
+        run: |
+          grep -q '^version: 12.0.3+303$' pubspec.yaml
       - name: Flutter pub get
         run: flutter pub get
       - name: Full Flutter test suite
