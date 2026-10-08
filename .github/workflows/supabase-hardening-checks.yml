@@ -83,7 +83,7 @@ jobs:
             exit 1
           fi
 
-          grep -Fq "const PARSER_REVISION = 'v12.0.3-r6-groq'" "$EDGE"
+          grep -Fq "const PARSER_REVISION = 'v12.0.3-groq-r6'" "$EDGE"
           grep -Fq "GroqRosterVision" "$EDGE"
           grep -Fq "groq_vision_a+groq_vision_b+conditional_c" "$EDGE"
           if grep -Eq 'api\\.openai\\.com|OPENAI_API_KEY' "$EDGE"; then
