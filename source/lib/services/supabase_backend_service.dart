@@ -66,6 +66,7 @@ class SupabaseBackendService {
     required String password,
     required String service,
     required MedicalPosition medicalPosition,
+    required TrainingLanguage trainingLanguage,
     required String hospital,
     int? promotionNumber,
     int? trainingYear,
@@ -84,6 +85,7 @@ class SupabaseBackendService {
         'medical_grade': grade.name,
         'fonction': grade.name,
         'medical_position': medicalPosition.name,
+        'training_language': trainingLanguage.name,
         if (trainingYear != null) 'training_year': trainingYear,
         'hospital': hospital,
         if (medicalPosition.requiresPromotion && promotionNumber != null)
@@ -277,7 +279,7 @@ class SupabaseBackendService {
       final rows = await client
           .from('profiles')
           .select(
-            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,medical_position,training_year,appearance_theme',
+            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,medical_position,training_year,training_language,appearance_theme',
           )
           .order('prenom')
           .order('nom')
@@ -435,6 +437,9 @@ class SupabaseBackendService {
       grade: grade,
       medicalPosition: MedicalPosition.values.where(
         (p) => p.name == j['medical_position'],
+      ).firstOrNull,
+      trainingLanguage: TrainingLanguage.values.where(
+        (l) => l.name == j['training_language'],
       ).firstOrNull,
       trainingYear: (j['training_year'] as num?)?.toInt(),
       hospital: j['hospital'] as String,
