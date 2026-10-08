@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/screen_decor.dart';
 import '../theme/widgets.dart';
+import 'official_planning_screen.dart';
 
 class AdminRosterRecalculationScreen extends StatefulWidget {
   const AdminRosterRecalculationScreen({super.key});
@@ -172,9 +173,25 @@ class _AdminRosterRecalculationScreenState
                   const Icon(Icons.info_outline_rounded, color: AppColors.info),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      _globalGuidance!,
-                      style: TextStyle(color: AppColors.inkSoft),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _globalGuidance!,
+                          style: TextStyle(color: AppColors.inkSoft),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const OfficialPlanningScreen(),
+                            ),
+                          ),
+                          icon: const Icon(Icons.picture_as_pdf_rounded),
+                          label: const Text('Relire les PDF officiels avec R6'),
+                        ),
+                      ],
                     ),
                   ),
                 ],
