@@ -8,7 +8,9 @@ void main() {
     final screen = File('lib/screens/official_planning_screen.dart')
         .readAsStringSync();
     expect(pubspec, contains('pdfrx: 2.6.5'));
-    expect(screen, contains('allowRemoteVerification: false'));
+    expect(screen, isNot(contains('allowRemoteVerification: true')));
+    expect(screen, isNot(contains('allowRemoteVerification =')));
+    expect(screen, contains('loadVerified: (version) => _backend.fetchOfficialRosterVerifiedRead('));
     expect(screen, contains('_OfficialRosterReadChoice.pdfrx'));
     expect(screen, contains('Valider la lecture pdfrx'));
   });
