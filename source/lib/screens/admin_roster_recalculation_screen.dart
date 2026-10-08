@@ -22,6 +22,7 @@ class _AdminRosterRecalculationScreenState
   String? _selectedProfileId;
   Map<String, dynamic>? _preview;
   List<Map<String, dynamic>> _globalPreviews = const [];
+  String? _globalGuidance;
   bool _busy = false;
   bool _globalBusy = false;
 
@@ -162,6 +163,24 @@ class _AdminRosterRecalculationScreenState
               ],
             ),
           ),
+          if (_globalGuidance != null) ...[
+            const SizedBox(height: 12),
+            AppCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: AppColors.info),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _globalGuidance!,
+                      style: TextStyle(color: AppColors.inkSoft),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_globalPreviews.isNotEmpty) ...[
             const SizedBox(height: 12),
             _GlobalPreviewCard(
@@ -184,7 +203,12 @@ class _AdminRosterRecalculationScreenState
       if (!mounted) return;
       setState(() => _preview = preview);
     } catch (e) {
-      if (mounted) _snack('Aperçu impossible : $e');
+      if (mounted) {
+        final message = e.toString();
+        _snack(message.contains('Aucune lecture R6 vérifiée')
+            ? 'Analysez et validez d’abord le PDF officiel des Urgences en R6.'
+            : 'Aperçu impossible : $e');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -233,7 +257,34 @@ class _AdminRosterRecalculationScreenState
     setState(() {
       _globalBusy = true;
       _globalPreviews = const [];
+      _globalGuidance = null;
     });
+
+    // Do not produce an apparent 16-doctor "recalculation failure" when
+    // no verified official R6 roster has ever been saved. This also prevents
+    // accidental application of an empty source to historical calendars.
+    try {
+      final reports = await _backend.fetchOfficialRosterImportReports(limit: 1);
+      if (!mounted) return;
+      if (reports.isEmpty) {
+        setState(() {
+          _globalBusy = false;
+          _globalGuidance =
+              'Aucun planning Urgences vérifié par le moteur R6. '
+              'Commencez par analyser et valider un PDF officiel dans '
+              '« Vérification des imports ». Aucun calendrier n’a été modifié.';
+        });
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _globalBusy = false;
+        _globalGuidance =
+            'Impossible de vérifier la source officielle R6 : $e';
+      });
+      return;
+    }
 
     final previews = <Map<String, dynamic>>[];
     for (final doctor in doctors) {
