@@ -127,7 +127,7 @@ async function scanChunk(
   return value;
 }
 
-function mergeChunkReads(chunks: any[]): any {
+export function mergeChunkReads(chunks: any[]): any {
   if (chunks.length === 1) return chunks[0];
   const rows = chunks.flatMap(c => c.rows);
   const dates = rows.map((r: any) => String(r.date ?? ''))
