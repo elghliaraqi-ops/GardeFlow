@@ -67,21 +67,122 @@ function parseJSON(value: unknown): any {
   }
 }
 
+/** Décode uniquement les cellules explicitement décrites par le modèle.
+ * Le numéro de page est lié aux octets PDF rendus par le serveur, jamais à une
+ * entrée libre du modèle. Un champ manquant annule intégralement la relecture.
+ */
+export function expandCompactRoster(raw: any, pageNumber: number): any {
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || !raw ||
+      typeof raw !== 'object' || !Array.isArray(raw.r) ||
+      !['U', 'S', '?'].includes(raw.scope) ||
+      !['M', 'R'].includes(raw.mode) ||
+      typeof raw.start !== 'string' || typeof raw.end !== 'string' ||
+      typeof raw.q !== 'number' || raw.q < 0 || raw.q > 1 ||
+      !Array.isArray(raw.w) || !raw.w.every((w: any) => typeof w === 'string')) {
+    throw new Error('groq_invalid_response');
+  }
+  const shifts: Record<string, string> = {
+    J: 'urg-jour', N: 'urg-nuit', H: 'urg-24h',
+  };
+  const rows = raw.r.map((r: any) => {
+    if (!Array.isArray(r) || r.length !== 5 ||
+        typeof r[0] !== 'string' ||
+        !Object.prototype.hasOwnProperty.call(shifts, r[1]) ||
+        !Array.isArray(r[2]) || !Array.isArray(r[3]) ||
+        !r[3].every((name: any) => typeof name === 'string') ||
+        typeof r[4] !== 'string' || r[4].trim().length === 0) {
+      throw new Error('groq_invalid_response');
+    }
+    const doctors = r[2].map((d: any) => {
+      if (!Array.isArray(d) || d.length !== 4 ||
+          !d.slice(0, 3).every((v: any) => typeof v === 'string') ||
+          typeof d[3] !== 'number' || d[3] < 0 || d[3] > 1) {
+        throw new Error('groq_invalid_response');
+      }
+      return {
+        first_name: d[0], last_name: d[1], full_name: d[2],
+        confidence: d[3],
+      };
+    });
+    return {
+      date: r[0], shift: shifts[r[1]], doctors,
+      red_names: r[3], page_number: pageNumber, zone: r[4],
+    };
+  });
+  if (raw.mode === 'M' &&
+      (!Number.isInteger(raw.m) || raw.m < 1 || raw.m > 12 ||
+       !Number.isInteger(raw.y) || raw.y < 2020 || raw.y > 2100)) {
+    throw new Error('groq_invalid_response');
+  }
+  if (raw.mode === 'R' && (raw.m != null || raw.y != null)) {
+    throw new Error('groq_invalid_response');
+  }
+  return {
+    month: raw.mode === 'M' ? raw.m : null,
+    year: raw.mode === 'M' ? raw.y : null,
+    document_scope: raw.scope === 'U' ? 'urgences'
+      : raw.scope === 'S' ? 'non_urgences' : 'mixed_or_uncertain',
+    coverage_mode: raw.mode === 'M' ? 'full_month' : 'explicit_range',
+    coverage_start: raw.start, coverage_end: raw.end,
+    confidence: raw.q, warnings: raw.w, rows,
+  };
+}
+
+/** Accepte aussi une sortie historique complète (validation strictement
+ * inchangée) ; la sortie compacte est préférée pour ne pas dépasser 4096 tokens.
+ */
+function decodeGroqResult(value: any, pages: Page[]): any {
+  if (value && Array.isArray(value.r)) {
+    if (pages.length !== 1) throw new Error('groq_invalid_response');
+    return expandCompactRoster(value, pages[0].pageNumber);
+  }
+  if (!Array.isArray(value?.rows) || !value?.document_scope) {
+    throw new Error('groq_invalid_response');
+  }
+  const validPages = new Set(pages.map(p => p.pageNumber));
+  if (value.rows.some((r: any) => !validPages.has(r?.page_number))) {
+    throw new Error('groq_invalid_page_reference');
+  }
+  return value;
+}
+
+const GROQ_MAX_WAIT_MS = 35000;
+const GROQ_READING_DEADLINE_MS = 105000;
+
+function retryAfterMs(response: Response): number | null {
+  const v = response.headers.get('retry-after');
+  if (!v) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.ceil(n * 1000) + 300;
+}
+
 async function scanChunk(
   pages: Page[],
   key: string,
   prompt: string,
   model: string,
+  deadline: number,
 ): Promise<any> {
-  const schemaHint =
-    'Retourne uniquement un objet JSON sans Markdown, avec les champs ' +
-    'month,year,document_scope,coverage_mode,coverage_start,coverage_end,' +
-    'confidence,warnings,rows. Dans rows : date,shift,doctors,red_names,' +
-    'page_number,zone ; chaque doctor a first_name,last_name,full_name,confidence. ' +
-    'Tu dois lire uniquement les pages envoyées, sans inventer des pages manquantes. ' +
-    'Numéros exacts des pages PDF : ' + pages.map(p => p.pageNumber).join(', ') + '. ' +
-    'Seuls les créneaux urg-jour, urg-nuit, urg-24h sont autorisés. ' +
-    'Si le document concerne le Service, document_scope vaut non_urgences.';
+  const schemaHint = [
+    'Réponds en JSON MINIFIÉ uniquement. Format COMPACT OBLIGATOIRE (pas les noms de champs longs).',
+    '{"m":10,"y":2026,"scope":"U","mode":"M","start":"2026-10-01",',
+    '"end":"2026-10-31","q":0.98,"w":[],"r":[',
+    '["2026-10-01","J",[["Prénom","Nom","Prénom Nom",0.98]],[],"ligne 1/J"]]}',
+    'm/y = mois et année si mode M (full_month), sinon null et mode R (explicit_range).',
+    'scope: U uniquement si clairement Urgences; S pour Service; ? si mixte ou incertain.',
+    'r : CHAQUE cellule visible, même vide, représentée par',
+    '[date ISO, J (urg-jour) ou N (urg-nuit) ou H (urg-24h),',
+    'médecins [[prénom,nom,nom complet exactement imprimé,confiance]],',
+    'noms rouges [nom complet], zone exacte ligne/colonne].',
+    'Pour chaque jour du tableau: deux cellules J+N, OU une cellule H fusionnée.',
+    'Ne jamais associer automatiquement une identité au répertoire, ne jamais inventer.',
+    'Garde la totalité des cellules; ne compresse pas en supprimant des lignes.',
+    'w = avertissements textuels, q = confiance globale 0..1,',
+    'start/end = dates de couverture officiellement affichées.',
+    'Page PDF analysée : ' + pages.map(p => p.pageNumber).join(', ') + '.',
+    'Le serveur attribue lui-même le numéro de page (ne retourne pas page_number).',
+  ].join('\\n');
   // Une erreur 429 ponctuelle peut être retentée si le serveur annonce un
   // délai bref. Pas de boucle longue au sein d'une Edge Function.
   let result: Response | null = null;
@@ -96,8 +197,7 @@ async function scanChunk(
       model,
       temperature: 0.1,
       stream: false,
-      // Réduire la réservation de tokens au lieu de demander 16000 tokens
-      // pour une seule page. Une sortie tronquée est rejetée plus bas.
+      // Format JSON compact, une page par appel; toute troncature reste bloquante.
       max_completion_tokens: 4096,
       reasoning_effort: 'none',
       response_format: { type: 'json_object' },
@@ -114,10 +214,13 @@ async function scanChunk(
     }),
   });
     if (result.status === 429 && attempt === 0) {
-      const retryAfter = Number(result.headers.get('retry-after'));
-      // Respecter Retry-After uniquement si une reprise courte est possible.
-      if (Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 8) {
-        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+      const delayMs = retryAfterMs(result);
+      // Le fournisseur demande souvent 19-22s, pas 8s. Réessayer une seule
+      // fois si le budget total d'exécution Edge le permet.
+      if (delayMs != null && delayMs <= GROQ_MAX_WAIT_MS &&
+          Date.now() + delayMs < deadline) {
+        console.info('Groq R6 rate limit: retry after seconds', Math.ceil(delayMs / 1000));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
     }
@@ -143,14 +246,7 @@ async function scanChunk(
     throw new Error('groq_response_truncated');
   }
   const value = parseJSON(payload?.choices?.[0]?.message?.content);
-  if (!Array.isArray(value?.rows) || !value?.document_scope) {
-    throw new Error('groq_invalid_response');
-  }
-  const validPages = new Set(pages.map(p => p.pageNumber));
-  if (value.rows.some((r: any) => !validPages.has(r?.page_number))) {
-    throw new Error('groq_invalid_page_reference');
-  }
-  return value;
+  return decodeGroqResult(value, pages);
 }
 
 export function mergeChunkReads(chunks: any[]): any {
@@ -184,6 +280,7 @@ export function mergeChunkReads(chunks: any[]): any {
 }
 
 export class GroqRosterVision {
+  private readonly readDeadline = Date.now() + GROQ_READING_DEADLINE_MS;
   private constructor(private readonly pages: Page[]) {}
 
   static async fromPdf(bytes: Uint8Array): Promise<GroqRosterVision> {
@@ -200,7 +297,8 @@ export class GroqRosterVision {
     const chunks: any[] = [];
     for (let index = 0; index < this.pages.length; index += GROQ_MAX_IMAGES_PER_REQUEST) {
       const group = this.pages.slice(index, index + GROQ_MAX_IMAGES_PER_REQUEST);
-      const extraction = await scanChunk(group, key, prompt, model);
+      if (Date.now() >= this.readDeadline) throw new Error('groq_rate_limited');
+      const extraction = await scanChunk(group, key, prompt, model, this.readDeadline);
       if (extraction.rows.length === 0) {
         throw new Error('groq_page_without_cells');
       }
