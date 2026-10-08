@@ -8,6 +8,12 @@
 >
 > Règle de sortie : **aucune mise en production tant qu'une ligne fonctionnelle n'est pas retrouvée et testée OK**.
 
+## Périmètre R6 confirmé — Urgences uniquement
+
+À la demande du propriétaire du produit, le moteur de lecture officielle R6 traite exclusivement les gardes **Urgences** : `urg-jour`, `urg-nuit`, `urg-24h`.
+
+Les gardes **Service** restent gérées par les fonctionnalités historiques de GardeFlow mais sont **hors du moteur PDF officiel R6**. Toute valeur `service-*` présentée au pipeline R6 doit être refusée explicitement. Cette règle ne modifie pas les règles métier historiques des échanges Service.
+
 ## Constat d'architecture baseline
 
 - Source Flutter canonique : `source/`.
