@@ -974,7 +974,10 @@ class SupabaseBackendService {
       final code = details is Map ? details['error']?.toString() : null;
       switch (code) {
         case 'groq_not_configured':
-          throw StateError('Le lecteur Groq des plannings n’est pas configuré. Calendriers inchangés.');
+          throw StateError(
+            'Le lecteur Groq des plannings n’est pas configuré. '
+            'Calendriers inchangés.',
+          );
         case 'groq_rate_limited':
           throw StateError(
             'Le lecteur Groq est limité temporairement : réessayez plus tard. '
@@ -1002,7 +1005,7 @@ class SupabaseBackendService {
 
   Future<Map<String, dynamic>> analyzeOfficialRosterResource(
     String resourceId, {
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
     String? verificationToken,
     List<Map<String, dynamic>> localEvidence =
         const <Map<String, dynamic>>[],
@@ -1027,7 +1030,7 @@ class SupabaseBackendService {
     required List<Map<String, dynamic>> localEvidence,
     List<Map<String, dynamic>> manualResolutions =
         const <Map<String, dynamic>>[],
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (!enabled || uid == null) {
@@ -1073,7 +1076,7 @@ class SupabaseBackendService {
 
   Future<Map<String, dynamic>?> fetchOfficialRosterVerifiedRead({
     required SharedResource resource,
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final raw = await client.rpc(
       'get_official_roster_verified_read',
@@ -1138,7 +1141,7 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required List<String> coveredDates,
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final uid = client.auth.currentUser?.id;
     if (uid == null) throw StateError('Session Supabase absente.');
@@ -1185,7 +1188,7 @@ class SupabaseBackendService {
 
   Future<bool> officialRosterImportIsCurrent(
     SharedResource resource, {
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final result = await client.rpc(
       'official_roster_import_is_current_v2',
@@ -1202,7 +1205,7 @@ class SupabaseBackendService {
     required SharedResource resource,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_v2',
@@ -1471,7 +1474,7 @@ class SupabaseBackendService {
   Future<bool> officialRosterProfileSyncIsCurrent({
     required SharedResource resource,
     required String profileId,
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final result = await client.rpc(
       'official_roster_profile_sync_is_current_v2',
@@ -1490,7 +1493,7 @@ class SupabaseBackendService {
     required String profileId,
     required List<Map<String, dynamic>> assignments,
     required List<Map<String, dynamic>> unmatchedCells,
-    String parserRevision = 'v12.0.2-r6',
+    String parserRevision = 'v12.0.3-r6-groq',
   }) async {
     final result = await client.rpc(
       'import_official_emergency_roster_for_profile_v2',
