@@ -1014,7 +1014,7 @@ class _OfficialRosterConflictReviewDialogState
               parts[0].isEmpty ||
               parts[1].isEmpty) {
             setState(() => _validationError =
-                'Format médecin invalide pour \${draft.date} \${draft.shift}.');
+                'Format médecin invalide pour ${draft.date} ${draft.shift}.');
             return;
           }
           doctors.add({
@@ -1022,7 +1022,7 @@ class _OfficialRosterConflictReviewDialogState
             'last_name': parts[1],
             'full_name': parts.length >= 3 && parts[2].isNotEmpty
                 ? parts[2]
-                : '\${parts[0]} \${parts[1]}',
+                : '${parts[0]} ${parts[1]}',
             'confidence': 1.0,
           });
         }
