@@ -65,10 +65,12 @@ class SupabaseBackendService {
     required String rawPhone,
     required String password,
     required String service,
-    required MedicalGrade grade,
+    required MedicalPosition medicalPosition,
     required String hospital,
     int? promotionNumber,
+    int? trainingYear,
   }) async {
+    final grade = medicalPosition.grade;
     final phone = authPhone(rawPhone);
     final email = technicalEmail(phone);
     final res = await client.auth.signUp(
@@ -81,8 +83,11 @@ class SupabaseBackendService {
         'service': service,
         'medical_grade': grade.name,
         'fonction': grade.name,
+        'medical_position': medicalPosition.name,
+        if (trainingYear != null) 'training_year': trainingYear,
         'hospital': hospital,
-        if (promotionNumber != null) 'promotion_number': promotionNumber,
+        if (medicalPosition.requiresPromotion && promotionNumber != null)
+          'promotion_number': promotionNumber,
       },
     );
     if (res.user == null) throw StateError('Création du compte impossible.');
@@ -272,7 +277,7 @@ class SupabaseBackendService {
       final rows = await client
           .from('profiles')
           .select(
-            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,appearance_theme',
+            'id,nom,prenom,phone,role,service,medical_grade,hospital,account_status,promotion_number,medical_position,training_year,appearance_theme',
           )
           .order('prenom')
           .order('nom')
@@ -428,6 +433,10 @@ class SupabaseBackendService {
       passwordSalt: '',
       service: j['service'] as String,
       grade: grade,
+      medicalPosition: MedicalPosition.values.where(
+        (p) => p.name == j['medical_position'],
+      ).firstOrNull,
+      trainingYear: (j['training_year'] as num?)?.toInt(),
       hospital: j['hospital'] as String,
       promotionNumber: (j['promotion_number'] as num?)?.toInt(),
       appearanceTheme: const <String>{
