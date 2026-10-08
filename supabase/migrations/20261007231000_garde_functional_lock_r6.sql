@@ -86,7 +86,8 @@ create table if not exists public.official_roster_guards (
   hospital text not null,
   date_str date not null,
   shift_id text not null check (shift_id in ('urg-jour','urg-nuit','urg-24h')),
-  duty_area text not null default 'urgences',
+  duty_area text not null default 'urgences'
+    check (duty_area = 'urgences'),
   first_name text not null,
   last_name text not null,
   full_name text not null,
@@ -477,6 +478,10 @@ begin
     v_shift := coalesce(v_item->>'shift_id','');
     if v_shift not in ('urg-jour','urg-nuit','urg-24h') then
       raise exception 'Créneau invalide à l''index %', v_ordinal;
+    end if;
+
+    if lower(coalesce(nullif(v_item->>'duty_area',''),'urgences')) <> 'urgences' then
+      raise exception 'R6 traite uniquement les gardes Urgences (index %)', v_ordinal;
     end if;
 
     v_first := trim(coalesce(v_item->>'first_name',''));
