@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/app_user.dart';
 import '../services/supabase_backend_service.dart';
+import '../services/official_roster_identity_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/screen_decor.dart';
@@ -125,6 +126,9 @@ class _AdminOfficialRosterReviewScreenState
               ((guard['confidence'] as num?)?.toDouble() ?? 0) < .95,
         )
         .toList(growable: false);
+    final activeProfiles = context.watch<AppState>().users
+        .where((profile) => profile.accountStatus == AccountStatus.active)
+        .toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
@@ -188,6 +192,7 @@ class _AdminOfficialRosterReviewScreenState
               padding: const EdgeInsets.only(bottom: 10),
               child: _GuardReviewCard(
                 guard: guard,
+                candidates: _candidateLabels(guard, activeProfiles),
                 onLink: () => _linkGuard(guard),
                 onCorrect: () => _correctGuard(guard),
               ),
@@ -277,6 +282,29 @@ class _AdminOfficialRosterReviewScreenState
     );
   }
 
+  List<String> _candidateLabels(
+    Map<String, dynamic> guard,
+    List<AppUser> profiles,
+  ) {
+    final hospital = (guard['hospital'] ?? '').toString();
+    final sameHospital = profiles
+        .where((profile) => profile.hospital == hospital)
+        .toList(growable: false);
+    final resolution = OfficialRosterIdentityService.resolve(
+      firstName: (guard['first_name'] ?? '').toString(),
+      lastName: (guard['last_name'] ?? '').toString(),
+      profiles: sameHospital,
+    );
+    return resolution.suggestions
+        .take(3)
+        .map(
+          (candidate) =>
+              '${candidate.profile.fullName} • '
+              '${candidate.exact ? 'exact' : '${(candidate.score * 100).round()} %'}',
+        )
+        .toList(growable: false);
+  }
+
   Future<void> _linkGuard(Map<String, dynamic> guard) async {
     final appState = context.read<AppState>();
     final hospital = (guard['hospital'] ?? '').toString();
@@ -295,7 +323,15 @@ class _AdminOfficialRosterReviewScreenState
       return;
     }
 
-    String? selectedId;
+    final resolution = OfficialRosterIdentityService.resolve(
+      firstName: (guard['first_name'] ?? '').toString(),
+      lastName: (guard['last_name'] ?? '').toString(),
+      profiles: profiles,
+    );
+    String? selectedId = resolution.profileId;
+    if (selectedId == null && resolution.suggestions.length == 1) {
+      selectedId = resolution.suggestions.single.profile.id;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -649,11 +685,13 @@ class _ReportSummary extends StatelessWidget {
 
 class _GuardReviewCard extends StatelessWidget {
   final Map<String, dynamic> guard;
+  final List<String> candidates;
   final VoidCallback onLink;
   final VoidCallback onCorrect;
 
   const _GuardReviewCard({
     required this.guard,
+    required this.candidates,
     required this.onLink,
     required this.onCorrect,
   });
@@ -717,6 +755,17 @@ class _GuardReviewCard extends StatelessWidget {
             Text(
               'Zone : ${guard['zone']}',
               style: TextStyle(color: AppColors.inkFaint, fontSize: 12),
+            ),
+          ],
+          if (status != 'matched' && candidates.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              'Compte(s) potentiel(s) : ${candidates.join(' • ')}',
+              style: const TextStyle(
+                color: AppColors.warning,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
           const SizedBox(height: 12),
