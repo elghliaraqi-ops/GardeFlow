@@ -117,6 +117,13 @@ class AppUser {
     return values.isEmpty ? '?' : values.join();
   }
 
+  String get positionDisplayLabel {
+    final base = medicalPosition?.label ?? gradeLabel;
+    final year = trainingYear;
+    if (year == null) return base;
+    return "$"+"base · $"+"{year == 1 ? '1re' : '${year}e'} année";
+  }
+
   String get gradeLabel => grade == MedicalGrade.senior ? 'Senior' : 'Junior';
   String get roleLabel => role == UserRole.admin ? 'Administrateur' : 'Médecin';
 
