@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:huim6_planning/models/app_user.dart';
+import 'package:huim6_planning/models/official_roster_guard.dart';
 import 'package:huim6_planning/services/official_roster_verified_read_service.dart';
 
 AppUser doctor(String id, String nom, String prenom) => AppUser(
@@ -15,6 +16,27 @@ AppUser doctor(String id, String nom, String prenom) => AppUser(
     );
 
 void main() {
+  test('Groq parser revision keeps strict R6 Urgences-only validation', () {
+    final parsed = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.3-groq-r6',
+        'status': 'green',
+        'document_scope': 'non_urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': <Map<String, dynamic>>[],
+      },
+      hospital: 'Test Hospital',
+      profiles: <AppUser>[],
+    );
+    expect(parsed.isComplete, isFalse);
+    expect(
+      parsed.validationErrors.any((message) => message.contains('Urgences')),
+      isTrue,
+    );
+  });
+
   test('verified read keeps every doctor in a multi-name cell', () {
     final profiles = [
       doctor('a', 'AKDIM', 'Aymen'),
@@ -98,4 +120,193 @@ void main() {
     expect(result.isComplete, isFalse);
     expect(result.validationErrors, isNotEmpty);
   });
+
+  test('R6 keeps an unregistered doctor as an official guard', () {
+    final result = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.2-r6',
+        'status': 'green',
+        'document_scope': 'urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': [
+          {
+            'date': '2026-10-09',
+            'shift': 'urg-jour',
+            'doctors': [
+              {
+                'first_name': 'Marwa',
+                'last_name': 'Oukkas',
+                'full_name': 'Marwa Oukkas',
+                'confidence': 0.99,
+              },
+            ],
+            'red_names': <String>[],
+            'page_number': 1,
+            'zone': '09 octobre / Jour',
+          },
+          {
+            'date': '2026-10-09',
+            'shift': 'urg-nuit',
+            'doctors': <Map<String, dynamic>>[],
+            'red_names': <String>[],
+            'page_number': 1,
+            'zone': '09 octobre / Nuit',
+          },
+        ],
+      },
+      hospital: 'Test Hospital',
+      profiles: [doctor('a', 'AKDIM', 'Aymen')],
+    );
+
+    expect(result.isComplete, isTrue);
+    expect(result.assignments, isEmpty);
+    expect(result.officialGuards, hasLength(1));
+    expect(result.officialGuards.single.displayName, 'Marwa Oukkas');
+    expect(
+      result.officialGuards.single.matchStatus,
+      OfficialDoctorMatchStatus.unregistered,
+    );
+    expect(
+      result.unmatchedCells.single['reason'],
+      'doctor_not_registered',
+    );
+  });
+
+  test('R6 homonyms remain ambiguous and never auto-assign', () {
+    final profiles = [
+      doctor('a', 'AKDIM', 'Aymen'),
+      doctor('b', 'AKDIM', 'Aymen'),
+    ];
+    final result = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.2-r6',
+        'status': 'green',
+        'document_scope': 'urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': [
+          {
+            'date': '2026-10-10',
+            'shift': 'urg-24h',
+            'doctors': [
+              {
+                'first_name': 'Aymen',
+                'last_name': 'Akdim',
+                'full_name': 'Aymen Akdim',
+                'confidence': 0.99,
+              },
+            ],
+            'red_names': <String>[],
+            'page_number': 1,
+            'zone': '10 octobre / 24H',
+          },
+        ],
+      },
+      hospital: 'Test Hospital',
+      profiles: profiles,
+    );
+
+    expect(result.isComplete, isTrue);
+    expect(result.assignments, isEmpty);
+    expect(result.officialGuards, hasLength(1));
+    expect(
+      result.officialGuards.single.matchStatus,
+      OfficialDoctorMatchStatus.ambiguous,
+    );
+    expect(
+      result.unmatchedCells.single['reason'],
+      'ambiguous_identity',
+    );
+    expect(
+      (result.unmatchedCells.single['candidates'] as List).length,
+      2,
+    );
+  });
+
+  test('R6 fuzzy candidate is suggested but never assigned', () {
+    final result = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.2-r6',
+        'status': 'green',
+        'document_scope': 'urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': [
+          {
+            'date': '2026-10-11',
+            'shift': 'urg-24h',
+            'doctors': [
+              {
+                'first_name': 'Mohamed',
+                'last_name': 'El Amrani',
+                'full_name': 'Mohamed El Amrani',
+                'confidence': 0.99,
+              },
+            ],
+            'red_names': <String>[],
+            'page_number': 1,
+            'zone': '11 octobre / 24H',
+          },
+        ],
+      },
+      hospital: 'Test Hospital',
+      profiles: [doctor('a', 'El Amrani', 'Mohammed')],
+    );
+
+    expect(result.isComplete, isTrue);
+    expect(result.assignments, isEmpty);
+    expect(
+      result.officialGuards.single.matchStatus,
+      OfficialDoctorMatchStatus.manualReview,
+    );
+    expect(
+      result.unmatchedCells.single['reason'],
+      'potential_identity_requires_admin',
+    );
+  });
+
+  test('R6 rejects a non-emergency official roster scope', () {
+    final result = OfficialRosterVerifiedReadService.fromExtraction(
+      extraction: {
+        'verified': true,
+        'parser_revision': 'v12.0.2-r6',
+        'status': 'green',
+        'document_scope': 'non_urgences',
+        'confidence': 0.99,
+        'validation_errors': <String>[],
+        'rows': [
+          {
+            'date': '2026-10-12',
+            'shift': 'urg-24h',
+            'doctors': [
+              {
+                'first_name': 'Alice',
+                'last_name': 'Service',
+                'full_name': 'Alice Service',
+                'confidence': 0.99,
+              },
+            ],
+            'red_names': <String>[],
+            'page_number': 1,
+            'zone': '12 octobre / Service',
+          },
+        ],
+      },
+      hospital: 'Test Hospital',
+      profiles: [doctor('a', 'SERVICE', 'Alice')],
+    );
+
+    expect(result.isComplete, isFalse);
+    expect(
+      result.validationErrors.any(
+        (error) => error.contains('uniquement les plannings officiels des Urgences'),
+      ),
+      isTrue,
+    );
+  });
+
 }

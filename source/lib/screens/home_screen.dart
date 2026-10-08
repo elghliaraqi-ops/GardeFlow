@@ -18,7 +18,7 @@ import '../services/supabase_backend_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../widgets/profile_avatar.dart';
-import 'admin_screen.dart';
+import 'admin_console_screen.dart';
 import 'announcements_screen.dart';
 import 'astreinte_screen.dart';
 import 'directory_screen.dart';
@@ -3865,7 +3865,7 @@ class _NavRailState extends State<_NavRail> {
           AppColors.ink,
           () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AdminScreen()),
+            MaterialPageRoute(builder: (_) => const AdminConsoleScreen()),
           ),
         ),
     ];

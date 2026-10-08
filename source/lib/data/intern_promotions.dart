@@ -85,9 +85,16 @@ class InternPromotions {
     return null;
   }
 
-  static int? numberFor(AppUser? user) => user == null
-      ? null
-      : user.promotionNumber ?? numberForNames(user.nom, user.prenom);
+  static int? numberFor(AppUser? user) {
+    if (user == null) return null;
+    // Les promotions ne concernent que les internes. Les comptes historiques
+    // sans statut conservent la détection habituelle par nom.
+    if (user.medicalPosition != null &&
+        user.medicalPosition != MedicalPosition.interne) {
+      return null;
+    }
+    return user.promotionNumber ?? numberForNames(user.nom, user.prenom);
+  }
 
   static int? highestPromotion(Iterable<AppUser> users) {
     int? result;
