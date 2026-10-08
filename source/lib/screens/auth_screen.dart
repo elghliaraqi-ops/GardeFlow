@@ -49,7 +49,9 @@ class _AuthScreenState extends State<AuthScreen>
   final _regPasswordCtrl = TextEditingController();
   int? _regPromotion;
   String _regService = kServices.first;
-  MedicalGrade _regGrade = MedicalGrade.junior;
+  MedicalPosition? _regPosition;
+  TrainingLanguage? _regTrainingLanguage;
+  int? _regTrainingYear;
 
   @override
   void initState() {
@@ -104,6 +106,15 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _submitRegister() async {
+    final position = _regPosition;
+    if (_regTrainingLanguage == null) {
+      setState(() => _error = 'Sélectionnez votre langue de formation.');
+      return;
+    }
+    if (position == null) {
+      setState(() => _error = 'Sélectionnez votre statut médical.');
+      return;
+    }
     final appState = context.read<AppState>();
     final err = await appState.register(
       nom: _regNomCtrl.text,
@@ -111,9 +122,11 @@ class _AuthScreenState extends State<AuthScreen>
       rawPhone: _regPhoneCtrl.text,
       password: _regPasswordCtrl.text,
       service: _regService,
-      grade: _regGrade,
+      medicalPosition: position,
+      trainingLanguage: _regTrainingLanguage!,
+      trainingYear: position.requiresPromotion ? null : _regTrainingYear,
       hospital: _hospital,
-      promotionNumber: _regGrade == MedicalGrade.junior
+      promotionNumber: position.requiresPromotion
           ? (_regPromotion ?? appState.currentFirstYearPromotion)
           : null,
     );
@@ -700,7 +713,7 @@ class _AuthScreenState extends State<AuthScreen>
         ),
         const SizedBox(height: 16),
         Text(
-          'Grade médical',
+          'Statut médical',
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w800,
@@ -708,14 +721,92 @@ class _AuthScreenState extends State<AuthScreen>
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _gradeOption(MedicalGrade.junior, 'Junior')),
-            const SizedBox(width: 10),
-            Expanded(child: _gradeOption(MedicalGrade.senior, 'Senior')),
-          ],
+        DropdownButtonFormField<MedicalPosition>(
+          value: _regPosition,
+          isExpanded: true,
+          decoration: _glassInputDecoration(
+            hint: 'Sélectionnez votre statut',
+            icon: Icons.school_outlined,
+          ),
+          items: MedicalPosition.values
+              .map((position) => DropdownMenuItem<MedicalPosition>(
+                    value: position,
+                    child: Text(
+                      position.label,
+                      style: const TextStyle(fontSize: 12.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          onChanged: (value) => setState(() {
+            _regPosition = value;
+            _regTrainingYear = null;
+            _regPromotion = null;
+            _error = null;
+          }),
         ),
-        if (_regGrade == MedicalGrade.junior) ...[
+        const SizedBox(height: 16),
+        Text(
+          'Langue de formation',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: AppColors.inkSoft,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<TrainingLanguage>(
+          value: _regTrainingLanguage,
+          isExpanded: true,
+          decoration: _glassInputDecoration(
+            hint: 'Anglophone ou Francophone',
+            icon: Icons.language_rounded,
+          ),
+          items: TrainingLanguage.values
+              .map((language) => DropdownMenuItem<TrainingLanguage>(
+                    value: language,
+                    child: Text(
+                      language.label,
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                  ))
+              .toList(),
+          onChanged: (value) => setState(() {
+            _regTrainingLanguage = value;
+            _error = null;
+          }),
+        ),
+        if (_regPosition != null &&
+            _regPosition!.trainingYears.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Année d’études',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: AppColors.inkSoft,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            key: ValueKey(_regPosition),
+            value: _regTrainingYear,
+            isExpanded: true,
+            decoration: _glassInputDecoration(
+              hint: 'Sélectionnez votre année',
+              icon: Icons.calendar_today_outlined,
+            ),
+            items: _regPosition!.trainingYears
+                .map((year) => DropdownMenuItem<int>(
+                      value: year,
+                      child: Text(year == 1 ? '1re année' : '${year}e année'),
+                    ))
+                .toList(),
+            onChanged: (value) =>
+                setState(() => _regTrainingYear = value),
+          ),
+        ],
+        if (_regPosition == MedicalPosition.interne) ...[
           const SizedBox(height: 16),
           Text(
             'Promotion d’internat',
@@ -822,36 +913,7 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-  Widget _gradeOption(MedicalGrade value, String label) {
-    final selected = _regGrade == value;
-    return GestureDetector(
-      onTap: () => setState(() => _regGrade = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 170),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected
-              ? _loginGreen.withOpacity(.90)
-              : const Color(0xFF151D19).withOpacity(.76),
-          border: Border.all(
-            color: selected
-                ? _loginGreen
-                : AppColors.line.withOpacity(.80),
-          ),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            color: selected ? Colors.white : AppColors.inkSoft,
-          ),
-        ),
-      ),
-    );
-  }
+
 }
 
 class _LoginDensity {

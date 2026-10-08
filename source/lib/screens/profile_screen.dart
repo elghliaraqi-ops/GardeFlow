@@ -9,7 +9,7 @@ import '../theme/widgets.dart';
 import '../widgets/profile_avatar.dart';
 import 'admin_disciplinary_assignment_screen.dart';
 import 'admin_password_reset_screen.dart';
-import 'admin_screen.dart';
+import 'admin_console_screen.dart';
 import 'application_settings_screen.dart';
 import 'astreinte_screen.dart';
 import 'auth_screen.dart';
@@ -140,7 +140,7 @@ class _ProfileContent extends StatelessWidget {
                         ),
                         SizedBox(height: 7),
                         Text(
-                          '${user.gradeLabel} · ${user.service}',
+                          '${user.positionDisplayLabel}${user.trainingLanguage == null ? '' : ' · ${user.trainingLanguage!.label}'} · ${user.service}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -284,7 +284,7 @@ class _ProfileContent extends StatelessWidget {
                 color: AppColors.navy,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => AdminScreen()),
+                  MaterialPageRoute(builder: (_) => const AdminConsoleScreen()),
                 ),
               ),
               _ProfileMenuItem(

@@ -183,6 +183,31 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     final suppliedBytes = <String, Uint8List>{
       if (currentBytes != null) resource.storagePath: currentBytes,
     };
+    var currentLocalEvidence = const <Map<String, dynamic>>[];
+    if (allowRemoteVerification) {
+      try {
+        final bytesForA =
+            currentBytes ?? await _backend.downloadSharedResource(resource.storagePath);
+        suppliedBytes[resource.storagePath] = bytesForA;
+        final localA = await OfficialRosterImportService.parse(
+          bytes: bytesForA,
+          displayName: resource.displayName,
+          hospital: slot.hospital,
+          profiles: profiles,
+          resourceUpdatedAt: resource.updatedAt,
+        );
+        currentLocalEvidence = localA.localCells
+            .map((cell) => cell.toJson())
+            .toList(growable: false);
+      } catch (e) {
+        // Les PDF scannés peuvent ne pas exposer une couche texte exploitable.
+        // Le serveur utilisera alors une Lecture A visuelle de secours distincte.
+        debugPrint('Lecture A géométrique indisponible: $e');
+      }
+    }
+
+    final identityLinks =
+        await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
 
     final parsed =
         await OfficialRosterVerifiedReadService.readVersionHistory(
@@ -200,6 +225,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
           cached = await _backend.analyzeOfficialRosterResource(
             resource.id,
             parserRevision: OfficialRosterImportService.parserRevision,
+            localEvidence: currentLocalEvidence,
           );
         }
         return cached;
@@ -207,6 +233,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
       hospital: slot.hospital,
       profiles: profiles,
       suppliedBytes: suppliedBytes,
+      identityLinks: identityLinks,
     );
 
     if (parsed.detectedRows == 0 || !parsed.isComplete) {
@@ -346,10 +373,13 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
     setState(() => _busySlot = slot.id);
     try {
       // Validation renforcée avant publication :
-      // 1) lecture géométrique locale quand le PDF possède une couche texte ;
-      // 2) trois lectures visuelles indépendantes côté serveur ;
-      // 3) majorité exacte 2/3 minimum, sinon l'import est bloqué.
+      // A = lecture géométrique locale indépendante quand elle est exploitable ;
+      // B = lecture visuelle distante sans connaissance des comptes ;
+      // C = lecture d'arbitrage déclenchée seulement si A/B ou les contrôles
+      // de complétude signalent un désaccord.
       final profiles = await _backend.fetchVisibleProfiles();
+      final identityLinks =
+          await _backend.fetchOfficialRosterIdentityLinks(hospital: slot.hospital);
       OfficialRosterParseResult? localPreflight;
       try {
         localPreflight = await OfficialRosterImportService.parse(
@@ -362,42 +392,69 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         debugPrint('Prélecture locale non exploitable: ' + e.toString());
       }
 
-      final verifiedPayload = await _backend.analyzeOfficialRosterPreflight(
+      final localEvidence = localPreflight?.localCells
+              .map((cell) => cell.toJson())
+              .toList(growable: false) ??
+          const <Map<String, dynamic>>[];
+      var verifiedPayload = await _backend.analyzeOfficialRosterPreflight(
         bytes: bytes,
         fileName: file.name,
         slot: slot.id,
+        localEvidence: localEvidence,
         parserRevision: OfficialRosterImportService.parserRevision,
       );
+
+      if (verifiedPayload['verified'] != true &&
+          verifiedPayload['status']?.toString().toLowerCase() == 'red') {
+        final conflicts = verifiedPayload['conflicts'] is List
+            ? (verifiedPayload['conflicts'] as List)
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList(growable: false)
+            : const <Map<String, dynamic>>[];
+        if (conflicts.isNotEmpty && mounted) {
+          final resolutions = await showDialog<List<Map<String, dynamic>>>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => _OfficialRosterConflictReviewDialog(
+              conflicts: conflicts,
+            ),
+          );
+          if (resolutions == null) {
+            throw StateError(
+              'Publication annulée : les zones litigieuses restent en statut ROUGE.',
+            );
+          }
+          verifiedPayload = await _backend.analyzeOfficialRosterPreflight(
+            bytes: bytes,
+            fileName: file.name,
+            slot: slot.id,
+            localEvidence: localEvidence,
+            manualResolutions: resolutions,
+            parserRevision: OfficialRosterImportService.parserRevision,
+          );
+        }
+      }
+
       final preflight = OfficialRosterVerifiedReadService.fromExtraction(
         extraction: verifiedPayload,
         hospital: slot.hospital,
         profiles: profiles,
+        identityLinks: identityLinks,
       );
       if (preflight.detectedRows == 0 || !preflight.isComplete) {
         final details = preflight.validationErrors.take(5).join(' • ');
         throw StateError(
           details.isEmpty
-              ? 'Le planning n’a pas passé la triple lecture visuelle.'
+              ? 'Le planning n’a pas passé la vérification indépendante A/B/C.'
               : 'Planning refusé avant publication : ' + details,
         );
       }
-      if (localPreflight != null &&
-          localPreflight.isComplete &&
-          !OfficialRosterVerifiedReadService.sameCoreAssignments(
-            localPreflight,
-            preflight,
-          )) {
-        debugPrint(
-          'Le lecteur géométrique diffère du consensus visuel 2/3. '
-          'Le consensus visuel vérifié reste autoritaire.',
-        );
-      }
-
       final verificationToken =
           verifiedPayload['_verification_token']?.toString();
       if (verificationToken == null || verificationToken.isEmpty) {
         throw StateError(
-          'La triple lecture a réussi mais son jeton de vérification est absent.',
+          'La vérification A/B/C a réussi mais son jeton de vérification est absent.',
         );
       }
 
@@ -422,6 +479,7 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
         extraction: publishedVerification,
         hospital: slot.hospital,
         profiles: profiles,
+        identityLinks: identityLinks,
       );
       if (!publishedRead.isComplete ||
           !OfficialRosterVerifiedReadService.sameCoreAssignments(
@@ -433,6 +491,13 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
           'prélecture. Synchronisation automatique bloquée.',
         );
       }
+      await _backend.saveOfficialRosterAnalysisR6(
+        resource: resource,
+        extraction: publishedVerification,
+        guards: publishedRead.officialGuards,
+        unmatchedCells: publishedRead.unmatchedCells,
+      );
+
       Map<String, dynamic>? importResult;
       Object? importError;
       try {
@@ -611,6 +676,467 @@ class _OfficialPlanningScreenState extends State<OfficialPlanningScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+}
+
+class _OfficialRosterConflictReviewDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> conflicts;
+
+  const _OfficialRosterConflictReviewDialog({required this.conflicts});
+
+  @override
+  State<_OfficialRosterConflictReviewDialog> createState() =>
+      _OfficialRosterConflictReviewDialogState();
+}
+
+class _OfficialRosterConflictReviewDialogState
+    extends State<_OfficialRosterConflictReviewDialog> {
+  late final List<_RosterConflictDraft> _drafts;
+  late final List<Map<String, dynamic>> _structuralConflicts;
+  String? _validationError;
+
+  @override
+  void initState() {
+    super.initState();
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    final structural = <Map<String, dynamic>>[];
+    for (final conflict in widget.conflicts) {
+      final date = conflict['date']?.toString().trim() ?? '';
+      final shift = conflict['shift']?.toString().trim() ?? '';
+      if (date.isEmpty ||
+          (shift != 'urg-jour' &&
+              shift != 'urg-nuit' &&
+              shift != 'urg-24h')) {
+        structural.add(conflict);
+        continue;
+      }
+      grouped.putIfAbsent('$date|$shift', () => []).add(conflict);
+    }
+
+    _structuralConflicts = structural;
+    _drafts = grouped.entries.map((entry) {
+      final conflicts = entry.value;
+      final first = conflicts.first;
+      final b = _rowMap(first['b']);
+      final c = _rowMap(first['c']);
+      return _RosterConflictDraft(
+        date: first['date'].toString(),
+        shift: first['shift'].toString(),
+        messages: conflicts
+            .map((item) => item['message']?.toString() ?? 'Désaccord')
+            .toSet()
+            .join(' • '),
+        b: b,
+        c: c,
+      );
+    }).toList(growable: false)
+      ..sort((a, b) {
+        final byDate = a.date.compareTo(b.date);
+        return byDate != 0 ? byDate : a.shift.compareTo(b.shift);
+      });
+  }
+
+  @override
+  void dispose() {
+    for (final draft in _drafts) {
+      draft.dispose();
+    }
+    super.dispose();
+  }
+
+  static Map<String, dynamic>? _rowMap(dynamic value) {
+    if (value is! Map) return null;
+    final row = Map<String, dynamic>.from(value);
+    if ((row['date'] ?? '').toString().isEmpty ||
+        (row['shift'] ?? '').toString().isEmpty) {
+      return null;
+    }
+    return row;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.report_problem_rounded, color: AppColors.danger),
+          SizedBox(width: 10),
+          Expanded(child: Text('Planning en statut ROUGE')),
+        ],
+      ),
+      content: SizedBox(
+        width: 760,
+        height: MediaQuery.sizeOf(context).height * .68,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Aucune publication automatique n’est autorisée. '
+              'Corrigez uniquement les cellules litigieuses ci-dessous. '
+              'Le moteur relancera ensuite tous les contrôles de complétude.',
+              style: TextStyle(color: AppColors.inkSoft),
+            ),
+            if (_structuralConflicts.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.danger.withOpacity(.30),
+                  ),
+                ),
+                child: Text(
+                  '${_structuralConflicts.length} anomalie(s) structurelle(s) '
+                  'sans cellule localisable restent bloquantes. '
+                  'Le PDF doit être corrigé ou relu avec une structure exploitable.',
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+            if (_validationError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _validationError!,
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: _drafts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, index) => _buildConflict(_drafts[index]),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler la publication'),
+        ),
+        FilledButton.icon(
+          onPressed: _structuralConflicts.isNotEmpty ? null : _submit,
+          icon: const Icon(Icons.verified_rounded),
+          label: const Text('Valider ces corrections'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConflict(_RosterConflictDraft draft) {
+    final bAvailable = draft.b != null;
+    final cAvailable = draft.c != null;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${draft.date} • ${draft.shift}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const Icon(Icons.lock_outline_rounded, size: 18),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            draft.messages,
+            style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: draft.action,
+            decoration: const InputDecoration(
+              labelText: 'Décision administrateur',
+            ),
+            items: [
+              if (bAvailable)
+                const DropdownMenuItem(
+                  value: 'use_b',
+                  child: Text('Conserver la Lecture B'),
+                ),
+              if (cAvailable)
+                const DropdownMenuItem(
+                  value: 'use_c',
+                  child: Text('Conserver la Lecture C'),
+                ),
+              const DropdownMenuItem(
+                value: 'manual',
+                child: Text('Saisie manuelle de cette cellule'),
+              ),
+              const DropdownMenuItem(
+                value: 'remove',
+                child: Text('Supprimer cette cellule parasite'),
+              ),
+            ],
+            onChanged: (value) => setState(() => draft.action = value),
+          ),
+          if (bAvailable || cAvailable) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (bAvailable)
+                  Expanded(
+                    child: _ConflictReadPreview(
+                      label: 'B',
+                      row: draft.b!,
+                    ),
+                  ),
+                if (bAvailable && cAvailable) const SizedBox(width: 8),
+                if (cAvailable)
+                  Expanded(
+                    child: _ConflictReadPreview(
+                      label: 'C',
+                      row: draft.c!,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (draft.action == 'manual') ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: draft.finalDate,
+              decoration: const InputDecoration(
+                labelText: 'Date finale YYYY-MM-DD',
+              ),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: draft.finalShift,
+              decoration: const InputDecoration(labelText: 'Créneau final'),
+              items: const [
+                DropdownMenuItem(
+                  value: 'urg-jour',
+                  child: Text('Urgences Jour'),
+                ),
+                DropdownMenuItem(
+                  value: 'urg-nuit',
+                  child: Text('Urgences Nuit'),
+                ),
+                DropdownMenuItem(
+                  value: 'urg-24h',
+                  child: Text('Urgences 24H'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => draft.finalShift = value);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: draft.doctors,
+              minLines: 2,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Médecins — une ligne par médecin',
+                helperText:
+                    'Format : Prénom | Nom | Nom complet (3e champ optionnel)',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: draft.redNames,
+              minLines: 1,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Noms rouges — un nom complet par ligne',
+                helperText: 'Laisser vide si aucune garde disciplinaire.',
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _submit() {
+    if (_drafts.isEmpty) {
+      setState(() => _validationError =
+          'Aucune cellule localisable ne peut être corrigée.');
+      return;
+    }
+
+    final resolutions = <Map<String, dynamic>>[];
+    for (final draft in _drafts) {
+      final action = draft.action;
+      if (action == null) {
+        setState(() => _validationError =
+            'Une décision explicite est requise pour chaque cellule.');
+        return;
+      }
+
+      final resolution = <String, dynamic>{
+        'date': draft.date,
+        'shift': draft.shift,
+        'action': action,
+      };
+      if (action == 'manual') {
+        final finalDate = draft.finalDate.text.trim();
+        if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(finalDate)) {
+          setState(() =>
+              _validationError = 'Date manuelle invalide : $finalDate');
+          return;
+        }
+        final doctors = <Map<String, dynamic>>[];
+        for (final rawLine in draft.doctors.text.split('\n')) {
+          final line = rawLine.trim();
+          if (line.isEmpty) continue;
+          final parts = line.split('|').map((part) => part.trim()).toList();
+          if (parts.length < 2 ||
+              parts[0].isEmpty ||
+              parts[1].isEmpty) {
+            setState(() => _validationError =
+                'Format médecin invalide pour ${draft.date} ${draft.shift}.');
+            return;
+          }
+          doctors.add({
+            'first_name': parts[0],
+            'last_name': parts[1],
+            'full_name': parts.length >= 3 && parts[2].isNotEmpty
+                ? parts[2]
+                : '${parts[0]} ${parts[1]}',
+            'confidence': 1.0,
+          });
+        }
+
+        resolution['final_date'] = finalDate;
+        resolution['final_shift'] = draft.finalShift;
+        resolution['doctors'] = doctors;
+        resolution['red_names'] = draft.redNames.text
+            .split('\n')
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toList(growable: false);
+      }
+      resolutions.add(resolution);
+    }
+
+    Navigator.pop(context, resolutions);
+  }
+}
+
+class _RosterConflictDraft {
+  final String date;
+  final String shift;
+  final String messages;
+  final Map<String, dynamic>? b;
+  final Map<String, dynamic>? c;
+  String? action;
+  late final TextEditingController finalDate;
+  String finalShift;
+  late final TextEditingController doctors;
+  late final TextEditingController redNames;
+
+  _RosterConflictDraft({
+    required this.date,
+    required this.shift,
+    required this.messages,
+    required this.b,
+    required this.c,
+  }) : finalShift = shift {
+    finalDate = TextEditingController(text: date);
+    final preferred = c ?? b;
+    doctors = TextEditingController(text: _doctorsText(preferred));
+    redNames = TextEditingController(text: _redNamesText(preferred));
+  }
+
+  static String _doctorsText(Map<String, dynamic>? row) {
+    final raw = row?['doctors'];
+    if (raw is! List) return '';
+    return raw
+        .whereType<Map>()
+        .map((doctor) {
+          final first = doctor['first_name']?.toString().trim() ?? '';
+          final last = doctor['last_name']?.toString().trim() ?? '';
+          final full = doctor['full_name']?.toString().trim() ?? '';
+          return '$first | $last | $full';
+        })
+        .where((line) => line.replaceAll('|', '').trim().isNotEmpty)
+        .join('\n');
+  }
+
+  static String _redNamesText(Map<String, dynamic>? row) {
+    final raw = row?['red_names'];
+    if (raw is! List) return '';
+    return raw
+        .map((value) => value.toString().trim())
+        .where((value) => value.isNotEmpty)
+        .join('\n');
+  }
+
+  void dispose() {
+    finalDate.dispose();
+    doctors.dispose();
+    redNames.dispose();
+  }
+}
+
+class _ConflictReadPreview extends StatelessWidget {
+  final String label;
+  final Map<String, dynamic> row;
+
+  const _ConflictReadPreview({
+    required this.label,
+    required this.row,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final doctors = row['doctors'] is List
+        ? (row['doctors'] as List)
+            .whereType<Map>()
+            .map(
+              (doctor) =>
+                  doctor['full_name']?.toString().trim() ?? '',
+            )
+            .where((value) => value.isNotEmpty)
+            .join(', ')
+        : '';
+    return Container(
+      padding: const EdgeInsets.all(9),
+      decoration: BoxDecoration(
+        color: AppColors.paperAlt,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Text(
+        'Lecture $label\n'
+        "${row['date'] ?? '—'} • ${row['shift'] ?? '—'}\n"
+        "${doctors.isEmpty ? 'Aucun médecin lu' : doctors}",
+        style: TextStyle(
+          color: AppColors.inkSoft,
+          fontSize: 11.5,
+          height: 1.35,
+        ),
+      ),
     );
   }
 }
