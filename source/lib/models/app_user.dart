@@ -121,7 +121,8 @@ class AppUser {
     final base = medicalPosition?.label ?? gradeLabel;
     final year = trainingYear;
     if (year == null) return base;
-    return "$"+"base · $"+"{year == 1 ? '1re' : '${year}e'} année";
+    if (year == 1) return '$base · 1re année';
+    return '$base · ${year}e année';
   }
 
   String get gradeLabel => grade == MedicalGrade.senior ? 'Senior' : 'Junior';
