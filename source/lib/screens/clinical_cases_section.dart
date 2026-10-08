@@ -197,6 +197,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   }
 
   String _specialtyLabel(ClinicalCasePost post) {
+    // Fictional cases belong to an independent category, never a real specialty.
+    if (post.isFictional) return 'Cas fictifs';
     final raw = (post.specialistService ?? '').trim();
     if (raw.isNotEmpty) return _canonicalService(raw);
     if (_looksLikeTraumaOrtho(post)) return 'Traumatologie / Orthopédie';
@@ -227,6 +229,9 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   List<_SpecialtyGroup> _sortedGroups() {
     final groups = _groupedCases().values.toList();
     groups.sort((a, b) {
+      // Keep the educational simulation collection clearly visible at the top.
+      if (a.label == 'Cas fictifs' && b.label != 'Cas fictifs') return -1;
+      if (b.label == 'Cas fictifs' && a.label != 'Cas fictifs') return 1;
       final aOther = a.label == 'Autres cas cliniques';
       final bOther = b.label == 'Autres cas cliniques';
       if (aOther != bOther) return aOther ? 1 : -1;
@@ -298,7 +303,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                 ? _specialtyLabel(selectedCase)
                 : selectedGroup != null
                     ? '${selectedGroup.cases.length} cas · ${selectedGroup.label}'
-                    : '${_items.length} cas · ${groups.length} spécialités',
+                    : '${_items.length} cas · ${groups.length} catégories',
             onRefresh: () => _loadAll(),
           ),
           const SizedBox(height: 14),
@@ -347,7 +352,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
         Text(
           _browseByDate
               ? 'Cas cliniques par date de publication'
-              : 'Cas cliniques par spécialité',
+              : 'Cas cliniques par catégorie',
           style: const TextStyle(
             color: _PracticeGame.text,
             fontSize: 18,
@@ -358,7 +363,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
         Text(
           _browseByDate
               ? 'Parcourez tous les cas selon leur date de publication.'
-              : 'Choisissez une spécialité pour accéder aux dossiers et aux QCM associés.',
+              : 'Parcourez les spécialités ou les cas fictifs générés par IA.',
           style: const TextStyle(
             color: _PracticeGame.secondary,
             fontSize: 11.5,
@@ -829,6 +834,7 @@ class _SpecialtyCard extends StatelessWidget {
 
   IconData _iconFor(String label) {
     final value = label.toLowerCase();
+    if (value == 'cas fictifs') return Icons.auto_awesome_rounded;
     if (value.contains('trauma') || value.contains('orthop')) {
       return Icons.healing_rounded;
     }
@@ -1029,6 +1035,11 @@ class _CaseListTile extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 4,
                       children: [
+                        if (post.isFictional)
+                          const _MetaText(
+                            icon: Icons.auto_awesome_rounded,
+                            text: 'Cas fictif · IA',
+                          ),
                         _MetaText(
                           icon: Icons.person_outline_rounded,
                           text: post.demographicLabel,
@@ -1317,6 +1328,34 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
       children: [
         _CaseIdentity(post: post, number: widget.number),
         const SizedBox(height: 10),
+        if (post.isFictional) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: _PracticeGame.gold.withOpacity(.10),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: _PracticeGame.gold.withOpacity(.30)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.science_outlined, color: _PracticeGame.gold, size: 19),
+                SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'CAS FICTIF · Simulation générée par IA, à visée pédagogique.',
+                    style: TextStyle(
+                      color: _PracticeGame.text,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         _CaseSection(
           icon: Icons.chat_bubble_outline_rounded,
           label: 'Présentation du cas',
