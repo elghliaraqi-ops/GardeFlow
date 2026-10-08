@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { GroqRosterVision } from './groq_vision.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const PARSER_REVISION = 'v12.0.2-r6';
+const PARSER_REVISION = 'v12.0.3-r6-groq';
 const SHIFTS = new Set(['urg-jour', 'urg-nuit', 'urg-24h']);
 const MIN_CONFIDENCE = 0.90;
 
@@ -1150,110 +1151,17 @@ const basePrompt = [
   "- En explicit_range, month et year doivent être null : la plage officielle est uniquement coverage_start → coverage_end.",
 ].join('\n');
 
-async function uploadOpenAIFile(
-  bytes: Uint8Array,
-  fileName: string,
-  key: string,
-): Promise<string> {
-  const form = new FormData();
-  form.append('purpose', 'user_data');
-  form.append('expires_after[anchor]', 'created_at');
-  form.append('expires_after[seconds]', '3600');
-  form.append(
-    'file',
-    new Blob([bytes], { type: 'application/pdf' }),
-    // OpenAI valide l'extension de façon sensible à la casse (.PDF rejeté).
-    /\.pdf$/i.test(fileName)
-      ? fileName.replace(/\.pdf$/i, '.pdf')
-      : 'planning-officiel.pdf',
-  );
-  const response = await fetch('https://api.openai.com/v1/files', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + key },
-    body: form,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || typeof payload?.id !== 'string') {
-    console.error('OpenAI file upload failed', response.status, payload);
-    throw new Error('openai_file_upload_failed');
-  }
-  return payload.id;
-}
-
-async function deleteOpenAIFile(fileId: string, key: string) {
-  try {
-    await fetch('https://api.openai.com/v1/files/' + fileId, {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + key },
-    });
-  } catch (_) {
-    // Best-effort cleanup.
-  }
-}
-
+// La source visuelle A/B/C provient uniquement des octets officiels PDF.
+// Les trois lectures sont indépendantes et restent exclusivement Urgences.
 async function runRead(
-  fileId: string,
+  vision: GroqRosterVision,
   key: string,
   extraPrompt: string,
-  schemaName: string,
+  _schemaName: string,
   modelEnv: string,
 ): Promise<Read> {
-  const model =
-    Deno.env.get(modelEnv) ||
-    Deno.env.get('OPENAI_VISION_MODEL') ||
-    'gpt-5.6';
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + key,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      store: false,
-      input: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'input_text',
-              text: basePrompt + '\n\n' + extraPrompt,
-            },
-            {
-              type: 'input_file',
-              file_id: fileId,
-            },
-          ],
-        },
-      ],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: schemaName,
-          strict: true,
-          schema: extractionSchema,
-        },
-      },
-    }),
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    console.error('OpenAI roster read failed', response.status, payload);
-    if (response.status === 429 &&
-        (payload?.error?.code === 'credit_balance_exhausted' ||
-         payload?.error?.type === 'insufficient_quota')) {
-      throw new Error('openai_api_credits_exhausted');
-    }
-    if (response.status === 429) {
-      throw new Error('openai_rate_limited');
-    }
-    if (response.status === 401 || response.status === 403) {
-      throw new Error('openai_authentication_failed');
-    }
-    throw new Error('openai_read_failed');
-  }
-  return normalizeExtraction(parseJsonLoose(extractResponseText(payload)));
+  const result = await vision.read(key, basePrompt + '\n\n' + extraPrompt, modelEnv);
+  return normalizeExtraction(result);
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -1288,7 +1196,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const openAiKey = Deno.env.get('OPENAI_API_KEY');
+    const groqKey = Deno.env.get('GROQ_API_KEY');
     const authorization = req.headers.get('Authorization') ?? '';
 
     if (
@@ -1299,8 +1207,8 @@ Deno.serve(async (req: Request) => {
     ) {
       return json({ ok: false, error: 'unauthorized' }, 401);
     }
-    if (!openAiKey) {
-      return json({ ok: false, error: 'verifier_not_configured' }, 503);
+    if (!groqKey) {
+      return json({ ok: false, error: 'groq_not_configured' }, 503);
     }
 
     const callerClient = createClient(supabaseUrl, anonKey, {
@@ -1447,7 +1355,7 @@ Deno.serve(async (req: Request) => {
           engine:
             String(
               preflight.extraction?.engine ??
-                'pdfrx_geometry+openai_visual_conditional',
+                'pdfrx_geometry+groq_vision_conditional',
             ) + '+sha256',
         };
         const { error: promoteError } = await adminClient
@@ -1485,17 +1393,16 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    let openAiFileId = '';
-    try {
-      openAiFileId = await uploadOpenAIFile(bytes, displayName, openAiKey);
+    const vision = await GroqRosterVision.fromPdf(bytes);
+    {
 
       const useLocalA =
         local.validationErrors.length === 0 && local.cells.length > 0;
       let readAVisual: Read | null = null;
       if (!useLocalA) {
         readAVisual = await runRead(
-          openAiFileId,
-          openAiKey,
+          vision,
+          groqKey,
           [
             'LECTURE A VISUELLE DE SECOURS.',
             'La couche texte/lecture géométrique locale est absente ou structurellement incomplète.',
@@ -1503,13 +1410,13 @@ Deno.serve(async (req: Request) => {
             'Utilise une stratégie de lecture globale par lignes puis colonnes et vérifie toutes les cellules.',
           ].join('\n'),
           'official_roster_read_a_fallback_r6',
-          'OPENAI_VISION_MODEL_A',
+          'GROQ_VISION_MODEL_A',
         );
       }
 
       const readB = await runRead(
-        openAiFileId,
-        openAiKey,
+        vision,
+        groqKey,
         [
           'LECTURE B INDÉPENDANTE.',
           'Lis le document depuis zéro.',
@@ -1518,7 +1425,7 @@ Deno.serve(async (req: Request) => {
           'Vérifie particulièrement chaque prénom, nom, date et créneau.',
         ].join('\n'),
         'official_roster_read_b_r6',
-        'OPENAI_VISION_MODEL_B',
+        'GROQ_VISION_MODEL_B',
       );
 
       const aReliable = useLocalA
@@ -1556,8 +1463,8 @@ Deno.serve(async (req: Request) => {
           })),
         );
         readC = await runRead(
-          openAiFileId,
-          openAiKey,
+          vision,
+          groqKey,
           [
             'LECTURE C CONDITIONNELLE — ARBITRAGE.',
             'Un désaccord ou un contrôle incomplet a été détecté entre A et B.',
@@ -1567,7 +1474,7 @@ Deno.serve(async (req: Request) => {
             'Zones litigieuses: ' + disputeSummary,
           ].join('\n'),
           'official_roster_read_c_r6',
-          'OPENAI_VISION_MODEL_C',
+          'GROQ_VISION_MODEL_C',
         );
 
         const cReliable = readIsReliable(readC);
@@ -1630,8 +1537,8 @@ Deno.serve(async (req: Request) => {
             verified: false,
             parser_revision: PARSER_REVISION,
             engine: useLocalA
-              ? 'pdfrx_geometry+openai_visual_conditional'
-              : 'openai_visual_a+openai_visual_b+conditional_c',
+              ? 'pdfrx_geometry+groq_vision_conditional'
+              : 'groq_vision_a+groq_vision_b+conditional_c',
             status: 'red',
             confidence: Math.min(
               minimumConfidence(readB),
@@ -1665,7 +1572,7 @@ Deno.serve(async (req: Request) => {
               ]),
             ],
             read_summary: {
-              a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
+              a_engine: useLocalA ? 'pdfrx_geometry' : 'groq_vision_fallback',
               a_cells: local.cells.length,
               a_confidence: readAVisual?.confidence ?? null,
               b_executed: true,
@@ -1693,8 +1600,8 @@ Deno.serve(async (req: Request) => {
         verified: true,
         parser_revision: PARSER_REVISION,
         engine: useLocalA
-          ? 'pdfrx_geometry+openai_visual_conditional'
-          : 'openai_visual_a+openai_visual_b+conditional_c',
+          ? 'pdfrx_geometry+groq_vision_conditional'
+          : 'groq_vision_a+groq_vision_b+conditional_c',
         status,
         confidence,
         agreement,
@@ -1716,7 +1623,7 @@ Deno.serve(async (req: Request) => {
         conflicts,
         validation_errors: [],
         read_summary: {
-          a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
+          a_engine: useLocalA ? 'pdfrx_geometry' : 'groq_vision_fallback',
           a_cells: local.cells.length,
           a_confidence: readAVisual?.confidence ?? null,
           b_executed: true,
@@ -1780,19 +1687,21 @@ Deno.serve(async (req: Request) => {
       }
 
       return json({ ok: true, cached: false, extraction });
-    } finally {
-      if (openAiFileId) await deleteOpenAIFile(openAiFileId, openAiKey);
     }
   } catch (error) {
     console.error('analyze-official-roster-pdf error', error);
     const code = error instanceof Error ? error.message : '';
-    if (code === 'openai_api_credits_exhausted') {
-      return json({ ok: false, error: code }, 503);
-    }
-    if (code === 'openai_rate_limited') {
+    if (code === 'groq_rate_limited') {
       return json({ ok: false, error: code }, 429);
     }
-    if (code === 'openai_authentication_failed') {
+    if (code === 'groq_authentication_failed') {
+      return json({ ok: false, error: code }, 503);
+    }
+    if ([
+      'groq_read_failed', 'groq_request_invalid', 'groq_invalid_response',
+      'groq_pdf_render_failed', 'groq_invalid_page_reference',
+      'groq_page_without_cells',
+    ].includes(code)) {
       return json({ ok: false, error: code }, 503);
     }
     return json({ ok: false, error: 'server_error' }, 500);
