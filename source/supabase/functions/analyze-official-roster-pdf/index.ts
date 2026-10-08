@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { GroqRosterVision, GroqRateLimitError } from './groq_vision.ts';
+import { validateGroqStoredSelection, validateGroqPreflightSelection } from './groq_request_scope.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1244,6 +1245,18 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const manualResolutions = parseManualResolutions(body?.manualResolutions);
     const forceReread = body?.forceReread === true;
+    // Les anciens clients ne doivent jamais déclencher de lecture Groq
+    // automatiquement. Le consentement doit accompagner CE PDF précis.
+    const manualGroqConfirmed = body?.manualGroqConfirmed === true;
+    const selectedSlot =
+      typeof body?.selectedSlot === 'string' ? body.selectedSlot.trim() : '';
+    const selectedResourceId =
+      typeof body?.selectedResourceId === 'string'
+        ? body.selectedResourceId.trim() : '';
+    const selectedUpdatedAt =
+      typeof body?.selectedUpdatedAt === 'string'
+        ? body.selectedUpdatedAt.trim() : '';
+
     const resourceId =
       typeof body?.resourceId === 'string' ? body.resourceId.trim() : '';
     const tempStoragePath =
@@ -1280,6 +1293,17 @@ Deno.serve(async (req: Request) => {
         return json({ ok: false, error: 'resource_not_found' }, 404);
       }
 
+      const scopeError = validateGroqStoredSelection({
+        manualGroqConfirmed,
+        selectedSlot,
+        selectedResourceId,
+        selectedUpdatedAt,
+        resourceId,
+        actualSlot: resource.slot,
+        actualUpdatedAt: resource.updated_at,
+      });
+      if (scopeError) return json({ ok: false, error: scopeError }, 409);
+
       // Lecture 2 explicitement demandée : ne jamais retourner une ancienne
       // lecture alors que l'administrateur souhaite corriger son résultat.
       const cached = forceReread
@@ -1308,6 +1332,15 @@ Deno.serve(async (req: Request) => {
     } else {
       slot = typeof body?.slot === 'string' ? body.slot.trim() : '';
       hospital = hospitalForSlot(slot) || '';
+      const preflightScopeError = validateGroqPreflightSelection({
+        manualGroqConfirmed,
+        selectedSlot,
+        selectedResourceId,
+        slot,
+      });
+      if (preflightScopeError) {
+        return json({ ok: false, error: preflightScopeError }, 409);
+      }
       displayName =
         typeof body?.displayName === 'string' && body.displayName.trim()
           ? body.displayName.trim()
@@ -1401,6 +1434,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const vision = await GroqRosterVision.fromPdf(bytes);
+    console.info('Groq R6 manually selected PDF', {
+      slot,
+      resource_id: cacheResourceId || null,
+      page_count: vision.pageCount,
+      force_reread: forceReread,
+    });
     {
 
       const useLocalA =

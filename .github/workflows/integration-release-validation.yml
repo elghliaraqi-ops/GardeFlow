@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   android-apk:
-    if: github.head_ref == 'feat/r6-pdfrx-first-manual-groq-20261008'
+    if: github.head_ref == 'fix/r6-groq-selected-pdf-only-20261008'
     runs-on: ubuntu-latest
     timeout-minutes: 65
     defaults:
@@ -57,17 +57,17 @@ jobs:
       - name: Build non-deployed release APK
         run: |
           flutter pub get
-          flutter build apk --release --build-name 12.0.3 --build-number 303
+          flutter build apk --release --build-name 12.0.4 --build-number 304
           test -f build/app/outputs/flutter-apk/app-release.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-R6-pdfrx265-Groq-manual-Android-APK
+          name: GardeFlow-v12.0.4-selected-PDF-only-Android-APK
           path: source/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
 
   web-release:
-    if: github.head_ref == 'feat/r6-pdfrx-first-manual-groq-20261008'
+    if: github.head_ref == 'fix/r6-groq-selected-pdf-only-20261008'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -87,24 +87,24 @@ jobs:
             flutter create --no-pub --platforms=web --project-name huim6_planning .
           fi
           flutter pub get
-          flutter build web --release --base-href "/GardeFlow/" --build-name 12.0.3 --build-number 303
+          flutter build web --release --base-href "/GardeFlow/" --build-name 12.0.4 --build-number 304
           test -f build/web/main.dart.js
           test -f build/web/index.html
       - uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-12.0.3-lockfile
+          name: GardeFlow-12.0.4-lockfile
           path: source/pubspec.lock
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-R6-pdfrx265-Groq-manual-Web
+          name: GardeFlow-v12.0.4-selected-PDF-only-Web
           path: source/build/web
           if-no-files-found: error
           retention-days: 30
 
   ios-unsigned:
-    if: github.head_ref == 'feat/r6-pdfrx-first-manual-groq-20261008'
+    if: github.head_ref == 'fix/r6-groq-selected-pdf-only-20261008'
     runs-on: macos-latest
     timeout-minutes: 75
     defaults:
@@ -128,7 +128,7 @@ jobs:
           if [ -f ios/Podfile ]; then
             (cd ios && pod install --repo-update)
           fi
-          flutter build ios --release --no-codesign --build-name 12.0.3 --build-number 303
+          flutter build ios --release --no-codesign --build-name 12.0.4 --build-number 304
           test -d build/ios/iphoneos/Runner.app
           mkdir -p build/ios/integration-unsigned/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/integration-unsigned/Payload/GardeFlow.app
@@ -136,7 +136,7 @@ jobs:
           ditto -c -k --keepParent build/ios/iphoneos/Runner.app build/ios/integration-unsigned/GardeFlow-R6-Groq-unsigned.app.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: GardeFlow-R6-pdfrx265-Groq-manual-iOS-unsigned
+          name: GardeFlow-v12.0.4-selected-PDF-only-iOS-unsigned
           path: |
             source/build/ios/integration-unsigned/GardeFlow-R6-Groq-unsigned.ipa
             source/build/ios/integration-unsigned/GardeFlow-R6-Groq-unsigned.app.zip

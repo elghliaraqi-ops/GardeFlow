@@ -189,6 +189,10 @@ class SupabaseBackendService {
 
     final error = raw is Map ? raw['error']?.toString() : null;
     switch (error) {
+      case 'groq_manual_confirmation_required':
+        throw StateError('Une confirmation explicite du PDF est requise avant Groq.');
+      case 'groq_pdf_selection_mismatch':
+        throw StateError('PDF modifié ou sélection invalide : actualisez puis réessayez.');
       case 'forbidden':
         throw StateError(
           'Cette action est réservée aux administrateurs GardeFlow.',
@@ -973,6 +977,16 @@ class SupabaseBackendService {
       final details = error.details;
       final code = details is Map ? details['error']?.toString() : null;
       switch (code) {
+        case 'groq_manual_confirmation_required':
+          throw StateError(
+            'Relecture Groq bloquée : confirmez le PDF choisi depuis '
+            'la nouvelle interface GardeFlow, puis réessayez.',
+          );
+        case 'groq_pdf_selection_mismatch':
+          throw StateError(
+            'Le PDF sélectionné ne correspond plus au document officiel : '
+            'actualisez cette page et choisissez à nouveau ce PDF.',
+          );
         case 'groq_not_configured':
           throw StateError(
             'Le lecteur Groq des plannings n’est pas configuré. '
@@ -1016,6 +1030,9 @@ class SupabaseBackendService {
     String parserRevision = 'v12.0.3-groq-r6',
     String? verificationToken,
     bool forceReread = false,
+    required String selectedSlot,
+    required DateTime selectedUpdatedAt,
+    required bool manualGroqConfirmed,
     List<Map<String, dynamic>> localEvidence =
         const <Map<String, dynamic>>[],
   }) async {
@@ -1024,6 +1041,10 @@ class SupabaseBackendService {
     }
     final response = await _invokeOfficialRosterPdf({
         'resourceId': resourceId,
+        'selectedResourceId': resourceId,
+        'selectedSlot': selectedSlot,
+        'selectedUpdatedAt': selectedUpdatedAt.toUtc().toIso8601String(),
+        'manualGroqConfirmed': manualGroqConfirmed,
         'parserRevision': parserRevision,
         'localEvidence': localEvidence,
         if (forceReread) 'forceReread': true,
@@ -1037,6 +1058,7 @@ class SupabaseBackendService {
     required Uint8List bytes,
     required String fileName,
     required String slot,
+    required bool manualGroqConfirmed,
     required List<Map<String, dynamic>> localEvidence,
     List<Map<String, dynamic>> manualResolutions =
         const <Map<String, dynamic>>[],
@@ -1069,6 +1091,8 @@ class SupabaseBackendService {
       final response = await _invokeOfficialRosterPdf({
           'tempStoragePath': path,
           'slot': slot,
+          'selectedSlot': slot,
+          'manualGroqConfirmed': manualGroqConfirmed,
           'displayName': fileName,
           'parserRevision': parserRevision,
           'localEvidence': localEvidence,

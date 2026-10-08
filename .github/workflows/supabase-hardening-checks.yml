@@ -30,6 +30,8 @@ jobs:
         run: deno check --node-modules-dir=auto source/supabase/functions/analyze-official-roster-pdf/index.ts
       - name: Validate trusted PDF rasterization and Groq page merging
         run: deno test --allow-read --allow-env --node-modules-dir=auto source/supabase/functions/analyze-official-roster-pdf/groq_vision_test.ts
+      - name: Validate selected PDF only and manual Groq consent
+        run: deno test source/supabase/functions/analyze-official-roster-pdf/groq_request_scope_test.ts
 
   sql-static-checks:
     runs-on: ubuntu-latest
