@@ -10,6 +10,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/screen_decor.dart';
 import '../theme/widgets.dart';
+import 'official_planning_screen.dart';
 
 class AdminOfficialRosterReviewScreen extends StatefulWidget {
   const AdminOfficialRosterReviewScreen({super.key});
@@ -106,13 +107,32 @@ class _AdminOfficialRosterReviewScreenState
 
   Widget _buildContent(BuildContext context) {
     if (_reports.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Aucun rapport R6 n’est encore disponible. '
-            'Les prochains imports officiels apparaîtront ici.',
-            textAlign: TextAlign.center,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.picture_as_pdf_rounded, size: 40),
+              const SizedBox(height: 12),
+              const Text(
+                'Aucune lecture officielle R6 validée. '
+                'Vous pouvez relire les PDF Urgences déjà publiés, '
+                'sans les remplacer ni modifier les calendriers.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const OfficialPlanningScreen(),
+                  ),
+                ).then((_) => _reload()),
+                icon: const Icon(Icons.fact_check_rounded),
+                label: const Text('Relire les PDF existants avec R6'),
+              ),
+            ],
           ),
         ),
       );
