@@ -979,9 +979,15 @@ class SupabaseBackendService {
             'Calendriers inchangés.',
           );
         case 'groq_rate_limited':
+          final seconds = (details is Map && details['retry_after_seconds'] is num)
+              ? (details['retry_after_seconds'] as num).toInt()
+              : null;
+          final waitText = seconds != null && seconds > 0
+              ? ' Réessayez dans environ ${(seconds / 60).ceil()} minute(s).'
+              : ' Réessayez plus tard.';
           throw StateError(
-            'Le lecteur Groq est limité temporairement : réessayez plus tard. '
-            'Aucune garde n’a été modifiée.',
+            'Limite de tokens Groq atteinte.' + waitText +
+            ' Aucune garde n’a été modifiée.',
           );
         case 'groq_request_invalid':
         case 'groq_invalid_response':

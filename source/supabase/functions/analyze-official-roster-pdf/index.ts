@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { GroqRosterVision } from './groq_vision.ts';
+import { GroqRosterVision, GroqRateLimitError } from './groq_vision.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1693,6 +1693,13 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error('analyze-official-roster-pdf error', error);
     const code = error instanceof Error ? error.message : '';
+    if (error instanceof GroqRateLimitError) {
+      return json({
+        ok: false,
+        error: 'groq_rate_limited',
+        retry_after_seconds: error.retryAfterSeconds,
+      }, 429);
+    }
     if (code === 'groq_rate_limited') {
       return json({ ok: false, error: code }, 429);
     }

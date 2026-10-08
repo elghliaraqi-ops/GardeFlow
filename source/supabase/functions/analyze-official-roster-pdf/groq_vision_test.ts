@@ -1,4 +1,8 @@
-import { GroqRosterVision, mergeChunkReads } from './groq_vision.ts';
+import {
+  GroqRosterVision, mergeChunkReads,
+  GROQ_MAX_IMAGES_PER_REQUEST, GROQ_MAX_COMPLETION_TOKENS,
+  parseGroqRetryAfter, GroqRateLimitError,
+} from './groq_vision.ts';
 
 function assert(ok: boolean, message: string): void {
   if (!ok) throw new Error(message);
@@ -72,4 +76,24 @@ Deno.test('Any mixed/Service page makes whole extraction fail closed', () => {
   ]);
   assert(merged.document_scope === 'mixed_or_uncertain',
     'Mixed scope must never be accepted as Urgences');
+});
+
+Deno.test('Groq R6 requests fit the free-tier per-request token budget', () => {
+  assert(GROQ_MAX_IMAGES_PER_REQUEST === 1,
+    'Only one 2048-token image must be sent per request');
+  assert(GROQ_MAX_COMPLETION_TOKENS <= 4096,
+    'Completion token reservation must remain bounded');
+  assert(GROQ_MAX_IMAGES_PER_REQUEST * 2048 + GROQ_MAX_COMPLETION_TOKENS < 8000,
+    'Leave room for verification instructions under the nominal 8K TPM budget');
+});
+
+Deno.test('Groq rate-limit retry delay is validated and clamped', () => {
+  assert(parseGroqRetryAfter('6') === 6, 'Seconds parsed');
+  assert(parseGroqRetryAfter('0.5') === 1, 'Fraction rounds upward');
+  assert(parseGroqRetryAfter(null) === null, 'Missing header is unknown');
+  assert(parseGroqRetryAfter('bad') === null, 'Invalid header ignored');
+  assert(parseGroqRetryAfter('10000') === 3600, 'Long waits capped');
+  const rateLimit = new GroqRateLimitError(32);
+  assert(rateLimit.message === 'groq_rate_limited', 'Stable API error');
+  assert(rateLimit.retryAfterSeconds === 32, 'Wait duration survives');
 });
