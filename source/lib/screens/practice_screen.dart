@@ -2700,6 +2700,18 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   Future<void> _save({required bool addAnother}) async {
     if (_saving) return;
     FocusScope.of(context).unfocus();
+    if (_generatedByAi && _isStandalone) {
+      // A physician may edit the narrative but must not silently turn an
+      // AI simulation into a patient observation in the public feed.
+      if (!_consultationReason.text.trim().startsWith('[SIMULATION IA]')) {
+        _consultationReason.text =
+            '[SIMULATION IA] ${_consultationReason.text.trim()}';
+      }
+      if (!_chiefComplaint.text.trim().startsWith('[CAS FICTIF')) {
+        _chiefComplaint.text =
+            '[CAS FICTIF – IA] ${_chiefComplaint.text.trim()}';
+      }
+    }
     final value = _buildCase(isDraft: false);
     if (value == null) return;
     if (!value.isValid) {
