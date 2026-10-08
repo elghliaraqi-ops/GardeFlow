@@ -9,6 +9,20 @@
 - Production Supabase : **inchangée**
 - `main` : **non fusionnée**
 
+## Périmètre fonctionnel R6 — Urgences uniquement
+
+R6 traite exclusivement les plannings officiels des **Urgences**.
+
+Créneaux autorisés :
+
+- `urg-jour`
+- `urg-nuit`
+- `urg-24h`
+
+Les plannings de **Service** ne passent pas par ce moteur et ne doivent pas être interprétés, importés, recalculés ou fusionnés par R6. Toute valeur `service-*` présentée au pipeline R6 doit être refusée explicitement.
+
+Cette séparation est volontaire afin de préserver les règles historiques du module Service et d'éviter toute modification implicite de son fonctionnement.
+
 ## 1. Fonctionnalités existantes recensées avant modification
 
 L'inventaire exhaustif est figé dans `docs/GARDE_FUNCTIONAL_LOCK_MATRIX.md`.
@@ -306,7 +320,7 @@ La validation infrastructure/backend isolée est maintenant effectuée. Le derni
    - 0 mauvaise attribution ;
    - 0 mauvaise date ;
    - 0 confusion Jour/Nuit/24H ;
-   - 0 confusion Service/Urgences ;
+   - aucune garde de Service acceptée par le moteur R6 Urgences ;
 5. vérifier que les cas volontairement partiels sont identifiés comme `explicit_range` et que les mois complets sont identifiés comme `full_month` ;
 6. seulement après ces résultats, fusionner la PR et appliquer les migrations/Edge Function à la production.
 
