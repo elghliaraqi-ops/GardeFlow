@@ -7,7 +7,28 @@ import UPNG from 'npm:upng-js@2.1.0';
 type Page = { pageNumber: number; imageUrl: string };
 // Qwen 3.6 was retired for standard Groq accounts on 14 Sep 2026.
 const DEFAULT_MODEL = 'qwen/qwen3.8-27b';
-export const GROQ_MAX_IMAGES_PER_REQUEST = 3; // Qwen 3.8 accepte au plus trois images par requête.
+// 1 image = 2048 tokens d'entrée. Sur le plan gratuit (8K TPM),
+ // envoyer 3 images + réserver 16K de sortie déclenche des 429.
+ // Préserver toutes les pages via une boucle; ne jamais en ignorer.
+export const GROQ_MAX_IMAGES_PER_REQUEST = 1;
+export const GROQ_MAX_COMPLETION_TOKENS = 4096;
+const MAX_INLINE_RETRY_SECONDS = 8;
+
+export function parseGroqRetryAfter(value: string | null): number | null {
+  if (value == null || !value.trim()) return null;
+  const seconds = Number(value.trim());
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.min(3600, Math.ceil(seconds))
+    : null;
+}
+
+export class GroqRateLimitError extends Error {
+  constructor(readonly retryAfterSeconds: number | null) {
+    super('groq_rate_limited');
+    this.name = 'GroqRateLimitError';
+  }
+}
+
 
 function b64(raw: Uint8Array): string {
   const parts: string[] = [];
@@ -80,39 +101,58 @@ async function scanChunk(
     'Numéros exacts des pages PDF : ' + pages.map(p => p.pageNumber).join(', ') + '. ' +
     'Seuls les créneaux urg-jour, urg-nuit, urg-24h sont autorisés. ' +
     'Si le document concerne le Service, document_scope vaut non_urgences.';
-  const result = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + key,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.1,
-      stream: false,
-      max_completion_tokens: 16000,
-      response_format: { type: 'json_object' },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt + '\n\n' + schemaHint },
-          ...pages.map(page => ({
-            type: 'image_url',
-            image_url: { url: page.imageUrl },
-          })),
-        ],
-      }],
-    }),
+  const request = JSON.stringify({
+    model,
+    temperature: 0.1,
+    reasoning_effort: 'none',
+    stream: false,
+    max_completion_tokens: GROQ_MAX_COMPLETION_TOKENS,
+    response_format: { type: 'json_object' },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: prompt + '\n\n' + schemaHint },
+        ...pages.map(page => ({
+          type: 'image_url',
+          image_url: { url: page.imageUrl },
+        })),
+      ],
+    }],
   });
-  const payload = await result.json().catch(() => ({}));
-  if (!result.ok) {
+  let payload: any;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + key,
+        'Content-Type': 'application/json',
+      },
+      body: request,
+    });
+    payload = await result.json().catch(() => ({}));
+    if (result.ok) break;
     const error = payload?.error ?? {};
+    if (result.status === 429) {
+      const retryAfter = parseGroqRetryAfter(result.headers.get('retry-after'));
+      console.warn('Groq R6 token/rate limit', {
+        error_type: String(error.type ?? '').slice(0, 50),
+        retry_after_seconds: retryAfter,
+        retry_attempted: attempt !== 0,
+      });
+      // One quick retry only. Waiting minutes inside an Edge request risks
+      // timeouts and cannot bypass provider account/day quotas.
+      if (attempt === 0 && retryAfter != null &&
+          retryAfter <= MAX_INLINE_RETRY_SECONDS) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+      throw new GroqRateLimitError(retryAfter);
+    }
     console.error('Groq R6 request failed', {
       http_status: result.status,
       error_code: String(error.code ?? '').slice(0, 90),
       error_type: String(error.type ?? '').slice(0, 90),
     });
-    if (result.status === 429) throw new Error('groq_rate_limited');
     if ([401, 403].includes(result.status)) throw new Error('groq_authentication_failed');
     if ([400, 404, 422].includes(result.status)) throw new Error('groq_request_invalid');
     throw new Error('groq_read_failed');
