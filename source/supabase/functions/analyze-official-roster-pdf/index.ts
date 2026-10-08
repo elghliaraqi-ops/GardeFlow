@@ -84,6 +84,9 @@ type Row = {
 type Read = {
   month: number | null;
   year: number | null;
+  coverage_mode: 'full_month' | 'explicit_range';
+  coverage_start: string;
+  coverage_end: string;
   confidence: number;
   warnings: string[];
   rows: Row[];
@@ -174,7 +177,16 @@ function mergeDoctors(values: unknown): Doctor[] {
   );
 }
 
-function validateCoverage(rows: Array<{ date: string; shift: string }>): string[] {
+function validateCoverage(
+  rows: Array<{ date: string; shift: string }>,
+  options?: {
+    coverageMode?: string | null;
+    coverageStart?: string | null;
+    coverageEnd?: string | null;
+    month?: number | null;
+    year?: number | null;
+  },
+): string[] {
   const errors: string[] = [];
   const byDate = new Map<string, Set<string>>();
   for (const row of rows) {
@@ -196,12 +208,87 @@ function validateCoverage(rows: Array<{ date: string; shift: string }>): string[
     return errors;
   }
 
-  let cursor = new Date(dates[0] + 'T00:00:00Z');
-  const last = new Date(dates[dates.length - 1] + 'T00:00:00Z');
-  while (cursor <= last) {
-    const key = cursor.toISOString().slice(0, 10);
-    if (!byDate.has(key)) errors.push('Date absente: ' + key);
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  const declaredStart = options?.coverageStart ?? null;
+  const declaredEnd = options?.coverageEnd ?? null;
+  const coverageMode = options?.coverageMode ?? null;
+
+  let expectedStart = dates[0];
+  let expectedEnd = dates[dates.length - 1];
+
+  if (coverageMode != null) {
+    if (coverageMode !== 'full_month' && coverageMode !== 'explicit_range') {
+      errors.push('Mode de couverture officiel invalide.');
+    }
+
+    if (!declaredStart || !validIsoDate(declaredStart)) {
+      errors.push('Début de couverture officiel absent ou invalide.');
+    } else {
+      expectedStart = declaredStart;
+    }
+    if (!declaredEnd || !validIsoDate(declaredEnd)) {
+      errors.push('Fin de couverture officielle absente ou invalide.');
+    } else {
+      expectedEnd = declaredEnd;
+    }
+
+    if (
+      declaredStart &&
+      declaredEnd &&
+      validIsoDate(declaredStart) &&
+      validIsoDate(declaredEnd) &&
+      declaredStart > declaredEnd
+    ) {
+      errors.push('Plage de couverture officielle inversée.');
+    }
+
+    if (coverageMode === 'full_month') {
+      const month = options?.month ?? null;
+      const year = options?.year ?? null;
+      if (
+        month == null ||
+        year == null ||
+        month < 1 ||
+        month > 12 ||
+        year < 2020 ||
+        year > 2100
+      ) {
+        errors.push('Mois/année principal requis pour une couverture mensuelle.');
+      } else {
+        const first = new Date(Date.UTC(year, month - 1, 1))
+          .toISOString()
+          .slice(0, 10);
+        const last = new Date(Date.UTC(year, month, 0))
+          .toISOString()
+          .slice(0, 10);
+        if (declaredStart !== first || declaredEnd !== last) {
+          errors.push(
+            'Couverture full_month incohérente: attendu ' +
+              first + ' → ' + last + '.',
+          );
+        }
+        expectedStart = first;
+        expectedEnd = last;
+      }
+    }
+  }
+
+  if (validIsoDate(expectedStart) && validIsoDate(expectedEnd)) {
+    const firstObserved = dates[0];
+    const lastObserved = dates[dates.length - 1];
+    if (firstObserved > expectedStart) {
+      errors.push('Début de planning non interprété: ' + expectedStart);
+    }
+    if (lastObserved < expectedEnd) {
+      errors.push('Fin de planning non interprétée: ' + expectedEnd);
+    }
+
+    let cursor = new Date(expectedStart + 'T00:00:00Z');
+    const last = new Date(expectedEnd + 'T00:00:00Z');
+    while (cursor <= last) {
+      const key = cursor.toISOString().slice(0, 10);
+      if (!byDate.has(key)) errors.push('Date absente: ' + key);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
   }
 
   for (const date of dates) {
@@ -223,6 +310,33 @@ function validateCoverage(rows: Array<{ date: string; shift: string }>): string[
 function normalizeExtraction(raw: any): Read {
   const merged = new Map<string, Row>();
   const validationErrors: string[] = [];
+  const month =
+    Number.isInteger(raw?.month) && raw.month >= 1 && raw.month <= 12
+      ? raw.month
+      : null;
+  const year =
+    Number.isInteger(raw?.year) && raw.year >= 2020 && raw.year <= 2100
+      ? raw.year
+      : null;
+  const coverageMode =
+    raw?.coverage_mode === 'full_month' ||
+      raw?.coverage_mode === 'explicit_range'
+      ? raw.coverage_mode as 'full_month' | 'explicit_range'
+      : 'explicit_range';
+  if (
+    raw?.coverage_mode !== 'full_month' &&
+    raw?.coverage_mode !== 'explicit_range'
+  ) {
+    validationErrors.push('Mode de couverture officiel absent ou invalide.');
+  }
+  const coverageStart =
+    typeof raw?.coverage_start === 'string'
+      ? raw.coverage_start.trim()
+      : '';
+  const coverageEnd =
+    typeof raw?.coverage_end === 'string'
+      ? raw.coverage_end.trim()
+      : '';
   const rawRows = Array.isArray(raw?.rows) ? raw.rows : [];
 
   for (const candidate of rawRows) {
@@ -250,6 +364,11 @@ function normalizeExtraction(raw: any): Read {
 
     const key = date + '|' + shift;
     const existing = merged.get(key);
+    if (existing) {
+      validationErrors.push(
+        'Cellule dupliquée dans la lecture visuelle: ' + date + ' ' + shift,
+      );
+    }
     if (!existing) {
       merged.set(key, {
         date,
@@ -276,7 +395,15 @@ function normalizeExtraction(raw: any): Read {
     (a, b) => a.date.localeCompare(b.date) || a.shift.localeCompare(b.shift),
   );
 
-  validationErrors.push(...validateCoverage(rows));
+  validationErrors.push(
+    ...validateCoverage(rows, {
+      coverageMode,
+      coverageStart,
+      coverageEnd,
+      month,
+      year,
+    }),
+  );
   for (const row of rows) {
     for (const doctor of row.doctors) {
       if (!normalizeText(doctor.first_name) || !normalizeText(doctor.last_name)) {
@@ -292,6 +419,16 @@ function normalizeExtraction(raw: any): Read {
         );
       }
     }
+    if (row.page_number == null) {
+      validationErrors.push(
+        'Page non localisée ' + row.date + ' ' + row.shift + '.',
+      );
+    }
+    if (row.zone == null || row.zone.trim().length === 0) {
+      validationErrors.push(
+        'Zone non localisée ' + row.date + ' ' + row.shift + '.',
+      );
+    }
   }
 
   const confidence =
@@ -301,18 +438,12 @@ function normalizeExtraction(raw: any): Read {
   const warnings = Array.isArray(raw?.warnings)
     ? raw.warnings.map((value: any) => String(value)).slice(0, 50)
     : [];
-  const month =
-    Number.isInteger(raw?.month) && raw.month >= 1 && raw.month <= 12
-      ? raw.month
-      : null;
-  const year =
-    Number.isInteger(raw?.year) && raw.year >= 2020 && raw.year <= 2100
-      ? raw.year
-      : null;
-
   return {
     month,
     year,
+    coverage_mode: coverageMode,
+    coverage_start: coverageStart,
+    coverage_end: coverageEnd,
     confidence,
     warnings,
     rows,
@@ -413,9 +544,10 @@ function localJson(cell: LocalCell | undefined): unknown {
   return cell ?? {};
 }
 
-function compareLocalVisual(local: LocalCell[], visual: Row[]): Conflict[] {
+function compareLocalVisual(local: LocalCell[], visual: Read): Conflict[] {
+  const visualRows = visual.rows;
   const a = new Map(local.map((cell) => [cell.date + '|' + cell.shift, cell]));
-  const b = new Map(visual.map((row) => [row.date + '|' + row.shift, row]));
+  const b = new Map(visualRows.map((row) => [row.date + '|' + row.shift, row]));
   const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
   const conflicts: Conflict[] = [];
 
@@ -464,6 +596,30 @@ function compareLocalVisual(local: LocalCell[], visual: Row[]): Conflict[] {
       }
     }
   }
+  const localDates = [...new Set(local.map((cell) => cell.date))].sort();
+  if (localDates.length > 0) {
+    const localStart = localDates[0];
+    const localEnd = localDates[localDates.length - 1];
+    if (
+      visual.coverage_start !== localStart ||
+      visual.coverage_end !== localEnd
+    ) {
+      conflicts.push({
+        code: 'coverage_scope_mismatch',
+        date: null,
+        shift: null,
+        message:
+          'La plage officielle déclarée par la lecture visuelle diffère de la structure A.',
+        a: { coverage_start: localStart, coverage_end: localEnd },
+        b: {
+          coverage_mode: visual.coverage_mode,
+          coverage_start: visual.coverage_start,
+          coverage_end: visual.coverage_end,
+        },
+      });
+    }
+  }
+
   return conflicts;
 }
 
@@ -498,14 +654,46 @@ function canonicalRow(row: Row): string {
 }
 
 function compareVisualReads(
-  first: Row[],
-  second: Row[],
+  first: Read,
+  second: Read,
   code: string,
 ): Conflict[] {
-  const left = new Map(first.map((row) => [row.date + '|' + row.shift, row]));
-  const right = new Map(second.map((row) => [row.date + '|' + row.shift, row]));
+  const left = new Map(
+    first.rows.map((row) => [row.date + '|' + row.shift, row]),
+  );
+  const right = new Map(
+    second.rows.map((row) => [row.date + '|' + row.shift, row]),
+  );
   const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
   const conflicts: Conflict[] = [];
+  if (
+    first.coverage_mode !== second.coverage_mode ||
+    first.coverage_start !== second.coverage_start ||
+    first.coverage_end !== second.coverage_end ||
+    first.month !== second.month ||
+    first.year !== second.year
+  ) {
+    conflicts.push({
+      code: 'coverage_scope_mismatch',
+      date: null,
+      shift: null,
+      message: 'Les lectures ne concordent pas sur la plage officielle du document.',
+      a: {
+        coverage_mode: first.coverage_mode,
+        coverage_start: first.coverage_start,
+        coverage_end: first.coverage_end,
+        month: first.month,
+        year: first.year,
+      },
+      b: {
+        coverage_mode: second.coverage_mode,
+        coverage_start: second.coverage_start,
+        coverage_end: second.coverage_end,
+        month: second.month,
+        year: second.year,
+      },
+    });
+  }
   for (const key of keys) {
     const aRow = left.get(key);
     const bRow = right.get(key);
@@ -694,6 +882,9 @@ function applyManualResolutions(
   const normalized = normalizeExtraction({
     month: base.month,
     year: base.year,
+    coverage_mode: base.coverage_mode,
+    coverage_start: base.coverage_start,
+    coverage_end: base.coverage_end,
     confidence: 1,
     warnings: [
       ...base.warnings,
@@ -735,7 +926,16 @@ function attachC(
 const extractionSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['month', 'year', 'confidence', 'warnings', 'rows'],
+  required: [
+    'month',
+    'year',
+    'coverage_mode',
+    'coverage_start',
+    'coverage_end',
+    'confidence',
+    'warnings',
+    'rows',
+  ],
   properties: {
     month: {
       anyOf: [
@@ -748,6 +948,1467 @@ const extractionSchema = {
         { type: 'integer', minimum: 2020, maximum: 2100 },
         { type: 'null' },
       ],
+    },
+    coverage_mode: {
+      type: 'string',
+      enum: ['full_month', 'explicit_range'],
+    },
+    coverage_start: {
+      type: 'string',
+      pattern: '^\\d{4}-\\d{2}-\\d{2} { type: 'number', minimum: 0, maximum: 1 },
+    warnings: {
+      type: 'array',
+      maxItems: 50,
+      items: { type: 'string' },
+    },
+    rows: {
+      type: 'array',
+      maxItems: 100,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'date',
+          'shift',
+          'doctors',
+          'red_names',
+          'page_number',
+          'zone',
+        ],
+        properties: {
+          date: {
+            type: 'string',
+            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          },
+          shift: {
+            type: 'string',
+            enum: ['urg-jour', 'urg-nuit', 'urg-24h'],
+          },
+          doctors: {
+            type: 'array',
+            maxItems: 16,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: [
+                'first_name',
+                'last_name',
+                'full_name',
+                'confidence',
+              ],
+              properties: {
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+                full_name: { type: 'string' },
+                confidence: {
+                  type: 'number',
+                  minimum: 0,
+                  maximum: 1,
+                },
+              },
+            },
+          },
+          red_names: {
+            type: 'array',
+            maxItems: 16,
+            items: { type: 'string' },
+          },
+          page_number: {
+            anyOf: [
+              { type: 'integer', minimum: 1 },
+              { type: 'null' },
+            ],
+          },
+          zone: {
+            anyOf: [
+              { type: 'string', maxLength: 180 },
+              { type: 'null' },
+            ],
+          },
+        },
+      },
+    },
+  },
+};
+
+const basePrompt = [
+  "Tu es le lecteur visuel indépendant d'un planning officiel de gardes d'Urgences pour GardeFlow.",
+  '',
+  'OBJECTIF',
+  "Lire le PDF VISUELLEMENT, sans utiliser ni supposer la base des comptes GardeFlow.",
+  "Reconstruire l'intégralité du tableau officiel, y compris les médecins qui ne sont pas inscrits dans l'application.",
+  '',
+  'RÈGLES ABSOLUES',
+  "- N'invente jamais un nom, une date ou un créneau.",
+  '- Lis toutes les pages utiles et toutes les cellules du tableau.',
+  '- Jour / 08H-20H => urg-jour.',
+  '- Nuit / 20H-08H => urg-nuit.',
+  '- Une cellule réellement fusionnée Jour+Nuit => urg-24h.',
+  '- Une cellule peut contenir plusieurs médecins : conserve chaque personne visible.',
+  '- Pour CHAQUE médecin, sépare first_name et last_name. Conserve aussi full_name exactement tel que lu.',
+  "- Ne décide jamais selon une liste d'utilisateurs : tu n'en disposes pas.",
+  "- N'utilise jamais prénom seul, nom seul ou initiales comme identité complète.",
+  '- Pour les prénoms/noms composés, conserve toutes les composantes visibles.',
+  '- confidence de chaque médecin reflète la certitude sur son identité complète.',
+  '- confidence globale reflète la certitude sur la lecture de TOUT le tableau.',
+  '- Si une identité est partiellement illisible, baisse sa confidence et signale-le dans warnings.',
+  '- Si un nom est rouge, ajoute full_name correspondant dans red_names.',
+  "- Pour chaque date, retourne soit urg-24h, soit exactement urg-jour + urg-nuit, même si l'une des cellules est vide.",
+  '- page_number est la page PDF où se trouve la cellule.',
+  "- zone décrit brièvement la zone utile (ex. 'ligne 26 octobre / colonne Nuit').",
+  '- Respecte les changements de mois et d’année.',
+  '- coverage_start et coverage_end sont les première et dernière dates OFFICIELLEMENT couvertes par le tableau visible, pas simplement les premières/dernières lignes que tu as réussi à lire.',
+  "- coverage_mode='full_month' uniquement si le document couvre explicitement tout un mois civil ; sinon coverage_mode='explicit_range'.",
+  "- En full_month, month/year sont obligatoires et coverage_start/coverage_end doivent correspondre au premier/dernier jour du mois.",
+].join('\n');
+
+async function uploadOpenAIFile(
+  bytes: Uint8Array,
+  fileName: string,
+  key: string,
+): Promise<string> {
+  const form = new FormData();
+  form.append('purpose', 'user_data');
+  form.append('expires_after[anchor]', 'created_at');
+  form.append('expires_after[seconds]', '3600');
+  form.append(
+    'file',
+    new Blob([bytes], { type: 'application/pdf' }),
+    fileName || 'planning-officiel.pdf',
+  );
+  const response = await fetch('https://api.openai.com/v1/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key },
+    body: form,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || typeof payload?.id !== 'string') {
+    console.error('OpenAI file upload failed', response.status, payload);
+    throw new Error('openai_file_upload_failed');
+  }
+  return payload.id;
+}
+
+async function deleteOpenAIFile(fileId: string, key: string) {
+  try {
+    await fetch('https://api.openai.com/v1/files/' + fileId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + key },
+    });
+  } catch (_) {
+    // Best-effort cleanup.
+  }
+}
+
+async function runRead(
+  fileId: string,
+  key: string,
+  extraPrompt: string,
+  schemaName: string,
+  modelEnv: string,
+): Promise<Read> {
+  const model =
+    Deno.env.get(modelEnv) ||
+    Deno.env.get('OPENAI_VISION_MODEL') ||
+    'gpt-5.6';
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + key,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      store: false,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: basePrompt + '\n\n' + extraPrompt,
+            },
+            {
+              type: 'input_file',
+              file_id: fileId,
+            },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: schemaName,
+          strict: true,
+          schema: extractionSchema,
+        },
+      },
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('OpenAI roster read failed', response.status, payload);
+    throw new Error('openai_read_failed');
+  }
+  return normalizeExtraction(parseJsonLoose(extractResponseText(payload)));
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function hospitalForSlot(slot: string): string | null {
+  if (slot === 'hm6_bouskoura') {
+    return 'Hôpital Universitaire International Mohammed VI de Bouskoura';
+  }
+  if (slot === 'hm6_rabat') {
+    return 'Hôpital Universitaire International Mohammed VI de Rabat';
+  }
+  if (slot === 'hck_casa') {
+    return 'Hôpital Universitaire International Cheikh Khalifa de Casablanca';
+  }
+  return null;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return json({ ok: false, error: 'method_not_allowed' }, 405);
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const openAiKey = Deno.env.get('OPENAI_API_KEY');
+    const authorization = req.headers.get('Authorization') ?? '';
+
+    if (
+      !supabaseUrl ||
+      !anonKey ||
+      !serviceRoleKey ||
+      !authorization.startsWith('Bearer ')
+    ) {
+      return json({ ok: false, error: 'unauthorized' }, 401);
+    }
+    if (!openAiKey) {
+      return json({ ok: false, error: 'verifier_not_configured' }, 503);
+    }
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: callerData, error: callerError } =
+      await callerClient.auth.getUser();
+    const callerId = callerData.user?.id;
+    if (callerError || !callerId) {
+      return json({ ok: false, error: 'unauthorized' }, 401);
+    }
+
+    const { data: callerProfile } = await adminClient
+      .from('profiles')
+      .select('id,role,account_status')
+      .eq('id', callerId)
+      .maybeSingle();
+    if (
+      !callerProfile ||
+      callerProfile.role !== 'admin' ||
+      callerProfile.account_status !== 'active'
+    ) {
+      return json({ ok: false, error: 'forbidden' }, 403);
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const manualResolutions = parseManualResolutions(body?.manualResolutions);
+    const resourceId =
+      typeof body?.resourceId === 'string' ? body.resourceId.trim() : '';
+    const tempStoragePath =
+      typeof body?.tempStoragePath === 'string'
+        ? body.tempStoragePath.trim()
+        : '';
+    const verificationToken =
+      typeof body?.verificationToken === 'string'
+        ? body.verificationToken.trim()
+        : '';
+    const local = normalizeLocalEvidence(body?.localEvidence);
+
+    let storagePath = '';
+    let displayName = 'planning-officiel.pdf';
+    let slot = '';
+    let hospital = '';
+    let resourceUpdatedAt = '';
+    let cacheResourceId = '';
+
+    if (/^[0-9a-f-]{36}$/i.test(resourceId)) {
+      const { data: resource, error } = await adminClient
+        .from('shared_resources')
+        .select(
+          'id,kind,slot,hospital,storage_path,display_name,mime_type,updated_at',
+        )
+        .eq('id', resourceId)
+        .maybeSingle();
+      if (
+        error ||
+        !resource ||
+        resource.kind !== 'official_pdf' ||
+        resource.mime_type !== 'application/pdf'
+      ) {
+        return json({ ok: false, error: 'resource_not_found' }, 404);
+      }
+
+      const { data: cached } = await adminClient
+        .from('official_roster_verified_reads')
+        .select('extraction')
+        .eq('resource_id', resource.id)
+        .eq('resource_updated_at', resource.updated_at)
+        .eq('parser_revision', PARSER_REVISION)
+        .maybeSingle();
+      if (cached?.extraction?.verified === true) {
+        return json({
+          ok: true,
+          cached: true,
+          extraction: cached.extraction,
+        });
+      }
+
+      storagePath = String(resource.storage_path);
+      displayName = String(resource.display_name || displayName);
+      slot = String(resource.slot || '');
+      hospital = String(resource.hospital || hospitalForSlot(slot) || '');
+      resourceUpdatedAt = String(resource.updated_at);
+      cacheResourceId = String(resource.id);
+    } else {
+      slot = typeof body?.slot === 'string' ? body.slot.trim() : '';
+      hospital = hospitalForSlot(slot) || '';
+      displayName =
+        typeof body?.displayName === 'string' && body.displayName.trim()
+          ? body.displayName.trim()
+          : displayName;
+      const expectedPrefix = 'official_preflight/' + callerId + '/';
+      if (
+        !tempStoragePath ||
+        !tempStoragePath.startsWith(expectedPrefix) ||
+        !hospital
+      ) {
+        return json({ ok: false, error: 'invalid_preflight_resource' }, 400);
+      }
+      storagePath = tempStoragePath;
+    }
+
+    const { data: blob, error: downloadError } = await adminClient.storage
+      .from('gardeflow-shared')
+      .download(storagePath);
+    if (downloadError || !blob) {
+      console.error('Official PDF download failed', downloadError);
+      return json({ ok: false, error: 'pdf_download_failed' }, 500);
+    }
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 25 * 1024 * 1024) {
+      return json({ ok: false, error: 'invalid_pdf_size' }, 400);
+    }
+
+    if (
+      cacheResourceId &&
+      /^[0-9a-f-]{36}$/i.test(verificationToken)
+    ) {
+      const nowIso = new Date().toISOString();
+      const fileSha256 = await sha256Hex(bytes);
+      const { data: preflight } = await adminClient
+        .from('official_roster_preflight_reads')
+        .select('id,slot,file_sha256,extraction,expires_at')
+        .eq('id', verificationToken)
+        .eq('owner_id', callerId)
+        .gt('expires_at', nowIso)
+        .maybeSingle();
+
+      if (
+        preflight &&
+        preflight.slot === slot &&
+        preflight.file_sha256 === fileSha256 &&
+        preflight.extraction?.verified === true &&
+        preflight.extraction?.parser_revision === PARSER_REVISION
+      ) {
+        const promotedExtraction = {
+          ...preflight.extraction,
+          engine:
+            String(
+              preflight.extraction?.engine ??
+                'pdfrx_geometry+openai_visual_conditional',
+            ) + '+sha256',
+        };
+        const { error: promoteError } = await adminClient
+          .from('official_roster_verified_reads')
+          .upsert(
+            {
+              resource_id: cacheResourceId,
+              resource_updated_at: resourceUpdatedAt,
+              parser_revision: PARSER_REVISION,
+              engine: promotedExtraction.engine,
+              extraction: promotedExtraction,
+              confidence: promotedExtraction.confidence ?? 0,
+              warnings: promotedExtraction.warnings ?? [],
+              created_at: new Date().toISOString(),
+            },
+            {
+              onConflict:
+                'resource_id,resource_updated_at,parser_revision',
+            },
+          );
+        if (!promoteError) {
+          await adminClient
+            .from('official_roster_preflight_reads')
+            .delete()
+            .eq('id', verificationToken)
+            .eq('owner_id', callerId);
+          return json({
+            ok: true,
+            cached: false,
+            promoted: true,
+            extraction: promotedExtraction,
+          });
+        }
+        console.error('Verified preflight promotion failed', promoteError);
+      }
+    }
+
+    let openAiFileId = '';
+    try {
+      openAiFileId = await uploadOpenAIFile(bytes, displayName, openAiKey);
+
+      const useLocalA =
+        local.validationErrors.length === 0 && local.cells.length > 0;
+      let readAVisual: Read | null = null;
+      if (!useLocalA) {
+        readAVisual = await runRead(
+          openAiFileId,
+          openAiKey,
+          [
+            'LECTURE A VISUELLE DE SECOURS.',
+            'La couche texte/lecture géométrique locale est absente ou structurellement incomplète.',
+            'Lis le document depuis zéro sans connaître les comptes GardeFlow.',
+            'Utilise une stratégie de lecture globale par lignes puis colonnes et vérifie toutes les cellules.',
+          ].join('\n'),
+          'official_roster_read_a_fallback_r6',
+          'OPENAI_VISION_MODEL_A',
+        );
+      }
+
+      const readB = await runRead(
+        openAiFileId,
+        openAiKey,
+        [
+          'LECTURE B INDÉPENDANTE.',
+          'Lis le document depuis zéro.',
+          'Ne suppose aucune sortie de la lecture A.',
+          'Utilise une stratégie centrée sur chaque date et chaque cellule, puis vérifie les identités complètes.',
+          'Vérifie particulièrement chaque prénom, nom, date et créneau.',
+        ].join('\n'),
+        'official_roster_read_b_r6',
+        'OPENAI_VISION_MODEL_B',
+      );
+
+      const aReliable = useLocalA
+        ? true
+        : (readAVisual != null && readIsReliable(readAVisual));
+      const bReliable = readIsReliable(readB);
+      const abConflicts = useLocalA
+        ? compareLocalVisual(local.cells, readB)
+        : compareVisualReads(
+            readAVisual!,
+            readB,
+            'a_b_mismatch',
+          );
+
+      let chosen: Read | null = null;
+      let status = 'red';
+      let agreement = 'none';
+      let cExecuted = false;
+      let conflicts = abConflicts;
+      let readC: Read | null = null;
+
+      if (aReliable && bReliable && abConflicts.length === 0) {
+        chosen = readB;
+        status = 'green';
+        agreement = 'A=B';
+      } else {
+        cExecuted = true;
+        const disputeSummary = JSON.stringify(
+          abConflicts.slice(0, 30).map((conflict) => ({
+            date: conflict.date,
+            shift: conflict.shift,
+            code: conflict.code,
+            a: conflict.a,
+            b: conflict.b,
+          })),
+        );
+        readC = await runRead(
+          openAiFileId,
+          openAiKey,
+          [
+            'LECTURE C CONDITIONNELLE — ARBITRAGE.',
+            'Un désaccord ou un contrôle incomplet a été détecté entre A et B.',
+            'Analyse en priorité les zones litigieuses ci-dessous.',
+            'Si le désaccord semble structurel, si une date manque ou si une zone dépend du reste du tableau, relis tout le document.',
+            'Ne choisis jamais par majorité aveugle : rends uniquement ce qui est réellement visible.',
+            'Zones litigieuses: ' + disputeSummary,
+          ].join('\n'),
+          'official_roster_read_c_r6',
+          'OPENAI_VISION_MODEL_C',
+        );
+
+        const cReliable = readIsReliable(readC);
+        const acConflicts = useLocalA
+          ? compareLocalVisual(local.cells, readC)
+          : compareVisualReads(
+              readAVisual!,
+              readC,
+              'a_c_mismatch',
+            );
+        const bcConflicts = compareVisualReads(
+          readB,
+          readC,
+          'b_c_mismatch',
+        );
+
+        if (aReliable && cReliable && acConflicts.length === 0) {
+          chosen = readC;
+          status = 'orange';
+          agreement = 'A=C';
+          conflicts = attachC(abConflicts, readC);
+        } else if (bReliable && cReliable && bcConflicts.length === 0) {
+          chosen = readC;
+          status = 'orange';
+          agreement = 'B=C';
+          conflicts = attachC(abConflicts, readC);
+        } else {
+          status = 'red';
+          agreement = 'none';
+          conflicts = [
+            ...attachC(abConflicts, readC),
+            ...bcConflicts.map((conflict) => ({
+              ...conflict,
+              a: {},
+              b: conflict.a,
+              c: conflict.b,
+            })),
+          ];
+
+          const manual = applyManualResolutions(
+            readB,
+            readC,
+            conflicts,
+            manualResolutions,
+          );
+          if (manual != null) {
+            chosen = manual.read;
+            conflicts = manual.conflicts;
+            status = 'orange';
+            agreement = 'ADMIN';
+          }
+        }
+      }
+
+      if (!chosen || status === 'red') {
+        return json({
+          ok: true,
+          cached: false,
+          extraction: {
+            verified: false,
+            parser_revision: PARSER_REVISION,
+            engine: useLocalA
+              ? 'pdfrx_geometry+openai_visual_conditional'
+              : 'openai_visual_a+openai_visual_b+conditional_c',
+            status: 'red',
+            confidence: Math.min(
+              minimumConfidence(readB),
+              readC ? minimumConfidence(readC) : 1,
+            ),
+            agreement,
+            hospital,
+            slot,
+            month: readC?.month ?? readB.month,
+            year: readC?.year ?? readB.year,
+            coverage_mode: readC?.coverage_mode ?? readB.coverage_mode,
+            coverage_start: readC?.coverage_start ?? readB.coverage_start,
+            coverage_end: readC?.coverage_end ?? readB.coverage_end,
+            warnings: [
+              ...new Set([
+                ...readB.warnings,
+                ...(readC?.warnings ?? []),
+                'Ambiguïté persistante : publication automatique bloquée.',
+              ]),
+            ],
+            rows: [],
+            conflicts,
+            validation_errors: [
+              ...new Set([
+                ...(useLocalA
+                  ? local.validationErrors
+                  : (readAVisual?.validationErrors ?? [])),
+                ...readB.validationErrors,
+                ...(readC?.validationErrors ?? []),
+              ]),
+            ],
+            read_summary: {
+              a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
+              a_cells: local.cells.length,
+              a_confidence: readAVisual?.confidence ?? null,
+              b_executed: true,
+              b_confidence: readB.confidence,
+              c_executed: cExecuted,
+              c_confidence: readC?.confidence ?? null,
+            },
+          },
+        });
+      }
+
+      const confidence =
+        agreement === 'A=B' && readAVisual
+          ? Math.min(
+              minimumConfidence(readAVisual),
+              minimumConfidence(readB),
+            )
+          : agreement === 'B=C' && readC
+            ? Math.min(
+                minimumConfidence(readB),
+                minimumConfidence(readC),
+              )
+            : minimumConfidence(chosen);
+      const extraction = {
+        verified: true,
+        parser_revision: PARSER_REVISION,
+        engine: useLocalA
+          ? 'pdfrx_geometry+openai_visual_conditional'
+          : 'openai_visual_a+openai_visual_b+conditional_c',
+        status,
+        confidence,
+        agreement,
+        hospital,
+        slot,
+        month: chosen.month,
+        year: chosen.year,
+        coverage_mode: chosen.coverage_mode,
+        coverage_start: chosen.coverage_start,
+        coverage_end: chosen.coverage_end,
+        warnings: agreement === 'ADMIN'
+          ? [
+              ...chosen.warnings,
+              'Publication autorisée après correction humaine ciblée.',
+            ]
+          : chosen.warnings,
+        rows: chosen.rows,
+        conflicts,
+        validation_errors: [],
+        read_summary: {
+          a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
+          a_cells: local.cells.length,
+          a_confidence: readAVisual?.confidence ?? null,
+          b_executed: true,
+          b_confidence: readB.confidence,
+          c_executed: cExecuted,
+          c_confidence: readC?.confidence ?? null,
+        },
+      };
+
+      if (cacheResourceId && resourceUpdatedAt) {
+        const { error: cacheError } = await adminClient
+          .from('official_roster_verified_reads')
+          .upsert(
+            {
+              resource_id: cacheResourceId,
+              resource_updated_at: resourceUpdatedAt,
+              parser_revision: PARSER_REVISION,
+              engine: extraction.engine,
+              extraction,
+              confidence: extraction.confidence,
+              warnings: extraction.warnings,
+              created_at: new Date().toISOString(),
+            },
+            {
+              onConflict:
+                'resource_id,resource_updated_at,parser_revision',
+            },
+          );
+        if (cacheError) {
+          console.error('Verified roster cache failed', cacheError);
+          return json({ ok: false, error: 'cache_failed' }, 500);
+        }
+      }
+
+      if (!cacheResourceId) {
+        const fileSha256 = await sha256Hex(bytes);
+        const { data: preflight, error: preflightError } = await adminClient
+          .from('official_roster_preflight_reads')
+          .insert({
+            owner_id: callerId,
+            slot,
+            file_sha256: fileSha256,
+            extraction,
+            expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          })
+          .select('id')
+          .single();
+        if (preflightError || !preflight?.id) {
+          console.error(
+            'Verified preflight token creation failed',
+            preflightError,
+          );
+          return json({ ok: false, error: 'preflight_cache_failed' }, 500);
+        }
+        return json({
+          ok: true,
+          cached: false,
+          verificationToken: preflight.id,
+          extraction,
+        });
+      }
+
+      return json({ ok: true, cached: false, extraction });
+    } finally {
+      if (openAiFileId) await deleteOpenAIFile(openAiFileId, openAiKey);
+    }
+  } catch (error) {
+    console.error('analyze-official-roster-pdf error', error);
+    return json({ ok: false, error: 'server_error' }, 500);
+  }
+});
+,
+    },
+    coverage_end: {
+      type: 'string',
+      pattern: '^\\d{4}-\\d{2}-\\d{2} { type: 'number', minimum: 0, maximum: 1 },
+    warnings: {
+      type: 'array',
+      maxItems: 50,
+      items: { type: 'string' },
+    },
+    rows: {
+      type: 'array',
+      maxItems: 100,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'date',
+          'shift',
+          'doctors',
+          'red_names',
+          'page_number',
+          'zone',
+        ],
+        properties: {
+          date: {
+            type: 'string',
+            pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          },
+          shift: {
+            type: 'string',
+            enum: ['urg-jour', 'urg-nuit', 'urg-24h'],
+          },
+          doctors: {
+            type: 'array',
+            maxItems: 16,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: [
+                'first_name',
+                'last_name',
+                'full_name',
+                'confidence',
+              ],
+              properties: {
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+                full_name: { type: 'string' },
+                confidence: {
+                  type: 'number',
+                  minimum: 0,
+                  maximum: 1,
+                },
+              },
+            },
+          },
+          red_names: {
+            type: 'array',
+            maxItems: 16,
+            items: { type: 'string' },
+          },
+          page_number: {
+            anyOf: [
+              { type: 'integer', minimum: 1 },
+              { type: 'null' },
+            ],
+          },
+          zone: {
+            anyOf: [
+              { type: 'string', maxLength: 180 },
+              { type: 'null' },
+            ],
+          },
+        },
+      },
+    },
+  },
+};
+
+const basePrompt = [
+  "Tu es le lecteur visuel indépendant d'un planning officiel de gardes d'Urgences pour GardeFlow.",
+  '',
+  'OBJECTIF',
+  "Lire le PDF VISUELLEMENT, sans utiliser ni supposer la base des comptes GardeFlow.",
+  "Reconstruire l'intégralité du tableau officiel, y compris les médecins qui ne sont pas inscrits dans l'application.",
+  '',
+  'RÈGLES ABSOLUES',
+  "- N'invente jamais un nom, une date ou un créneau.",
+  '- Lis toutes les pages utiles et toutes les cellules du tableau.',
+  '- Jour / 08H-20H => urg-jour.',
+  '- Nuit / 20H-08H => urg-nuit.',
+  '- Une cellule réellement fusionnée Jour+Nuit => urg-24h.',
+  '- Une cellule peut contenir plusieurs médecins : conserve chaque personne visible.',
+  '- Pour CHAQUE médecin, sépare first_name et last_name. Conserve aussi full_name exactement tel que lu.',
+  "- Ne décide jamais selon une liste d'utilisateurs : tu n'en disposes pas.",
+  "- N'utilise jamais prénom seul, nom seul ou initiales comme identité complète.",
+  '- Pour les prénoms/noms composés, conserve toutes les composantes visibles.',
+  '- confidence de chaque médecin reflète la certitude sur son identité complète.',
+  '- confidence globale reflète la certitude sur la lecture de TOUT le tableau.',
+  '- Si une identité est partiellement illisible, baisse sa confidence et signale-le dans warnings.',
+  '- Si un nom est rouge, ajoute full_name correspondant dans red_names.',
+  "- Pour chaque date, retourne soit urg-24h, soit exactement urg-jour + urg-nuit, même si l'une des cellules est vide.",
+  '- page_number est la page PDF où se trouve la cellule.',
+  "- zone décrit brièvement la zone utile (ex. 'ligne 26 octobre / colonne Nuit').",
+  '- Respecte les changements de mois et d’année.',
+].join('\n');
+
+async function uploadOpenAIFile(
+  bytes: Uint8Array,
+  fileName: string,
+  key: string,
+): Promise<string> {
+  const form = new FormData();
+  form.append('purpose', 'user_data');
+  form.append('expires_after[anchor]', 'created_at');
+  form.append('expires_after[seconds]', '3600');
+  form.append(
+    'file',
+    new Blob([bytes], { type: 'application/pdf' }),
+    fileName || 'planning-officiel.pdf',
+  );
+  const response = await fetch('https://api.openai.com/v1/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key },
+    body: form,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || typeof payload?.id !== 'string') {
+    console.error('OpenAI file upload failed', response.status, payload);
+    throw new Error('openai_file_upload_failed');
+  }
+  return payload.id;
+}
+
+async function deleteOpenAIFile(fileId: string, key: string) {
+  try {
+    await fetch('https://api.openai.com/v1/files/' + fileId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + key },
+    });
+  } catch (_) {
+    // Best-effort cleanup.
+  }
+}
+
+async function runRead(
+  fileId: string,
+  key: string,
+  extraPrompt: string,
+  schemaName: string,
+  modelEnv: string,
+): Promise<Read> {
+  const model =
+    Deno.env.get(modelEnv) ||
+    Deno.env.get('OPENAI_VISION_MODEL') ||
+    'gpt-5.6';
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + key,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      store: false,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: basePrompt + '\n\n' + extraPrompt,
+            },
+            {
+              type: 'input_file',
+              file_id: fileId,
+            },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: schemaName,
+          strict: true,
+          schema: extractionSchema,
+        },
+      },
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('OpenAI roster read failed', response.status, payload);
+    throw new Error('openai_read_failed');
+  }
+  return normalizeExtraction(parseJsonLoose(extractResponseText(payload)));
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function hospitalForSlot(slot: string): string | null {
+  if (slot === 'hm6_bouskoura') {
+    return 'Hôpital Universitaire International Mohammed VI de Bouskoura';
+  }
+  if (slot === 'hm6_rabat') {
+    return 'Hôpital Universitaire International Mohammed VI de Rabat';
+  }
+  if (slot === 'hck_casa') {
+    return 'Hôpital Universitaire International Cheikh Khalifa de Casablanca';
+  }
+  return null;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return json({ ok: false, error: 'method_not_allowed' }, 405);
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const openAiKey = Deno.env.get('OPENAI_API_KEY');
+    const authorization = req.headers.get('Authorization') ?? '';
+
+    if (
+      !supabaseUrl ||
+      !anonKey ||
+      !serviceRoleKey ||
+      !authorization.startsWith('Bearer ')
+    ) {
+      return json({ ok: false, error: 'unauthorized' }, 401);
+    }
+    if (!openAiKey) {
+      return json({ ok: false, error: 'verifier_not_configured' }, 503);
+    }
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: callerData, error: callerError } =
+      await callerClient.auth.getUser();
+    const callerId = callerData.user?.id;
+    if (callerError || !callerId) {
+      return json({ ok: false, error: 'unauthorized' }, 401);
+    }
+
+    const { data: callerProfile } = await adminClient
+      .from('profiles')
+      .select('id,role,account_status')
+      .eq('id', callerId)
+      .maybeSingle();
+    if (
+      !callerProfile ||
+      callerProfile.role !== 'admin' ||
+      callerProfile.account_status !== 'active'
+    ) {
+      return json({ ok: false, error: 'forbidden' }, 403);
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const manualResolutions = parseManualResolutions(body?.manualResolutions);
+    const resourceId =
+      typeof body?.resourceId === 'string' ? body.resourceId.trim() : '';
+    const tempStoragePath =
+      typeof body?.tempStoragePath === 'string'
+        ? body.tempStoragePath.trim()
+        : '';
+    const verificationToken =
+      typeof body?.verificationToken === 'string'
+        ? body.verificationToken.trim()
+        : '';
+    const local = normalizeLocalEvidence(body?.localEvidence);
+
+    let storagePath = '';
+    let displayName = 'planning-officiel.pdf';
+    let slot = '';
+    let hospital = '';
+    let resourceUpdatedAt = '';
+    let cacheResourceId = '';
+
+    if (/^[0-9a-f-]{36}$/i.test(resourceId)) {
+      const { data: resource, error } = await adminClient
+        .from('shared_resources')
+        .select(
+          'id,kind,slot,hospital,storage_path,display_name,mime_type,updated_at',
+        )
+        .eq('id', resourceId)
+        .maybeSingle();
+      if (
+        error ||
+        !resource ||
+        resource.kind !== 'official_pdf' ||
+        resource.mime_type !== 'application/pdf'
+      ) {
+        return json({ ok: false, error: 'resource_not_found' }, 404);
+      }
+
+      const { data: cached } = await adminClient
+        .from('official_roster_verified_reads')
+        .select('extraction')
+        .eq('resource_id', resource.id)
+        .eq('resource_updated_at', resource.updated_at)
+        .eq('parser_revision', PARSER_REVISION)
+        .maybeSingle();
+      if (cached?.extraction?.verified === true) {
+        return json({
+          ok: true,
+          cached: true,
+          extraction: cached.extraction,
+        });
+      }
+
+      storagePath = String(resource.storage_path);
+      displayName = String(resource.display_name || displayName);
+      slot = String(resource.slot || '');
+      hospital = String(resource.hospital || hospitalForSlot(slot) || '');
+      resourceUpdatedAt = String(resource.updated_at);
+      cacheResourceId = String(resource.id);
+    } else {
+      slot = typeof body?.slot === 'string' ? body.slot.trim() : '';
+      hospital = hospitalForSlot(slot) || '';
+      displayName =
+        typeof body?.displayName === 'string' && body.displayName.trim()
+          ? body.displayName.trim()
+          : displayName;
+      const expectedPrefix = 'official_preflight/' + callerId + '/';
+      if (
+        !tempStoragePath ||
+        !tempStoragePath.startsWith(expectedPrefix) ||
+        !hospital
+      ) {
+        return json({ ok: false, error: 'invalid_preflight_resource' }, 400);
+      }
+      storagePath = tempStoragePath;
+    }
+
+    const { data: blob, error: downloadError } = await adminClient.storage
+      .from('gardeflow-shared')
+      .download(storagePath);
+    if (downloadError || !blob) {
+      console.error('Official PDF download failed', downloadError);
+      return json({ ok: false, error: 'pdf_download_failed' }, 500);
+    }
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 25 * 1024 * 1024) {
+      return json({ ok: false, error: 'invalid_pdf_size' }, 400);
+    }
+
+    if (
+      cacheResourceId &&
+      /^[0-9a-f-]{36}$/i.test(verificationToken)
+    ) {
+      const nowIso = new Date().toISOString();
+      const fileSha256 = await sha256Hex(bytes);
+      const { data: preflight } = await adminClient
+        .from('official_roster_preflight_reads')
+        .select('id,slot,file_sha256,extraction,expires_at')
+        .eq('id', verificationToken)
+        .eq('owner_id', callerId)
+        .gt('expires_at', nowIso)
+        .maybeSingle();
+
+      if (
+        preflight &&
+        preflight.slot === slot &&
+        preflight.file_sha256 === fileSha256 &&
+        preflight.extraction?.verified === true &&
+        preflight.extraction?.parser_revision === PARSER_REVISION
+      ) {
+        const promotedExtraction = {
+          ...preflight.extraction,
+          engine:
+            String(
+              preflight.extraction?.engine ??
+                'pdfrx_geometry+openai_visual_conditional',
+            ) + '+sha256',
+        };
+        const { error: promoteError } = await adminClient
+          .from('official_roster_verified_reads')
+          .upsert(
+            {
+              resource_id: cacheResourceId,
+              resource_updated_at: resourceUpdatedAt,
+              parser_revision: PARSER_REVISION,
+              engine: promotedExtraction.engine,
+              extraction: promotedExtraction,
+              confidence: promotedExtraction.confidence ?? 0,
+              warnings: promotedExtraction.warnings ?? [],
+              created_at: new Date().toISOString(),
+            },
+            {
+              onConflict:
+                'resource_id,resource_updated_at,parser_revision',
+            },
+          );
+        if (!promoteError) {
+          await adminClient
+            .from('official_roster_preflight_reads')
+            .delete()
+            .eq('id', verificationToken)
+            .eq('owner_id', callerId);
+          return json({
+            ok: true,
+            cached: false,
+            promoted: true,
+            extraction: promotedExtraction,
+          });
+        }
+        console.error('Verified preflight promotion failed', promoteError);
+      }
+    }
+
+    let openAiFileId = '';
+    try {
+      openAiFileId = await uploadOpenAIFile(bytes, displayName, openAiKey);
+
+      const useLocalA =
+        local.validationErrors.length === 0 && local.cells.length > 0;
+      let readAVisual: Read | null = null;
+      if (!useLocalA) {
+        readAVisual = await runRead(
+          openAiFileId,
+          openAiKey,
+          [
+            'LECTURE A VISUELLE DE SECOURS.',
+            'La couche texte/lecture géométrique locale est absente ou structurellement incomplète.',
+            'Lis le document depuis zéro sans connaître les comptes GardeFlow.',
+            'Utilise une stratégie de lecture globale par lignes puis colonnes et vérifie toutes les cellules.',
+          ].join('\n'),
+          'official_roster_read_a_fallback_r6',
+          'OPENAI_VISION_MODEL_A',
+        );
+      }
+
+      const readB = await runRead(
+        openAiFileId,
+        openAiKey,
+        [
+          'LECTURE B INDÉPENDANTE.',
+          'Lis le document depuis zéro.',
+          'Ne suppose aucune sortie de la lecture A.',
+          'Utilise une stratégie centrée sur chaque date et chaque cellule, puis vérifie les identités complètes.',
+          'Vérifie particulièrement chaque prénom, nom, date et créneau.',
+        ].join('\n'),
+        'official_roster_read_b_r6',
+        'OPENAI_VISION_MODEL_B',
+      );
+
+      const aReliable = useLocalA
+        ? true
+        : (readAVisual != null && readIsReliable(readAVisual));
+      const bReliable = readIsReliable(readB);
+      const abConflicts = useLocalA
+        ? compareLocalVisual(local.cells, readB)
+        : compareVisualReads(
+            readAVisual!,
+            readB,
+            'a_b_mismatch',
+          );
+
+      let chosen: Read | null = null;
+      let status = 'red';
+      let agreement = 'none';
+      let cExecuted = false;
+      let conflicts = abConflicts;
+      let readC: Read | null = null;
+
+      if (aReliable && bReliable && abConflicts.length === 0) {
+        chosen = readB;
+        status = 'green';
+        agreement = 'A=B';
+      } else {
+        cExecuted = true;
+        const disputeSummary = JSON.stringify(
+          abConflicts.slice(0, 30).map((conflict) => ({
+            date: conflict.date,
+            shift: conflict.shift,
+            code: conflict.code,
+            a: conflict.a,
+            b: conflict.b,
+          })),
+        );
+        readC = await runRead(
+          openAiFileId,
+          openAiKey,
+          [
+            'LECTURE C CONDITIONNELLE — ARBITRAGE.',
+            'Un désaccord ou un contrôle incomplet a été détecté entre A et B.',
+            'Analyse en priorité les zones litigieuses ci-dessous.',
+            'Si le désaccord semble structurel, si une date manque ou si une zone dépend du reste du tableau, relis tout le document.',
+            'Ne choisis jamais par majorité aveugle : rends uniquement ce qui est réellement visible.',
+            'Zones litigieuses: ' + disputeSummary,
+          ].join('\n'),
+          'official_roster_read_c_r6',
+          'OPENAI_VISION_MODEL_C',
+        );
+
+        const cReliable = readIsReliable(readC);
+        const acConflicts = useLocalA
+          ? compareLocalVisual(local.cells, readC)
+          : compareVisualReads(
+              readAVisual!,
+              readC,
+              'a_c_mismatch',
+            );
+        const bcConflicts = compareVisualReads(
+          readB,
+          readC,
+          'b_c_mismatch',
+        );
+
+        if (aReliable && cReliable && acConflicts.length === 0) {
+          chosen = readC;
+          status = 'orange';
+          agreement = 'A=C';
+          conflicts = attachC(abConflicts, readC);
+        } else if (bReliable && cReliable && bcConflicts.length === 0) {
+          chosen = readC;
+          status = 'orange';
+          agreement = 'B=C';
+          conflicts = attachC(abConflicts, readC);
+        } else {
+          status = 'red';
+          agreement = 'none';
+          conflicts = [
+            ...attachC(abConflicts, readC),
+            ...bcConflicts.map((conflict) => ({
+              ...conflict,
+              a: {},
+              b: conflict.a,
+              c: conflict.b,
+            })),
+          ];
+
+          const manual = applyManualResolutions(
+            readB,
+            readC,
+            conflicts,
+            manualResolutions,
+          );
+          if (manual != null) {
+            chosen = manual.read;
+            conflicts = manual.conflicts;
+            status = 'orange';
+            agreement = 'ADMIN';
+          }
+        }
+      }
+
+      if (!chosen || status === 'red') {
+        return json({
+          ok: true,
+          cached: false,
+          extraction: {
+            verified: false,
+            parser_revision: PARSER_REVISION,
+            engine: useLocalA
+              ? 'pdfrx_geometry+openai_visual_conditional'
+              : 'openai_visual_a+openai_visual_b+conditional_c',
+            status: 'red',
+            confidence: Math.min(
+              minimumConfidence(readB),
+              readC ? minimumConfidence(readC) : 1,
+            ),
+            agreement,
+            hospital,
+            slot,
+            month: readC?.month ?? readB.month,
+            year: readC?.year ?? readB.year,
+            warnings: [
+              ...new Set([
+                ...readB.warnings,
+                ...(readC?.warnings ?? []),
+                'Ambiguïté persistante : publication automatique bloquée.',
+              ]),
+            ],
+            rows: [],
+            conflicts,
+            validation_errors: [
+              ...new Set([
+                ...(useLocalA
+                  ? local.validationErrors
+                  : (readAVisual?.validationErrors ?? [])),
+                ...readB.validationErrors,
+                ...(readC?.validationErrors ?? []),
+              ]),
+            ],
+            read_summary: {
+              a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
+              a_cells: local.cells.length,
+              a_confidence: readAVisual?.confidence ?? null,
+              b_executed: true,
+              b_confidence: readB.confidence,
+              c_executed: cExecuted,
+              c_confidence: readC?.confidence ?? null,
+            },
+          },
+        });
+      }
+
+      const confidence =
+        agreement === 'A=B' && readAVisual
+          ? Math.min(
+              minimumConfidence(readAVisual),
+              minimumConfidence(readB),
+            )
+          : agreement === 'B=C' && readC
+            ? Math.min(
+                minimumConfidence(readB),
+                minimumConfidence(readC),
+              )
+            : minimumConfidence(chosen);
+      const extraction = {
+        verified: true,
+        parser_revision: PARSER_REVISION,
+        engine: useLocalA
+          ? 'pdfrx_geometry+openai_visual_conditional'
+          : 'openai_visual_a+openai_visual_b+conditional_c',
+        status,
+        confidence,
+        agreement,
+        hospital,
+        slot,
+        month: chosen.month,
+        year: chosen.year,
+        warnings: agreement === 'ADMIN'
+          ? [
+              ...chosen.warnings,
+              'Publication autorisée après correction humaine ciblée.',
+            ]
+          : chosen.warnings,
+        rows: chosen.rows,
+        conflicts,
+        validation_errors: [],
+        read_summary: {
+          a_engine: useLocalA ? 'pdfrx_geometry' : 'openai_visual_fallback',
+          a_cells: local.cells.length,
+          a_confidence: readAVisual?.confidence ?? null,
+          b_executed: true,
+          b_confidence: readB.confidence,
+          c_executed: cExecuted,
+          c_confidence: readC?.confidence ?? null,
+        },
+      };
+
+      if (cacheResourceId && resourceUpdatedAt) {
+        const { error: cacheError } = await adminClient
+          .from('official_roster_verified_reads')
+          .upsert(
+            {
+              resource_id: cacheResourceId,
+              resource_updated_at: resourceUpdatedAt,
+              parser_revision: PARSER_REVISION,
+              engine: extraction.engine,
+              extraction,
+              confidence: extraction.confidence,
+              warnings: extraction.warnings,
+              created_at: new Date().toISOString(),
+            },
+            {
+              onConflict:
+                'resource_id,resource_updated_at,parser_revision',
+            },
+          );
+        if (cacheError) {
+          console.error('Verified roster cache failed', cacheError);
+          return json({ ok: false, error: 'cache_failed' }, 500);
+        }
+      }
+
+      if (!cacheResourceId) {
+        const fileSha256 = await sha256Hex(bytes);
+        const { data: preflight, error: preflightError } = await adminClient
+          .from('official_roster_preflight_reads')
+          .insert({
+            owner_id: callerId,
+            slot,
+            file_sha256: fileSha256,
+            extraction,
+            expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          })
+          .select('id')
+          .single();
+        if (preflightError || !preflight?.id) {
+          console.error(
+            'Verified preflight token creation failed',
+            preflightError,
+          );
+          return json({ ok: false, error: 'preflight_cache_failed' }, 500);
+        }
+        return json({
+          ok: true,
+          cached: false,
+          verificationToken: preflight.id,
+          extraction,
+        });
+      }
+
+      return json({ ok: true, cached: false, extraction });
+    } finally {
+      if (openAiFileId) await deleteOpenAIFile(openAiFileId, openAiKey);
+    }
+  } catch (error) {
+    console.error('analyze-official-roster-pdf error', error);
+    return json({ ok: false, error: 'server_error' }, 500);
+  }
+});
+,
     },
     confidence: { type: 'number', minimum: 0, maximum: 1 },
     warnings: {
@@ -1215,10 +2876,10 @@ Deno.serve(async (req: Request) => {
         : (readAVisual != null && readIsReliable(readAVisual));
       const bReliable = readIsReliable(readB);
       const abConflicts = useLocalA
-        ? compareLocalVisual(local.cells, readB.rows)
+        ? compareLocalVisual(local.cells, readB)
         : compareVisualReads(
-            readAVisual?.rows ?? [],
-            readB.rows,
+            readAVisual!,
+            readB,
             'a_b_mismatch',
           );
 
@@ -1261,15 +2922,15 @@ Deno.serve(async (req: Request) => {
 
         const cReliable = readIsReliable(readC);
         const acConflicts = useLocalA
-          ? compareLocalVisual(local.cells, readC.rows)
+          ? compareLocalVisual(local.cells, readC)
           : compareVisualReads(
-              readAVisual?.rows ?? [],
-              readC.rows,
+              readAVisual!,
+              readC,
               'a_c_mismatch',
             );
         const bcConflicts = compareVisualReads(
-          readB.rows,
-          readC.rows,
+          readB,
+          readC,
           'b_c_mismatch',
         );
 
