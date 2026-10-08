@@ -78,6 +78,18 @@ begin
     raise exception 'anon can execute an R6 admin RPC';
   end if;
 
+  -- A PDF uploaded by R4/R5 must NOT authorize R6 recalculation.
+  begin
+    perform public.admin_preview_official_roster_recalculation(
+      '22222222-2222-2222-2222-222222222222'
+    );
+    raise exception 'Unverified historical PDF unexpectedly permitted recalculation';
+  exception when others then
+    if sqlerrm not like 'Aucune lecture R6 vérifiée des Urgences%' then
+      raise;
+    end if;
+  end;
+
   v_report := public.save_official_roster_analysis_r6(
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     v_resource_updated_at,
@@ -165,6 +177,25 @@ begin
   if jsonb_array_length(v_preview->'added') <> 1 then
     raise exception 'Preview must contain exactly 1 added guard';
   end if;
+
+  -- Legacy official PDFs identify hospitals by slot, hospital can be NULL.
+  -- A subtransaction rollback restores source/profile metadata after test.
+  begin
+    update public.profiles
+    set hospital='Hôpital Universitaire International Mohammed VI de Bouskoura'
+    where id='22222222-2222-2222-2222-222222222222';
+    update public.shared_resources
+    set hospital=null, slot='hm6_bouskoura'
+    where id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    perform public.admin_preview_official_roster_recalculation(
+      '22222222-2222-2222-2222-222222222222'
+    );
+    raise exception '__rollback_legacy_slot_assertion__';
+  exception when others then
+    if sqlerrm <> '__rollback_legacy_slot_assertion__' then
+      raise;
+    end if;
+  end;
 
   v_apply := public.admin_apply_official_roster_recalculation(
     '22222222-2222-2222-2222-222222222222',
