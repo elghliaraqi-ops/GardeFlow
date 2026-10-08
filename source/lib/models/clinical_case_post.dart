@@ -213,6 +213,16 @@ class ClinicalCasePost {
     );
   }
 
+  /// Marqueur pédagogique ajouté par le générateur côté serveur.
+  /// Dans le flux historique, la présentation peut provenir soit du motif
+  /// principal soit du motif de consultation. Les deux portent un marqueur.
+  bool get isFictional {
+    final text = presentation.toUpperCase();
+    return text.contains('[SIMULATION IA]') ||
+        text.contains('[CAS FICTIF – IA]') ||
+        text.contains('[CAS FICTIF - IA]');
+  }
+
   String get demographicLabel {
     final values = <String>[
       if ((ageBand ?? '').trim().isNotEmpty) ageBand!.trim(),
