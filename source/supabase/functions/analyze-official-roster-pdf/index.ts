@@ -1165,7 +1165,9 @@ async function runRead(
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const safeBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(safeBuffer).set(bytes);
+  const digest = await crypto.subtle.digest('SHA-256', safeBuffer);
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('');
