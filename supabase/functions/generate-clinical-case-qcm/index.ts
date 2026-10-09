@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 
 const axes = ['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'];
 const topics = ['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
@@ -466,7 +467,7 @@ Deno.serve(async(req)=>{
     const effortRaw=String(Deno.env.get('GROQ_REASONING_EFFORT')??'medium').trim().toLowerCase();
     const reasoningEffort=['low','medium','high'].includes(effortRaw)?effortRaw:'medium';
 
-    const prompt=`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : 2 octobre 2026.
+    const prompt=medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
 Le cas ci-dessous est ANONYMISÉ et sert d'ancrage pédagogique. N'essaie jamais d'identifier le patient et ne restitue jamais de données d'identification.
 
 Crée EXACTEMENT 5 QCM autonomes, exigeants et utiles, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.
@@ -678,6 +679,13 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
         if(q.image_search_query){
           try { images=await fetchCommonsImages(q.image_search_query,1); }
           catch(e) { log('external_image_lookup_failed',{...meta(),error_code:codeValue(e?.message,'image_lookup_error')}); }
+          if(!images.length){
+           const other=await findOpenverseMedicalPreview(q.image_search_query);
+           if(other)images=[{
+            title:other.title+' · '+other.creator+' · '+other.license+' · Openverse',
+            preview_url:other.preview_url,source_url:other.source_url}];
+          }
+          
         }
         return {...q,correction:correction(q.raw_correction,q.references,images)};
       }));
