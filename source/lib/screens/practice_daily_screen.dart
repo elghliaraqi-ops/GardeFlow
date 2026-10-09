@@ -457,7 +457,11 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     );
   }
 
-  Widget _explanation(String correction) {
+  Widget _explanation(
+    String correction, {
+    String question = '',
+    String topic = '',
+  }) {
     final sources = correction.split('§SOURCES§');
     final before = sources.first.split('§IMAGES§');
     final explanation = PracticeQcmImageMetadata.visibleText(correction);
@@ -477,7 +481,11 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
         ),
         const SizedBox(height: 6),
         Text(explanation, style: const TextStyle(color: _text, height: 1.5)),
-        PracticeQcmMedicalIllustration(correction: correction),
+        PracticeQcmMedicalIllustration(
+          correction: correction,
+          question: question,
+          caseContext: topic,
+        ),
         if (refs.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Text(
@@ -773,7 +781,8 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           ),
           const SizedBox(height: 12),
           _options(q, index, s.completed),
-          if (s.completed) _explanation(q.correction),
+          if (s.completed)
+            _explanation(q.correction, question: q.question, topic: q.topic),
           const SizedBox(height: 12),
           Row(
             children: [

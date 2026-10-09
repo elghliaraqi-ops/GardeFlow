@@ -1646,6 +1646,12 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               correct: correct,
               expanded: _explanationExpanded[current.id] ?? false,
               correction: current.correction,
+              question: current.question,
+              caseContext: [
+                post.topicLabel,
+                post.presentation,
+                post.imagingConclusion,
+              ].where((x) => x.trim().isNotEmpty).join(' · '),
               onToggle: () => setState(() {
                 _explanationExpanded[current.id] =
                     !(_explanationExpanded[current.id] ?? false);
@@ -2197,12 +2203,16 @@ class _AnswerFeedback extends StatelessWidget {
   final bool correct;
   final bool expanded;
   final String correction;
+  final String question;
+  final String caseContext;
   final VoidCallback onToggle;
 
   const _AnswerFeedback({
     required this.correct,
     required this.expanded,
     required this.correction,
+    required this.question,
+    required this.caseContext,
     required this.onToggle,
   });
 
@@ -2285,7 +2295,11 @@ class _AnswerFeedback extends StatelessWidget {
             firstChild: const SizedBox(width: double.infinity),
             secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: _GuidelineCorrection(correction: correction),
+              child: _GuidelineCorrection(
+                correction: correction,
+                question: question,
+                caseContext: caseContext,
+              ),
             ),
           ),
         ],
@@ -2395,8 +2409,14 @@ class _ExternalImageReference {
 
 class _GuidelineCorrection extends StatelessWidget {
   final String correction;
+  final String question;
+  final String caseContext;
 
-  const _GuidelineCorrection({required this.correction});
+  const _GuidelineCorrection({
+    required this.correction,
+    required this.question,
+    required this.caseContext,
+  });
 
   ({
     String explanation,
@@ -2657,7 +2677,11 @@ class _GuidelineCorrection extends StatelessWidget {
             children: _explanationWidgets(explanation),
           ),
         ),
-        PracticeQcmMedicalIllustration(correction: correction),
+        PracticeQcmMedicalIllustration(
+          correction: correction,
+          question: question,
+          caseContext: caseContext,
+        ),
         if (parsed.references.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Row(

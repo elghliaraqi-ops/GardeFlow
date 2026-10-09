@@ -29,7 +29,7 @@ void main() {
       prior,
       'Quel est le signal IRM ?',
     );
-    expect(desc?['query'], 'Quel est le signal IRM ?');
+    expect(desc?['query'], contains('Quel est le signal IRM ?'));
   });
   test('malformed image JSON never hides or crashes the correction', () {
     const incorrect =
@@ -44,6 +44,45 @@ void main() {
     );
     expect(
       PracticeQcmImageMetadata.legacyRequest('Explication simple', 'QCM'),
+      isNull,
+    );
+  });
+  test(
+    'old QCM with no image JSON can recover imaging intent and case context',
+    () {
+      final request = PracticeQcmImageMetadata.legacyRequest(
+        'La séquence IRM T2 permet d’apprécier la tumeur.',
+        'Quel aspect retrouve-t-on en IRM T2 ?',
+        context: 'Cancer du rectum · TDM et IRM',
+      );
+      expect(request, isNotNull);
+      expect(request!['image_type'], 'radiology_scan');
+      expect((request['query'] as String).toLowerCase(), contains('rectum'));
+    },
+  );
+
+  test(
+    'historic rectal anatomy must not become tumor MRI just due to case topic',
+    () {
+      final request = PracticeQcmImageMetadata.legacyRequest(
+        'Étudier les rapports anatomiques du mésorectum.\n\n§IMAGES§\n'
+            'Orientation anatomique du rectum et sphincters|||https://example.org/bad.jpg',
+        'Identifier les sphincters et le mésorectum',
+        context: 'Cancer du rectum',
+      );
+      expect(request!['image_type'], 'anatomical_diagram');
+      expect((request['query'] as String).toLowerCase(), contains('rectum'));
+      expect(request['query'], isNot(contains('example.org')));
+    },
+  );
+
+  test('old non-visual QCM keeps its correction and skips image lookups', () {
+    expect(
+      PracticeQcmImageMetadata.legacyRequest(
+        'Le traitement antibiotique est indiqué.',
+        'Quelle antibiothérapie prescrire ?',
+        context: 'Cholécystite aiguë',
+      ),
       isNull,
     );
   });
