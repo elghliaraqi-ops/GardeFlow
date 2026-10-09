@@ -111,8 +111,12 @@ async function newGroqBatch(
  );
  const models=[primary,primary==='openai/gpt-oss-20b'?'openai/gpt-oss-120b':'openai/gpt-oss-20b'];
  let code='groq_unavailable',rateLimited=0;
+ // Complex first-case schemas are more reliable in JSON object mode on GPT-OSS.
+ const isCaseFormat=Boolean(
+  (format.properties as Record<string,unknown>|undefined)?.case_stages
+ );
  for(const model of models){
-  for(const strict of [true,false]){
+  for(const strict of isCaseFormat?[false]:[true,false]){
    const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),38000);
    try{
     const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
@@ -171,7 +175,7 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  if(!Array.isArray(batch.qcms)||batch.qcms.length!==5)throw Error('invalid_generated_question_count');
  const map=new Map(refs.map(x=>[canon(x.url),x]));
  const output:Record<string,unknown>[]=[];
- for(const raw of batch.qcms){
+ for(const [index,raw] of batch.qcms.entries()){
   const q=raw as Record<string,unknown>;
   const question=plain(q.question,1400),options=Array.isArray(q.options)
    ?q.options.map(x=>plain(x,450)):[];
@@ -182,10 +186,19 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
    const source=map.get(canon((r as {url?:string})?.url));
    return source?[[canon(source.url),source]]:[];
   }) as [string,Ref][]).values()].slice(0,3);
-  if(question.length<12||options.length!==4||options.some(x=>x.length<1)||
-   new Set(options.map(cleanKey)).size!==4||correction.length<25||
-   !Number.isInteger(correct)||correct<0||correct>3||!references.length||
-   !topics.includes(topic)||seen.has(fingerprint))throw Error('invalid_generated_questions');
+  const failure=question.length<12?'question_short':
+   options.length!==4?'option_count':
+   options.some(x=>x.length<1)?'option_empty':
+   new Set(options.map(cleanKey)).size!==4?'duplicate_options':
+   correction.length<25?'correction_short':
+   !Number.isInteger(correct)||correct<0||correct>3?'invalid_correct_index':
+   !references.length?'unverified_reference':
+   !topics.includes(topic)?'invalid_topic':
+   seen.has(fingerprint)?'duplicate_question':'';
+  if(failure){
+   console.warn('progressive_qcm_rejected',{position:index+1,reason:failure});
+   throw Error('invalid_generated_questions');
+  }
   seen.add(fingerprint);
   output.push({question,options,correct_index:correct,correction,topic,
    references,illustration_query:String(q.image_search_query??'')});
@@ -224,7 +237,7 @@ Deno.serve(async(req:Request)=>{
  if(profileError||!profile||profile.account_status!=='active')return send(req,{ok:false,error:'account_inactive'},403);
  try {
    // Completely independent from official daily challenges, scores and XP.
-   // Nothing is inserted into Supabase tables or Storage.
+   // Validated cases are stored in a private owner-scoped table, never Storage.
    const specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
@@ -285,7 +298,19 @@ Deno.serve(async(req:Request)=>{
    const second=await newGroqBatch(continuation,batchSchema);
    questions.push(...await checkAndFormat(second,refs,seen));
    if(questions.length!==10)throw Error('invalid_question_count');
+   // Persist only the final validated fiction, never a partial or rejected batch.
+   // Image previews are HTTPS links inside correction text; no Storage upload.
+   const {data:saved,error:saveErr}=await admin.from('practice_generated_cases')
+    .insert({owner_id:uid,specialty,case_title:caseTitle,case_stem:caseStem,
+     case_stages:stages,questions})
+    .select('id,created_at').single();
+   if(saveErr||!saved?.id){
+    console.warn('progressive_case_storage_failure',{code:saveErr?.code??'empty'});
+    throw Error('case_storage_failed');
+   }
+   console.info('progressive_case_saved',{specialty,question_count:questions.length});
    return send(req,{ok:true,mode:'cas_progressif_independant',
+     case_id:saved.id,created_at:saved.created_at,specialty,
      case_title:caseTitle,case_stem:caseStem,case_stages:stages,questions});
  }catch(err){
    const code=err instanceof Error?err.message:'case_generation_failed';
