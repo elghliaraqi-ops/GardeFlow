@@ -1,4 +1,5 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
+import {dailyQcmFingerprint,validateDailyBatch,validCachedDailyQuestion} from './daily_qcm_validation.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology'];
@@ -118,84 +119,23 @@ async function newGroqBatch(
  }finally{clearTimeout(timer);}
 }
 
-// Treat malformed questions individually. Keep already-validated material;
-// callers request only the number of replacement questions still needed.
 async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>)
  :Promise<Record<string,unknown>[]>{
- if(!Array.isArray(batch.qcms)){
-  console.warn('daily_ai_bad_batch',{reason:'qcms_not_array'});
-  return [];
- }
- const map=new Map(refs.map(x=>[canon(x.url),x]));
- const output:Record<string,unknown>[]=[];
- for(const [index,raw] of batch.qcms.slice(0,8).entries()){
-  if(!raw||typeof raw!=='object'||Array.isArray(raw)){
-   console.warn('daily_ai_question_rejected',{position:index+1,reason:'invalid_object'});
-   continue;
-  }
-  const q=raw as Record<string,unknown>;
-  const question=plain(q.question,1400);
-  const options=Array.isArray(q.options)?q.options.map(x=>plain(x,450)):[];
-  const correct=Number(q.correct_index),correction=plain(q.correction,6500);
-  const topic=String(q.topic??'synthese'),fingerprint=cleanKey(question);
-  // Only resolve to actual, server-fetched Europe PMC references.
-  // Source IDs avoid fragile LLM reproduction of long DOI/PMID URLs.
-  const refObjects=Array.isArray(q.references)?q.references:[];
-  const refIds=Array.isArray(q.source_ids)?q.source_ids:[];
-  const validatedSources:Ref[]=[];
-  for(const item of refObjects){
-   const entry=item as {url?:unknown}|null;
-   const source=map.get(canon(entry?.url));
-   if(source)validatedSources.push(source);
-  }
-  for(const id of refIds){
-   const n=Number(id);
-   if(Number.isInteger(n)&&n>=1&&n<=Math.min(8,refs.length))
-    validatedSources.push(refs[n-1]);
-  }
-  const references=[...new Map(validatedSources.map(r=>[canon(r.url),r])).values()]
-   .slice(0,3);
-  const failure=question.length<12?'question_too_short':
-   options.length!==4?'option_count':
-   options.some(x=>x.length<1)?'empty_option':
-   new Set(options.map(cleanKey)).size!==4?'duplicate_options':
-   correction.length<25?'correction_too_short':
-   !Number.isInteger(correct)||correct<0||correct>3?'invalid_answer_index':
-   !references.length?'unverified_source':
-   !topics.includes(topic)?'invalid_topic':
-   seen.has(fingerprint)?'duplicate_question':'';
-  if(failure){
-   console.warn('daily_ai_question_rejected',{position:index+1,reason:failure});
-   continue;
-  }
-  seen.add(fingerprint);
-  output.push({question,options,correct_index:correct,correction,topic,
-   references,illustration_query:plain(q.image_search_query,140)});
- }
- // Optional external thumbnails must not be able to invalidate a sound QCM.
- return await Promise.all(output.map(async(item)=>{
-  const query=String(item.illustration_query??'').trim();
-  const picture=query?await commons(query):null;
+ const result=validateDailyBatch(batch,refs,seen);
+ for(const reason of result.rejected)
+  console.warn('daily_ai_question_rejected',reason);
+ // Optional remote images can never invalidate correctly generated questions.
+ return await Promise.all(result.accepted.map(async item=>{
+  const picture=item.illustration_query?await commons(item.illustration_query):null;
   const img=picture?'\n\n§IMAGES§\n'+
-    [picture.name,picture.url,picture.source].join('|||'):'';
-  const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
+   [picture.name,picture.url,picture.source].join('|||'):'';
+  const urls='\n\n§SOURCES§\n'+item.references
    .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
    question:item.question,options:item.options,correct_index:item.correct_index,
-   topic:item.topic,correction:String(item.correction)+img+urls
+   topic:item.topic,correction:item.correction+img+urls
   };
  }));
-}
-function validCachedQuestion(raw:unknown):raw is Record<string,unknown>{
- if(!raw||typeof raw!=='object'||Array.isArray(raw))return false;
- const q=raw as Record<string,unknown>;
- return typeof q.question==='string'&&q.question.length>=12&&
-  Array.isArray(q.options)&&q.options.length===4&&
-  q.options.every(x=>typeof x==='string'&&x.trim())&&
-  new Set(q.options.map(x=>cleanKey(String(x)))).size===4&&
-  Number.isInteger(q.correct_index)&&Number(q.correct_index)>=0&&
-  Number(q.correct_index)<=3&&typeof q.correction==='string'&&
-  q.correction.length>=25&&topics.includes(String(q.topic));
 }
 
 Deno.serve(async(req:Request)=>{
@@ -263,8 +203,8 @@ Deno.serve(async(req:Request)=>{
      const rawCached=Array.isArray(existingBatch?.questions)?existingBatch.questions:[];
      const accepted:Record<string,unknown>[]=[];
      for(const q of rawCached){
-      if(!validCachedQuestion(q))continue;
-      const fingerprint=cleanKey(String(q.question));
+      if(!validCachedDailyQuestion(q))continue;
+      const fingerprint=dailyQcmFingerprint(q.question);
       if(seen.has(fingerprint))continue;
       seen.add(fingerprint);
       accepted.push(q);
@@ -296,7 +236,7 @@ Deno.serve(async(req:Request)=>{
        const replacement=await checkAndFormat(response,refs,candidateSeen);
        for(const q of replacement){
         if(accepted.length>=5)break;
-        const fingerprint=cleanKey(String(q.question));
+        const fingerprint=dailyQcmFingerprint(q.question);
         if(seen.has(fingerprint))continue;
         seen.add(fingerprint);
         accepted.push(q);
