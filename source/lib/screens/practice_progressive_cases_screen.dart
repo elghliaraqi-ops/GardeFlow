@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/practice_qcm_medical_illustration.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/practice_daily_models.dart';
@@ -294,56 +295,13 @@ class _PracticeProgressiveCasesScreenState
         ),
         const SizedBox(height: 7),
         Text(
-          parts.first.trim(),
+          PracticeQcmImageMetadata.visibleText(correction),
           style: const TextStyle(
             color: PracticeDailyVisualTheme.text,
             height: 1.5,
           ),
         ),
-        for (final raw in images)
-          Builder(
-            builder: (_) {
-              final data = raw.split('|||');
-              if (data.length != 3) return const SizedBox.shrink();
-              final image = Uri.tryParse(data[1]), page = Uri.tryParse(data[2]);
-              if (!isSupportedExternalMedicalPreview(image, page)) {
-                return const SizedBox.shrink();
-              }
-              return InkWell(
-                onTap: () =>
-                    launchUrl(page!, mode: LaunchMode.externalApplication),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 12),
-                    Text(
-                      data[0],
-                      style: const TextStyle(
-                        color: PracticeDailyVisualTheme.gold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        image.toString(),
-                        height: 170,
-                        width: double.infinity,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Text(
-                          'Aperçu externe indisponible',
-                          style: TextStyle(
-                            color: PracticeDailyVisualTheme.muted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+        PracticeQcmMedicalIllustration(correction: correction),
         if (refs.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Text(
