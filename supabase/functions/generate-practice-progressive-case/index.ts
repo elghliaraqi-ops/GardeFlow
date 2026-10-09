@@ -350,60 +350,52 @@ Deno.serve(async(req:Request)=>{
    const specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
+   // PHASE 1: same Groq Responses + clinical form schema as the working random-case generator.
+   const simulated=await generateCaseDossier(specialty);
+   const display=narrativeFromCase(simulated);
+   const caseTitle=display.title,caseStem=display.stem,stages=display.stages;
+   // PHASE 2: QCMs are about this preexisting simulated clinical dossier, never a course bank.
+   const context=JSON.stringify(simulated);
    const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
-   // Describe QCM fields independently from the root schema: the first batch ALSO needs the case.
-   const common='Chaque QCM a exactement les clés question, options (4 textes), correct_index (0 à 3), '+
-     'correction détaillée (minimum 25 caractères), '+
-     'topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
-     'references (tableau de 1 à 3 objets {url}), image_search_query (texte). '+
-     'Cinq QCM originaux EXACTEMENT par lot. Utilise uniquement ces références réelles :\n'+refList;
-   const prompt='Crée un SEUL cas clinique entièrement FICTIF pour la formation médicale en '+specialty+
-    '. Objet JSON racine contenant EXACTEMENT case_title, case_stem, case_stages et qcms. '+
-    'case_stem : dossier clinique de 150 à 450 caractères. '+
-    'case_stages : EXACTEMENT QUATRE objets {title,narrative}, chaque narrative de 150 à 300 caractères. '+
-    'Étape 1 admission et examen; étape 2 investigations, laboratoire et imagerie; '+
-    'étape 3 décisions thérapeutiques; étape 4 complications, évolution et suivi. '+
-    'Pas de spoiler dans une étape précoce. '+
-    'qcms : exactement cinq questions sur admission (1-2) puis investigations (3-5). '+
-    'Ne retourne aucun texte hors de cet objet JSON. '+common;
-   let caseTitle='',caseStem='',stages:{title:string;narrative:string}[]=[];
+   const common='Génère EXACTEMENT cinq QCM originaux et CONTEXTUALISÉS à ce patient fictif. '+
+    'Chaque question porte sur une décision motivée par les symptômes, constantes, examens ou évolution de CE dossier, '+
+    'pas sur un chapitre de cours théorique. '+
+    'Chaque QCM doit contenir exactement question, options (4 réponses distinctes), correct_index (0 à 3), '+
+    'correction détaillée, topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
+    'references (1 à 3 objets {url}), image_search_query (vide si non pertinent). '+
+    'Utilise seulement les liens bibliographiques suivants :\n'+refList;
+   const early='Retourne UN objet JSON avec uniquement {qcms:[cinq objets]}. '+
+    'Sur le même dossier, construis 5 QCM cliniques progressifs : '+
+    '1-2 priorité initiale et examen clinique; 3-5 examens complémentaires, '+
+    'interprétation et hiérarchisation diagnostique. Les questions 1-5 ne dévoilent pas '+
+    'la conduite thérapeutique finale ou l’évolution avant leur étape. '+common+
+    '\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
+   const seen=new Set<string>();
    let questions:Record<string,unknown>[]=[];
-   let firstError='invalid_case_format';
-   // Retry only malformed/temporary Groq responses; never retry authentication or rate-limit failures.
    for(let attempt=0;attempt<2;attempt++){
     try{
-     const instruction=attempt===0?prompt:prompt+
-      '\nREGENERATION : objet racine avec case_title, case_stem (minimum 150 caracteres), '+
-      'case_stages (4 etapes, narrative minimum 120 caracteres) et qcms (EXACTEMENT 5 questions). '+
-      'Aucun Markdown, aucune cle manquante ni texte hors JSON.';
-     const first=await newGroqBatch(instruction,caseBatchSchema,attempt===1?'openai/gpt-oss-120b':undefined);
-     const title=plain(first.case_title,180),stem=plain(first.case_stem,6500);
-     const rawStages=first.case_stages;
-     if(!title||stem.length<150||!Array.isArray(rawStages)||rawStages.length!==4)
-      throw Error('invalid_case_format');
-     const parsedStages=rawStages.map((stage:{title?:string;narrative?:string})=>({
-      title:plain(stage.title,140),narrative:plain(stage.narrative,2400)
-     }));
-     if(parsedStages.some(stage=>stage.title.length<5||stage.narrative.length<120))
-      throw Error('invalid_stage_format');
-     const seenAttempt=new Set<string>();
-     const parsedQuestions=await checkAndFormat(first,refs,seenAttempt);
-     caseTitle=title;caseStem=stem;stages=parsedStages;questions=parsedQuestions;
+     const first=await newGroqBatch(early,batchSchema,
+      attempt===1?'openai/gpt-oss-120b':undefined);
+     const localSeen=new Set<string>();
+     const accepted=await checkAndFormat(first,refs,localSeen);
+     questions=accepted;
+     for(const fingerprint of localSeen)seen.add(fingerprint);
      break;
     }catch(err){
      const code=err instanceof Error?err.message:'groq_invalid_response';
      if(['groq_auth_failed','groq_rate_limited','groq_configuration_missing'].includes(code))throw err;
-     firstError=code;
-     console.warn('independent_case_first_batch_retry',{code,attempt:attempt+1});
+     console.warn('progressive_case_qcm_retry',{code,attempt:attempt+1});
+     if(attempt===1)throw err;
     }
    }
-   if(Number(questions.length)!==5)throw Error(firstError);
-   const seen=new Set(questions.map(x=>cleanKey(String(x.question))));
-   const continuation='Continue EXACTEMENT le même cas FICTIF, sans recréer un patient. '+
-     'Objet JSON racine contenant UNIQUEMENT la clé qcms (5 nouveaux QCM 6-10). '+
-     'Dossier : '+caseStem+'. Étapes : '+JSON.stringify(stages)+
-     '. Questions 6,7,8 : décision thérapeutique; questions 9,10 : évolution/suivi. '+
-     'Ne répète jamais ces questions : '+questions.map(x=>String(x.question)).join(' / ')+'. '+common;
+   if(Number(questions.length)!==5)throw Error('invalid_generated_question_count');
+   const continuation='Retourne UN objet JSON avec uniquement {qcms:[cinq objets]}. '+
+    'Même dossier fictif, mêmes données et même patient. Les 5 nouvelles questions 6 à 10 concernent : '+
+    '6-8 les choix thérapeutiques et la conduite à tenir concrète; '+
+    '9-10 surveillance, réévaluation, complications, orientation et suivi. '+
+    'NE crée aucun autre patient ou scénario, NE répète pas ces questions : '+
+    questions.map(x=>String(x.question)).join(' / ')+'. '+common+
+    '\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
    const second=await newGroqBatch(continuation,batchSchema);
    questions.push(...await checkAndFormat(second,refs,seen));
    if(questions.length!==10)throw Error('invalid_question_count');
