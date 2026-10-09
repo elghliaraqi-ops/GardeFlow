@@ -98,52 +98,71 @@ const caseBatchSchema=JSON.parse(JSON.stringify(schema));
 caseBatchSchema.properties.qcms.minItems=5;
 caseBatchSchema.properties.qcms.maxItems=5;
 
-async function newGroqBatch(prompt:string,format:Record<string,unknown>):Promise<Record<string,unknown>> {
+async function newGroqBatch(
+ prompt:string,format:Record<string,unknown>,preferred?:string
+):Promise<Record<string,unknown>> {
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
- const config=(Deno.env.get('GROQ_TEXT_MODEL')??'').trim();
- const model=['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(config)
-  ?config:'openai/gpt-oss-120b';
- let code='groq_unavailable';
- for(const strict of [true,false]){
-  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),48000);
-  try{
-   const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
-    method:'POST',signal:ctrl.signal,
-    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-    body:JSON.stringify({
-     model,messages:[{role:'user',content:prompt}],
-     temperature:0.2,reasoning_effort:'low',reasoning_format:'hidden',
-     max_completion_tokens:7000,stream:false,
-     response_format:strict
-      ?{type:'json_schema',json_schema:{name:'practice_daily_batch',strict:true,schema:format}}
-      :{type:'json_object'}
-    })
-   });
-   if(!response.ok){
+ // Independent training uses the smaller model by default; the configured override is optional.
+ const configured=(Deno.env.get('GROQ_PROGRESSIVE_CASE_MODEL')??'').trim();
+ const primary=preferred??(
+  ['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
+   ?configured:'openai/gpt-oss-20b'
+ );
+ const models=[primary,primary==='openai/gpt-oss-20b'?'openai/gpt-oss-120b':'openai/gpt-oss-20b'];
+ let code='groq_unavailable',rateLimited=0;
+ for(const model of models){
+  for(const strict of [true,false]){
+   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),38000);
+   try{
+    const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+     method:'POST',signal:ctrl.signal,
+     headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+     body:JSON.stringify({
+      model,messages:[{role:'user',content:prompt}],
+      temperature:0.15,reasoning_effort:'low',reasoning_format:'hidden',
+      max_completion_tokens:5200,stream:false,
+      response_format:strict
+       ?{type:'json_schema',json_schema:{name:'practice_progressive_case_batch',strict:true,schema:format}}
+       :{type:'json_object'}
+     })
+    });
+    if(response.status===429){
+     rateLimited++;
+     const retryAfter=Number(response.headers.get('retry-after')??'');
+     console.warn('progressive_groq_rate_limit',{model,
+      retry_after_seconds:Number.isFinite(retryAfter)?Math.max(0,Math.min(3600,retryAfter)):null});
+     code='groq_rate_limited';
+     break; // A different model may have separate available quota; no hot-loop retries.
+    }
+    if(!response.ok){
+     const raw=await response.json().catch(()=>null);
+     const reason=String(raw?.error?.code??raw?.error?.type??'').slice(0,70);
+     console.warn('progressive_groq_http',{status:response.status,model,reason});
+     if(response.status===401||response.status===403)throw Error('groq_auth_failed');
+     code=response.status===400?'groq_request_rejected':'groq_provider_unavailable';
+     if(strict&&response.status===400)continue; // Unsupported/malformed strict JSON: try JSON mode.
+     break;
+    }
     const raw=await response.json().catch(()=>null);
-    console.warn('daily_groq_http',{status:response.status,model,
-     reason:String(raw?.error?.code??raw?.error?.type??'').slice(0,70)});
-    if(response.status===401||response.status===403)throw Error('groq_auth_failed');
-    if(response.status===429)throw Error('groq_rate_limited');
-    code=response.status===400?'groq_request_rejected':'groq_provider_unavailable';
-    continue;
-   }
-   const raw=await response.json().catch(()=>null);
-   const content=raw?.choices?.[0]?.message?.content;
-   if(typeof content==='string'){
-    try{const parsed=JSON.parse(content);
-     if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
-    }catch{/* If JSON mode fails, retry with the fallback. */}
-   }
-   code='groq_invalid_json';
-  }catch(err){
-   const e=err instanceof Error?err:Error('groq_network_error');
-   if(['groq_auth_failed','groq_rate_limited'].includes(e.message))throw e;
-   code=e.name==='AbortError'?'groq_timeout':e.message;
-   console.warn('daily_groq_exception',{code,model});
-  }finally{clearTimeout(timer);}
+    const content=raw?.choices?.[0]?.message?.content;
+    if(typeof content==='string'){
+     try{
+      const parsed=JSON.parse(content);
+      if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
+     }catch{/* Validate again using a different output format. */}
+    }
+    code='groq_invalid_json';
+   }catch(err){
+    const e=err instanceof Error?err:Error('groq_network_error');
+    if(e.message==='groq_auth_failed')throw e;
+    code=e.name==='AbortError'?'groq_timeout':e.message;
+    console.warn('progressive_groq_exception',{code,model});
+    break;
+   }finally{clearTimeout(timer);}
+  }
  }
+ if(rateLimited===models.length)throw Error('groq_rate_limited');
  throw Error(code);
 }
 
@@ -209,19 +228,22 @@ Deno.serve(async(req:Request)=>{
    const specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
-   const refList=refs.map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
-   const common='Réponds UNIQUEMENT en JSON. Format exigé : objet {qcms:[cinq objets]} ; '+
-     'chaque QCM a exactement les clés question, options (4 textes), correct_index (0 à 3), '+
-     'correction détaillée, topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
-     'references (tableau 1 à 3 objets {url}), image_search_query (texte). '+
-     'Cinq QCM originaux EXACTEMENT par lot. Utilise exclusivement ces liens vérifiables :\n'+refList;
+   const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
+   // Describe QCM fields independently from the root schema: the first batch ALSO needs the case.
+   const common='Chaque QCM a exactement les clés question, options (4 textes), correct_index (0 à 3), '+
+     'correction détaillée (minimum 25 caractères), '+
+     'topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
+     'references (tableau de 1 à 3 objets {url}), image_search_query (texte). '+
+     'Cinq QCM originaux EXACTEMENT par lot. Utilise uniquement ces références réelles :\n'+refList;
    const prompt='Crée un SEUL cas clinique entièrement FICTIF pour la formation médicale en '+specialty+
-    '. JSON avec case_title, case_stem dossier complet (min 150 caractères) et case_stages : EXACTEMENT QUATRE objets {title,narrative}, '+
-    'minimum 120 caractères par narrative. '+
+    '. Objet JSON racine contenant EXACTEMENT case_title, case_stem, case_stages et qcms. '+
+    'case_stem : dossier clinique de 150 à 450 caractères. '+
+    'case_stages : EXACTEMENT QUATRE objets {title,narrative}, chaque narrative de 150 à 300 caractères. '+
     'Étape 1 admission et examen; étape 2 investigations, laboratoire et imagerie; '+
     'étape 3 décisions thérapeutiques; étape 4 complications, évolution et suivi. '+
     'Pas de spoiler dans une étape précoce. '+
-    'Les cinq premiers QCM concernent l’admission (QCM 1-2) puis les investigations (QCM 3-5). '+common;
+    'qcms : exactement cinq questions sur admission (1-2) puis investigations (3-5). '+
+    'Ne retourne aucun texte hors de cet objet JSON. '+common;
    let caseTitle='',caseStem='',stages:{title:string;narrative:string}[]=[];
    let questions:Record<string,unknown>[]=[];
    let firstError='invalid_case_format';
@@ -232,7 +254,7 @@ Deno.serve(async(req:Request)=>{
       '\nREGENERATION : objet racine avec case_title, case_stem (minimum 150 caracteres), '+
       'case_stages (4 etapes, narrative minimum 120 caracteres) et qcms (EXACTEMENT 5 questions). '+
       'Aucun Markdown, aucune cle manquante ni texte hors JSON.';
-     const first=await newGroqBatch(instruction,caseBatchSchema);
+     const first=await newGroqBatch(instruction,caseBatchSchema,attempt===1?'openai/gpt-oss-120b':undefined);
      const title=plain(first.case_title,180),stem=plain(first.case_stem,6500);
      const rawStages=first.case_stages;
      if(!title||stem.length<150||!Array.isArray(rawStages)||rawStages.length!==4)
@@ -255,8 +277,9 @@ Deno.serve(async(req:Request)=>{
    }
    if(Number(questions.length)!==5)throw Error(firstError);
    const seen=new Set(questions.map(x=>cleanKey(String(x.question))));
-   const continuation='Continue EXACTEMENT le même cas FICTIF, sans recréer un patient, en cinq nouveaux QCM (6-10). '+
-     'Dossier complet : '+caseStem+'. Étapes : '+JSON.stringify(stages)+
+   const continuation='Continue EXACTEMENT le même cas FICTIF, sans recréer un patient. '+
+     'Objet JSON racine contenant UNIQUEMENT la clé qcms (5 nouveaux QCM 6-10). '+
+     'Dossier : '+caseStem+'. Étapes : '+JSON.stringify(stages)+
      '. Questions 6,7,8 : décision thérapeutique; questions 9,10 : évolution/suivi. '+
      'Ne répète jamais ces questions : '+questions.map(x=>String(x.question)).join(' / ')+'. '+common;
    const second=await newGroqBatch(continuation,batchSchema);
