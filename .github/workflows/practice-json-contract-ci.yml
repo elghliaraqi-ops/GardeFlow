@@ -1,0 +1,74 @@
+name: Practice Prompt JSON Contract Synchronization
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/generate-practice-daily-challenge/**'
+      - 'supabase/functions/generate-practice-progressive-case/**'
+      - 'supabase/functions/generate-clinical-case-qcm/**'
+      - 'supabase/functions/generate-random-clinical-case/**'
+      - 'supabase/functions/preview-clinical-case-qcm/**'
+      - 'source/supabase/functions/generate-practice-daily-challenge/**'
+      - 'source/supabase/functions/generate-practice-progressive-case/**'
+      - 'source/supabase/functions/generate-clinical-case-qcm/**'
+      - 'source/supabase/functions/generate-random-clinical-case/**'
+      - 'source/supabase/functions/preview-clinical-case-qcm/**'
+      - '.github/workflows/practice-json-contract-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type check typed generators and mirrored code
+        run: |
+          set -euo pipefail
+          for fn in generate-practice-daily-challenge generate-practice-progressive-case generate-random-clinical-case preview-clinical-case-qcm; do
+            deno check "supabase/functions/$fn/index.ts"
+            deno check "source/supabase/functions/$fn/index.ts"
+          done
+          for fn in generate-practice-daily-challenge generate-practice-progressive-case generate-random-clinical-case preview-clinical-case-qcm generate-clinical-case-qcm; do
+            cmp "supabase/functions/$fn/index.ts" "source/supabase/functions/$fn/index.ts"
+          done
+          # Published QCM Edge source has pre-existing implicit-any types.
+          deno check supabase/functions/generate-clinical-case-qcm/medical_evidence_media.ts
+          deno test supabase/functions/generate-practice-progressive-case/progressive_question_sequence_test.ts
+          deno test supabase/functions/generate-practice-daily-challenge/daily_qcm_validation_test.ts
+      - name: Check all prompt/schema contracts remain aligned
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const get = slug => fs.readFileSync('supabase/functions/' + slug + '/index.ts', 'utf8');
+          const daily = get('generate-practice-daily-challenge');
+          assert.match(daily, /dailyJsonContract\(missing\)/);
+          assert.match(daily, /dailyBatchSchema\(missing\)/);
+          assert.match(daily, /required:\['question','options','correct_index','correction','topic','references','source_ids','image_search_query'\]/);
+          assert.match(daily, /references:\{type:'array',minItems:0/);
+          assert.doesNotMatch(daily, /const common=[^;]*EXACTEMENT cinq objets/);
+          const published = get('generate-clinical-case-qcm');
+          assert.match(published, /const referenceSchema=.*required:\['url'\]/);
+          assert.match(published, /Object\.keys\(qcmSchema\.properties\)/);
+          assert.match(published, /JSON\.stringify\(exampleQcms\)/);
+          const preview = get('preview-clinical-case-qcm');
+          assert.match(preview, /const refSchema=.*required:\['url'\]/);
+          assert.match(preview, /const jsonContract=/);
+          assert.match(preview, /JSON\.stringify\(exampleQcms\)/);
+          const random = get('generate-random-clinical-case');
+          assert.match(random, /Object\.keys\(caseProperties\)/);
+          assert.match(random, /JSON\.stringify\(caseJsonExample\)/);
+          assert.match(random, /caseJsonContract;/);
+          const progressive = get('generate-practice-progressive-case');
+          assert.match(progressive, /clinicalCaseJsonContract;/);
+          assert.match(progressive, /JSON\.stringify\(clinicalCaseJsonExample\)/);
+          assert.match(progressive, /progressiveJsonContract\(0\)/);
+          assert.match(progressive, /progressiveJsonContract\(1\)/);
+          assert.match(progressive, /validateProgressiveAxisSequence\(batch\.qcms,batchIndex\)/);
+          console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
+          NODE
