@@ -47,33 +47,38 @@ void main() {
     );
     expect(find.text('Quitter le défi'), findsOneWidget);
   });
-  testWidgets('Explicit button styles remain high contrast when disabled',
-      (tester) async {
+  testWidgets('Explicit button styles remain high contrast when disabled', (
+    tester,
+  ) async {
     expect(
-      PracticeDailyVisualTheme.primaryButtonStyle.backgroundColor!
-          .resolve(<WidgetState>{}),
+      PracticeDailyVisualTheme.primaryButtonStyle.backgroundColor!.resolve(
+        <WidgetState>{},
+      ),
       PracticeDailyVisualTheme.mint,
     );
     expect(
-      PracticeDailyVisualTheme.primaryButtonStyle.foregroundColor!
-          .resolve(<WidgetState>{}),
+      PracticeDailyVisualTheme.primaryButtonStyle.foregroundColor!.resolve(
+        <WidgetState>{},
+      ),
       PracticeDailyVisualTheme.background,
     );
     expect(
-      PracticeDailyVisualTheme.secondaryButtonStyle.foregroundColor!
-          .resolve(<WidgetState>{}),
+      PracticeDailyVisualTheme.secondaryButtonStyle.foregroundColor!.resolve(
+        <WidgetState>{},
+      ),
       PracticeDailyVisualTheme.text,
     );
     expect(
-      PracticeDailyVisualTheme.toolbarButtonStyle.foregroundColor!
-          .resolve(<WidgetState>{}),
+      PracticeDailyVisualTheme.toolbarButtonStyle.foregroundColor!.resolve(
+        <WidgetState>{},
+      ),
       PracticeDailyVisualTheme.text,
     );
     expect(
-      PracticeDailyVisualTheme.secondaryButtonStyle.foregroundColor!
-          .resolve(<WidgetState>{WidgetState.disabled}),
+      PracticeDailyVisualTheme.secondaryButtonStyle.foregroundColor!.resolve(
+        <WidgetState>{WidgetState.disabled},
+      ),
       isNot(Colors.transparent),
     );
   });
-
 }

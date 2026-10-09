@@ -329,12 +329,14 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                           ),
                           actions: [
                             TextButton(
-                style: PracticeDailyVisualTheme.clearTextButtonStyle,
+                              style:
+                                  PracticeDailyVisualTheme.clearTextButtonStyle,
                               onPressed: () => Navigator.pop(c),
                               child: const Text('Fermer'),
                             ),
                             FilledButton.icon(
-                style: PracticeDailyVisualTheme.primaryButtonStyle,
+                              style:
+                                  PracticeDailyVisualTheme.primaryButtonStyle,
                               onPressed: () {
                                 Navigator.pop(c);
                                 _openReplay(date);
@@ -528,7 +530,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 final uri = Uri.tryParse(parts.length == 5 ? parts[4] : '');
                 if (uri?.scheme != 'https') return const SizedBox.shrink();
                 return TextButton.icon(
-                style: PracticeDailyVisualTheme.clearTextButtonStyle,
+                  style: PracticeDailyVisualTheme.clearTextButtonStyle,
                   onPressed: () =>
                       launchUrl(uri!, mode: LaunchMode.externalApplication),
                   icon: const Icon(Icons.open_in_new, size: 14),
@@ -569,7 +571,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-                style: PracticeDailyVisualTheme.secondaryButtonStyle,
+              style: PracticeDailyVisualTheme.secondaryButtonStyle,
               onPressed: _busy ? null : _load,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Réessayer'),
@@ -602,9 +604,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               Text(
                 'Note historique : $_legacyOfficialScore/10. '
                 'Ce nouveau défi IA sera un entraînement sans modifier cette note.',
-                style: const TextStyle(
-                  color: _gold, fontSize: 12, height: 1.4,
-                ),
+                style: const TextStyle(color: _gold, fontSize: 12, height: 1.4),
               ),
             ],
             const SizedBox(height: 15),
@@ -826,7 +826,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               const Spacer(),
               if (index < 9)
                 FilledButton(
-                style: PracticeDailyVisualTheme.primaryButtonStyle,
+                  style: PracticeDailyVisualTheme.primaryButtonStyle,
                   onPressed: canAdvance
                       ? () => setState(() => _current = index + 1)
                       : null,
@@ -834,7 +834,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 )
               else if (!s.completed)
                 FilledButton(
-                style: PracticeDailyVisualTheme.primaryButtonStyle,
+                  style: PracticeDailyVisualTheme.primaryButtonStyle,
                   onPressed: _busy || _selected.any((x) => x == null)
                       ? null
                       : _finish,
@@ -892,7 +892,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           ),
           actions: [
             IconButton(
-                style: PracticeDailyVisualTheme.toolbarButtonStyle,
+              style: PracticeDailyVisualTheme.toolbarButtonStyle,
               tooltip: 'Quitter le défi et revenir à Practice',
               onPressed: _leavePractice,
               icon: const Icon(Icons.exit_to_app_rounded),
@@ -905,7 +905,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 icon: const Icon(Icons.history_rounded),
               ),
             IconButton(
-                style: PracticeDailyVisualTheme.toolbarButtonStyle,
+              style: PracticeDailyVisualTheme.toolbarButtonStyle,
               tooltip: 'Actualiser',
               onPressed: _busy ? null : _load,
               icon: const Icon(Icons.refresh_rounded),
@@ -950,7 +950,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
-                style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                        style: PracticeDailyVisualTheme.secondaryButtonStyle,
                         onPressed: _busy
                             ? null
                             : () => _lastMode == null
@@ -969,7 +969,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                  style: PracticeDailyVisualTheme.secondaryButtonStyle,
                   onPressed: _leavePractice,
                   icon: const Icon(Icons.exit_to_app_rounded),
                   label: const Text('Quitter le défi'),
@@ -981,7 +981,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                style: PracticeDailyVisualTheme.primaryButtonStyle,
+                      style: PracticeDailyVisualTheme.primaryButtonStyle,
                       onPressed: _openHistory,
                       icon: const Icon(Icons.history_rounded),
                       label: const Text('Historique · Rejouer mes défis'),

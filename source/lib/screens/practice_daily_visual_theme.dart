@@ -41,9 +41,7 @@ abstract final class PracticeDailyVisualTheme {
     disabledForegroundColor: const Color(0xFFC1D1DD),
     minimumSize: const Size(0, 48),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    textStyle: const TextStyle(
-      fontSize: 13, fontWeight: FontWeight.w900,
-    ),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
   );
 
@@ -55,9 +53,7 @@ abstract final class PracticeDailyVisualTheme {
     minimumSize: const Size(0, 47),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
     side: const BorderSide(color: Color(0xFF84B0C6), width: 1.3),
-    textStyle: const TextStyle(
-      fontSize: 13, fontWeight: FontWeight.w900,
-    ),
+    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
   );
 
@@ -106,12 +102,8 @@ abstract final class PracticeDailyVisualTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(style: primaryButtonStyle),
       outlinedButtonTheme: OutlinedButtonThemeData(style: secondaryButtonStyle),
-      textButtonTheme: TextButtonThemeData(
-        style: clearTextButtonStyle,
-      ),
-      iconButtonTheme: IconButtonThemeData(
-        style: toolbarButtonStyle,
-      ),
+      textButtonTheme: TextButtonThemeData(style: clearTextButtonStyle),
+      iconButtonTheme: IconButtonThemeData(style: toolbarButtonStyle),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           foregroundColor: WidgetStateProperty.resolveWith(

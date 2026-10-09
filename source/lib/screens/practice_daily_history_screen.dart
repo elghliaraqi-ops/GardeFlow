@@ -98,13 +98,13 @@ class _PracticeDailyHistoryScreenState
           backgroundColor: _background,
           actions: [
             IconButton(
-                    style: PracticeDailyVisualTheme.toolbarButtonStyle,
+              style: PracticeDailyVisualTheme.toolbarButtonStyle,
               tooltip: 'Quitter l’historique',
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(Icons.exit_to_app_rounded),
             ),
             IconButton(
-                    style: PracticeDailyVisualTheme.toolbarButtonStyle,
+              style: PracticeDailyVisualTheme.toolbarButtonStyle,
               tooltip: 'Actualiser l’historique',
               onPressed: _busy ? null : () => _load(reset: true),
               icon: const Icon(Icons.refresh_rounded),
@@ -231,7 +231,7 @@ class _PracticeDailyHistoryScreenState
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton.icon(
-                    style: PracticeDailyVisualTheme.primaryButtonStyle,
+                          style: PracticeDailyVisualTheme.primaryButtonStyle,
                           onPressed: _busy ? null : () => _replay(item),
                           icon: const Icon(Icons.replay_rounded),
                           label: const Text('Rejouer'),
@@ -244,7 +244,7 @@ class _PracticeDailyHistoryScreenState
               if (_hasMore && !_busy) ...[
                 const SizedBox(height: 14),
                 OutlinedButton(
-                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                  style: PracticeDailyVisualTheme.secondaryButtonStyle,
                   onPressed: () => _load(),
                   child: const Text('Afficher plus de défis'),
                 ),
@@ -253,7 +253,7 @@ class _PracticeDailyHistoryScreenState
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                  style: PracticeDailyVisualTheme.secondaryButtonStyle,
                   onPressed: () => Navigator.of(context).maybePop(),
                   icon: const Icon(Icons.exit_to_app_rounded),
                   label: const Text('Quitter l’historique'),

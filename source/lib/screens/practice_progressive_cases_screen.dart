@@ -53,22 +53,35 @@ class _PracticeProgressiveCasesScreenState
         throw StateError('Réponse IA indisponible.');
       }
       final map = Map<String, dynamic>.from(response.data as Map);
-      if (map['ok'] != true) throw StateError('${map['error'] ?? 'generation_failed'}');
+      if (map['ok'] != true)
+        throw StateError('${map['error'] ?? 'generation_failed'}');
       final rawStages = map['case_stages'];
       final rawQuestions = map['questions'];
-      if (rawStages is! List || rawStages.length != 4 ||
-          rawQuestions is! List || rawQuestions.length != 10) {
+      if (rawStages is! List ||
+          rawStages.length != 4 ||
+          rawQuestions is! List ||
+          rawQuestions.length != 10) {
         throw StateError('Le cas généré est incomplet.');
       }
-      final stages = rawStages.whereType<Map>().map((x) =>
-          PracticeDailyStage.fromMap(Map<String, dynamic>.from(x))).toList();
-      final questions = rawQuestions.whereType<Map>().map((x) =>
-          PracticeDailyQuestion.fromMap(Map<String, dynamic>.from(x))).toList();
+      final stages = rawStages
+          .whereType<Map>()
+          .map((x) => PracticeDailyStage.fromMap(Map<String, dynamic>.from(x)))
+          .toList();
+      final questions = rawQuestions
+          .whereType<Map>()
+          .map(
+            (x) => PracticeDailyQuestion.fromMap(Map<String, dynamic>.from(x)),
+          )
+          .toList();
       if (stages.length != 4 ||
           stages.any((x) => x.title.isEmpty || x.narrative.length < 120) ||
           questions.length != 10 ||
-          questions.any((x) => x.options.length != 4 ||
-              x.correctIndex == null || x.correction.isEmpty)) {
+          questions.any(
+            (x) =>
+                x.options.length != 4 ||
+                x.correctIndex == null ||
+                x.correction.isEmpty,
+          )) {
         throw StateError('Le cas généré est incomplet.');
       }
       if (!mounted) return;
@@ -85,11 +98,12 @@ class _PracticeProgressiveCasesScreenState
       if (!mounted) return;
       final reason = e.toString().toLowerCase();
       setState(() {
-        _error = reason.contains('groq_auth') || reason.contains('configuration')
+        _error =
+            reason.contains('groq_auth') || reason.contains('configuration')
             ? 'La configuration du service IA doit être vérifiée.'
             : reason.contains('rate_limited')
-                ? 'L’IA est momentanément saturée. Réessayez dans quelques instants.'
-                : 'Le cas clinique ne peut pas être généré maintenant. Réessayez.';
+            ? 'L’IA est momentanément saturée. Réessayez dans quelques instants.'
+            : 'Le cas clinique ne peut pas être généré maintenant. Réessayez.';
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -121,7 +135,9 @@ class _PracticeProgressiveCasesScreenState
 
   Widget _stagePanel() {
     final stageIndex = PracticeDailyProgress.stageForQuestion(_question);
-    final unlocked = _submitted ? 3 : PracticeDailyProgress.unlockedStage(_answers);
+    final unlocked = _submitted
+        ? 3
+        : PracticeDailyProgress.unlockedStage(_answers);
     return Column(
       children: [
         for (var stage = 0; stage < 4; stage++) ...[
@@ -130,12 +146,14 @@ class _PracticeProgressiveCasesScreenState
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${stage + 1}. ${_stages[stage].title}',
+                      Text(
+                        '${stage + 1}. ${_stages[stage].title}',
                         style: const TextStyle(
                           color: PracticeDailyVisualTheme.gold,
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
-                        )),
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         _stages[stage].narrative,
@@ -150,20 +168,28 @@ class _PracticeProgressiveCasesScreenState
                         const Text(
                           'Étape en cours · répondez aux questions avant de poursuivre',
                           style: TextStyle(
-                            color: PracticeDailyVisualTheme.mint, fontSize: 11,
+                            color: PracticeDailyVisualTheme.mint,
+                            fontSize: 11,
                           ),
                         ),
                       ],
                     ],
                   )
-                : Row(children: [
-                    const Icon(Icons.lock_outline_rounded,
-                        color: PracticeDailyVisualTheme.muted),
-                    const SizedBox(width: 8),
-                    Text('Étape ${stage + 1} · À débloquer',
+                : Row(
+                    children: [
+                      const Icon(
+                        Icons.lock_outline_rounded,
+                        color: PracticeDailyVisualTheme.muted,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Étape ${stage + 1} · À débloquer',
                         style: const TextStyle(
-                            color: PracticeDailyVisualTheme.muted)),
-                  ]),
+                          color: PracticeDailyVisualTheme.muted,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
           const SizedBox(height: 8),
         ],
@@ -180,98 +206,138 @@ class _PracticeProgressiveCasesScreenState
       progressive: true,
       completed: _submitted,
     );
-    return _panel(Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'QUESTION ${i + 1}/10 · ${q.topic.toUpperCase()}',
-          style: const TextStyle(
-            color: PracticeDailyVisualTheme.mint,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 11),
-        Text(q.question,
-          style: const TextStyle(
-            color: PracticeDailyVisualTheme.text,
-            fontSize: 16, height: 1.4, fontWeight: FontWeight.w700,
-          )),
-        const SizedBox(height: 15),
-        for (var choice = 0; choice < q.options.length; choice++) ...[
-          InkWell(
-            onTap: _submitted ? null : () => setState(() => _answers[i] = choice),
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: _answers[i] == choice
-                    ? PracticeDailyVisualTheme.mint.withOpacity(.14)
-                    : PracticeDailyVisualTheme.elevated,
-                border: Border.all(
-                  width: _answers[i] == choice ? 2 : 1,
-                  color: (_submitted && q.correctIndex == choice) ||
-                      _answers[i] == choice
-                    ? PracticeDailyVisualTheme.mint
-                    : PracticeDailyVisualTheme.border,
-                ),
-              ),
-              child: Row(children: [
-                Text('${String.fromCharCode(65 + choice)}. ',
-                  style: const TextStyle(
-                    color: PracticeDailyVisualTheme.gold,
-                    fontWeight: FontWeight.w800,
-                  )),
-                Expanded(child: Text(q.options[choice],
-                  style: const TextStyle(
-                    color: PracticeDailyVisualTheme.text,
-                    fontSize: 13,
-                  ))),
-                if (_submitted && q.correctIndex == choice)
-                  const Icon(Icons.check_circle,
-                      color: PracticeDailyVisualTheme.mint, size: 20),
-              ]),
+    return _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'QUESTION ${i + 1}/10 · ${q.topic.toUpperCase()}',
+            style: const TextStyle(
+              color: PracticeDailyVisualTheme.mint,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
-        ],
-        if (_submitted) ...[
           const SizedBox(height: 11),
-          const Text('EXPLICATION IA',
+          Text(
+            q.question,
+            style: const TextStyle(
+              color: PracticeDailyVisualTheme.text,
+              fontSize: 16,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 15),
+          for (var choice = 0; choice < q.options.length; choice++) ...[
+            InkWell(
+              onTap: _submitted
+                  ? null
+                  : () => setState(() => _answers[i] = choice),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: _answers[i] == choice
+                      ? PracticeDailyVisualTheme.mint.withOpacity(.14)
+                      : PracticeDailyVisualTheme.elevated,
+                  border: Border.all(
+                    width: _answers[i] == choice ? 2 : 1,
+                    color:
+                        (_submitted && q.correctIndex == choice) ||
+                            _answers[i] == choice
+                        ? PracticeDailyVisualTheme.mint
+                        : PracticeDailyVisualTheme.border,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${String.fromCharCode(65 + choice)}. ',
+                      style: const TextStyle(
+                        color: PracticeDailyVisualTheme.gold,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        q.options[choice],
+                        style: const TextStyle(
+                          color: PracticeDailyVisualTheme.text,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    if (_submitted && q.correctIndex == choice)
+                      const Icon(
+                        Icons.check_circle,
+                        color: PracticeDailyVisualTheme.mint,
+                        size: 20,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_submitted) ...[
+            const SizedBox(height: 11),
+            const Text(
+              'EXPLICATION IA',
               style: TextStyle(
                 color: PracticeDailyVisualTheme.gold,
                 fontWeight: FontWeight.w900,
-              )),
-          const SizedBox(height: 6),
-          Text(q.correction,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              q.correction,
               style: const TextStyle(
                 color: PracticeDailyVisualTheme.text,
                 height: 1.5,
-              )),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                  onPressed: i == 0
+                      ? null
+                      : () => setState(() => _question = i - 1),
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  label: const Text('Précédent'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  style: PracticeDailyVisualTheme.primaryButtonStyle,
+                  onPressed: i < 9
+                      ? (canNext
+                            ? () => setState(() => _question = i + 1)
+                            : null)
+                      : (!_submitted &&
+                                _answers.every((answer) => answer != null)
+                            ? () => setState(() {
+                                _submitted = true;
+                                _question = 0;
+                              })
+                            : null),
+                  icon: Icon(
+                    i < 9 ? Icons.chevron_right_rounded : Icons.check_rounded,
+                  ),
+                  label: Text(i < 9 ? 'Suivant' : 'Terminer'),
+                ),
+              ),
+            ],
+          ),
         ],
-        const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: OutlinedButton.icon(
-            style: PracticeDailyVisualTheme.secondaryButtonStyle,
-            onPressed: i == 0 ? null : () => setState(() => _question = i - 1),
-            icon: const Icon(Icons.chevron_left_rounded),
-            label: const Text('Précédent'),
-          )),
-          const SizedBox(width: 10),
-          Expanded(child: FilledButton.icon(
-            style: PracticeDailyVisualTheme.primaryButtonStyle,
-            onPressed: i < 9
-                ? (canNext ? () => setState(() => _question = i + 1) : null)
-                : (!_submitted && _answers.every((answer) => answer != null)
-                    ? () => setState(() { _submitted = true; _question = 0; })
-                    : null),
-            icon: Icon(i < 9 ? Icons.chevron_right_rounded : Icons.check_rounded),
-            label: Text(i < 9 ? 'Suivant' : 'Terminer'),
-          )),
-        ]),
-      ],
-    ));
+      ),
+    );
   }
 
   @override
@@ -281,9 +347,14 @@ class _PracticeProgressiveCasesScreenState
       child: Scaffold(
         backgroundColor: PracticeDailyVisualTheme.background,
         appBar: AppBar(
-          title: const Text('Cas cliniques progressifs',
-            style: TextStyle(color: PracticeDailyVisualTheme.text,
-                fontSize: 17, fontWeight: FontWeight.w800)),
+          title: const Text(
+            'Cas cliniques progressifs',
+            style: TextStyle(
+              color: PracticeDailyVisualTheme.text,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           actions: [
             IconButton(
               tooltip: 'Quitter les cas progressifs',
@@ -309,13 +380,23 @@ class _PracticeProgressiveCasesScreenState
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('SIMULATION CLINIQUE · IA',
-                      style: TextStyle(color: Colors.white70,
-                          fontSize: 11, letterSpacing: 1.1)),
+                    Text(
+                      'SIMULATION CLINIQUE · IA',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
                     SizedBox(height: 6),
-                    Text('Un dossier qui évolue en 4 étapes',
-                      style: TextStyle(color: Colors.white,
-                          fontWeight: FontWeight.w900, fontSize: 21)),
+                    Text(
+                      'Un dossier qui évolue en 4 étapes',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 21,
+                      ),
+                    ),
                     SizedBox(height: 6),
                     Text(
                       '10 QCM liés à un seul cas fictif. '
@@ -328,14 +409,24 @@ class _PracticeProgressiveCasesScreenState
               const SizedBox(height: 16),
               if (_busy) ...[
                 const LinearProgressIndicator(
-                  color: PracticeDailyVisualTheme.mint),
+                  color: PracticeDailyVisualTheme.mint,
+                ),
                 const SizedBox(height: 8),
-                const Text('Génération IA du cas et de ses 10 QCM…',
-                  style: TextStyle(color: PracticeDailyVisualTheme.text)),
+                const Text(
+                  'Génération IA du cas et de ses 10 QCM…',
+                  style: TextStyle(color: PracticeDailyVisualTheme.text),
+                ),
               ],
               if (_error != null) ...[
-                _panel(Text(_error!, style: const TextStyle(
-                  color: Color(0xFFFFB2B2), fontSize: 14))),
+                _panel(
+                  Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: Color(0xFFFFB2B2),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 12),
               ],
               if (_questions.isEmpty) ...[
@@ -346,39 +437,61 @@ class _PracticeProgressiveCasesScreenState
                   label: const Text('Générer un cas clinique progressif'),
                 ),
               ] else ...[
-                Text(_title, style: const TextStyle(
-                  color: PracticeDailyVisualTheme.text,
-                  fontSize: 19, fontWeight: FontWeight.w900)),
+                Text(
+                  _title,
+                  style: const TextStyle(
+                    color: PracticeDailyVisualTheme.text,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 if (_submitted) ...[
-                  _panel(Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Résultat d’entraînement : $_score/10',
-                        style: const TextStyle(
-                          fontSize: 19, color: PracticeDailyVisualTheme.mint,
-                          fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 8),
-                      Text(_stem, style: const TextStyle(
-                        color: PracticeDailyVisualTheme.text, height: 1.4)),
-                    ],
-                  )),
+                  _panel(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Résultat d’entraînement : $_score/10',
+                          style: const TextStyle(
+                            fontSize: 19,
+                            color: PracticeDailyVisualTheme.mint,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _stem,
+                          style: const TextStyle(
+                            color: PracticeDailyVisualTheme.text,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(child: OutlinedButton.icon(
-                      style: PracticeDailyVisualTheme.secondaryButtonStyle,
-                      onPressed: _replay,
-                      icon: const Icon(Icons.replay_rounded),
-                      label: const Text('Rejouer'),
-                    )),
-                    const SizedBox(width: 10),
-                    Expanded(child: FilledButton.icon(
-                      style: PracticeDailyVisualTheme.primaryButtonStyle,
-                      onPressed: _generate,
-                      icon: const Icon(Icons.auto_awesome_rounded),
-                      label: const Text('Nouveau cas'),
-                    )),
-                  ]),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                          onPressed: _replay,
+                          icon: const Icon(Icons.replay_rounded),
+                          label: const Text('Rejouer'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: PracticeDailyVisualTheme.primaryButtonStyle,
+                          onPressed: _generate,
+                          icon: const Icon(Icons.auto_awesome_rounded),
+                          label: const Text('Nouveau cas'),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                 ],
                 _stagePanel(),
