@@ -710,8 +710,8 @@ class _PracticeProgressiveCasesScreenState
                           onTap: _busy
                               ? null
                               : () => item['generation_status'] == 'ready'
-                                  ? _openSavedCase('${item['id']}')
-                                  : _generate(resumeCaseId: '${item['id']}'),
+                                    ? _openSavedCase('${item['id']}')
+                                    : _generate(resumeCaseId: '${item['id']}'),
                         ),
                     ],
                   ),
