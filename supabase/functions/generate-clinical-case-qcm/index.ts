@@ -147,7 +147,7 @@ async function fetchEuropePmc(query,pageSize=10) {
 
 // Scientific-language terms from the PRESENTING PROBLEM, not from an unrelated
 // consultation service or an old operation in the patient's history.
-const clinicalSearchDictionary = [
+const clinicalSearchDictionary: Array<[RegExp,string]> = [
   [/otite|otalgie|tympan/i,'otitis media'],[/vertig/i,'vertigo'],
   [/rhinorrh|ecoulement nasal|écoulement nasal/i,'rhinorrhea'],
   [/appendic/i,'appendicitis'],[/cholécyst|cholecyst/i,'cholecystitis'],
