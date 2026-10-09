@@ -1,18 +1,19 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {dailyQcmFingerprint,validateDailyBatch,validCachedDailyQuestion} from './daily_qcm_validation.ts';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
+import {medicalImageSchema,medicalImagePrompt,emptyMedicalImageRequest,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology'];
 // Prompts and data contract share one count and one set of fields.
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const itemSchema={type:'object',additionalProperties:false,
- required:['question','options','correct_index','correction','topic','references','source_ids','image_search_query'],
+ required:['question','options','correct_index','correction','topic','references','source_ids','image_search_query','image_request'],
  properties:{question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
   correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},
   topic:{type:'string',enum:topics},references:{type:'array',minItems:0,maxItems:3,items:referenceSchema},
   source_ids:{type:'array',minItems:1,maxItems:3,items:{type:'integer',minimum:1,maximum:8}},
-  image_search_query:{type:'string'}}};
+  image_search_query:{type:'string'},image_request:medicalImageSchema}};
 function dailyBatchSchema(count:number){
  return {type:'object',additionalProperties:false,required:['qcms'],
   properties:{qcms:{type:'array',minItems:count,maxItems:count,items:itemSchema}}};
@@ -22,13 +23,13 @@ function dailyJsonContract(count:number):string{
   question:'REMPLACER par une vraie question médicale '+(i+1),
   options:['Proposition clinique A','Proposition clinique B','Proposition clinique C','Proposition clinique D'],
   correct_index:0,correction:'REMPLACER par une explication clinique conforme aux sources fournies.',
-  topic:'examen',references:[],source_ids:[1],image_search_query:''}))};
+  topic:'examen',references:[],source_ids:[1],image_search_query:'',image_request:emptyMedicalImageRequest}))};
  return 'CONTRAT JSON : '+count+' QCM dans un objet racine contenant uniquement qcms. '+
   'Champs exacts pour chaque QCM : '+Object.keys(itemSchema.properties).join(', ')+'. '+
   'references peut être [] car source_ids (1 à 3 indices de la bibliographie vérifiée) suffit. '+
   'Quatre options distinctes, correct_index entre 0 et 3, topic parmi '+topics.join('/')+
   '. Ne jamais recopier les placeholders. Exemple JSON valide : '+JSON.stringify(sample)+
-  '. Aucun Markdown, préambule ni champ supplémentaire.';
+  '. '+medicalImagePrompt+' Aucun Markdown, préambule ni champ supplémentaire.';
 }
 
 type Ref={title:string;url:string;year:string;organization:string;kind:string};
@@ -144,23 +145,17 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  const result=validateDailyBatch(batch,refs,seen);
  for(const reason of result.rejected)
   console.warn('daily_ai_question_rejected',reason);
- // Optional remote images can never invalidate correctly generated questions.
- return await Promise.all(result.accepted.map(async item=>{
-  const commonImage=item.illustration_query?await commons(item.illustration_query):null;
-  const alternative=(!commonImage&&item.illustration_query)?
-   await findOpenverseMedicalPreview(item.illustration_query):null;
-  const picture=commonImage??(alternative?{
-   name:alternative.title+' · '+alternative.creator+' · '+alternative.license+' · Openverse',
-   url:alternative.preview_url,source:alternative.source_url}:null);
-  const img=picture?'\n\n§IMAGES§\n'+
-   [picture.name,picture.url,picture.source].join('|||'):'';
+ // Image visuals are retrieved only when the learner opens a correction.
+ // Never preselect a random book cover or persist image URLs in the QCM.
+ return result.accepted.map(item=>{
   const urls='\n\n§SOURCES§\n'+item.references
-   .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
+    .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
-   question:item.question,options:item.options,correct_index:item.correct_index,
-   topic:item.topic,correction:item.correction+img+urls
+    question:item.question,options:item.options,correct_index:item.correct_index,
+    topic:item.topic,
+    correction:item.correction+medicalImageCorrectionSuffix(item.image_request,item.illustration_query)+urls
   };
- }));
+ });
 }
 
 Deno.serve(async(req:Request)=>{
@@ -201,7 +196,7 @@ Deno.serve(async(req:Request)=>{
    const common=medicalEvidencePolicy+'\nSOURCES NUMÉROTÉES VÉRIFIÉES :\n'+refList+
     '\nChaque question est inédite, niveau internat, avec correction détaillée (3-5 phrases) '+ 
     'fondée sur ces sources et sans données personnelles. '+ 
-    'image_search_query en anglais si une image externe aide, sinon vide.\n';
+    'image_search_query en anglais si une image externe aide, sinon vide.\n'+medicalImagePrompt+'\n';
    // A shared date-scoped checkpoint keeps good AI questions after a transient failure.
    const {data:checkpoint,error:checkpointReadError}=
     await admin.from('practice_daily_generation_batches')
