@@ -463,6 +463,20 @@ Deno.serve(async(req)=>{
     const canForce=force&&(isAdmin||post.author_id===uid);
     if(force&&!canForce)return fail(403,'authorization_failed',false);
     if(append&&!isAdmin&&post.author_id!==uid)return fail(403,'authorization_failed',false);
+    // Do not silently rewrite scored questions while their answer records or
+    // attempt history still refer to the old correct answers.
+    if(force&&(existing.data??[]).length){
+      const ids=(existing.data??[]).map(q=>q.id);
+      const [answers,history,legacyAttempts]=await Promise.all([
+        admin.from('clinical_case_qcm_answers').select('id',{count:'exact',head:true}).in('qcm_id',ids),
+        admin.from('clinical_case_qcm_answer_history').select('id',{count:'exact',head:true}).in('qcm_id',ids),
+        admin.from('clinical_case_qcm_attempts').select('id',{count:'exact',head:true}).eq('post_id',post.id)
+      ]);
+      if(answers.error||history.error||legacyAttempts.error)
+        return fail(503,'database_unavailable',true);
+      if((answers.count??0)>0||(history.count??0)>0||(legacyAttempts.count??0)>0)
+        return fail(409,'case_has_answer_history_requires_archive',false);
+    }
     const claimResult=await admin.rpc(append?'clinical_case_claim_qcm_extension':'clinical_case_claim_qcm_generation',append?{p_post_id:post.id,p_user_id:uid}:{p_post_id:post.id,p_user_id:uid,p_force:canForce});
 
     if(claimResult.error||!Array.isArray(claimResult.data)||claimResult.data.length===0){
