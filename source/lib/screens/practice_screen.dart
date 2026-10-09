@@ -18,6 +18,7 @@ import '../widgets/practice_hub_cards.dart';
 import 'practice_qcm_screen.dart';
 import 'practice_daily_screen.dart';
 import 'practice_progressive_cases_screen.dart';
+import 'practice_visceral_radio_screen.dart';
 import 'practice_daily_gamification_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
@@ -402,6 +403,22 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                 ),
               ),
+              if (_me?.id == 'a6ab90cd-aa2c-41f3-a5e8-be00aedd019c') ...[
+                const SizedBox(height: 11),
+                _PracticePrimaryActionCard(
+                  icon: Icons.biotech_rounded,
+                  title: 'Viscéral × Radio · espace privé',
+                  subtitle: 'Fiche surprise · 20 QCM · cas clinique et QCM progressifs',
+                  meta: 'RÉSIDANAT · CHIRURGIE ET RADIOLOGIE',
+                  accent: PracticeColors.gameGold,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PracticeVisceralRadioScreen(),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 11),
               PracticeInlineNavigation(
                 icon: Icons.menu_book_rounded,
