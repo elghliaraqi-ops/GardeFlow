@@ -21,18 +21,30 @@ export function validateProgressiveAxisSequence(input:unknown,batch:0|1):boolean
 }
 export function progressiveJsonContract(batch:0|1):string{
  const steps=expectedProgressiveAxes(batch);
- return 'CONTRAT JSON OBLIGATOIRE (objet racine uniquement): '+
-  '{"qcms":[{"axis":"'+steps[0]+
-  '","question":"Question contextualisée au patient",'+
-  '"options":["Proposition A","Proposition B","Proposition C","Proposition D"],'+
-  '"correct_index":0,"correction":"Justification médicale détaillée",'+
-  '"topic":"symptome","references":[{"url":"URL réelle autorisée"}],'+
-  '"image_search_query":""}, ... EXACTEMENT cinq objets]}.'+
-  ' Ne pas inclure les points de suspension littéraux dans la réponse. '+
-  'Chaque objet doit comporter EXACTEMENT les champs axis, question, options, '+
-  'correct_index, correction, topic, references, image_search_query. '+
-  'Les axis dans ce lot doivent être STRICTEMENT dans cet ordre : '+
-  steps.map((a,i)=>(batch*5+i+1)+':'+a).join(' → ')+'. '+
-  'Le champ axis décrit la nature de la question, pas une simple étiquette : '+
-  'respecte réellement son contenu, le niveau de révélation des résultats et la chronologie.';
+ const topics=['symptome','examen','synthese','synthese','examen',
+  'synthese','prise_en_charge','prise_en_charge','prise_en_charge','orientation'];
+ const sample={
+  qcms:steps.map((axis,i)=>({
+   axis,question:'REMPLACER par une question sur '+axis+' du même patient',
+   options:['Choix clinique A','Choix clinique B','Choix clinique C','Choix clinique D'],
+   correct_index:0,
+   correction:'REMPLACER par explication précise conforme aux références vérifiées.',
+   topic:topics[batch*5+i],
+   references:[{url:'REMPLACER_PAR_URL_EXACTE_DU_CATALOGUE'}],
+   image_search_query:''
+  }))
+ };
+ return 'CONTRAT JSON OBLIGATOIRE : objet racine avec exactement la clé qcms '+
+  'et EXACTEMENT cinq objets. Voici UN MODÈLE JSON SYNTAXIQUEMENT VALIDE '+
+  'avec 5 questions, dont tous les textes, réponses et références PLACEHOLDERS '+
+  'doivent être remplacés par les faits du dossier et les liens exacts vérifiés. '+
+  'Ne reprends JAMAIS les placeholders ni les options génériques. '+
+  'MODELE_JSON_DEBUT\n'+JSON.stringify(sample)+'\nMODELE_JSON_FIN\n'+
+  'Chaque QCM comporte axis, question, options (4 chaînes), correct_index '+
+  '(entier 0, 1, 2 ou 3), correction médicale détaillée, topic autorisé, '+
+  'references (1 à 3 objets {url} du catalogue uniquement), image_search_query. '+
+  'L’ordre clinique est ABSOLUMENT imposé : '+
+  steps.map((axis,i)=>(batch*5+i+1)+':'+axis).join(' → ')+'. '+
+  'Chaque question doit correspondre réellement à son axis, aux données du patient '+
+  'et aux informations révélées à cette étape. Pas de Markdown, texte ni commentaire hors JSON.';
 }
