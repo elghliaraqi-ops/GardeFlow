@@ -1,0 +1,67 @@
+name: Verify Practice Latest Guidelines and External Image Previews
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/generate-*/**'
+      - 'supabase/functions/preview-clinical-case-qcm/**'
+      - 'source/supabase/functions/generate-*/**'
+      - 'source/supabase/functions/preview-clinical-case-qcm/**'
+      - 'source/lib/models/practice_external_medical_media_policy.dart'
+      - 'source/lib/widgets/practice_clinical_dossier.dart'
+      - 'source/lib/screens/practice_daily_screen.dart'
+      - 'source/lib/screens/practice_progressive_cases_screen.dart'
+      - 'source/test/practice_external_medical_media_policy_test.dart'
+      - '.github/workflows/practice-medical-evidence-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  clinical-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate every Practice Edge generator and mirror
+        run: |
+          set -euo pipefail
+          for fn in generate-practice-daily-challenge generate-practice-progressive-case generate-clinical-case-qcm generate-random-clinical-case preview-clinical-case-qcm; do
+            deno check "supabase/functions/$fn/index.ts"
+            deno check "source/supabase/functions/$fn/index.ts"
+            deno check "supabase/functions/$fn/medical_evidence_media.ts"
+            deno check "source/supabase/functions/$fn/medical_evidence_media.ts"
+            cmp "supabase/functions/$fn/index.ts" "source/supabase/functions/$fn/index.ts"
+            cmp "supabase/functions/$fn/medical_evidence_media.ts" "source/supabase/functions/$fn/medical_evidence_media.ts"
+            grep -Fq 'medicalEvidencePolicy' "supabase/functions/$fn/index.ts"
+            grep -Fq 'findOpenverseMedicalPreview' "supabase/functions/$fn/index.ts"
+          done
+          deno test supabase/functions/generate-practice-daily-challenge/medical_evidence_media_test.ts
+          deno test supabase/functions/generate-practice-daily-challenge/daily_qcm_validation_test.ts
+          if grep -RE 'storage\.from\(|base64|data:image/' supabase/functions/generate-*/medical_evidence_media.ts; then
+            echo "Media helper must not persist image bytes" >&2
+            exit 1
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Fetch Flutter dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Validate Dart formatting
+        working-directory: source
+        run: |
+          dart format --output=none --set-exit-if-changed lib/models/practice_external_medical_media_policy.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/widgets/practice_clinical_dossier.dart test/practice_external_medical_media_policy_test.dart
+      - name: Analyze Flutter UI files
+        working-directory: source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_external_medical_media_policy.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/widgets/practice_clinical_dossier.dart
+      - name: Medical link UI tests
+        working-directory: source
+        run: |
+          flutter test test/practice_external_medical_media_policy_test.dart
+          flutter test test/practice_clinical_dossier_test.dart
+          flutter test test/practice_daily_models_test.dart
