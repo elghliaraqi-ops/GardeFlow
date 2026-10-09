@@ -21,6 +21,20 @@ export type ImagePreview = {
 };
 
 const SEARCH_LIMIT=24;
+// Wikimedia Commons commonly hosts anatomical drawings as SVG originals.
+// These must be displayed through the PNG thumb supplied by imageinfo.
+export function rasterImageUrls(info:any):{thumbnail:string,full:string}|null{
+  const original=String(info?.url||'');
+  const thumbnail=String(info?.thumburl||'');
+  const svg=/\.svg(?:\?.*)?$/i.test(original);
+  if(svg){
+    if(!thumbnail||!allowedAsset(thumbnail))return null;
+    return {thumbnail,full:thumbnail};
+  }
+  const preview=thumbnail||original;
+  const full=original||preview;
+  return allowedAsset(preview)&&allowedAsset(full)?{thumbnail:preview,full}:null;
+}
 const REQUEST_HEADERS={Accept:'application/json','Api-User-Agent':'GardeFlowPractice/1.1 (https://github.com/elghliaraqi-ops/GardeFlow)', 'User-Agent':'GardeFlowPractice/1.1 (https://github.com/elghliaraqi-ops/GardeFlow)'};
 const MAX_BYTES=12*1024*1024;
 const banned=/(?:book\s*cover|cover\s*of|annual\s*report|costs?\s+and\s+effectiveness|screening\s+report|congress|advertis|financial|conference\s*proceedings|poster\s*session|booklet|textbook\s*cover|national\s+cancer\s+institute\s+report|pdf\s+page|magazine|statistical\s+graph|brochure|front\s+page|journal\s+cover)/i;
@@ -172,8 +186,10 @@ async function commons(search:string):Promise<ImagePreview[]>{
   const out:ImagePreview[]=[];
   for(const page of data?.query?.pages??[]){
     const info=page?.imageinfo?.[0];if(!info)continue;
+    const urls=rasterImageUrls(info);
+    if(!urls)continue;
     const image:ImagePreview={
-      thumbnail:String(info.thumburl||''),full:String(info.url||''),
+      thumbnail:urls.thumbnail,full:urls.full,
       source:String(info.descriptionurl||''),
       title:clean(String(page.title||'').replace(/^File:/i,''),190),
       description:clean(info.extmetadata?.ImageDescription?.value,400),
@@ -188,8 +204,10 @@ async function commons(search:string):Promise<ImagePreview[]>{
 // Known, openly licensed anatomy sources are queried by FILE TITLE, not by
 // hardcoded image URLs. Wikimedia returns current media URLs and attribution.
 async function rectalAnatomyFiles():Promise<ImagePreview[]> {
-  const titles=['File:Rectal_anatomy.jpg',
-    'File:Anatomy_of_human_rectum_and_anus-2.png',
+  const titles=['File:Rectum anatomy en.svg',
+    'File:Anatomy of human rectum and anus-2.png',
+    'File:Rectum anatomy de 01.svg',
+    'File:Pelvis diagram.png',
     'File:Gray1079.png'];
   const params=new URLSearchParams({action:'query',titles:titles.join('|'),
     prop:'imageinfo',iiprop:'url|mime|extmetadata',iiurlwidth:'750',
@@ -201,9 +219,11 @@ async function rectalAnatomyFiles():Promise<ImagePreview[]> {
     const data=await r.json();const out:ImagePreview[]=[];
     for(const page of data?.query?.pages??[]){
       const info=page?.imageinfo?.[0];if(!info)continue;
+      const urls=rasterImageUrls(info);
+      if(!urls)continue;
       const item:ImagePreview={
-        thumbnail:String(info.thumburl||info.url||''),
-        full:String(info.url||''),
+        thumbnail:urls.thumbnail,
+        full:urls.full,
         source:String(info.descriptionurl||''),
         title:clean(String(page.title||'').replace(/^File:/i,''),180),
         description:clean(info.extmetadata?.ImageDescription?.value,440),
@@ -289,6 +309,7 @@ export async function resolveMedicalPreviews(input:any){
     if(seen.has(key))return false;
     seen.add(key);return true;
   }).slice(0,8);
+  console.info('medical_image_result',JSON.stringify({type:request.image_type,queries:queries.length,candidates:candidates.length,accepted:images.length}));
   return {
     images,medical_searches:pages(queries[0]),image_request:request,
     image_sources_searched:queries,
