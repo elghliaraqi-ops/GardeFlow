@@ -70,8 +70,10 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
   Future<void> _scheduleReminders(
     List<PracticeDailyCalendarEntry> entries,
   ) async {
+    final localFallback =
+        _enabled && !PushNotificationService.instance.hasActiveRemotePush;
     await NotificationService.instance.schedulePracticeDailyChallengeReminders(
-      enabled: _enabled && !PushNotificationService.instance.hasActiveRemotePush,
+      enabled: localFallback,
       completedDays: entries
           .map((e) => DateFormat('yyyy-MM-dd').format(e.day))
           .toSet(),
@@ -647,7 +649,8 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 style: TextStyle(color: _text, fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Notification FCM à 8 h (Casablanca) si le push est actif, sinon rappel local sur mobile.',
+                'Notification FCM à 8 h (Casablanca) si le push est actif, '
+                'sinon rappel local sur mobile.',
                 style: TextStyle(color: _muted, fontSize: 12),
               ),
               secondary: const Icon(
