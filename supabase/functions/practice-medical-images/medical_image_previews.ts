@@ -13,7 +13,14 @@ export type MedicalImageRequest = {
   plane: 'axial'|'sagittal'|'coronal'|'multiplanar'|'not_applicable';
   required_features: string[];
   excluded_features: string[];
+  fallback_queries?:string[];
+  preferred_sources?:string[];
+  allow_article_figures?:boolean;
+  allow_source_illustrations?:boolean;
+  allow_open_graph_preview?:boolean;
+  allow_page_preview?:boolean;
 };
+export type MedicalArticlePreview={ title:string;source:string;provider:string;summary:string;figure_page?:string;thumbnail?:string;figure_caption?:string;license?:string; }; 
 export type ImagePreview = {
   thumbnail:string; full:string; source:string;
   title:string; creator:string; license:string; provider:string;
@@ -21,6 +28,7 @@ export type ImagePreview = {
 };
 
 const SEARCH_LIMIT=24;
+const ARTICLE_LIMIT=3;
 // Wikimedia Commons commonly hosts anatomical drawings as SVG originals.
 // These must be displayed through the PNG thumb supplied by imageinfo.
 export function rasterImageUrls(info:any):{thumbnail:string,full:string}|null{
@@ -46,6 +54,7 @@ const clinicalHosts=new Set([
  'images.squarespace-cdn.com','static1.squarespace.com',
  'i0.wp.com','i1.wp.com','i2.wp.com','i3.wp.com',
  'images.pexels.com','images.unsplash.com',
+ 'pmc.ncbi.nlm.nih.gov',
 ]);
 const openversePreviewPath=/^\/v1\/images\/[a-f\d-]{36}\/thumb\/?$/i;
 export function allowedAsset(raw: string) {
@@ -96,6 +105,10 @@ export function legacyImageRequest(input:any):MedicalImageRequest {
     .includes(input?.image_type)?input.image_type:image_type;
   const specifiedPlane=['axial','sagittal','coronal','multiplanar','not_applicable']
     .includes(input?.plane)?input.plane:(anatomy?'sagittal':'not_applicable');
+  const alternatives=Array.isArray(input?.fallback_queries)
+    ?input.fallback_queries.map((v:unknown)=>clean(v,90)).filter(Boolean).slice(0,4):[];
+  const preferred=Array.isArray(input?.preferred_sources)
+    ?input.preferred_sources.map((v:unknown)=>clean(v,60)).filter(Boolean).slice(0,7):[];
   const selectedFeatures=Array.isArray(input?.required_features)?
     input.required_features.map((x:unknown)=>clean(x,70)).filter(Boolean).slice(0,5):findings;
   const exclusions=Array.isArray(input?.excluded_features)?
@@ -111,6 +124,12 @@ export function legacyImageRequest(input:any):MedicalImageRequest {
     anatomy:clean(input?.anatomy||target,130),plane:specifiedPlane,
     required_features:selectedFeatures,
     excluded_features:exclusions,
+    fallback_queries:alternatives,
+    preferred_sources:preferred,
+    allow_article_figures:input?.allow_article_figures!==false,
+    allow_source_illustrations:input?.allow_source_illustrations!==false,
+    allow_open_graph_preview:input?.allow_open_graph_preview!==false,
+    allow_page_preview:input?.allow_page_preview!==false,
   };
 }
 export function imageSearchTerms(request:MedicalImageRequest):string{
@@ -129,7 +148,7 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!/^https:\/\//i.test(image.source))return false;
   // Openverse only indexes openly licensed media, including attribution,
   // share-alike and non-commercial licenses. Keep creator/source attribution.
-  if(!/(CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
+  if(!/(Open access|CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
      && !['by','by-sa','by-nc','by-nc-sa','by-nd','by-nc-nd','cc0','pdm']
        .includes(image.license.toLowerCase()))return false;
   const hay=ascii(image.title+' '+image.description);
@@ -271,16 +290,140 @@ export function imageSearchVariants(request:MedicalImageRequest):string[]{
   const target=ascii(request.anatomy+' '+request.query+' '+request.purpose);
   if(/rect|mesorect|sphinct|levator/.test(target)){
     if(request.image_type==='anatomical_diagram')
-      return [base,'rectum anatomy','anal canal sphincter anatomy','mesorectum anatomy'];
+      return [...new Set([base,...(request.fallback_queries||[]),'rectum anatomy','anal canal sphincter anatomy','mesorectum anatomy'])].slice(0,7);
     if(/diffus|dwi|adc|ganglion|lymph/.test(target))
-      return [base,'rectal MRI diffusion','rectal cancer MRI lymph node','pelvic MRI'];
-    return [base,'rectal cancer MRI','rectum MRI','pelvic magnetic resonance'];
+      return [...new Set([base,...(request.fallback_queries||[]),'rectal MRI diffusion','rectal cancer MRI lymph node','pelvic MRI'])].slice(0,7);
+    return [...new Set([base,...(request.fallback_queries||[]),'rectal cancer MRI','rectum MRI','pelvic magnetic resonance'])].slice(0,7);
   }
+  const extras=(request.fallback_queries||[]).filter(q=>q.length>3);
   const words=base.split(/\s+/).filter(Boolean);
   const compact=words.slice(0,3).join(' ');
   const anatomy=ascii(request.anatomy).split(/\s+/).filter(Boolean).slice(0,2).join(' ');
-  return [...new Set([base,compact,anatomy].filter(q=>q.length>=5))];
+  return [...new Set([base,...extras,compact,anatomy].filter(q=>q.length>=5))].slice(0,6);
 }
+/**
+ * Article and figure discovery is intentionally restricted to publicly accessible
+ * Europe PMC open-access articles. Other medical sites are linked as external
+ * sources, without copying copyrighted figures or bypassing access controls.
+ * No article body, image or URL is persisted.
+ */
+function xmlText(value:string):string {
+  return clean(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/<[^>]+>/g,' '),520);
+}
+export function articleFigureSnippets(xml:string):Array<{id:string;href:string;caption:string}>{
+  const figs:Array<{id:string;href:string;caption:string}>=[];
+  const blocks=xml.match(/<fig\b[\s\S]*?<\/fig>/gi)||[];
+  for(const block of blocks.slice(0,24)){
+    const id=block.match(/<fig\b[^>]*\bid=["']([^"']{1,65})["']/i)?.[1]||'';
+    const href=block.match(/<(?:graphic|inline-graphic)\b[^>]*\b(?:xlink:)?href=["']([^"']{1,165})["']/i)?.[1]||'';
+    const caption=xmlText(block.match(/<caption\b[^>]*>([\s\S]*?)<\/caption>/i)?.[1]||'');
+    if(!/^[a-z0-9._-]{2,145}$/i.test(href))continue;
+    figs.push({id,href,caption});
+  }
+  return figs;
+}
+function articleTopical(text:string,request:MedicalImageRequest):boolean{
+  const hay=ascii(text);
+  if(banned.test(hay))return false;
+  const subject=ascii(request.anatomy+' '+request.query+' '+request.purpose);
+  if(/rect|mesorect|sphinct|levator/.test(subject) && !/rect|mesorect|sphinct|pelvic floor/.test(hay))
+    return false;
+  if(request.image_type==='radiology_scan')
+    return /mri|magnetic resonance|diffusion|dwi|ct scan|computed tomography|ultrasound|radiolog|imaging|t2/.test(hay);
+  if(request.image_type==='anatomical_diagram')
+    return /anatom|diagram|sphinct|mesorect|pelvic floor|schematic|illustrat/.test(hay);
+  return true;
+}
+export function openGraphImageFromHtml(html:string):string|null{
+  const tags=html.match(/<meta\b[^>]*>/gi)||[];
+  for(const tag of tags){
+    if(!/(?:property|name)\s*=\s*["']og:image["']/i.test(tag))continue;
+    const raw=tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1]||'';
+    const value=raw.replace(/&amp;/g,'&');
+    if(!allowedAsset(value))continue;
+    if(/logo|banner|default|social|favicon|journal.cover|site.icon|generic/i.test(value))continue;
+    return value;
+  }
+  return null;
+}
+async function articleOpenGraphPreview(pmcid:string):Promise<string|null>{
+  try {
+    // Only fetch a known public PMC article host, never user-provided pages.
+    const res=await fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
+      signal:AbortSignal.timeout(4200),headers:REQUEST_HEADERS});
+    if(!res.ok)return null;
+    const content=await res.text();
+    if(content.length>1100000)return null;
+    const img=openGraphImageFromHtml(content);
+    if(!img)return null;
+    const head=await fetch(img,{method:'HEAD',redirect:'manual',
+      signal:AbortSignal.timeout(3000)});
+    if(head.ok && /^image\/(?:jpeg|png|webp)/i.test(head.headers.get('content-type')||''))return img;
+  } catch (_) { /* A link-only preview is still useful. */ }
+  return null;
+}
+
+async function articleSourcePreviews(request:MedicalImageRequest,query:string):
+  Promise<{articles:MedicalArticlePreview[];figures:ImagePreview[]}>{
+  const articles:MedicalArticlePreview[]=[];
+  const figures:ImagePreview[]=[];
+  const url='https://www.ebi.ac.uk/europepmc/webservices/rest/search?'+new URLSearchParams({
+    query:query+' AND OPEN_ACCESS:y',
+    pageSize:String(ARTICLE_LIMIT),format:'json',resultType:'core'
+  });
+  let items:any[]=[];
+  try{
+    const res=await fetch(url,{headers:REQUEST_HEADERS,signal:AbortSignal.timeout(7500)});
+    if(!res.ok)return {articles,figures};
+    const json=await res.json();
+    items=Array.isArray(json?.resultList?.result)?json.resultList.result:[];
+  }catch(_){return {articles,figures};}
+  for(const entry of items.slice(0,ARTICLE_LIMIT)){
+    const pmcid=String(entry.pmcid||'');
+    if(!/^PMC\d{3,11}$/i.test(pmcid))continue;
+    const title=clean(entry.title,220);
+    const summary=clean(entry.authorString||entry.journalTitle||'',140);
+    const source='https://europepmc.org/articles/'+pmcid;
+    if(!articleTopical(title+' '+clean(entry.abstractText,500),request))continue;
+    const card:MedicalArticlePreview={title,source,provider:'Europe PMC',summary,
+      figure_page:source+'#figures'};
+    articles.push(card);
+    if(request.allow_open_graph_preview!==false && articles.length<=2){
+      const openGraph=await articleOpenGraphPreview(pmcid);
+      if(openGraph)card.thumbnail=openGraph;
+    }
+    if(request.allow_article_figures===false||figures.length>=2||articles.length>2)continue;
+    try{
+      const rr=await fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
+        headers:REQUEST_HEADERS,signal:AbortSignal.timeout(6000)});
+      if(!rr.ok)continue;
+      const xml=await rr.text();
+      if(xml.length>2200000)continue;
+      const candidates=articleFigureSnippets(xml).filter(f=>articleTopical(f.caption,request)).slice(0,3);
+      for(const fig of candidates){
+        const href=fig.href.replace(/^.*\//,'');
+        const candidatesUrls=[href,/\.jpg$|\.png$|\.jpeg$|\.webp$/i.test(href)?'':href+'.jpg'].filter(Boolean);
+        for(const filename of candidatesUrls){
+          const raw='https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/bin/'+filename;
+          if(!allowedAsset(raw))continue;
+          // Never claim a real thumbnail until the upstream responds as an image.
+          try{
+            const head=await fetch(raw,{method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(3500)});
+            if(!head.ok || !/^image\/(?:jpeg|png|webp)/i.test(head.headers.get('content-type')||''))continue;
+            const image:ImagePreview={thumbnail:raw,full:raw,source:source+'#figures',
+              title:fig.caption||title,description:title+' '+fig.caption,
+              license:'Open access (voir licence de l’article)',creator:summary,provider:'PubMed Central'};
+            figures.push(image);
+            card.thumbnail=raw;card.figure_caption=fig.caption;
+            break;
+          }catch(_){/* Keep a useful article preview without a broken image. */}
+        }
+      }
+    }catch(_){/* Article metadata card remains available. */}
+  }
+  return {articles,figures};
+}
+
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
@@ -303,6 +446,14 @@ export async function resolveMedicalPreviews(input:any){
     candidates.push(...secondary.flat());
     images=candidates.filter(x=>imageIsTopical(x,request));
   }
+  const articleQuery=(request.image_type==='anatomical_diagram' && /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query)))?'rectum anatomy':
+    (request.image_type==='radiology_scan' && /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query)))?'rectal cancer MRI':queries[0];
+  const articleResult=(images.length<2 && request.allow_page_preview!==false)
+    ? await articleSourcePreviews(request,articleQuery)
+    : {articles:[] as MedicalArticlePreview[],figures:[] as ImagePreview[]};
+  // Article figures have a weaker caption filter than general image catalogs
+  // but still require a relevant article and an actually accessible image.
+  images.push(...articleResult.figures);
   const seen=new Set<string>();
   images=images.filter(x=>{
     const key=x.full||x.thumbnail;
@@ -311,9 +462,9 @@ export async function resolveMedicalPreviews(input:any){
   }).slice(0,8);
   console.info('medical_image_result',JSON.stringify({type:request.image_type,queries:queries.length,candidates:candidates.length,accepted:images.length}));
   return {
-    images,medical_searches:pages(queries[0]),image_request:request,
+    images,article_previews:articleResult.articles,medical_searches:pages(queries[0]),image_request:request,
     image_sources_searched:queries,
-    unavailable_reason:images.length===0?'no_matching_accessible_images':null,
+    unavailable_reason:images.length===0&&articleResult.articles.length===0?'no_matching_accessible_images':null,
   };
 }
 
@@ -322,8 +473,24 @@ export async function proxyMedicalImage(asset:string):Promise<Response>{
     'Cache-Control':'private, no-store, max-age=0','Vary':'Origin'};
   if(!allowedAsset(asset))return new Response(null,{status:400,headers:common});
   try {
-    const response=await fetch(asset,{redirect:'error',
-      signal:AbortSignal.timeout(10000),headers:{Accept:'image/jpeg,image/png,image/webp'}});
+    // Publisher figure endpoints sometimes redirect to their trusted CDN.
+    // Follow no more than two redirects, checking each target against the
+    // explicit image-host allowlist (never arbitrary destinations).
+    let target=asset;
+    let response:Response|null=null;
+    for(let hop=0;hop<3;hop++){
+      response=await fetch(target,{redirect:'manual',
+        signal:AbortSignal.timeout(9000),headers:{Accept:'image/jpeg,image/png,image/webp'}});
+      if(response.status>=300&&response.status<400){
+        const location=response.headers.get('location');
+        if(!location||hop===2)return new Response(null,{status:404,headers:common});
+        const next=new URL(location,target).toString();
+        if(!allowedAsset(next))return new Response(null,{status:403,headers:common});
+        target=next;continue;
+      }
+      break;
+    }
+    if(!response)return new Response(null,{status:502,headers:common});
     if(!response.ok||!response.body)return new Response(null,{status:404,headers:common});
     const type=(response.headers.get('content-type')||'').toLowerCase().split(';')[0];
     if(!['image/jpeg','image/png','image/webp'].includes(type))

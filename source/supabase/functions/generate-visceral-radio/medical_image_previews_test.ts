@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -102,4 +102,26 @@ Deno.test('non-renderable SVG and unrelated publication covers never become prev
   const png='https://upload.wikimedia.org/wikipedia/commons/a/ab/Rectum.jpg';
   assert(!imageIsTopical({...good,thumbnail:png,full:png,title:'Rectum anatomy annual report book cover',
     description:'Annual report'},req),'irrelevant covers must still be excluded');
+});
+
+Deno.test('Europe PMC XML figure captions can be linked to an open article',()=>{
+ const xml='<article><fig id="fig2"><caption><p>Axial T2 pelvic MRI demonstrating rectal tumor</p></caption><graphic xlink:href="MRI-rectal-fig2.jpg"/></fig></article>';
+ const figures=articleFigureSnippets(xml);
+ assert(figures.length===1,'one medical source figure must be found');
+ assert(figures[0].id==='fig2'&&figures[0].href==='MRI-rectal-fig2.jpg','figure metadata preserved');
+ assert(figures[0].caption.includes('MRI'),'caption is readable');
+ assert(allowedAsset('https://pmc.ncbi.nlm.nih.gov/articles/PMC1234567/bin/MRI-rectal-fig2.jpg'),
+  'public article image is eligible for secure proxy');
+});
+Deno.test('malformed article XML does not supply an unsafe figure',()=>{
+ const xml='<fig id="bad"><graphic xlink:href="../../evil.jpg"/></fig>';
+ assert(articleFigureSnippets(xml).length===0,'traversal figure names must be rejected');
+});
+
+Deno.test('Article page OpenGraph preview only accepts explicitly permitted medical image assets',()=>{
+ const article='<meta property="og:image" content="https://cdn.ncbi.nlm.nih.gov/pmc/blobs/10/rectum-figure.jpg">';
+ const image=openGraphImageFromHtml(article);
+ assert(image==='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/10/rectum-figure.jpg','verified article OG image is found');
+ assert(openGraphImageFromHtml('<meta property="og:image" content="http://evil.invalid/banner.png">')===null,'unsafe http OG blocked');
+ assert(openGraphImageFromHtml('<meta property="og:image" content="https://cdn.ncbi.nlm.nih.gov/logo.png">')===null,'publisher logo blocked');
 });

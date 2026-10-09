@@ -88,7 +88,7 @@ class VisceralMedicalGallery extends StatefulWidget {
 
 class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   static final Map<String,Map<String,dynamic>> _cache = {};
-  List<Map<String,dynamic>> images=[], sources=[];
+  List<Map<String,dynamic>> images=[], sources=[], articles=[];
   bool busy=false;
   String? message;
   int generation=0;
@@ -109,11 +109,12 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       setState((){
         images=rows(cached['images']);
         sources=rows(cached['medical_searches']);
+        articles=rows(cached['article_previews']);
         busy=false;message=null;
       });
       return;
     }
-    setState((){busy=true;message=null;images=[];sources=[];});
+    setState((){busy=true;message=null;images=[];sources=[];articles=[];});
     try {
       final response=await SupabaseBackendService.instance.client.functions.invoke(
         'generate-visceral-radio',
@@ -125,12 +126,13 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       if(result['error']!=null)throw StateError('Images indisponibles');
       // Do not preserve negative searches: adding new sources should refresh
       // already-generated fiches without re-generating the course.
-      if(rows(result['images']).isNotEmpty){_cache[cacheKey]=result;}else{_cache.remove(cacheKey);}
+      if(rows(result['images']).isNotEmpty||rows(result['article_previews']).isNotEmpty){_cache[cacheKey]=result;}else{_cache.remove(cacheKey);}
       setState((){
         images=rows(result['images']).where((v)=>
           (v['thumbnail']??'').toString().startsWith('https://') &&
           (v['source']??'').toString().startsWith('https://')).take(8).toList();
         sources=rows(result['medical_searches']);
+        articles=rows(result['article_previews']);
       });
     }catch(_){
       if(mounted&&generation==n)setState(()=>message='Recherche temporairement indisponible.');
@@ -221,7 +223,48 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
           },
         )),
       ],
-      if(!busy&&images.isEmpty)...[
+      if(articles.isNotEmpty)...[
+        const SizedBox(height:12),
+        const Text('Figures et articles médicaux associés',
+          style:TextStyle(color:PracticeDailyVisualTheme.mint,fontSize:12,fontWeight:FontWeight.w800)),
+        const SizedBox(height:7),
+        ...articles.take(4).map((a)=>Container(
+          margin:const EdgeInsets.only(bottom:8),
+          decoration:BoxDecoration(color:PracticeDailyVisualTheme.elevated.withValues(alpha:.65),
+            borderRadius:BorderRadius.circular(11)),
+          child:InkWell(
+            onTap:()=>_external((a['figure_page']??a['source']??'').toString()),
+            borderRadius:BorderRadius.circular(11),
+            child:Padding(padding:const EdgeInsets.all(11),
+              child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                if((a['thumbnail']??'').toString().startsWith('https://'))
+                  Padding(padding:const EdgeInsets.only(right:9),
+                    child:ClipRRect(borderRadius:BorderRadius.circular(8),
+                      child:Image.network(
+                        visceralImageProxyUrl((a['thumbnail']??'').toString()),
+                        headers:visceralImageHeaders(),width:65,height:65,fit:BoxFit.contain,
+                        errorBuilder:(_,__,___)=>const Icon(Icons.article_outlined,
+                          color:PracticeDailyVisualTheme.mint,size:22)))),
+                if(!(a['thumbnail']??'').toString().startsWith('https://'))
+                  const Icon(Icons.article_outlined,color:PracticeDailyVisualTheme.mint,size:20),
+                const SizedBox(width:10),
+                Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  Text((a['title']??'Article médical').toString(),maxLines:3,
+                    overflow:TextOverflow.ellipsis,style:const TextStyle(
+                      color:PracticeDailyVisualTheme.text,fontSize:12.5,fontWeight:FontWeight.w700)),
+                  const SizedBox(height:4),
+                  Text((a['summary']??'Consulter les figures et les légendes').toString(),
+                    maxLines:2,style:const TextStyle(
+                      color:PracticeDailyVisualTheme.muted,fontSize:11)),
+                  const SizedBox(height:4),
+                  const Text('Ouvrir l’article et ses figures ↗',style:TextStyle(
+                    color:PracticeDailyVisualTheme.mint,fontSize:11)),
+                ])),
+              ])),
+          ),
+        )),
+      ],
+      if(!busy&&images.isEmpty&&articles.isEmpty)...[
         const SizedBox(height:12),
         Text(message??'Aucun aperçu médical correspondant trouvé. Consultez les sources ci-dessous ou relancez la recherche.',
           style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:12)),

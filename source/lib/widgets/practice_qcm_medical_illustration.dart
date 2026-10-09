@@ -134,6 +134,7 @@ class _PracticeQcmMedicalIllustrationState
     extends State<PracticeQcmMedicalIllustration> {
   List<Map<String, dynamic>> _found = [];
   List<Map<String, dynamic>> _links = [];
+  List<Map<String, dynamic>> _articles = [];
   final Map<String, Uint8List> _bytes = {};
   final Set<String> _failed = {};
   bool _busy = false;
@@ -196,6 +197,7 @@ class _PracticeQcmMedicalIllustrationState
       _message = null;
       _found = [];
       _links = [];
+      _articles = [];
       _bytes.clear();
       _failed.clear();
     });
@@ -215,11 +217,17 @@ class _PracticeQcmMedicalIllustrationState
       setState(() {
         _found = images;
         _links = _records(data['medical_searches']);
+        _articles = _records(data['article_previews']);
       });
       for (final image in images) {
         if (!mounted || id != _version) break;
         final raw = (image['thumbnail'] ?? '').toString();
         await _getBytes(raw, id);
+      }
+      for (final article in _articles.take(2)) {
+        if (!mounted || id != _version) break;
+        final thumb = (article['thumbnail'] ?? '').toString();
+        if (thumb.startsWith('https://')) await _getBytes(thumb,id);
       }
     } catch (_) {
       if (mounted && id == _version)
@@ -279,7 +287,7 @@ class _PracticeQcmMedicalIllustrationState
         builder: (_) => _QcmImageViewer(
           bytes: data,
           title: (image['title'] ?? 'Image médicale').toString(),
-          credits: ' · ',
+          credits: '${image['creator'] ?? ''} · ${image['license'] ?? ''}',
           source: (image['source'] ?? '').toString(),
         ),
       ),
@@ -391,7 +399,49 @@ class _PracticeQcmMedicalIllustrationState
               ),
             ),
           ],
-          if (!_busy && live.isEmpty) ...[
+          if(_articles.isNotEmpty)...[
+            const SizedBox(height:12),
+            const Text('Articles et figures associés',
+              style:TextStyle(color:Color(0xFF4FDBA8),fontWeight:FontWeight.w800,fontSize:12)),
+            const SizedBox(height:8),
+            for(final article in _articles.take(3))
+              Container(
+                margin:const EdgeInsets.only(bottom:8),
+                decoration:BoxDecoration(
+                  color:const Color(0xFF173049),
+                  borderRadius:BorderRadius.circular(12)),
+                child:InkWell(
+                  key:ValueKey('qcm-article-'+(article['source']??'').toString()),
+                  borderRadius:BorderRadius.circular(12),
+                  onTap:()=>_open((article['figure_page']??article['source']??'').toString()),
+                  child:Padding(
+                    padding:const EdgeInsets.all(11),
+                    child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                      if(_bytes.containsKey((article['thumbnail']??'').toString()))
+                        ClipRRect(borderRadius:BorderRadius.circular(8),
+                          child:Image.memory(_bytes[(article['thumbnail']??'').toString()]!,
+                            width:60,height:65,fit:BoxFit.contain)),
+                      if(!_bytes.containsKey((article['thumbnail']??'').toString()))
+                        const Icon(Icons.article_outlined,color:Color(0xFF4FDBA8)),
+                      const SizedBox(width:9),
+                      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                        Text((article['title']??'Article médical').toString(),
+                          maxLines:3,overflow:TextOverflow.ellipsis,
+                          style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.w700)),
+                        const SizedBox(height:5),
+                        Text((article['summary']??'Figures sur le site source').toString(),
+                          maxLines:2,style:const TextStyle(
+                            color:Color(0xFFB6CDDD),fontSize:11)),
+                        const SizedBox(height:4),
+                        const Text('Ouvrir les figures ↗',style:TextStyle(
+                          color:Color(0xFF4FDBA8),fontSize:11)),
+                      ])),
+                    ]),
+                  ),
+                ),
+              ),
+          ],
+          if (!_busy && live.isEmpty && _articles.isEmpty) ...[
             const SizedBox(height: 11),
             Text(
               _message ?? 'Aucun aperçu médical correspondant et accessible.',
