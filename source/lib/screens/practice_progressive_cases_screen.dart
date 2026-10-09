@@ -49,7 +49,7 @@ class _PracticeProgressiveCasesScreenState
     try {
       final rows = await backend.client
           .from('practice_generated_cases')
-          .select('id,case_title,specialty,created_at')
+          .select('id,case_title,specialty,generation_status,created_at')
           .order('created_at', ascending: false)
           .limit(40);
       if (!mounted) return;
@@ -154,7 +154,7 @@ class _PracticeProgressiveCasesScreenState
     return sum;
   }
 
-  Future<void> _generate() async {
+  Future<void> _generate({String? resumeCaseId}) async {
     if (_busy) return;
     setState(() {
       _busy = true;
@@ -167,7 +167,9 @@ class _PracticeProgressiveCasesScreenState
       }
       final response = await backend.client.functions.invoke(
         'generate-practice-progressive-case',
-        body: <String, dynamic>{},
+        body: <String, dynamic>{
+          if (resumeCaseId != null) 'case_id': resumeCaseId,
+        },
       );
       if (response.data is! Map) {
         throw StateError('Réponse IA indisponible.');
@@ -228,6 +230,7 @@ class _PracticeProgressiveCasesScreenState
       });
     } finally {
       if (mounted) setState(() => _busy = false);
+      await _loadSavedCases();
     }
   }
 
@@ -692,18 +695,23 @@ class _PracticeProgressiveCasesScreenState
                           ),
                           subtitle: Text(
                             '${item['specialty'] ?? ''} · '
-                            '${item['created_at']?.toString().split('T').first ?? ''}',
+                            '${item['created_at']?.toString().split('T').first ?? ''}'
+                            '${item['generation_status'] == 'ready' ? ' · Prêt' : ' · QCM à compléter'}',
                             style: const TextStyle(
                               color: PracticeDailyVisualTheme.muted,
                             ),
                           ),
-                          trailing: const Icon(
-                            Icons.play_arrow_rounded,
+                          trailing: Icon(
+                            item['generation_status'] == 'ready'
+                                ? Icons.play_arrow_rounded
+                                : Icons.refresh_rounded,
                             color: PracticeDailyVisualTheme.mint,
                           ),
                           onTap: _busy
                               ? null
-                              : () => _openSavedCase('${item['id']}'),
+                              : () => item['generation_status'] == 'ready'
+                                  ? _openSavedCase('${item['id']}')
+                                  : _generate(resumeCaseId: '${item['id']}'),
                         ),
                     ],
                   ),
