@@ -54,6 +54,7 @@ class PushNotificationService {
   Future<void> _operations = Future<void>.value();
 
   bool get initialized => _initialized;
+  bool get hasActiveRemotePush => _enabled && _registeredToken != null;
   bool get _android =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   bool get _ios => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -234,6 +235,10 @@ class PushNotificationService {
       await LocalStorageService.savePushEnabled(true);
       _registeredToken = token;
       status.value = 'Notifications push activées sur cet appareil';
+      await NotificationService.instance.schedulePracticeDailyChallengeReminders(
+        enabled: false,
+        completedDays: const <String>{},
+      );
       await _tokenRefreshSub?.cancel();
       _tokenRefreshSub =
           FirebaseMessaging.instance.onTokenRefresh.listen((token) {
@@ -254,6 +259,10 @@ class PushNotificationService {
           }
           _registeredToken = token;
           status.value = 'Notifications push activées sur cet appareil';
+      await NotificationService.instance.schedulePracticeDailyChallengeReminders(
+        enabled: false,
+        completedDays: const <String>{},
+      );
         }));
       }, onError: (Object e) {
         status.value =
