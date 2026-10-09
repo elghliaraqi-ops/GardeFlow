@@ -1,0 +1,32 @@
+name: Temporary Dart Format PR109
+on:
+  push:
+    branches:
+      - feature/practice-structured-dossier-external-previews-20261009
+    paths:
+      - .github/workflows/temporary-format-practice-109.yml
+permissions:
+  contents: write
+jobs:
+  format-practice:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+      - name: Format touched Practice Dart files
+        run: |
+          set -euo pipefail
+          dart format source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_clinical_dossier_test.dart
+          git diff --check
+          if git diff --quiet -- source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_clinical_dossier_test.dart; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git add source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_clinical_dossier_test.dart
+          git commit -m 'style(practice): format structured dossier UI'
+          git push origin HEAD:feature/practice-structured-dossier-external-previews-20261009
