@@ -422,7 +422,7 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
   return {
    question:item.question,options:item.options,correct_index:item.correct_index,
    axis:item.axis,topic:item.topic,
-   correction:String(item.correction)+medicalImageCorrectionSuffix(item.image_request,item.illustration_query)+urls
+   correction:String(item.correction)+medicalImageCorrectionSuffix(item.image_request,String(item.illustration_query??''))+urls
   };
  });
 }
