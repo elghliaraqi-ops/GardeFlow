@@ -19,13 +19,132 @@ class _PracticeProgressiveCasesScreenState
     extends State<PracticeProgressiveCasesScreen> {
   bool _busy = false;
   bool _submitted = false;
+  bool _loadingSaved = false;
   String? _error;
+  String? _savedError;
+  List<Map<String, dynamic>> _savedCases = const [];
   String _title = '';
   String _stem = '';
   List<PracticeDailyStage> _stages = const [];
   List<PracticeDailyQuestion> _questions = const [];
   List<int?> _answers = List<int?>.filled(10, null);
   int _question = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCases();
+  }
+
+  Future<void> _loadSavedCases() async {
+    final backend = SupabaseBackendService.instance;
+    if (!backend.enabled) return;
+    try {
+      if (backend.client.auth.currentUser == null) return;
+    } catch (_) {
+      // Widget tests can render Practice before Supabase.initialize.
+      return;
+    }
+    if (mounted) setState(() => _loadingSaved = true);
+    try {
+      final rows = await backend.client
+          .from('practice_generated_cases')
+          .select('id,case_title,specialty,generation_status,created_at')
+          .order('created_at', ascending: false)
+          .limit(40);
+      if (!mounted) return;
+      setState(() {
+        _savedCases = rows
+            .map((entry) => Map<String, dynamic>.from(entry))
+            .toList();
+        _savedError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _savedError = 'Impossible de charger les cas enregistrés.';
+      });
+    } finally {
+      if (mounted) setState(() => _loadingSaved = false);
+    }
+  }
+
+  Future<void> _openSavedCase(String id) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final backend = SupabaseBackendService.instance;
+      final data = await backend.client
+          .from('practice_generated_cases')
+          .select('case_title,case_stem,case_stages,questions')
+          .eq('id', id)
+          .single();
+      final rawStages = data['case_stages'];
+      final rawQuestions = data['questions'];
+      if (rawStages is! List ||
+          rawStages.length != 4 ||
+          rawQuestions is! List ||
+          rawQuestions.length != 10) {
+        throw StateError('saved_case_invalid');
+      }
+      final stages = rawStages
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                PracticeDailyStage.fromMap(Map<String, dynamic>.from(entry)),
+          )
+          .toList();
+      final questions = rawQuestions
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                PracticeDailyQuestion.fromMap(Map<String, dynamic>.from(entry)),
+          )
+          .toList();
+      if (stages.length != 4 ||
+          questions.length != 10 ||
+          questions.any(
+            (q) =>
+                q.options.length != 4 ||
+                q.correctIndex == null ||
+                q.correction.isEmpty,
+          )) {
+        throw StateError('saved_case_invalid');
+      }
+      if (!mounted) return;
+      setState(() {
+        _title = '${data['case_title'] ?? ''}';
+        _stem = '${data['case_stem'] ?? ''}';
+        _stages = stages;
+        _questions = questions;
+        _answers = List<int?>.filled(10, null);
+        _question = 0;
+        _submitted = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Impossible de rouvrir ce cas. Réessayez.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showSavedCases() {
+    setState(() {
+      _questions = const [];
+      _stages = const [];
+      _error = null;
+      _submitted = false;
+      _question = 0;
+    });
+    _loadSavedCases();
+  }
 
   int get _score {
     var sum = 0;
@@ -35,7 +154,7 @@ class _PracticeProgressiveCasesScreenState
     return sum;
   }
 
-  Future<void> _generate() async {
+  Future<void> _generate({String? resumeCaseId}) async {
     if (_busy) return;
     setState(() {
       _busy = true;
@@ -48,7 +167,9 @@ class _PracticeProgressiveCasesScreenState
       }
       final response = await backend.client.functions.invoke(
         'generate-practice-progressive-case',
-        body: <String, dynamic>{},
+        body: <String, dynamic>{
+          if (resumeCaseId != null) 'case_id': resumeCaseId,
+        },
       );
       if (response.data is! Map) {
         throw StateError('Réponse IA indisponible.');
@@ -95,6 +216,7 @@ class _PracticeProgressiveCasesScreenState
         _question = 0;
         _submitted = false;
       });
+      await _loadSavedCases();
     } catch (e) {
       if (!mounted) return;
       final reason = e.toString().toLowerCase();
@@ -108,6 +230,7 @@ class _PracticeProgressiveCasesScreenState
       });
     } finally {
       if (mounted) setState(() => _busy = false);
+      await _loadSavedCases();
     }
   }
 
@@ -532,6 +655,67 @@ class _PracticeProgressiveCasesScreenState
                   icon: const Icon(Icons.auto_awesome_rounded),
                   label: const Text('Générer un cas clinique progressif'),
                 ),
+                const SizedBox(height: 18),
+                _panel(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'MES CAS SAUVEGARDÉS',
+                        style: TextStyle(
+                          color: PracticeDailyVisualTheme.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_loadingSaved)
+                        const LinearProgressIndicator(
+                          color: PracticeDailyVisualTheme.mint,
+                        ),
+                      if (_savedError != null)
+                        Text(
+                          _savedError!,
+                          style: const TextStyle(color: Color(0xFFFFB2B2)),
+                        ),
+                      if (!_loadingSaved && _savedCases.isEmpty)
+                        const Text(
+                          'Aucun cas enregistré pour le moment.',
+                          style: TextStyle(
+                            color: PracticeDailyVisualTheme.muted,
+                          ),
+                        ),
+                      for (final item in _savedCases)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${item['case_title'] ?? 'Cas clinique'}',
+                            style: const TextStyle(
+                              color: PracticeDailyVisualTheme.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${item['specialty'] ?? ''} · '
+                            '${item['created_at']?.toString().split('T').first ?? ''}'
+                            '${item['generation_status'] == 'ready' ? ' · Prêt' : ' · QCM à compléter'}',
+                            style: const TextStyle(
+                              color: PracticeDailyVisualTheme.muted,
+                            ),
+                          ),
+                          trailing: Icon(
+                            item['generation_status'] == 'ready'
+                                ? Icons.play_arrow_rounded
+                                : Icons.refresh_rounded,
+                            color: PracticeDailyVisualTheme.mint,
+                          ),
+                          onTap: _busy
+                              ? null
+                              : () => item['generation_status'] == 'ready'
+                                    ? _openSavedCase('${item['id']}')
+                                    : _generate(resumeCaseId: '${item['id']}'),
+                        ),
+                    ],
+                  ),
+                ),
               ] else ...[
                 Text(
                   _title,
@@ -592,6 +776,13 @@ class _PracticeProgressiveCasesScreenState
                 ],
                 _stagePanel(),
                 _quiz(),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                  onPressed: _busy ? null : _showSavedCases,
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  label: const Text('Mes cas sauvegardés'),
+                ),
               ],
               const SizedBox(height: 15),
               OutlinedButton.icon(

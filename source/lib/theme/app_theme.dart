@@ -27,28 +27,28 @@ class AppColors {
   static Color get paper {
     if (_isRed) return const Color(0xFF241011);
     if (_isWhite) return const Color(0xFFF4F7F5);
-    if (_isBlack) return const Color(0xFF080B09);
+    if (_isBlack) return const Color(0xFF071526);
     return const Color(0xFF071F18);
   }
 
   static Color get paperAlt {
     if (_isRed) return const Color(0xFF301516);
     if (_isWhite) return const Color(0xFFEDF2EF);
-    if (_isBlack) return const Color(0xFF0F1311);
+    if (_isBlack) return const Color(0xFF10243A);
     return const Color(0xFF0A291F);
   }
 
   static Color get card {
     if (_isRed) return const Color(0xFF3B1B1D);
     if (_isWhite) return const Color(0xFFFFFFFF);
-    if (_isBlack) return const Color(0xFF161A18);
+    if (_isBlack) return const Color(0xFF10243A);
     return const Color(0xFF0E3025);
   }
 
   static Color get surfaceRaised {
     if (_isRed) return const Color(0xFF482326);
     if (_isWhite) return const Color(0xFFF9FBFA);
-    if (_isBlack) return const Color(0xFF1D221F);
+    if (_isBlack) return const Color(0xFF17314E);
     return const Color(0xFF14392C);
   }
 
@@ -58,21 +58,21 @@ class AppColors {
   static Color get inkSoft {
     if (_isRed) return const Color(0xFFD8BFC0);
     if (_isWhite) return const Color(0xFF617168);
-    if (_isBlack) return const Color(0xFFB9C2BD);
+    if (_isBlack) return const Color(0xFFB9CBE0);
     return const Color(0xFFB6CAC0);
   }
 
   static Color get inkFaint {
     if (_isRed) return const Color(0xFFA78486);
     if (_isWhite) return const Color(0xFF92A099);
-    if (_isBlack) return const Color(0xFF7E8983);
+    if (_isBlack) return const Color(0xFF87A4BB);
     return const Color(0xFF789388);
   }
 
   static Color get line {
     if (_isRed) return const Color(0xFF653236);
     if (_isWhite) return const Color(0xFFDCE5DF);
-    if (_isBlack) return const Color(0xFF2C332F);
+    if (_isBlack) return const Color(0xFF244B68);
     return const Color(0xFF1B4A38);
   }
 
@@ -80,6 +80,7 @@ class AppColors {
   static Color get brand {
     if (_isRed) return const Color(0xFFE65B55);
     if (_isGreen) return const Color(0xFF22D985);
+    if (_isBlack) return const Color(0xFF5BE7B0);
     return const Color(0xFF15965B);
   }
 
@@ -92,13 +93,14 @@ class AppColors {
   static Color get brandBright {
     if (_isRed) return const Color(0xFFFF7A73);
     if (_isGreen) return const Color(0xFF4AE9A0);
+    if (_isBlack) return const Color(0xFF5BE7B0);
     return const Color(0xFF2AB66F);
   }
 
   static Color get brandSoft {
     if (_isRed) return const Color(0xFF55262A);
     if (_isWhite) return const Color(0xFFE4F5EC);
-    if (_isBlack) return const Color(0xFF173126);
+    if (_isBlack) return const Color(0xFF143D37);
     return const Color(0xFF123F2F);
   }
 
@@ -115,7 +117,7 @@ class AppColors {
   static Color get navy {
     if (_isRed) return const Color(0xFF241011);
     if (_isWhite) return const Color(0xFF173D2E);
-    if (_isBlack) return const Color(0xFF080B09);
+    if (_isBlack) return const Color(0xFF071526);
     return const Color(0xFF071F18);
   }
 

@@ -164,7 +164,8 @@ class ScreenDecorBackdrop extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: scene == ScreenDecorScene.practice
+                colors: scene == ScreenDecorScene.practice ||
+                        (dark && AppColors.appearanceTheme == 'black')
                     ? [
                         const Color(0xFF8B6CFF).withOpacity(dark ? .20 : .14),
                         const Color(0xFF3295FF).withOpacity(dark ? .08 : .055),
