@@ -190,8 +190,12 @@ Deno.serve(async(req:Request)=>{
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
    const refList=refs.map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
-   const common='Réponds UNIQUEMENT en JSON. Cinq QCM originaux EXACTEMENT par lot, '+
-    '4 options distinctes, une seule correcte, correction médicale claire (3 à 5 phrases), '+
+   const common='Réponds UNIQUEMENT en JSON. Format exigé : objet {qcms:[cinq objets]} ; '+
+    'chaque QCM a exactement les clés question (texte), options (tableau de 4 chaînes), '+
+    'correct_index (entier de 0 à 3), correction (texte), topic (texte), '+
+    'references (tableau de 1 à 3 objets {url}), image_search_query (texte ou chaîne vide). '+
+    'Cinq QCM originaux EXACTEMENT par lot, quatre options distinctes, une seule correcte, '+
+    'correction médicale claire (3 à 5 phrases), '+
     'topic parmi motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise, '+
     'references: liste de 1 à 3 objets {url} issus UNIQUEMENT des URL Europe PMC ci-dessous. '+
     'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
