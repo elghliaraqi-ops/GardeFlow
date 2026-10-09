@@ -237,7 +237,16 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
             borderRadius:BorderRadius.circular(11),
             child:Padding(padding:const EdgeInsets.all(11),
               child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                const Icon(Icons.article_outlined,color:PracticeDailyVisualTheme.mint,size:20),
+                if((a['thumbnail']??'').toString().startsWith('https://'))
+                  Padding(padding:const EdgeInsets.only(right:9),
+                    child:ClipRRect(borderRadius:BorderRadius.circular(8),
+                      child:Image.network(
+                        visceralImageProxyUrl((a['thumbnail']??'').toString()),
+                        headers:visceralImageHeaders(),width:65,height:65,fit:BoxFit.contain,
+                        errorBuilder:(_,__,___)=>const Icon(Icons.article_outlined,
+                          color:PracticeDailyVisualTheme.mint,size:22)))),
+                if(!(a['thumbnail']??'').toString().startsWith('https://'))
+                  const Icon(Icons.article_outlined,color:PracticeDailyVisualTheme.mint,size:20),
                 const SizedBox(width:10),
                 Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                   Text((a['title']??'Article médical').toString(),maxLines:3,
