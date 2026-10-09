@@ -203,77 +203,105 @@ class _PracticeProgressiveCasesScreenState
     final parts = sections.first.split('§IMAGES§');
     final images = parts.length > 1 ? parts[1].trim().split('\n') : <String>[];
     final refs = sections.length > 1
-        ? sections[1].trim().split('\n') : <String>[];
+        ? sections[1].trim().split('\n')
+        : <String>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('EXPLICATION IA', style: TextStyle(
-          color: PracticeDailyVisualTheme.gold,
-          fontWeight: FontWeight.w900,
-        )),
-        const SizedBox(height: 7),
-        Text(parts.first.trim(), style: const TextStyle(
-          color: PracticeDailyVisualTheme.text, height: 1.5,
-        )),
-        for (final raw in images)
-          Builder(builder: (_) {
-            final data = raw.split('|||');
-            if (data.length != 3) return const SizedBox.shrink();
-            final image = Uri.tryParse(data[1]), page = Uri.tryParse(data[2]);
-            if (image?.scheme != 'https' ||
-                image?.host != 'upload.wikimedia.org' ||
-                page?.scheme != 'https' ||
-                page?.host != 'commons.wikimedia.org') {
-              return const SizedBox.shrink();
-            }
-            return InkWell(
-              onTap: () => launchUrl(page!, mode: LaunchMode.externalApplication),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  Text(data[0], style: const TextStyle(
-                    color: PracticeDailyVisualTheme.gold, fontSize: 12,
-                  )),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(image.toString(), height: 170,
-                      width: double.infinity, fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Text(
-                        'Aperçu externe indisponible',
-                        style: TextStyle(color: PracticeDailyVisualTheme.muted),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        if (refs.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          const Text('SOURCES MÉDICALES', style: TextStyle(
+        const Text(
+          'EXPLICATION IA',
+          style: TextStyle(
             color: PracticeDailyVisualTheme.gold,
             fontWeight: FontWeight.w900,
-          )),
-          for (final raw in refs)
-            Builder(builder: (_) {
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          parts.first.trim(),
+          style: const TextStyle(
+            color: PracticeDailyVisualTheme.text,
+            height: 1.5,
+          ),
+        ),
+        for (final raw in images)
+          Builder(
+            builder: (_) {
               final data = raw.split('|||');
-              if (data.length != 5) return const SizedBox.shrink();
-              final url = Uri.tryParse(data[4]);
-              if (url?.scheme != 'https') return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: TextButton.icon(
-                  style: PracticeDailyVisualTheme.clearTextButtonStyle,
-                  onPressed: () => launchUrl(
-                    url!, mode: LaunchMode.externalApplication),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                  label: Text(data[1], maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
+              if (data.length != 3) return const SizedBox.shrink();
+              final image = Uri.tryParse(data[1]), page = Uri.tryParse(data[2]);
+              if (image?.scheme != 'https' ||
+                  image?.host != 'upload.wikimedia.org' ||
+                  page?.scheme != 'https' ||
+                  page?.host != 'commons.wikimedia.org') {
+                return const SizedBox.shrink();
+              }
+              return InkWell(
+                onTap: () =>
+                    launchUrl(page!, mode: LaunchMode.externalApplication),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Text(
+                      data[0],
+                      style: const TextStyle(
+                        color: PracticeDailyVisualTheme.gold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        image.toString(),
+                        height: 170,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Text(
+                          'Aperçu externe indisponible',
+                          style: TextStyle(
+                            color: PracticeDailyVisualTheme.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               );
-            }),
+            },
+          ),
+        if (refs.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text(
+            'SOURCES MÉDICALES',
+            style: TextStyle(
+              color: PracticeDailyVisualTheme.gold,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          for (final raw in refs)
+            Builder(
+              builder: (_) {
+                final data = raw.split('|||');
+                if (data.length != 5) return const SizedBox.shrink();
+                final url = Uri.tryParse(data[4]);
+                if (url?.scheme != 'https') return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: TextButton.icon(
+                    style: PracticeDailyVisualTheme.clearTextButtonStyle,
+                    onPressed: () =>
+                        launchUrl(url!, mode: LaunchMode.externalApplication),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: Text(
+                      data[1],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                );
+              },
+            ),
         ],
       ],
     );
