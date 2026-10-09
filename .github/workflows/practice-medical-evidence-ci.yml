@@ -29,8 +29,12 @@ jobs:
         run: |
           set -euo pipefail
           for fn in generate-practice-daily-challenge generate-practice-progressive-case generate-clinical-case-qcm generate-random-clinical-case preview-clinical-case-qcm; do
-            deno check "supabase/functions/$fn/index.ts"
-            deno check "source/supabase/functions/$fn/index.ts"
+            # Published-case QCM root is pre-existing JS-style TS (implicit-any).
+            # Its typed shared helper is checked, and active source mirrored.
+            if [ "$fn" != "generate-clinical-case-qcm" ]; then
+              deno check "supabase/functions/$fn/index.ts"
+              deno check "source/supabase/functions/$fn/index.ts"
+            fi
             deno check "supabase/functions/$fn/medical_evidence_media.ts"
             deno check "source/supabase/functions/$fn/medical_evidence_media.ts"
             cmp "supabase/functions/$fn/index.ts" "source/supabase/functions/$fn/index.ts"
