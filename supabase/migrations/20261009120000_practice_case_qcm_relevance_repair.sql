@@ -119,7 +119,7 @@ begin
 
   return query select true,'running'::text,v_attempts,null::timestamptz,null::text;
 end;
-$function$
+$function$;
 
 
 -- Private before-image of clinical-case QCM repair and existing answers.
