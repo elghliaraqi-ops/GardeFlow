@@ -162,6 +162,38 @@ async function commons(search:string):Promise<ImagePreview[]>{
   }
   return out;
 }
+// Known, openly licensed anatomy sources are queried by FILE TITLE, not by
+// hardcoded image URLs. Wikimedia returns current media URLs and attribution.
+async function rectalAnatomyFiles():Promise<ImagePreview[]> {
+  const titles=['File:Rectal_anatomy.jpg',
+    'File:Anatomy_of_human_rectum_and_anus-2.png',
+    'File:Gray1079.png'];
+  const params=new URLSearchParams({action:'query',titles:titles.join('|'),
+    prop:'imageinfo',iiprop:'url|mime|extmetadata',iiurlwidth:'750',
+    format:'json',formatversion:'2'});
+  try {
+    const r=await fetch('https://commons.wikimedia.org/w/api.php?'+params,{
+      signal:AbortSignal.timeout(7500),headers:{Accept:'application/json'}});
+    if(!r.ok)return[];
+    const data=await r.json();const out:ImagePreview[]=[];
+    for(const page of data?.query?.pages??[]){
+      const info=page?.imageinfo?.[0];if(!info)continue;
+      const item:ImagePreview={
+        thumbnail:String(info.thumburl||info.url||''),
+        full:String(info.url||''),
+        source:String(info.descriptionurl||''),
+        title:clean(String(page.title||'').replace(/^File:/i,''),180),
+        description:clean(info.extmetadata?.ImageDescription?.value,440),
+        creator:clean(info.extmetadata?.Artist?.value,130),
+        license:clean(info.extmetadata?.LicenseShortName?.value,60),
+        provider:'Wikimedia Commons',
+      };
+      if(allowedAsset(item.thumbnail)&&allowedAsset(item.full))out.push(item);
+    }
+    return out;
+  }catch(_){return[];}
+}
+
 async function openverse(search:string):Promise<ImagePreview[]>{
   const r=await fetch('https://api.openverse.org/v1/images/?'+new URLSearchParams({
     q:search,page_size:String(SEARCH_LIMIT),license:'by,by-sa,cc0,pdm'}),{
@@ -183,8 +215,12 @@ async function openverse(search:string):Promise<ImagePreview[]>{
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const search=imageSearchTerms(request);
+  const curated=request.image_type==='anatomical_diagram' &&
+    /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query))
+    ? await rectalAnatomyFiles() : [];
   const [a,b]=await Promise.allSettled([commons(search),openverse(search)]);
   const candidates=[
+    ...curated,
     ...(a.status==='fulfilled'?a.value:[]),
     ...(b.status==='fulfilled'?b.value:[]),
   ].filter(x=>imageIsTopical(x,request));
