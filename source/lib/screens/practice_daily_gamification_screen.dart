@@ -530,155 +530,164 @@ class _PracticeDailyLeaderboardScreenState
       child: Scaffold(
         backgroundColor: _ink,
         appBar: AppBar(
-        title: const Text('Classement · Défis quotidiens',
-          style: TextStyle(
-            color: PracticeDailyVisualTheme.text,
-            fontWeight: FontWeight.w800,
-            fontSize: 17,
-          ),
-        ),
-        backgroundColor: _ink,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: 'Quitter le classement',
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.exit_to_app_rounded),
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: PracticeDailyVisualTheme.pageGradient,
-        ),
-        child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            'LE PODIUM DES DÉFIS',
+          title: const Text(
+            'Classement · Défis quotidiens',
             style: TextStyle(
-              color: _gold,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
+              color: PracticeDailyVisualTheme.text,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Un classement distinct des QCM et des gardes. '
-            'Seuls les premiers résultats quotidiens rapportent des XP. '
-            'Les profils ayant désactivé leur participation sont exclus.',
-            style: TextStyle(color: _soft, fontSize: 12, height: 1.5),
-          ),
-          const SizedBox(height: 14),
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 'month', label: Text('Ce mois')),
-              ButtonSegment(value: 'all', label: Text('Tout le temps')),
-            ],
-            selected: {_period},
-            onSelectionChanged: (values) {
-              setState(() => _period = values.first);
-              _load();
-            },
-          ),
-          if (_loading) ...[
-            const SizedBox(height: 12),
-            const LinearProgressIndicator(color: _mint),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 15),
-            Text(_error!, style: const TextStyle(color: _soft)),
-            OutlinedButton(onPressed: _load, child: const Text('Réessayer')),
-          ],
-          if (!_loading && _rows.isEmpty && _error == null) ...[
-            const SizedBox(height: 30),
-            const Center(
-              child: Text(
-                'Aucun défi terminé pour cette période.',
-                style: TextStyle(color: _soft),
-              ),
-            ),
-          ],
-          for (final item in _rows) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: item.userId == user ? _mint.withOpacity(.14) : _surface,
-                borderRadius: BorderRadius.circular(17),
-                border: Border.all(
-                  color: item.userId == user
-                      ? _mint.withOpacity(.50)
-                      : const Color(0xFF244B68),
-                ),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 35,
-                    child: Text(
-                      '#${item.rank}',
-                      style: TextStyle(
-                        color: item.rank <= 3 ? _gold : _soft,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.userId == user
-                              ? '${item.displayName} · Vous'
-                              : item.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${item.completedDays} défis · '
-                          '${item.perfectDays} sans-faute'
-                          '${item.hospital.isNotEmpty ? ' · ${item.hospital}' : ''}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _soft, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${item.xp} XP',
-                    style: const TextStyle(
-                      color: _mint,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
+          backgroundColor: _ink,
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              tooltip: 'Quitter le classement',
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(Icons.exit_to_app_rounded),
-              label: const Text('Quitter le classement'),
             ),
-          ),
-        ],
+          ],
         ),
-      ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: PracticeDailyVisualTheme.pageGradient,
+          ),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text(
+                'LE PODIUM DES DÉFIS',
+                style: TextStyle(
+                  color: _gold,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Un classement distinct des QCM et des gardes. '
+                'Seuls les premiers résultats quotidiens rapportent des XP. '
+                'Les profils ayant désactivé leur participation sont exclus.',
+                style: TextStyle(color: _soft, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'month', label: Text('Ce mois')),
+                  ButtonSegment(value: 'all', label: Text('Tout le temps')),
+                ],
+                selected: {_period},
+                onSelectionChanged: (values) {
+                  setState(() => _period = values.first);
+                  _load();
+                },
+              ),
+              if (_loading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(color: _mint),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 15),
+                Text(_error!, style: const TextStyle(color: _soft)),
+                OutlinedButton(
+                  onPressed: _load,
+                  child: const Text('Réessayer'),
+                ),
+              ],
+              if (!_loading && _rows.isEmpty && _error == null) ...[
+                const SizedBox(height: 30),
+                const Center(
+                  child: Text(
+                    'Aucun défi terminé pour cette période.',
+                    style: TextStyle(color: _soft),
+                  ),
+                ),
+              ],
+              for (final item in _rows) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: item.userId == user
+                        ? _mint.withOpacity(.14)
+                        : _surface,
+                    borderRadius: BorderRadius.circular(17),
+                    border: Border.all(
+                      color: item.userId == user
+                          ? _mint.withOpacity(.50)
+                          : const Color(0xFF244B68),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 35,
+                        child: Text(
+                          '#${item.rank}',
+                          style: TextStyle(
+                            color: item.rank <= 3 ? _gold : _soft,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.userId == user
+                                  ? '${item.displayName} · Vous'
+                                  : item.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${item.completedDays} défis · '
+                              '${item.perfectDays} sans-faute'
+                              '${item.hospital.isNotEmpty ? ' · ${item.hospital}' : ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _soft,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${item.xp} XP',
+                        style: const TextStyle(
+                          color: _mint,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.exit_to_app_rounded),
+                  label: const Text('Quitter le classement'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

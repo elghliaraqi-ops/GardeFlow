@@ -147,14 +147,15 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     } catch (e) {
       if (mounted) {
         final raw = e.toString().toLowerCase();
-        final message = raw.contains('groq_auth_failed') ||
+        final message =
+            raw.contains('groq_auth_failed') ||
                 raw.contains('groq_configuration_missing')
             ? 'Le service de génération IA nécessite une vérification de sa configuration.'
             : raw.contains('groq_rate_limited')
-                ? 'Le service IA a atteint sa limite temporaire. Réessayez plus tard.'
-                : raw.contains('generation_in_progress')
-                    ? 'Le défi est en préparation. Réessayez dans quelques instants.'
-                    : 'La génération IA n’a pas abouti. Réessayez dans quelques instants.';
+            ? 'Le service IA a atteint sa limite temporaire. Réessayez plus tard.'
+            : raw.contains('generation_in_progress')
+            ? 'Le défi est en préparation. Réessayez dans quelques instants.'
+            : 'La génération IA n’a pas abouti. Réessayez dans quelques instants.';
         setState(() => _error = message);
       }
     } finally {
@@ -866,134 +867,144 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       child: Scaffold(
         backgroundColor: _bg,
         appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: _text,
-        title: Text(
-          _replayMode ? 'Rejouer · Practice' : 'Défi quotidien · Practice',
-          style: const TextStyle(
-            color: PracticeDailyVisualTheme.text,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Quitter le défi et revenir à Practice',
-            onPressed: _leavePractice,
-            icon: const Icon(Icons.exit_to_app_rounded),
-          ),
-          if (!_replayMode)
-            IconButton(
-              tooltip: 'Historique et rejouer',
-              onPressed: _busy ? null : _openHistory,
-              icon: const Icon(Icons.history_rounded),
+          backgroundColor: _bg,
+          foregroundColor: _text,
+          title: Text(
+            _replayMode ? 'Rejouer · Practice' : 'Défi quotidien · Practice',
+            style: const TextStyle(
+              color: PracticeDailyVisualTheme.text,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
             ),
-          IconButton(
-            tooltip: 'Actualiser',
-            onPressed: _busy ? null : _load,
-            icon: const Icon(Icons.refresh_rounded),
           ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: PracticeDailyVisualTheme.pageGradient,
-        ),
-        child: ListView(
-        padding: const EdgeInsets.all(15),
-        children: [
-          if (_busy) ...[
-            const LinearProgressIndicator(color: _green),
-            const SizedBox(height: 12),
+          actions: [
+            IconButton(
+              tooltip: 'Quitter le défi et revenir à Practice',
+              onPressed: _leavePractice,
+              icon: const Icon(Icons.exit_to_app_rounded),
+            ),
+            if (!_replayMode)
+              IconButton(
+                tooltip: 'Historique et rejouer',
+                onPressed: _busy ? null : _openHistory,
+                icon: const Icon(Icons.history_rounded),
+              ),
+            IconButton(
+              tooltip: 'Actualiser',
+              onPressed: _busy ? null : _load,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
           ],
-          if (_error != null) ...[
-            _box(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: PracticeDailyVisualTheme.pageGradient,
+          ),
+          child: ListView(
+            padding: const EdgeInsets.all(15),
+            children: [
+              if (_busy) ...[
+                const LinearProgressIndicator(color: _green),
+                const SizedBox(height: 12),
+              ],
+              if (_error != null) ...[
+                _box(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.error_outline, color: Color(0xFFFF8D97)),
-                      SizedBox(width: 8),
-                      Text('Défi indisponible',
-                        style: TextStyle(
+                      const Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Color(0xFFFF8D97)),
+                          SizedBox(width: 8),
+                          Text(
+                            'Défi indisponible',
+                            style: TextStyle(
+                              color: PracticeDailyVisualTheme.text,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _error!,
+                        style: const TextStyle(
                           color: PracticeDailyVisualTheme.text,
-                          fontWeight: FontWeight.w800,
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _lastMode == null
+                                  ? _load()
+                                  : _start(_lastMode!),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Réessayer'),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(_error!,
-                    style: const TextStyle(color: PracticeDailyVisualTheme.text),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : () =>
-                        _lastMode == null ? _load() : _start(_lastMode!),
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Réessayer'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          _challenge(),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _leavePractice,
-              icon: const Icon(Icons.exit_to_app_rounded),
-              label: const Text('Quitter le défi'),
-            ),
-          ),
-          if (!_replayMode) ...[
-            const SizedBox(height: 18),
-            _box(
+                ),
+                const SizedBox(height: 12),
+              ],
+              _challenge(),
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _openHistory,
-                  icon: const Icon(Icons.history_rounded),
-                  label: const Text('Historique · Rejouer mes défis'),
+                child: OutlinedButton.icon(
+                  onPressed: _leavePractice,
+                  icon: const Icon(Icons.exit_to_app_rounded),
+                  label: const Text('Quitter le défi'),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
-            _calendar(),
-            const SizedBox(height: 16),
-            _box(
-              SwitchListTile(
-                value: _enabled,
-                onChanged: _toggle,
-                activeColor: _green,
-                title: const Text(
-                  'Rappel quotidien',
-                  style: TextStyle(color: _text, fontWeight: FontWeight.bold),
+              if (!_replayMode) ...[
+                const SizedBox(height: 18),
+                _box(
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _openHistory,
+                      icon: const Icon(Icons.history_rounded),
+                      label: const Text('Historique · Rejouer mes défis'),
+                    ),
+                  ),
                 ),
-                subtitle: const Text(
-                  'Notification FCM à 8 h (Casablanca) si le push est actif, '
-                  'sinon rappel local sur mobile.',
-                  style: TextStyle(color: _muted, fontSize: 12),
+                const SizedBox(height: 18),
+                _calendar(),
+                const SizedBox(height: 16),
+                _box(
+                  SwitchListTile(
+                    value: _enabled,
+                    onChanged: _toggle,
+                    activeColor: _green,
+                    title: const Text(
+                      'Rappel quotidien',
+                      style: TextStyle(
+                        color: _text,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Notification FCM à 8 h (Casablanca) si le push est actif, '
+                      'sinon rappel local sur mobile.',
+                      style: TextStyle(color: _muted, fontSize: 12),
+                    ),
+                    secondary: const Icon(
+                      Icons.notifications_active_rounded,
+                      color: _gold,
+                    ),
+                  ),
                 ),
-                secondary: const Icon(
-                  Icons.notifications_active_rounded,
-                  color: _gold,
-                ),
+              ],
+              const SizedBox(height: 12),
+              const Text(
+                'Les corrections et les images externes apparaissent après validation des 10 réponses. '
+                'Aucune image médicale n’est enregistrée sur les serveurs GardeFlow.',
+                style: TextStyle(color: _muted, fontSize: 12),
               ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          const Text(
-            'Les corrections et les images externes apparaissent après validation des 10 réponses. '
-            'Aucune image médicale n’est enregistrée sur les serveurs GardeFlow.',
-            style: TextStyle(color: _muted, fontSize: 12),
+            ],
           ),
-        ],
         ),
-      ),
       ),
     );
   }

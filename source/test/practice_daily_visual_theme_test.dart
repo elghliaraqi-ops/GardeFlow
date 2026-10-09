@@ -3,8 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:huim6_planning/screens/practice_daily_visual_theme.dart';
 
 void main() {
-  testWidgets('Practice dark gradient and readable primary/secondary buttons',
-      (tester) async {
+  testWidgets('Practice dark gradient and readable primary/secondary buttons', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -13,8 +14,14 @@ void main() {
             child: Scaffold(
               body: Column(
                 children: [
-                  FilledButton(onPressed: () {}, child: const Text('Commencer')),
-                  OutlinedButton(onPressed: () {}, child: const Text('Quitter le défi')),
+                  FilledButton(
+                    onPressed: () {},
+                    child: const Text('Commencer'),
+                  ),
+                  OutlinedButton(
+                    onPressed: () {},
+                    child: const Text('Quitter le défi'),
+                  ),
                 ],
               ),
             ),
@@ -33,7 +40,9 @@ void main() {
       PracticeDailyVisualTheme.mint,
     );
     expect(
-      theme.outlinedButtonTheme.style?.foregroundColor?.resolve(<WidgetState>{}),
+      theme.outlinedButtonTheme.style?.foregroundColor?.resolve(
+        <WidgetState>{},
+      ),
       PracticeDailyVisualTheme.text,
     );
     expect(find.text('Quitter le défi'), findsOneWidget);

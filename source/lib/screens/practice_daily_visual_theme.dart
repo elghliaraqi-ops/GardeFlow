@@ -28,11 +28,7 @@ abstract final class PracticeDailyVisualTheme {
   static const cardGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [
-      Color(0xFF5D47D8),
-      Color(0xFF1D5AA4),
-      Color(0xFF087B6D),
-    ],
+    colors: [Color(0xFF5D47D8), Color(0xFF1D5AA4), Color(0xFF087B6D)],
     stops: [0, .55, 1],
   );
 
@@ -44,7 +40,9 @@ abstract final class PracticeDailyVisualTheme {
       disabledBackgroundColor: elevated,
       disabledForegroundColor: muted,
       textStyle: const TextStyle(
-        fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: .15,
+        fontSize: 13,
+        fontWeight: FontWeight.w800,
+        letterSpacing: .15,
       ),
       minimumSize: const Size(0, 47),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -78,7 +76,9 @@ abstract final class PracticeDailyVisualTheme {
         iconTheme: IconThemeData(color: text),
         actionsIconTheme: IconThemeData(color: text),
         titleTextStyle: TextStyle(
-          color: text, fontSize: 17, fontWeight: FontWeight.w800,
+          color: text,
+          fontSize: 17,
+          fontWeight: FontWeight.w800,
           letterSpacing: .1,
         ),
       ),
@@ -91,27 +91,29 @@ abstract final class PracticeDailyVisualTheme {
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(foregroundColor: text, backgroundColor: Colors.transparent),
+        style: IconButton.styleFrom(
+          foregroundColor: text,
+          backgroundColor: Colors.transparent,
+        ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           foregroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? background : text,
+            (states) =>
+                states.contains(WidgetState.selected) ? background : text,
           ),
           backgroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? mint : elevated,
+            (states) => states.contains(WidgetState.selected) ? mint : elevated,
           ),
-          side: const WidgetStatePropertyAll(
-            BorderSide(color: border),
-          ),
+          side: const WidgetStatePropertyAll(BorderSide(color: border)),
         ),
       ),
       dialogTheme: const DialogThemeData(
         backgroundColor: surface,
         titleTextStyle: TextStyle(
-          color: text, fontSize: 18, fontWeight: FontWeight.w800,
+          color: text,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
         ),
         contentTextStyle: TextStyle(color: text, fontSize: 14),
       ),
@@ -121,7 +123,8 @@ abstract final class PracticeDailyVisualTheme {
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? mint.withOpacity(.35) : elevated,
+              ? mint.withOpacity(.35)
+              : elevated,
         ),
       ),
     );

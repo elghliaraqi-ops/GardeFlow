@@ -54,8 +54,7 @@ jobs:
       - name: Strict Dart formatting
         working-directory: source
         run: |
-          dart format lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart test/practice_daily_visual_theme_test.dart
-          git diff -- lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart test/practice_daily_visual_theme_test.dart
+          dart format --output=none --set-exit-if-changed lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart test/practice_daily_visual_theme_test.dart
       - name: Analyze changed Practice pages
         working-directory: source
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart
