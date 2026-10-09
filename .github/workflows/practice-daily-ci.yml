@@ -13,6 +13,7 @@ on:
       - 'supabase/functions/generate-practice-daily-challenge/**'
       - 'source/supabase/functions/generate-practice-daily-challenge/**'
       - 'supabase/migrations/*practice_daily*'
+      - 'supabase/migrations/*practice_progressive*'
       - '.github/workflows/practice-daily-ci.yml'
   workflow_dispatch:
 
@@ -49,8 +50,10 @@ jobs:
         run: |
           deno check supabase/functions/generate-practice-daily-challenge/index.ts
           deno check source/supabase/functions/generate-practice-daily-challenge/index.ts
+          test "$(sha256sum supabase/functions/generate-practice-daily-challenge/index.ts | cut -d' ' -f1)" = "$(sha256sum source/supabase/functions/generate-practice-daily-challenge/index.ts | cut -d' ' -f1)"
       - name: Verify no public answer-key reads
         run: |
           grep -Fq 'revoke all on public.practice_daily_challenges,public.practice_daily_attempts from public,anon,authenticated' supabase/migrations/20261009002000_practice_daily_challenge.sql
           grep -Fq "questions jsonb not null" supabase/migrations/20261009002000_practice_daily_challenge.sql
           grep -Fq 'grant execute on function public.practice_daily_generation_claim(date,text) to service_role' supabase/migrations/20261009002500_practice_daily_generation_claim.sql
+          grep -Fq 'case_stages' supabase/migrations/20261009030000_practice_progressive_case_stages.sql
