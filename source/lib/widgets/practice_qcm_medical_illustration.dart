@@ -66,17 +66,41 @@ class PracticeQcmImageMetadata {
           .trim().split('\n').first;
       oldTitle = line.split('|||').first.trim();
     }
+    final focused = '$oldTitle $question'.toLowerCase();
+    final isAnatomy = RegExp(r'anatom|mésorect|mesorect|sphinct|levator|rapport')
+            .hasMatch(focused) &&
+        !RegExp(r'\b(irm|mri|tdm|scanner|dwi|adc|t1|t2|t3|t4|diffusion)\b')
+            .hasMatch(focused);
+    final isScan = RegExp(
+      r'\b(irm|mri|tdm|scanner|ct|radiograph|echograph|'
+      r'ultrasound|t2|t1|dwi|adc|diffusion)\b',
+      caseSensitive: false,
+    ).hasMatch(focused);
+    final contextShort = context.trim().length > 85
+        ? context.trim().substring(0, 85)
+        : context.trim();
     final descriptor = [
-      if (context.trim().isNotEmpty) context.trim(),
+      if (contextShort.isNotEmpty) contextShort,
       if (oldTitle.isNotEmpty) oldTitle,
       if (question.trim().isNotEmpty) question.trim(),
     ].join(' — ').trim();
     if (descriptor.isEmpty) return null;
-    final text = descriptor.length > 290 ? descriptor.substring(0, 290) : descriptor;
+    final text = descriptor.length > 280
+        ? descriptor.substring(0, 280)
+        : descriptor;
     return <String, dynamic>{
       'query': text,
-      'purpose': oldTitle.isNotEmpty ? oldTitle : 'Illustration de la question médicale',
-      'modality': '',
+      'purpose': oldTitle.isNotEmpty
+          ? oldTitle
+          : 'Illustration médicale correspondant au QCM',
+      'modality': isScan ? 'medical radiology' : 'anatomical illustration',
+      'image_type': isAnatomy
+          ? 'anatomical_diagram'
+          : isScan ? 'radiology_scan' : 'operative_diagram',
+      'anatomy': contextShort,
+      'plane': 'not_applicable',
+      'required_features': <String>[],
+      'excluded_features': <String>['book cover','annual report','wrong organ'],
     };
   }
 
