@@ -1,5 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {dailyQcmFingerprint,validateDailyBatch,validCachedDailyQuestion} from './daily_qcm_validation.ts';
+import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology'];
@@ -126,7 +127,12 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
   console.warn('daily_ai_question_rejected',reason);
  // Optional remote images can never invalidate correctly generated questions.
  return await Promise.all(result.accepted.map(async item=>{
-  const picture=item.illustration_query?await commons(item.illustration_query):null;
+  const commonImage=item.illustration_query?await commons(item.illustration_query):null;
+  const alternative=(!commonImage&&item.illustration_query)?
+   await findOpenverseMedicalPreview(item.illustration_query):null;
+  const picture=commonImage??(alternative?{
+   name:alternative.title+' · '+alternative.creator+' · '+alternative.license+' · Openverse',
+   url:alternative.preview_url,source:alternative.source_url}:null);
   const img=picture?'\n\n§IMAGES§\n'+
    [picture.name,picture.url,picture.source].join('|||'):'';
   const urls='\n\n§SOURCES§\n'+item.references
@@ -173,7 +179,7 @@ Deno.serve(async(req:Request)=>{
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
    const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url}`).join('\n');
-   const common='Retourne seulement un objet JSON racine contenant uniquement la clé qcms avec EXACTEMENT cinq objets ; '+
+   const common=medicalEvidencePolicy+'\nBIBLIOGRAPHIE VÉRIFIÉE :\n'+refList+'\n'+'Retourne seulement un objet JSON racine contenant uniquement la clé qcms avec EXACTEMENT cinq objets ; '+
     'chaque QCM a exactement les clés question (texte), options (tableau de 4 chaînes), '+
     'correct_index (entier de 0 à 3), correction (texte), topic (texte), '+
     'references (tableau de 1 à 3 objets {url}) et source_ids (1 à 3 indices entiers de sources ci-dessous), image_search_query (texte ou chaîne vide). '+
