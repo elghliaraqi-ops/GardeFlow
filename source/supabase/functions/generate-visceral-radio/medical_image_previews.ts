@@ -21,7 +21,7 @@ export type ImagePreview = {
 };
 
 const SEARCH_LIMIT=24;
-const REQUEST_HEADERS={Accept:'application/json','User-Agent':'GardeFlowPractice/1.1 (https://github.com/elghliaraqi-ops/GardeFlow; medical-learning previews)'};
+const REQUEST_HEADERS={Accept:'application/json','Api-User-Agent':'GardeFlowPractice/1.1 (https://github.com/elghliaraqi-ops/GardeFlow)', 'User-Agent':'GardeFlowPractice/1.1 (https://github.com/elghliaraqi-ops/GardeFlow)'};
 const MAX_BYTES=12*1024*1024;
 const banned=/(?:book\s*cover|cover\s*of|annual\s*report|costs?\s+and\s+effectiveness|screening\s+report|congress|advertis|financial|conference\s*proceedings|poster\s*session|booklet|textbook\s*cover|national\s+cancer\s+institute\s+report|pdf\s+page|magazine|statistical\s+graph|brochure|front\s+page|journal\s+cover)/i;
 // Additional trusted image CDNs used by open-license medical publishers and Openverse.
@@ -227,9 +227,10 @@ async function openverse(search:string):Promise<ImagePreview[]>{
     const id=String(v.id||'');
     // Openverse offers its own thumbnail proxy across multiple providers,
     // so we are no longer limited to just Wikimedia Commons and Flickr.
-    const thumbnail=/^[a-f\d-]{36}$/i.test(id)
+    const rawThumb=String(v.thumbnail||'');
+    const thumbnail=allowedAsset(rawThumb)?rawThumb:/^[a-f\d-]{36}$/i.test(id)
       ? 'https://api.openverse.org/v1/images/'+id+'/thumb/'
-      : String(v.thumbnail||'');
+      : rawThumb;
     const source=String(v.foreign_landing_url||'');
     const original=String(v.url||'');
     const full=allowedAsset(original)?original:thumbnail;
