@@ -40,7 +40,10 @@ jobs:
 
       - name: Dart formatting
         working-directory: source
-        run: dart format --output=none --set-exit-if-changed lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
+        run: |
+          dart format lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
+          git diff -- lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
+          git diff --exit-code -- lib/services/clinical_case_service.dart lib/services/qcm_generation_retry_policy.dart test/qcm_generation_retry_policy_test.dart
 
       - name: Flutter analyzer
         working-directory: source
