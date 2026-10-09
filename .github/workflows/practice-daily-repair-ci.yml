@@ -6,6 +6,12 @@ on:
     paths:
       - 'supabase/functions/generate-practice-daily-challenge/**'
       - 'source/supabase/functions/generate-practice-daily-challenge/**'
+      - 'supabase/functions/generate-practice-progressive-case/**'
+      - 'source/supabase/functions/generate-practice-progressive-case/**'
+      - 'source/lib/screens/practice_progressive_cases_screen.dart'
+      - 'source/lib/screens/practice_screen.dart'
+      - 'supabase/migrations/*practice_daily_ai_only*'
+      - 'source/test/practice_progressive_cases_screen_test.dart'
       - 'source/lib/screens/practice_daily_screen.dart'
       - 'source/lib/screens/practice_daily_visual_theme.dart'
       - 'source/lib/screens/practice_daily_history_screen.dart'
@@ -36,7 +42,18 @@ jobs:
           set -euo pipefail
           EDGE=supabase/functions/generate-practice-daily-challenge/index.ts
           grep -Fq "newGroqBatch(prompt,batchSchema)" "$EDGE"
-          grep -Fq "questions.push(...await checkAndFormat(second,refs,seen))" "$EDGE"
+          grep -Fq "if(mode!=='cours_ia')" "$EDGE"
+          grep -Fq "if(mode==='cours_ia')" "$EDGE"
+          CASE=supabase/functions/generate-practice-progressive-case/index.ts
+          deno check "$CASE"
+          deno check source/supabase/functions/generate-practice-progressive-case/index.ts
+          cmp "$CASE" source/supabase/functions/generate-practice-progressive-case/index.ts
+          grep -Fq "questions.push(...await checkAndFormat(second,refs,seen))" "$CASE"
+          if grep -Fq "practice_daily_challenges').upsert" "$CASE"; then
+            echo "Independent progressive cases cannot store daily challenges" >&2
+            exit 1
+          fi
+          test -f supabase/migrations/20261009061500_practice_daily_ai_only_legacy_review.sql
           grep -Fq "groq_auth_failed" "$EDGE"
           grep -Fq "groq_rate_limited" "$EDGE"
           if grep -Fq "admin.from('clinical_case_qcms')" "$EDGE"; then
@@ -54,12 +71,13 @@ jobs:
       - name: Strict Dart formatting
         working-directory: source
         run: |
-          dart format --output=none --set-exit-if-changed lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart test/practice_daily_visual_theme_test.dart
+          dart format --output=none --set-exit-if-changed lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart test/practice_daily_visual_theme_test.dart test/practice_progressive_cases_screen_test.dart
       - name: Analyze changed Practice pages
         working-directory: source
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart
       - name: Test Practice UI tokens and daily models
         working-directory: source
         run: |
           flutter test test/practice_daily_visual_theme_test.dart
           flutter test test/practice_daily_models_test.dart
+          flutter test test/practice_progressive_cases_screen_test.dart

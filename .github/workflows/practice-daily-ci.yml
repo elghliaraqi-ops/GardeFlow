@@ -7,6 +7,8 @@ on:
       - 'source/lib/models/practice_daily_models.dart'
       - 'source/lib/services/practice_daily_service.dart'
       - 'source/lib/screens/practice_daily_screen.dart'
+      - 'source/lib/screens/practice_progressive_cases_screen.dart'
+      - 'source/lib/screens/practice_daily_visual_theme.dart'
       - 'source/lib/screens/practice_daily_history_screen.dart'
       - 'supabase/migrations/*practice_daily_replay*'
       - 'source/lib/screens/practice_screen.dart'
@@ -38,13 +40,13 @@ jobs:
         run: flutter pub get
       - name: Check Dart formatting
         working-directory: source
-        run: dart format --output=none --set-exit-if-changed lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart test/practice_daily_models_test.dart test/practice_daily_visual_theme_test.dart
+        run: dart format --output=none --set-exit-if-changed lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_screen.dart test/practice_daily_visual_theme_test.dart test/practice_progressive_cases_screen_test.dart
       - name: Test daily challenge models
         working-directory: source
         run: flutter test test/practice_daily_models_test.dart
       - name: Analyze daily challenge UI and backend
         working-directory: source
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_screen.dart lib/services/notification_service.dart lib/screens/practice_daily_history_screen.dart
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_screen.dart lib/services/notification_service.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_progressive_cases_screen.dart
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x

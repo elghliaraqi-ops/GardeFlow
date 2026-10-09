@@ -167,61 +167,54 @@ Deno.serve(async(req:Request)=>{
  if(!url||!anon||!service)return send(req,{ok:false,error:'config_missing'},503);
  const caller=createClient(url,anon,{global:{headers:{Authorization:auth}},auth:{persistSession:false,autoRefreshToken:false}});
  const {data:userData,error:authErr}=await caller.auth.getUser();
- const uid=userData.user?.id;if(authErr||!uid)return send(req,{ok:false,error:'auth_failed'},401);
+ const uid=userData.user?.id;
+ if(authErr||!uid)return send(req,{ok:false,error:'auth_failed'},401);
  const admin=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
- const {data:profile}=await admin.from('profiles').select('id,account_status').eq('id',uid).maybeSingle();
- if(!profile||profile.account_status!=='active')return send(req,{ok:false,error:'account_inactive'},403);
- const body=await req.json().catch(()=>null);
- const mode=String(body?.mode??'');
- if(mode!=='cours_ia')return send(req,{ok:false,error:'daily_challenge_ai_only'},400);
- const date=casablancaDay();
- const existing=await admin.from('practice_daily_challenges').select('challenge_date').eq('challenge_date',date).eq('mode',mode).maybeSingle();
- if(existing.data)return send(req,{ok:true,ready:true,day:date,mode,generated:false});
- if(existing.error)return send(req,{ok:false,error:'database_unavailable'},503);
-
- const claim=await admin.rpc('practice_daily_generation_claim',{p_day:date,p_mode:mode});
- if(claim.error)return send(req,{ok:false,error:'generation_guard_unavailable'},503);
- if(claim.data!==true)return send(req,{ok:false,error:'generation_in_progress',retryable:true},202);
+ const {data:profile,error:profileError}=await admin.from('profiles').select('id,account_status').eq('id',uid).maybeSingle();
+ if(profileError||!profile||profile.account_status!=='active')return send(req,{ok:false,error:'account_inactive'},403);
  try {
-   let questions:Record<string,unknown>[]=[];
-   let caseTitle='',caseStem='';
-   let caseStages:{title:string;narrative:string}[]=[];
-   const specialty=specialties[numericSeed(date+mode)%specialties.length];
+   // Completely independent from official daily challenges, scores and XP.
+   // Nothing is inserted into Supabase tables or Storage.
+   const specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
    const refList=refs.map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
    const common='Réponds UNIQUEMENT en JSON. Format exigé : objet {qcms:[cinq objets]} ; '+
-    'chaque QCM a exactement les clés question (texte), options (tableau de 4 chaînes), '+
-    'correct_index (entier de 0 à 3), correction (texte), topic (texte), '+
-    'references (tableau de 1 à 3 objets {url}), image_search_query (texte ou chaîne vide). '+
-    'Cinq QCM originaux EXACTEMENT par lot, quatre options distinctes, une seule correcte, '+
-    'correction médicale claire (3 à 5 phrases), '+
-    'topic parmi motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise, '+
-    'references: liste de 1 à 3 objets {url} issus UNIQUEMENT des URL Europe PMC ci-dessous. '+
-    'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
-    'SOURCES VERIFIABLES :\n'+refList;
+     'chaque QCM a exactement les clés question, options (4 textes), correct_index (0 à 3), '+
+     'correction détaillée, topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
+     'references (tableau 1 à 3 objets {url}), image_search_query (texte). '+
+     'Cinq QCM originaux EXACTEMENT par lot. Utilise exclusivement ces liens vérifiables :\n'+refList;
+   const prompt='Crée un SEUL cas clinique entièrement FICTIF pour la formation médicale en '+specialty+
+    '. JSON avec case_title, case_stem dossier complet (min 150 caractères) et case_stages : EXACTEMENT QUATRE objets {title,narrative}, '+
+    'minimum 120 caractères par narrative. '+
+    'Étape 1 admission et examen; étape 2 investigations, laboratoire et imagerie; '+
+    'étape 3 décisions thérapeutiques; étape 4 complications, évolution et suivi. '+
+    'Pas de spoiler dans une étape précoce. '+
+    'Les cinq premiers QCM concernent l’admission (QCM 1-2) puis les investigations (QCM 3-5). '+common;
+   const first=await newGroqBatch(prompt,caseBatchSchema);
+   const caseTitle=plain(first.case_title,180),caseStem=plain(first.case_stem,6500);
+   const rawStages=first.case_stages;
+   if(!caseTitle||caseStem.length<150||!Array.isArray(rawStages)||rawStages.length!==4)
+    throw Error('invalid_case_format');
+   const stages=rawStages.map((stage:{title?:string;narrative?:string})=>({
+     title:plain(stage.title,140),narrative:plain(stage.narrative,2400)
+   }));
+   if(stages.some(stage=>stage.title.length<5||stage.narrative.length<120))
+    throw Error('invalid_stage_format');
    const seen=new Set<string>();
-   if(mode==='cours_ia'){
-    // Always generate 10 NEW course questions with Groq, never reuse the local bank.
-    for(let index=0;index<2;index++){
-     const goal=index===0?'Diagnostic, démarche clinique, examens et interprétation.':
-      'Traitements, décisions, recommandations, complications et suivi.';
-     const prompt='Crée 5 NOUVEAUX QCM de cours niveau internat, français, discipline '+specialty+
-      '. Lot '+(index+1)+'/2. '+goal+' Questions déjà générées à ne pas répéter : '+
-      questions.map(q=>String(q.question)).join(' / ')+'. '+common;
-     const part=await newGroqBatch(prompt,batchSchema);
-     questions.push(...await checkAndFormat(part,refs,seen));
-    }
-   }
+   const questions=await checkAndFormat(first,refs,seen);
+   const continuation='Continue EXACTEMENT le même cas FICTIF, sans recréer un patient, en cinq nouveaux QCM (6-10). '+
+     'Dossier complet : '+caseStem+'. Étapes : '+JSON.stringify(stages)+
+     '. Questions 6,7,8 : décision thérapeutique; questions 9,10 : évolution/suivi. '+
+     'Ne répète jamais ces questions : '+questions.map(x=>String(x.question)).join(' / ')+'. '+common;
+   const second=await newGroqBatch(continuation,batchSchema);
+   questions.push(...await checkAndFormat(second,refs,seen));
    if(questions.length!==10)throw Error('invalid_question_count');
-   const inserted=await admin.from('practice_daily_challenges').upsert({challenge_date:date,mode,case_title:caseTitle,case_stem:caseStem,case_stages:caseStages,questions},{onConflict:'challenge_date,mode',ignoreDuplicates:true});
-   if(inserted.error)throw Error('database_write_failed');
-   return send(req,{ok:true,ready:true,day:date,mode,generated:true});
- }catch(e){
-   const error=e instanceof Error?e.message:'generation_failed';
-   console.warn('practice_daily_ai_failure',{code:error,mode,date});
-   return send(req,{ok:false,error,retryable:!['groq_auth_failed','groq_configuration_missing'].includes(error)},503);
- }finally{
-   await admin.from('practice_daily_generation_claims').delete().eq('challenge_date',date).eq('mode',mode);
+   return send(req,{ok:true,mode:'cas_progressif_independant',
+     case_title:caseTitle,case_stem:caseStem,case_stages:stages,questions});
+ }catch(err){
+   const code=err instanceof Error?err.message:'case_generation_failed';
+   console.warn('independent_case_generation_failure',{code});
+   return send(req,{ok:false,error:code,retryable:!['groq_auth_failed','groq_configuration_missing'].includes(code)},503);
  }
 });

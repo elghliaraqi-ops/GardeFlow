@@ -15,6 +15,7 @@ import '../state/app_state.dart';
 import '../widgets/profile_avatar.dart';
 import 'practice_qcm_screen.dart';
 import 'practice_daily_screen.dart';
+import 'practice_progressive_cases_screen.dart';
 import 'practice_daily_gamification_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
@@ -370,6 +371,22 @@ class _PracticeScreenState extends State<PracticeScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 11),
+              _PracticePrimaryActionCard(
+                icon: Icons.account_tree_rounded,
+                title: 'Cas cliniques progressifs · IA',
+                subtitle:
+                    'Un dossier fictif en 4 étapes et 10 QCM, '
+                    'indépendant du défi quotidien, sans XP ni classement',
+                meta: 'Simulation libre · 10 QCM',
+                accent: PracticeColors.gameBlue,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: 11),
               Container(
