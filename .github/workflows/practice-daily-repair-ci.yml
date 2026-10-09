@@ -47,7 +47,8 @@ jobs:
         run: |
           set -euo pipefail
           EDGE=supabase/functions/generate-practice-daily-challenge/index.ts
-          grep -Fq "newGroqBatch(prompt,batchSchema,selectedModel" "$EDGE"
+          grep -Fq "newGroqBatch(prompt,dailyBatchSchema(missing),selectedModel" "$EDGE"
+          grep -Fq "dailyJsonContract(missing)" "$EDGE"
           grep -Fq "practice_daily_generation_batches" "$EDGE"
           grep -Fq "validCachedDailyQuestion" "$EDGE"
           grep -Fq "if(questions.length!==10)" "$EDGE"
