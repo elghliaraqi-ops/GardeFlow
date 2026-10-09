@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 
 // No patient data is sent to the model. Every generated case is fictional.
 const specialties = [
@@ -155,7 +156,10 @@ Deno.serve(async (req: Request) => {
     const level = pick(levels);
     const model = Deno.env.get('GROQ_CASE_MODEL')?.trim() ||
       'openai/gpt-oss-20b';
-    const prompt = `Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine.
+    const evidence=await recentGuidelineCatalog(specialty);
+    const prompt = medicalEvidencePolicy+'\nRECOMMANDATIONS RÉCENTES RETROUVÉES :\n'+
+      (evidence||'Aucune recommandation récente vérifiée, éviter les affirmations non sourcées.')+
+      '\n'+`Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine.
 Spécialité imposée : ${specialty}. Niveau : ${level}.
 Aucune donnée réelle : pas de nom, initiales, date de naissance, adresse, téléphone ni identifiant.
 Rédige en français médical précis, avec signes positifs ET négatifs utiles.
@@ -209,6 +213,21 @@ Réponds exclusivement avec l'objet JSON structuré demandé.`;
     const simulated = cleanCase((generated as any)?.case, specialty);
     if (!simulated)
       return reply(req, { ok: false, error: 'invalid_generated_case' }, 502);
+    // Optional CC-licensed preview link metadata; no binary images stored.
+    const examinations=String(simulated.complementary_exams??'')+' '+
+      String(simulated.imaging_conclusion??'');
+    const query=/\bECG\b|electrocardio/i.test(examinations)?'normal ECG electrocardiogram':
+      /coronarograph/i.test(examinations)?'coronary arteries anatomy':
+      /radiograph/i.test(examinations)?'chest radiograph anatomy':
+      /scanner|tomodensitom/i.test(examinations)?'CT scan medical anatomy':
+      /IRM|MRI/i.test(examinations)?'MRI medical anatomy':'';
+    const image=query?await findOpenverseMedicalPreview(query):null;
+    if(image)simulated.external_media=[{
+      title:image.title,creator:image.creator,license:image.license,
+      source:image.provider,url:image.source_url,
+      preview_image_url:image.preview_url,
+      caption:'Illustration pédagogique externe, non issue du patient fictif.'
+    }];
     return reply(req, {
       ok: true, fictional: true, requires_review: true,
       case: simulated,
