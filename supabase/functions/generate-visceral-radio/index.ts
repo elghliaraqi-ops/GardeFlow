@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { generationContract, type GenerationContract } from './generation_contract.ts';
+import { resolveMedicalPreviews } from './medical_image_previews.ts';
 
 // GardeFlow Practice · Viscéral × Radio. Private, on-demand generation.
 // Only technical JSON parsing/count checks; no secondary medical reviewer.
@@ -152,27 +153,6 @@ function sanitized(x:any):any {
   }
   return x;
 }
-async function transientImages(query:string) {
-  const results:any[]=[];
-  try {
-    const u='https://api.openverse.org/v1/images/?'+new URLSearchParams({q:query,page_size:'12',license:'by,by-sa,cc0,pdm'}).toString();
-    const r=await fetch(u,{signal:AbortSignal.timeout(6000)});
-    if(r.ok){
-      const d=await r.json();
-      for(const x of d?.results??[]) {
-        const thumb=str(x.thumbnail,1000),page=str(x.foreign_landing_url||x.url,1000),provider=str(x.provider,100);
-        if(!thumb.startsWith('https://')||!page.startsWith('https://'))continue;
-        results.push({thumbnail:thumb,source:page,title:str(x.title,160),license:str(x.license,25),provider});
-      }
-    }
-  }catch(_){}
-  const external=[
-    {title:'Radiopaedia',source:'https://radiopaedia.org/search?'+new URLSearchParams({q:query}).toString()},
-    {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query}).toString()},
-    {title:'Eurorad',source:'https://www.eurorad.org/search?'+new URLSearchParams({keys:query}).toString()}
-  ];
-  return {images:results.slice(0,8),medical_searches:external};
-}
 Deno.serve(async(req)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   if(req.method!=='POST')return answer({error:'method_not_allowed'},405);
@@ -186,7 +166,7 @@ Deno.serve(async(req)=>{
   if(user.id!==OWNER)return answer({error:'forbidden'},403);
   try{
     const input=await req.json().catch(()=>({})),action=str(input.action,40),id=str(input.id,45);
-    if(action==='images')return answer(await transientImages(str(input.query,200)));
+    if(action==='images')return answer(await resolveMedicalPreviews(str(input.query,240),str(input.modality,60)));
     if(action==='list'){
       const {data,error}=await db.from(TABLE).select('*').eq('owner_id',user.id).order('created_at',{ascending:false}).limit(80);
       if(error)throw error;
