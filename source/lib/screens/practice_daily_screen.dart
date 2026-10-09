@@ -851,9 +851,18 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       appBar: AppBar(
         backgroundColor: _bg,
         foregroundColor: _text,
-        title: const Text('Défi quotidien · Practice'),
+        title: Text(
+          _replayMode ? 'Rejouer · Practice' : 'Défi quotidien · Practice',
+        ),
         actions: [
+          if (!_replayMode)
+            IconButton(
+              tooltip: 'Historique et rejouer',
+              onPressed: _busy ? null : _openHistory,
+              icon: const Icon(Icons.history_rounded),
+            ),
           IconButton(
+            tooltip: 'Actualiser',
             onPressed: _busy ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -871,11 +880,23 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 12),
           ],
           _challenge(),
-          const SizedBox(height: 18),
-          _calendar(),
-          const SizedBox(height: 16),
-          _box(
-            SwitchListTile(
+          if (!_replayMode) ...[
+            const SizedBox(height: 18),
+            _box(
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _openHistory,
+                  icon: const Icon(Icons.history_rounded),
+                  label: const Text('Historique · Rejouer mes défis'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            _calendar(),
+            const SizedBox(height: 16),
+            _box(
+              SwitchListTile(
               value: _enabled,
               onChanged: _toggle,
               activeColor: _green,
@@ -894,6 +915,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               ),
             ),
           ),
+          ],
           const SizedBox(height: 12),
           const Text(
             'Les corrections et les images externes apparaissent après validation des 10 réponses. '
