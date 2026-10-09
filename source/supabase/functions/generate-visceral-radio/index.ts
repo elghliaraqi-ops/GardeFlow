@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { generationContract, type GenerationContract } from './generation_contract.ts';
 
 // GardeFlow Practice · Viscéral × Radio. Private, on-demand generation.
 // Only technical JSON parsing/count checks; no secondary medical reviewer.
@@ -23,46 +24,97 @@ const topics = [
 const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, x-client-info, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
 function answer(body: unknown, status=200): Response { return new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}}); }
 function str(v: unknown, max=20000):string { return String(v??'').slice(0,max); }
-function compact(x:unknown,max=26000){return JSON.stringify(x).slice(0,max);}
-function object(properties: Record<string,unknown>, required=Object.keys(properties)){return {type:'object',additionalProperties:false,required,properties};}
-const S={type:'string'}, N={type:'integer'}, SA={type:'array',items:S};
-const pic=object({query:S,modality:S,purpose:S});
-const section=object({key:S,title:S,content:S,key_points:SA,image_requests:{type:'array',items:pic}});
-const option=object({key:{type:'string',enum:['A','B','C','D','E']},text:S,correct:{type:'boolean'},explanation:S});
-const question=object({phase:N,category:S,statement:S,options:{type:'array',items:option,minItems:5,maxItems:5},global_explanation:S,reference:S,image_requests:{type:'array',items:pic}});
-const ficheSchema=object({title:S,summary:S,sections:{type:'array',items:section},study_core:SA,references:SA});
-const qcmSchema=object({questions:{type:'array',items:question,minItems:5,maxItems:10}});
-const stage=object({phase:N,title:S,narrative:S,clinical_findings:S,imaging_findings:S,decisions:S,image_requests:{type:'array',items:pic}});
-const caseSchema=object({title:S,patient:S,difficulty:{type:'string',enum:['simple','intermediaire','complexe']},recommended_qcms:{type:'integer',enum:[10,15,20]},stages:{type:'array',items:stage,minItems:4,maxItems:4},final_diagnosis:S,learning_points:SA,references:SA});
+// Never clip a JSON string in the middle of a quotation/escape sequence.
+// The context sent to Groq always remains a valid JSON document.
+function compact(value: unknown, maxChars = 26000): string {
+  const json = JSON.stringify(value ?? null);
+  if (json.length <= maxChars) return json;
+  for (const limit of [3200, 2000, 1200, 600, 300, 150]) {
+    const prune = (item: any): any => {
+      if (typeof item === 'string') return item.slice(0, limit);
+      if (Array.isArray(item)) return item.map(prune);
+      if (item && typeof item === 'object') {
+        return Object.fromEntries(Object.entries(item).map(([key, content]) => [key, prune(content)]));
+      }
+      return item;
+    };
+    const candidate = JSON.stringify(prune(value));
+    if (candidate.length <= maxChars) return candidate;
+  }
+  // Retain a valid JSON wrapper even for unexpectedly oversized input.
+  return JSON.stringify({ abridged_context: json.slice(0, maxChars - 150) });
+}
+
 function extract(payload:any): string {
   if(typeof payload?.output_text==='string')return payload.output_text;
   for(const item of payload?.output??[])for(const c of item?.content??[])if(typeof c?.text==='string')return c.text;
   return '';
 }
-async function groq(schema:any,name:string,prompt:string) {
-  const key=Deno.env.get('GROQ_API_KEY');
-  if(!key)throw new Error('groq_key_missing');
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),110000);
+async function groq(contract: GenerationContract, prompt: string) {
+  const key = Deno.env.get('GROQ_API_KEY');
+  if (!key) throw new Error('groq_key_missing');
+  // Strict JSON Schema is available for these models; never silently fall
+  // back to best-effort JSON (the source of json_validate_failed in Practice).
+  const model = Deno.env.get('GROQ_TEXT_MODEL') || 'openai/gpt-oss-120b';
+  if (!['openai/gpt-oss-120b', 'openai/gpt-oss-20b'].includes(model)) {
+    throw new Error('groq_model_without_strict_json_schema_support');
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 110000);
   try {
-    const r=await fetch('https://api.groq.com/openai/v1/responses',{
-      method:'POST',signal:controller.signal,
-      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:Deno.env.get('GROQ_TEXT_MODEL')||'openai/gpt-oss-120b',
-        instructions:'Réponds uniquement avec un JSON conforme au schéma. Aucun texte additionnel.',
-        input:prompt,reasoning:{effort:'medium'},
-        text:{format:{type:'json_schema',name,schema}},
-        max_output_tokens:16000,store:false
-      })
+    const payload = {
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: 'Tu es enseignant universitaire en chirurgie viscérale et radiologie. ' +
+            'Tu produis uniquement du JSON conforme au contrat partagé. ' +
+            'Les détails médicaux suivent le cas fourni, sans invention de source.',
+        },
+        { role: 'user', content: prompt + '\n\n' + contract.outputInstructions },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: contract.name,
+          strict: true,
+          schema: contract.schema,
+        },
+      },
+      reasoning_effort: 'medium',
+      max_completion_tokens: 20000,
+      stream: false,
+    };
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: 'Bearer ' + key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     });
-    const data=await r.json().catch(()=>null);
-    if(!r.ok)throw new Error('groq_http_'+r.status+':'+str(data?.error?.code||data?.error?.message,150));
-    const raw=extract(data);
-    if(!raw)throw new Error('groq_empty_response');
-    return JSON.parse(raw);
-  } finally {clearTimeout(timer);}
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const code = str(data?.error?.code || data?.error?.type || 'unknown_error', 100);
+      throw new Error('groq_http_' + response.status + ':' + code);
+    }
+    if (data?.choices?.[0]?.finish_reason === 'length') {
+      throw new Error('groq_output_token_limit');
+    }
+    const raw = data?.choices?.[0]?.message?.content;
+    if (typeof raw !== 'string' || !raw.trim()) throw new Error('groq_empty_response');
+    try {
+      return JSON.parse(raw);
+    } catch (_) {
+      // Technical failure only: no independent medical/content reviewing.
+      throw new Error('groq_invalid_json_response');
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
+
 async function guidelines(topic:string):Promise<string> {
   // Retrieval is input context, not a separate verification/reviewer pipeline.
   const query='('+topic+') AND (GUIDELINE OR CONSENSUS OR RECOMMENDATION)';
@@ -149,7 +201,7 @@ Deno.serve(async(req)=>{
       const evidence=await guidelines(topic);
       const prompt=sourcePrompt(topic,evidence)+
         '\nMODE FICHE: rédige un cours synthétique mais complet en 10 sections : définition, anatomie, physiopathologie, clinique, biologie, radiologie (protocoles, sémiologie, complications), prise en charge actualisée, techniques opératoires étape par étape, suites/complications, dix points-clés. Chaque section donne du contenu substantiel, précis et utile au bloc. Le contenu image_requests décrit les signes à illustrer. study_core condense les notions à utiliser pour les QCM.';
-      const fiche=sanitized(await groq(ficheSchema,'visceral_radio_fiche',prompt));
+      const fiche=sanitized(await groq(generationContract('fiche'),prompt));
       if(!fiche?.title||!Array.isArray(fiche?.sections))throw new Error('incomplete_fiche');
       const {data,error}=await db.from(TABLE).insert({owner_id:user.id,topic,title:str(fiche.title,220),fiche,medical_sources:evidence}).select().single();
       if(error)throw error;
@@ -166,14 +218,14 @@ Deno.serve(async(req)=>{
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
         '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite.\nFICHE:\n'+compact(session.fiche,34000)+
         '\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>q.statement),4000);
-      const produced=await groq(qcmSchema,'visceral_radio_course_questions',prompt);
+      const produced=await groq(generationContract('course_qcms',{count}),prompt);
       validQuestions(produced,count);
       patch.course_qcms=[...existing,...sanitized(produced.questions)];
     }else if(action==='case'){
       if(session.case_data)return answer({session});
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
         '\nMODE CAS CLINIQUE: construis un patient FICTIF, même sujet médical exact que la fiche. Quatre étapes chronologiques: (1) admission/examen, (2) biologie et imagerie, (3) diagnostic/prise en charge/intervention, (4) suites/complications/suivi. Les décisions respectent les recommandations. Radiologie réellement centrale, prévoir images de sémiologie qui correspondent à ton scénario; les images sont externes, illustratives, jamais du patient fictif. Ne révèle pas le diagnostic dans la phase 1. Le dossier complet contient le diagnostic pour les générations ultérieures. Propose recommended_qcms 10 (simple), 15 (intermédiaire) ou 20 (complexe).\nSYNTHÈSE FICHE:\n'+compact(session.fiche?.study_core,9000);
-      const scenario=sanitized(await groq(caseSchema,'visceral_radio_case',prompt));
+      const scenario=sanitized(await groq(generationContract('case'),prompt));
       if(!Array.isArray(scenario.stages)||scenario.stages.length!==4)throw new Error('invalid_case_stages');
       patch.case_data=scenario;patch.case_target=scenario.recommended_qcms;
     }else if(action==='case_qcms'){
@@ -187,7 +239,7 @@ Deno.serve(async(req)=>{
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
         '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER COMPLET (NE PAS divulguer précocement):\n'+compact(session.case_data,31000)+
         '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>q.statement),4000);
-      const produced=await groq(qcmSchema,'visceral_radio_progressive_questions',prompt);
+      const produced=await groq(generationContract('case_qcms',{count,phases:phaseSequence}),prompt);
       validQuestions(produced,count);
       produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];});
       patch.case_qcms=[...existing,...sanitized(produced.questions)];
