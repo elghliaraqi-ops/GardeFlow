@@ -1315,24 +1315,179 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     }
   }
 
-  Future<void> _addFiveQcms() async {
+  Future<void> _addMoreQcms() async {
     if (_addingQcms || _submitting || _resetting) return;
+    final remaining = 100 - _qcms.length;
+    if (remaining < 5) return;
+    var quantity = 5;
+    var difficulty = 'intermediaire';
+
+    final selected = await showDialog<({int count, String level})>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, updateDialog) => AlertDialog(
+          title: const Text('Ajouter des QCM'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Choisissez la quantité et le niveau. Les questions '
+                  'seront prévisualisées avant leur publication.',
+                ),
+                const SizedBox(height: 14),
+                const Text('NOMBRE DE QCM',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final n in const <int>[5, 10, 20])
+                      if (n <= remaining)
+                        ChoiceChip(
+                          label: Text('$n QCM'),
+                          selected: quantity == n,
+                          onSelected: (_) => updateDialog(() => quantity = n),
+                        ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text('DIFFICULTÉ',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 7,
+                  children: [
+                    for (final item in const <(String, String)>[
+                      ('facile', 'Facile'),
+                      ('intermediaire', 'Intermédiaire'),
+                      ('avance', 'Avancé'),
+                    ])
+                      ChoiceChip(
+                        label: Text(item.$2),
+                        selected: difficulty == item.$1,
+                        onSelected: (_) =>
+                            updateDialog(() => difficulty = item.$1),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '${_qcms.length} QCM existants seront conservés. '
+                  'Maximum : 100 QCM par cas.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Annuler'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                (count: quantity, level: difficulty),
+              ),
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Créer un aperçu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
     setState(() => _addingQcms = true);
     try {
-      await ClinicalCaseService.instance.addQcmsToClinicalCase(
+      final preview =
+          await ClinicalCaseService.instance.prepareClinicalQcmPreview(
         postId: widget.post.id,
+        quantity: selected.count,
+        difficulty: selected.level,
+      );
+      if (!mounted) {
+        await ClinicalCaseService.instance.discardClinicalQcmPreview(
+          postId: widget.post.id,
+          previewId: preview.id,
+        );
+        return;
+      }
+
+      final accepted = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Aperçu · ${preview.quantity} QCM'),
+          content: SizedBox(
+            width: 440,
+            height: MediaQuery.sizeOf(dialogContext).height * 0.55,
+            child: ListView.separated(
+              itemCount: preview.questions.length,
+              separatorBuilder: (_, __) => const Divider(height: 24),
+              itemBuilder: (context, index) {
+                final q = preview.questions[index];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${index + 1}. ${q.question}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    for (var i = 0; i < q.options.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          '${String.fromCharCode(65 + i)}. ${q.options[i]}',
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Ne pas publier'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.check_circle_outline_rounded),
+              label: const Text('Valider et publier'),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true) {
+        await ClinicalCaseService.instance.discardClinicalQcmPreview(
+          postId: widget.post.id,
+          previewId: preview.id,
+        );
+        return;
+      }
+      final total =
+          await ClinicalCaseService.instance.confirmClinicalQcmPreview(
+        postId: widget.post.id,
+        previewId: preview.id,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('5 nouveaux QCM ajoutés sans effacer les précédents.'),
+        SnackBar(
+          content: Text(
+            '${preview.quantity} nouveaux QCM publiés · Total : $total. '
+            'Les questions et scores précédents sont conservés.',
+          ),
         ),
       );
     } catch (error) {
       if (!mounted) return;
       final message = error is StateError
           ? error.message.toString()
-          : 'Impossible de générer les nouveaux QCM.';
+          : 'Impossible de générer ou publier ces QCM.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -1481,11 +1636,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               child: _GamingTextButton(
                 icon: Icons.add_circle_outline_rounded,
                 label: _addingQcms
-                    ? 'Génération des 5 QCM en cours…'
-                    : 'Ajouter 5 nouveaux QCM avec l’IA',
+                    ? 'Préparation de l’aperçu en cours…'
+                    : 'Ajouter des QCM (5 / 10 / 20)',
                 onPressed: (_addingQcms || _submitting || _resetting)
                     ? null
-                    : _addFiveQcms,
+                    : _addMoreQcms,
               ),
             ),
           ],

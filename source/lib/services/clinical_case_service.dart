@@ -186,41 +186,94 @@ class ClinicalCaseService {
     return count;
   }
 
-  /// Ajoute cinq nouvelles questions uniquement : ne relance jamais la
-  /// génération initiale et ne supprime ni réponses ni statistiques.
-  Future<int> addQcmsToClinicalCase({required String postId}) async {
-    final id = postId.trim();
-    if (!_backend.enabled ||
-        _backend.client.auth.currentUser == null ||
-        id.isEmpty) {
+  /// Prépare les QCM sans les publier et sans exposer le corrigé.
+  Future<ClinicalQcmPreview> prepareClinicalQcmPreview({
+    required String postId,
+    required int quantity,
+    required String difficulty,
+  }) async {
+    if (!_backend.enabled || _backend.client.auth.currentUser == null) {
+      throw StateError('Authentification requise.');
+    }
+    if (!const <int>[5, 10, 20].contains(quantity) ||
+        !const <String>[
+          'facile',
+          'intermediaire',
+          'avance',
+        ].contains(difficulty)) {
+      throw ArgumentError('Paramètres incorrects.');
+    }
+    try {
+      final result = await _backend.client.functions.invoke(
+        'preview-clinical-case-qcm',
+        body: <String, dynamic>{
+          'action': 'preview',
+          'post_id': postId.trim(),
+          'quantity': quantity,
+          'difficulty': difficulty,
+        },
+      );
+      final data = result.data;
+      if (data is! Map || data['ok'] != true) {
+        throw StateError('Prévisualisation indisponible.');
+      }
+      return ClinicalQcmPreview.fromMap(Map<String, dynamic>.from(data));
+    } catch (error) {
+      if (error is StateError || error is ArgumentError) rethrow;
+      throw StateError(
+        'Génération indisponible. Les anciens QCM restent intacts.',
+      );
+    }
+  }
+
+  Future<int> confirmClinicalQcmPreview({
+    required String postId,
+    required String previewId,
+  }) async {
+    if (!_backend.enabled || _backend.client.auth.currentUser == null) {
       throw StateError('Authentification requise.');
     }
     try {
-      final response = await _backend.client.functions.invoke(
-        'generate-clinical-case-qcm',
-        body: <String, dynamic>{'post_id': id, 'append_qcms': true},
+      final result = await _backend.client.functions.invoke(
+        'preview-clinical-case-qcm',
+        body: <String, dynamic>{
+          'action': 'confirm',
+          'post_id': postId.trim(),
+          'preview_id': previewId,
+        },
       );
-      final data = response.data;
-      if (data is Map && data['ok'] == true && data['added'] == 5) {
-        notifyChanged();
-        return int.tryParse('${data['count']}') ?? 0;
+      final data = result.data;
+      if (data is! Map || data['ok'] != true) {
+        throw StateError('Aperçu expiré ou invalide.');
       }
-      final code = data is Map ? '${data['error'] ?? ''}' : '';
-      if (code == 'generation_in_progress') {
-        throw StateError('Une génération est déjà en cours pour ce cas.');
-      }
-      if (code == 'extension_cooldown') {
-        throw StateError('Réessayez dans quelques minutes.');
-      }
-      if (code == 'qcm_limit_reached') {
-        throw StateError('Ce cas a atteint sa limite de 100 QCM.');
-      }
-      throw StateError('Ajout des QCM indisponible pour le moment.');
+      final count = int.tryParse('${data['count']}');
+      if (count == null) throw StateError('Confirmation incomplète.');
+      notifyChanged();
+      return count;
     } catch (error) {
       if (error is StateError) rethrow;
       throw StateError(
-        'Échec de la génération. Vérifiez la connexion puis réessayez.',
+        'Publication impossible. Les anciens QCM sont conservés.',
       );
+    }
+  }
+
+  Future<void> discardClinicalQcmPreview({
+    required String postId,
+    required String previewId,
+  }) async {
+    if (!_backend.enabled || _backend.client.auth.currentUser == null) return;
+    try {
+      await _backend.client.functions.invoke(
+        'preview-clinical-case-qcm',
+        body: <String, dynamic>{
+          'action': 'discard',
+          'post_id': postId.trim(),
+          'preview_id': previewId,
+        },
+      );
+    } catch (_) {
+      // Les aperçus expirent automatiquement après 15 minutes.
     }
   }
 
@@ -600,6 +653,68 @@ class _QcmRetryState {
       permanent: map['permanent'] == true,
       automaticSuspended: map['automatic_suspended'] == true,
       lastErrorCode: '${map['last_error_code'] ?? ''}',
+    );
+  }
+}
+
+/// Un aperçu ne contient que les énoncés et propositions, jamais le corrigé.
+class ClinicalQcmPreview {
+  final String id;
+  final int quantity;
+  final String difficulty;
+  final List<ClinicalQcmPreviewQuestion> questions;
+
+  const ClinicalQcmPreview({
+    required this.id,
+    required this.quantity,
+    required this.difficulty,
+    required this.questions,
+  });
+
+  factory ClinicalQcmPreview.fromMap(Map<String, dynamic> data) {
+    final items = data['questions'];
+    final questions = items is List
+        ? items
+              .whereType<Map>()
+              .map(
+                (entry) => ClinicalQcmPreviewQuestion.fromMap(
+                  Map<String, dynamic>.from(entry),
+                ),
+              )
+              .toList(growable: false)
+        : <ClinicalQcmPreviewQuestion>[];
+    final quantity = int.tryParse('${data['quantity'] ?? 0}') ?? 0;
+    final id = '${data['preview_id'] ?? ''}'.trim();
+    if (id.isEmpty ||
+        quantity != questions.length ||
+        !const <int>[5, 10, 20].contains(quantity)) {
+      throw StateError('Aperçu incomplet.');
+    }
+    return ClinicalQcmPreview(
+      id: id,
+      quantity: quantity,
+      difficulty: '${data['difficulty'] ?? ''}',
+      questions: questions,
+    );
+  }
+}
+
+class ClinicalQcmPreviewQuestion {
+  final String question;
+  final List<String> options;
+
+  const ClinicalQcmPreviewQuestion({
+    required this.question,
+    required this.options,
+  });
+
+  factory ClinicalQcmPreviewQuestion.fromMap(Map<String, dynamic> data) {
+    final options = data['options'];
+    return ClinicalQcmPreviewQuestion(
+      question: '${data['question'] ?? ''}',
+      options: options is List
+          ? options.map((item) => '$item').toList(growable: false)
+          : const <String>[],
     );
   }
 }
