@@ -86,7 +86,7 @@ export function vettedOpenverseImage(item:Record<string,unknown>,query:string,gu
  if(title.length<5)return null;
  if(guard&&!guard.test(title))return null;
  const terms=String(query).toLowerCase().split(/[^a-z0-9]+/).filter(x=>
-  x.length>=4&&!['medical','image','illustration','diagram','example','labeled',
+  x.length>=3&&!['medical','image','illustration','diagram','example','labeled',
     'scan','normal','patient','disease','anatomy','clinical'].includes(x));
  if(terms.length&&terms.every(term=>!title.toLowerCase().includes(term)))return null;
  const result={
