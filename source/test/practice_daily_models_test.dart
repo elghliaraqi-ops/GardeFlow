@@ -162,4 +162,75 @@ void main() {
       true,
     );
   });
+
+  test('archived replay has ten concealed correct answers', () {
+    final replay = PracticeDailySession.fromMap(<String, dynamic>{
+      'day': '2026-10-09',
+      'mode': 'cas_clinique',
+      'ready': true,
+      'replay': true,
+      'completed': false,
+      'official_score': 8,
+      'replay_count': 3,
+      'case_title': 'Simulation complète',
+      'case_stem': '',
+      'questions': List<Map<String, dynamic>>.generate(10, question),
+    });
+    expect(replay.isReplay, true);
+    expect(replay.officialScore, 8);
+    expect(replay.replayCount, 3);
+    expect(replay.score, isNull);
+    expect(replay.questions.every((q) => q.correctIndex == null), isTrue);
+  });
+
+  test('replay result is separate from immutable official score', () {
+    final replay = PracticeDailySession.fromMap(<String, dynamic>{
+      'day': '2026-10-09',
+      'mode': 'cas_clinique',
+      'ready': true,
+      'replay': true,
+      'completed': true,
+      'official_score': 8,
+      'score': 5,
+      'replay_count': 2,
+      'replay_id': 'd1901d5d-0cb4-43b2-95ec-70c0f22f4938',
+      'questions': List<Map<String, dynamic>>.generate(10, (i) => {
+        ...question(i),
+        'selected_index': 0,
+        'correct_index': 1,
+        'correction': 'Correction documentée',
+      }),
+    });
+    expect(replay.officialScore, 8);
+    expect(replay.score, 5);
+    expect(replay.replayCount, 2);
+    expect(replay.questions.first.correction, isNotEmpty);
+  });
+
+  test('history displays original and latest replay scores separately', () {
+    final entry = PracticeDailyHistoryEntry.fromMap(<String, dynamic>{
+      'challenge_date': '2026-10-08',
+      'mode': 'cas_clinique',
+      'case_title': 'Cas progressif · pneumologie',
+      'official_score': 7,
+      'replay_count': 4,
+      'last_replay_score': 9,
+      'last_replay_at': '2026-10-09T01:20:00Z',
+    });
+    expect(entry.officialScore, 7);
+    expect(entry.lastReplayScore, 9);
+    expect(entry.replayCount, 4);
+    expect(entry.day.day, 8);
+  });
+
+  test('history fails closed on missing official score', () {
+    expect(
+      () => PracticeDailyHistoryEntry.fromMap(<String, dynamic>{
+        'challenge_date': '2026-10-08',
+        'mode': 'cours',
+      }),
+      throwsStateError,
+    );
+  });
+
 }
