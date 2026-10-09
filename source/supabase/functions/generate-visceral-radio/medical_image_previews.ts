@@ -20,19 +20,35 @@ export type ImagePreview = {
   description:string;
 };
 
-const SEARCH_LIMIT=18;
+const SEARCH_LIMIT=24;
+const REQUEST_HEADERS={Accept:'application/json','User-Agent':'GardeFlowPractice/1.1 (https://github.com/elghliaraqi-ops/GardeFlow; medical-learning previews)'};
 const MAX_BYTES=12*1024*1024;
 const banned=/(?:book\s*cover|cover\s*of|annual\s*report|costs?\s+and\s+effectiveness|screening\s+report|congress|advertis|financial|conference\s*proceedings|poster\s*session|booklet|textbook\s*cover|national\s+cancer\s+institute\s+report|pdf\s+page|magazine|statistical\s+graph|brochure|front\s+page|journal\s+cover)/i;
-const clinicalHosts=new Set(['upload.wikimedia.org','live.staticflickr.com','commons.wikimedia.org']);
+// Additional trusted image CDNs used by open-license medical publishers and Openverse.
+const clinicalHosts=new Set([
+ 'upload.wikimedia.org','live.staticflickr.com','commons.wikimedia.org',
+ 'api.openverse.org','images.openverse.org',
+ 'cdn.ncbi.nlm.nih.gov','pmc.ncbi.nlm.nih.gov',
+ 'images.squarespace-cdn.com','static1.squarespace.com',
+ 'i0.wp.com','i1.wp.com','i2.wp.com','i3.wp.com',
+ 'images.pexels.com','images.unsplash.com',
+]);
+const openversePreviewPath=/^\/v1\/images\/[a-f\d-]{36}\/thumb\/?$/i;
 export function allowedAsset(raw: string) {
   try {
     const uri=new URL(raw);
-    return uri.protocol==='https:' && !uri.username && !uri.password &&
-      !uri.port && clinicalHosts.has(uri.hostname.toLowerCase()) &&
-      (uri.hostname.toLowerCase()!=='upload.wikimedia.org'||uri.pathname.startsWith('/wikipedia/commons/')) &&
-      uri.pathname.length<1100 && !uri.pathname.includes('..') &&
-      !uri.searchParams.has('download') &&
-      /\.(?:jpg|jpeg|png|webp)(?:$)/i.test(uri.pathname);
+    if(uri.protocol!=='https:'||uri.username||uri.password||uri.port)return false;
+    if(!clinicalHosts.has(uri.hostname.toLowerCase()))return false;
+    if(uri.pathname.length>1100 || /%2e|%2f|%5c/i.test(raw))return false;
+    if(uri.searchParams.has('download'))return false;
+    if(uri.hostname==='api.openverse.org'){
+      // Only the documented image-thumbnail endpoint, never arbitrary API paths.
+      return openversePreviewPath.test(uri.pathname) &&
+        [...uri.searchParams.keys()].every(k=>k==='full_size');
+    }
+    if(uri.hostname==='upload.wikimedia.org' &&
+       !uri.pathname.startsWith('/wikipedia/commons/'))return false;
+    return /\.(?:jpg|jpeg|png|webp)(?:$)/i.test(uri.pathname);
   }catch(_){return false;}
 }
 const clean=(value:unknown,length=220)=>String(value??'').replace(/<[^>]*>/g,' ')
@@ -96,7 +112,11 @@ export function imageSearchTerms(request:MedicalImageRequest):string{
 export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!allowedAsset(image.thumbnail)||!allowedAsset(image.full))return false;
   if(!/^https:\/\//i.test(image.source))return false;
-  if(!/(CC BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA)/i.test(image.license) && !['by','by-sa','cc0','pdm'].includes(image.license.toLowerCase()))return false;
+  // Openverse only indexes openly licensed media, including attribution,
+  // share-alike and non-commercial licenses. Keep creator/source attribution.
+  if(!/(CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
+     && !['by','by-sa','by-nc','by-nc-sa','by-nd','by-nc-nd','cc0','pdm']
+       .includes(image.license.toLowerCase()))return false;
   const hay=ascii(image.title+' '+image.description);
   if(banned.test(hay))return false;
   const raw=ascii(request.anatomy+' '+request.purpose+' '+request.query);
@@ -135,6 +155,8 @@ function pages(query:string){
     {title:'Radiopaedia',source:'https://radiopaedia.org/search?'+new URLSearchParams({q:query})},
     {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query})},
     {title:'Eurorad',source:'https://www.eurorad.org/search?'+new URLSearchParams({keys:query})},
+    {title:'Europe PMC',source:'https://europepmc.org/search?'+new URLSearchParams({query:query+' AND OPEN_ACCESS:y'})},
+    {title:'PubMed Central',source:'https://pmc.ncbi.nlm.nih.gov/?'+new URLSearchParams({term:query})},
   ];
 }
 async function commons(search:string):Promise<ImagePreview[]>{
@@ -143,7 +165,7 @@ async function commons(search:string):Promise<ImagePreview[]>{
     prop:'imageinfo',iiprop:'url|mime|extmetadata',iiurlwidth:'750',
     format:'json',formatversion:'2'});
   const r=await fetch('https://commons.wikimedia.org/w/api.php?'+params,{
-    signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
+    signal:AbortSignal.timeout(9000),headers:REQUEST_HEADERS});
   if(!r.ok)return[];
   const data=await r.json();
   const out:ImagePreview[]=[];
@@ -173,7 +195,7 @@ async function rectalAnatomyFiles():Promise<ImagePreview[]> {
     format:'json',formatversion:'2'});
   try {
     const r=await fetch('https://commons.wikimedia.org/w/api.php?'+params,{
-      signal:AbortSignal.timeout(7500),headers:{Accept:'application/json'}});
+      signal:AbortSignal.timeout(8500),headers:REQUEST_HEADERS});
     if(!r.ok)return[];
     const data=await r.json();const out:ImagePreview[]=[];
     for(const page of data?.query?.pages??[]){
@@ -196,44 +218,82 @@ async function rectalAnatomyFiles():Promise<ImagePreview[]> {
 
 async function openverse(search:string):Promise<ImagePreview[]>{
   const r=await fetch('https://api.openverse.org/v1/images/?'+new URLSearchParams({
-    q:search,page_size:String(SEARCH_LIMIT),license:'by,by-sa,cc0,pdm'}),{
-    signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
+    q:search,page_size:String(SEARCH_LIMIT)}),{
+    signal:AbortSignal.timeout(9000),headers:REQUEST_HEADERS});
   if(!r.ok)return[];
   const data=await r.json();const out:ImagePreview[]=[];
   for(const v of data?.results??[]){
     if(v.mature===true)continue;
+    const id=String(v.id||'');
+    // Openverse offers its own thumbnail proxy across multiple providers,
+    // so we are no longer limited to just Wikimedia Commons and Flickr.
+    const thumbnail=/^[a-f\d-]{36}$/i.test(id)
+      ? 'https://api.openverse.org/v1/images/'+id+'/thumb/'
+      : String(v.thumbnail||'');
+    const source=String(v.foreign_landing_url||'');
+    const original=String(v.url||'');
+    const full=allowedAsset(original)?original:thumbnail;
     const item:ImagePreview={
-      thumbnail:String(v.thumbnail||''),full:String(v.url||''),
-      source:String(v.foreign_landing_url||''),title:clean(v.title,180),
+      thumbnail,full,source,title:clean(v.title,180),
       description:clean(v.description,360),license:clean(v.license,45),
-      creator:clean(v.creator,130),provider:'Openverse',
+      creator:clean(v.creator,130),
+      provider:clean(v.source||v.provider||'Openverse',65),
     };
     if(allowedAsset(item.thumbnail)&&allowedAsset(item.full))out.push(item);
   }
   return out;
 }
+
+export function imageSearchVariants(request:MedicalImageRequest):string[]{
+  const base=imageSearchTerms(request);
+  const target=ascii(request.anatomy+' '+request.query+' '+request.purpose);
+  if(/rect|mesorect|sphinct|levator/.test(target)){
+    if(request.image_type==='anatomical_diagram')
+      return [base,'rectum anatomy','anal canal sphincter anatomy','mesorectum anatomy'];
+    if(/diffus|dwi|adc|ganglion|lymph/.test(target))
+      return [base,'rectal MRI diffusion','rectal cancer MRI lymph node','pelvic MRI'];
+    return [base,'rectal cancer MRI','rectum MRI','pelvic magnetic resonance'];
+  }
+  const words=base.split(/\s+/).filter(Boolean);
+  const compact=words.slice(0,3).join(' ');
+  const anatomy=ascii(request.anatomy).split(/\s+/).filter(Boolean).slice(0,2).join(' ');
+  return [...new Set([base,compact,anatomy].filter(q=>q.length>=5))];
+}
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
-  const search=imageSearchTerms(request);
+  const queries=imageSearchVariants(request);
   const curated=request.image_type==='anatomical_diagram' &&
     /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query))
     ? await rectalAnatomyFiles() : [];
-  const [a,b]=await Promise.allSettled([commons(search),openverse(search)]);
-  const candidates=[
-    ...curated,
-    ...(a.status==='fulfilled'?a.value:[]),
-    ...(b.status==='fulfilled'?b.value:[]),
-  ].filter(x=>imageIsTopical(x,request));
+  const run=async(q:string)=>{
+    const matches=await Promise.allSettled([commons(q),openverse(q)]);
+    return [
+      ...(matches[0].status==='fulfilled'?matches[0].value:[]),
+      ...(matches[1].status==='fulfilled'?matches[1].value:[]),
+    ];
+  };
+  // Start with medically specific results. Broader terms are used ONLY
+  // if no sufficiently relevant image is returned by the first query.
+  let candidates=[...curated,...await run(queries[0])];
+  let images=candidates.filter(x=>imageIsTopical(x,request));
+  if(images.length===0){
+    const secondary=await Promise.all(queries.slice(1).map(run));
+    candidates.push(...secondary.flat());
+    images=candidates.filter(x=>imageIsTopical(x,request));
+  }
   const seen=new Set<string>();
-  const images=candidates.filter(x=>{
-    const k=x.full;
-    if(seen.has(k))return false;seen.add(k);return true;
-  }).slice(0,5);
+  images=images.filter(x=>{
+    const key=x.full||x.thumbnail;
+    if(seen.has(key))return false;
+    seen.add(key);return true;
+  }).slice(0,8);
   return {
-    images,medical_searches:pages(search),image_request:request,
-    unavailable_reason:images.length===0?'no_matching_licensed_images':null,
+    images,medical_searches:pages(queries[0]),image_request:request,
+    image_sources_searched:queries,
+    unavailable_reason:images.length===0?'no_matching_accessible_images':null,
   };
 }
+
 export async function proxyMedicalImage(asset:string):Promise<Response>{
   const common={'Access-Control-Allow-Origin':'*',
     'Cache-Control':'private, no-store, max-age=0','Vary':'Origin'};
