@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleFigureSnippets, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -116,4 +116,12 @@ Deno.test('Europe PMC XML figure captions can be linked to an open article',()=>
 Deno.test('malformed article XML does not supply an unsafe figure',()=>{
  const xml='<fig id="bad"><graphic xlink:href="../../evil.jpg"/></fig>';
  assert(articleFigureSnippets(xml).length===0,'traversal figure names must be rejected');
+});
+
+Deno.test('Article page OpenGraph preview only accepts explicitly permitted medical image assets',()=>{
+ const article='<meta property="og:image" content="https://cdn.ncbi.nlm.nih.gov/pmc/blobs/10/rectum-figure.jpg">';
+ const image=openGraphImageFromHtml(article);
+ assert(image==='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/10/rectum-figure.jpg','verified article OG image is found');
+ assert(openGraphImageFromHtml('<meta property="og:image" content="http://evil.invalid/banner.png">')===null,'unsafe http OG blocked');
+ assert(openGraphImageFromHtml('<meta property="og:image" content="https://cdn.ncbi.nlm.nih.gov/logo.png">')===null,'publisher logo blocked');
 });
