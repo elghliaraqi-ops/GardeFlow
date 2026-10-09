@@ -197,7 +197,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                     overflow:TextOverflow.ellipsis,style:const TextStyle(
                       color:PracticeDailyVisualTheme.muted,fontSize:10))),
                 ]))),
-              ));
+              );
           },
         )),
       ],
