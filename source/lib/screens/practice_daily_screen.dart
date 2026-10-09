@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/practice_daily_models.dart';
+import '../models/practice_external_medical_media_policy.dart';
 import '../services/practice_daily_service.dart';
 import '../services/notification_service.dart';
 import '../services/push_notification_service.dart';
@@ -480,10 +481,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               if (parts.length != 3) return const SizedBox.shrink();
               final image = Uri.tryParse(parts[1]),
                   page = Uri.tryParse(parts[2]);
-              if (image?.scheme != 'https' ||
-                  image?.host != 'upload.wikimedia.org' ||
-                  page?.scheme != 'https' ||
-                  page?.host != 'commons.wikimedia.org')
+              if (!isSupportedExternalMedicalPreview(image, page))
                 return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 12),
