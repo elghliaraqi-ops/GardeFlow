@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/practice_daily_models.dart';
+import '../models/practice_external_medical_media_policy.dart';
 import '../services/supabase_backend_service.dart';
 import '../widgets/practice_clinical_dossier.dart';
 import 'practice_daily_visual_theme.dart';
@@ -305,10 +306,7 @@ class _PracticeProgressiveCasesScreenState
               final data = raw.split('|||');
               if (data.length != 3) return const SizedBox.shrink();
               final image = Uri.tryParse(data[1]), page = Uri.tryParse(data[2]);
-              if (image?.scheme != 'https' ||
-                  image?.host != 'upload.wikimedia.org' ||
-                  page?.scheme != 'https' ||
-                  page?.host != 'commons.wikimedia.org') {
+              if (!isSupportedExternalMedicalPreview(image, page)) {
                 return const SizedBox.shrink();
               }
               return InkWell(

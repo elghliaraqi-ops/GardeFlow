@@ -57,7 +57,10 @@ jobs:
           deno check "$CASE"
           deno check source/supabase/functions/generate-practice-progressive-case/index.ts
           cmp "$CASE" source/supabase/functions/generate-practice-progressive-case/index.ts
-          grep -Fq "questions.push(...await checkAndFormat(second,refs,seen))" "$CASE"
+          grep -Fq "questions.push(...secondBatch)" "$CASE"
+          grep -Fq "validateProgressiveAxisSequence" "$CASE"
+          grep -Fq "progressiveJsonContract(0)" "$CASE"
+          grep -Fq "progressiveJsonContract(1)" "$CASE"
           if grep -Fq "practice_daily_challenges').upsert" "$CASE"; then
             echo "Independent progressive cases cannot store daily challenges" >&2
             exit 1

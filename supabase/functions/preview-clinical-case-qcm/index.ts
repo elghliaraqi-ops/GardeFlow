@@ -1,4 +1,5 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
+import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 type Ref={title:string;url:string;kind:string;organization:string;year:string};
 type Choice={axis:string;question:string;options:string[];correct_index:number;correction:string;topic:string;references:Ref[];image_search_query:string};
 type Item={position:number;question:string;options:string[];correct_index:number;correction:string;topic:string};
@@ -124,11 +125,11 @@ Deno.serve(async(req:Request)=>{
  complementary:clean(post.complementary_exams),imaging:clean(post.imaging_conclusion),assessment:clean(post.assessment),plan:clean(post.plan)});
  for(let part=0;part<qty/5;part++){
  const forbidden=past.concat(proposed.map(q=>q.question)).slice(-100).join('\n');
- const prompt='Génère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON strict.\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
+ const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON STRUCTURÉ sans markdown : {"qcms":[cinq objets ayant exactement les champs axis, question, options (4 textes), correct_index (entier 0 à 3), correction, topic, references ([{"url":"URL fournie"}]), image_search_query]}. Les 5 axis suivent exactement l’ordre demandé.\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
  try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
  body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:9500,
- response_format:{type:'json_schema',json_schema:{name:'practice_preview',strict:true,schema}}})});}
+ response_format:{type:'json_object'}})});}
  finally{clearTimeout(timer);}
  const raw=await remote.json().catch(()=>null);
  if(!remote.ok)throw Error(remote.status===429?'groq_rate_limited':'groq_unavailable');
@@ -145,7 +146,13 @@ Deno.serve(async(req:Request)=>{
  throw Error('invalid_generated_qcm');
  const normalize=(s:string)=>s.toLowerCase().replace(/\s+/g,' ').trim();
  if(past.some(x=>normalize(x)===normalize(question))||proposed.some(x=>normalize(x.question)===normalize(question)))throw Error('duplicate_questions');
- const image=q.image_search_query?await wikimedia(q.image_search_query):null;
+ const primary=q.image_search_query?await wikimedia(q.image_search_query):null;
+ const other=(!primary&&q.image_search_query)?
+  await findOpenverseMedicalPreview(q.image_search_query):null;
+ const image=primary??(other?{
+  name:other.title+' · '+other.creator+' · '+other.license+' · Openverse',
+  url:other.preview_url,source:other.source_url
+ }:null);
  const links=image?'\n\n§IMAGES§\n'+[image.name,image.url,image.source].join('|||'):'';
  const correction=(cor+links+'\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
  proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:q.topic});

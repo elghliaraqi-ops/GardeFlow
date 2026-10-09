@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 
 const axes = ['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'];
 const topics = ['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
@@ -466,7 +467,7 @@ Deno.serve(async(req)=>{
     const effortRaw=String(Deno.env.get('GROQ_REASONING_EFFORT')??'medium').trim().toLowerCase();
     const reasoningEffort=['low','medium','high'].includes(effortRaw)?effortRaw:'medium';
 
-    const prompt=`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : 2 octobre 2026.
+    const prompt=medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
 Le cas ci-dessous est ANONYMISÉ et sert d'ancrage pédagogique. N'essaie jamais d'identifier le patient et ne restitue jamais de données d'identification.
 
 Crée EXACTEMENT 5 QCM autonomes, exigeants et utiles, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.
@@ -476,7 +477,7 @@ Les questions doivent tester des connaissances médicales réelles et générali
 Évite les formulations vagues comme « dans ce cas », « toutes les réponses » ou « aucune des réponses ».
 
 SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous pour les références. Chaque QCM doit citer 1 à 3 références du catalogue et recopier exactement leur URL. N'invente aucune référence ni URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
-Réponds en français et respecte strictement le schéma JSON.
+Réponds en français, exclusivement par un objet JSON racine {"qcms":[...]} comprenant exactement 5 objets. Chaque objet possède les champs axis, question, options (exactement 4 chaînes), correct_index (0 à 3), correction (explication médicale), topic, references (1 à 3 objets {"url":"URL autorisée"}), image_search_query (chaîne vide si non pertinent). Les axis doivent suivre cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations, dans cet ordre. Pas de Markdown, pas de texte hors JSON.
 
 CAS ANONYMISÉ :
 ${cleanJson}
@@ -513,14 +514,7 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
           reasoning_format:'hidden',
           max_completion_tokens:12000,
           stream:false,
-          response_format:{
-            type:'json_schema',
-            json_schema:{
-              name:'gardeflow_qcms',
-              strict:true,
-              schema:outputSchema
-            }
-          }
+          response_format:{type:'json_object'}
         }),
       });
     } catch(e) {
@@ -678,6 +672,13 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
         if(q.image_search_query){
           try { images=await fetchCommonsImages(q.image_search_query,1); }
           catch(e) { log('external_image_lookup_failed',{...meta(),error_code:codeValue(e?.message,'image_lookup_error')}); }
+          if(!images.length){
+           const other=await findOpenverseMedicalPreview(q.image_search_query);
+           if(other)images=[{
+            title:other.title+' · '+other.creator+' · '+other.license+' · Openverse',
+            preview_url:other.preview_url,source_url:other.source_url}];
+          }
+          
         }
         return {...q,correction:correction(q.raw_correction,q.references,images)};
       }));

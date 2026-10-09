@@ -1,4 +1,6 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
+import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
+import {progressiveAxes,progressiveJsonContract,validateProgressiveAxisSequence} from './progressive_question_sequence.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['Chirurgie viscérale','Orthopédie','Cardiologie','Neurologie','Urologie','ORL','Gynécologie','Réanimation','Pneumologie','Gastro-entérologie','Néphrologie','Endocrinologie','Dermatologie','Psychiatrie','Pédiatrie','Ophtalmologie','Neurochirurgie','Chirurgie thoracique','Chirurgie vasculaire','Maladies infectieuses','Médecine interne'];
@@ -19,8 +21,8 @@ const clinicalCaseSchema={type:'object',additionalProperties:false,required:['ca
  properties:{case:{type:'object',additionalProperties:false,
  required:['age','sex',...caseTextFields,...caseBoolFields],properties:caseProperties}}};
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
-const itemSchema={type:'object',additionalProperties:false,required:['question','options','correct_index','correction','topic','references','image_search_query'],
- properties:{question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
+const itemSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],
+ properties:{axis:{type:'string',enum:progressiveAxes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
  correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}}};
 type Ref={title:string;url:string;year:string;organization:string;kind:string};
 function plain(value:unknown,max=2500):string {
@@ -173,7 +175,17 @@ async function externalMedicalIllustrations(dossier:Record<string,unknown>):
   searches.push({query:'CT scan anatomy medical',label:'Scanner anatomique illustratif',
    accept:/ct.scan|computed tomography|tomodensitom/i});
  // Parallel, bounded, all-optional external requests. Never store image bytes.
- const found=await Promise.all(searches.slice(0,2).map(verifiedExternalMedia));
+ const found=await Promise.all(searches.slice(0,2).map(async spec=>{
+  const primary=await verifiedExternalMedia(spec);
+  if(primary)return primary;
+  const candidate=await findOpenverseMedicalPreview(spec.query,spec.accept);
+  return candidate?{
+   stage:1,title:spec.label+' · '+candidate.title+
+    ' · '+candidate.creator+' · '+candidate.license,
+   url:candidate.source_url,preview_image_url:candidate.preview_url,
+   license:candidate.license+' · '+candidate.creator
+  }:null;
+ }));
  return found.filter((entry):entry is MedicalLink=>entry!==null);
 }
 
@@ -200,7 +212,10 @@ async function generateCaseDossier(specialty:string):Promise<Record<string,unkno
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
  const model=Deno.env.get('GROQ_CASE_MODEL')?.trim()||'openai/gpt-oss-20b';
- const prompt='Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine. '+
+ const evidence=await recentGuidelineCatalog(specialty);
+ const prompt=medicalEvidencePolicy+'\nRECOMMANDATIONS INDEXÉES :\n'+
+  (evidence||'Aucune recommandation actuelle confirmée par la recherche, ne fais pas d’affirmation datée.')+
+  '\nCrée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine. '+
   'Spécialité imposée : '+specialty+'. Niveau : intermédiaire ou complexe. '+
   'Pas de nom, initiales, date de naissance, adresse, téléphone ni identifiant réel. '+
   'Rédige en français médical précis, avec signes positifs ET négatifs utiles. '+
@@ -296,7 +311,7 @@ async function newGroqBatch(
   (format.properties as Record<string,unknown>|undefined)?.case_stages
  );
  for(const model of models){
-  for(const strict of isCaseFormat?[false]:[true,false]){
+  for(const strict of [false]){ // JSON object mode avoids Groq strict-schema 400 responses.
    const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),38000);
    try{
     const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
@@ -350,9 +365,10 @@ async function newGroqBatch(
  throw Error(code);
 }
 
-async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>)
+async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>,batchIndex:0|1)
  :Promise<Record<string,unknown>[]>{
  if(!Array.isArray(batch.qcms)||batch.qcms.length!==5)throw Error('invalid_generated_question_count');
+ if(!validateProgressiveAxisSequence(batch.qcms,batchIndex))throw Error('invalid_clinical_axis_order');
  const map=new Map(refs.map(x=>[canon(x.url),x]));
  const output:Record<string,unknown>[]=[];
  for(const [index,raw] of batch.qcms.entries()){
@@ -380,20 +396,25 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
    throw Error('invalid_generated_questions');
   }
   seen.add(fingerprint);
-  output.push({question,options,correct_index:correct,correction,topic,
+  output.push({axis:progressiveAxes[batchIndex*5+index],question,options,correct_index:correct,correction,topic,
    references,illustration_query:String(q.image_search_query??'')});
  }
  // Parallel Wikimedia lookups avoid up to 60s sequential Edge timeout.
  return await Promise.all(output.map(async(item)=>{
   const query=String(item.illustration_query??'').trim();
-  const picture=query?await commons(query):null;
+  const primary=query?await commons(query):null;
+  const second=(!primary&&query)?await findOpenverseMedicalPreview(query):null;
+  const picture=primary??(second?{
+   name:second.title+' · '+second.creator+' · '+second.license+' · Openverse',
+   url:second.preview_url,source:second.source_url
+  }:null);
   const img=picture?'\n\n§IMAGES§\n'+
     [picture.name,picture.url,picture.source].join('|||'):'';
   const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
     .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
    question:item.question,options:item.options,correct_index:item.correct_index,
-   topic:item.topic,correction:String(item.correction)+img+urls
+   axis:item.axis,topic:item.topic,correction:String(item.correction)+img+urls
   };
  }));
 }
@@ -471,19 +492,22 @@ Deno.serve(async(req:Request)=>{
    // PHASE 2: QCMs are about this preexisting simulated clinical dossier, never a course bank.
    const context=JSON.stringify(simulated);
    const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
-   const common='Génère EXACTEMENT cinq QCM originaux et CONTEXTUALISÉS à ce patient fictif. '+
+   const common=medicalEvidencePolicy+'\nGénère EXACTEMENT cinq QCM originaux et CONTEXTUALISÉS à ce patient fictif. '+
     'Chaque question porte sur une décision motivée par les symptômes, constantes, examens ou évolution de CE dossier, '+
     'pas sur un chapitre de cours théorique. '+
     'Chaque QCM doit contenir exactement question, options (4 réponses distinctes), correct_index (0 à 3), '+
     'correction détaillée, topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
     'references (1 à 3 objets {url}), image_search_query (vide si non pertinent). '+
     'Utilise seulement les liens bibliographiques suivants :\n'+refList;
-   const early='Retourne UN objet JSON avec uniquement {qcms:[cinq objets]}. '+
-    'Sur le même dossier, construis 5 QCM cliniques progressifs : '+
-    '1-2 priorité initiale et examen clinique; 3-5 examens complémentaires, '+
-    'interprétation et hiérarchisation diagnostique. Les questions 1-5 ne dévoilent pas '+
-    'la conduite thérapeutique finale ou l’évolution avant leur étape. '+common+
-    '\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
+   const early=progressiveJsonContract(0)+'\n'+
+    'Génère exactement les QCM 1 à 5, pour CE patient et pas un cours : '+
+    '1 SYMPTÔMES : identifier manifestations positives, négatives et signes d’alerte; '+
+    '2 EXAMEN CLINIQUE : examen ciblé, constantes et degré d’urgence; '+
+    '3 HYPOTHÈSES DIAGNOSTIQUES : diagnostic principal et différentiels plausibles; '+
+    '4 CLASSIFICATION / GRAVITÉ : stadification ou score UNIQUEMENT si les critères sont disponibles; '+
+    '5 EXAMENS COMPLÉMENTAIRES : choisir et hiérarchiser les examens indiqués. '+
+    'Ne révèle jamais traitement final, résultats futurs ni évolution avant leur étape. '+
+    common+'\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
    const seen=new Set<string>();
    let questions:Record<string,unknown>[]=[];
    for(let attempt=0;attempt<2;attempt++){
@@ -491,7 +515,7 @@ Deno.serve(async(req:Request)=>{
      const first=await newGroqBatch(early,batchSchema,
       attempt===1?'openai/gpt-oss-120b':undefined);
      const localSeen=new Set<string>();
-     const accepted=await checkAndFormat(first,refs,localSeen);
+     const accepted=await checkAndFormat(first,refs,localSeen,0);
      questions=accepted;
      for(const fingerprint of localSeen)seen.add(fingerprint);
      break;
@@ -503,15 +527,35 @@ Deno.serve(async(req:Request)=>{
     }
    }
    if(Number(questions.length)!==5)throw Error('invalid_generated_question_count');
-   const continuation='Retourne UN objet JSON avec uniquement {qcms:[cinq objets]}. '+
-    'Même dossier fictif, mêmes données et même patient. Les 5 nouvelles questions 6 à 10 concernent : '+
-    '6-8 les choix thérapeutiques et la conduite à tenir concrète; '+
-    '9-10 surveillance, réévaluation, complications, orientation et suivi. '+
-    'NE crée aucun autre patient ou scénario, NE répète pas ces questions : '+
+   const continuation=progressiveJsonContract(1)+'\n'+
+    'Toujours le MÊME patient fictif, questions 6 à 10 STRICTEMENT dans cet ordre : '+
+    '6 INTERPRÉTATION ET DIAGNOSTIC : interpréter les examens disponibles et retenir le diagnostic; '+
+    '7 DÉCISION THÉRAPEUTIQUE : sélectionner une option fondée sur gravité et recommandations; '+
+    '8 CONDUITE À TENIR : traitement et intervention éventuelle, contre-indications, orientation; '+
+    '9 SURVEILLANCE/RÉÉVALUATION : critères de réponse, signes d’alerte et bilans de contrôle; '+
+    '10 COMPLICATIONS ET SUIVI : prévenir les complications et programmer le suivi. '+
+    'Ne crée aucun autre patient, aucune question indépendante du dossier. '+
+    'Ne répète pas les questions précédentes : '+
     questions.map(x=>String(x.question)).join(' / ')+'. '+common+
     '\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
-   const second=await newGroqBatch(continuation,batchSchema);
-   questions.push(...await checkAndFormat(second,refs,seen));
+   let secondBatch:Record<string,unknown>[]|null=null;
+   for(let attempt=0;attempt<2;attempt++){
+    try{
+     const batch=await newGroqBatch(continuation,batchSchema,
+      attempt===1?'openai/gpt-oss-120b':undefined);
+     const localSeen=new Set(seen);
+     secondBatch=await checkAndFormat(batch,refs,localSeen,1);
+     for(const fingerprint of localSeen)seen.add(fingerprint);
+     break;
+    }catch(err){
+     const code=err instanceof Error?err.message:'groq_invalid_response';
+     if(['groq_auth_failed','groq_rate_limited','groq_configuration_missing'].includes(code))throw err;
+     console.warn('progressive_case_second_qcm_retry',{code,attempt:attempt+1});
+     if(attempt===1)throw err;
+    }
+   }
+   if(!secondBatch||secondBatch.length!==5)throw Error('invalid_generated_question_count');
+   questions.push(...secondBatch);
    if(questions.length!==10)throw Error('invalid_question_count');
    // Optional Wikimedia Commons link metadata only; no remote media file storage.
    const illustrations=await externalMedicalIllustrations(simulated);
