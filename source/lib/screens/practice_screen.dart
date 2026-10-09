@@ -14,6 +14,7 @@ import '../services/random_clinical_case_service.dart';
 import '../state/app_state.dart';
 import '../widgets/profile_avatar.dart';
 import 'practice_qcm_screen.dart';
+import 'practice_daily_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
 
@@ -371,6 +372,20 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ],
               ),
               const SizedBox(height: 9),
+              const SizedBox(height: 9),
+              _PracticePrimaryActionCard(
+                icon: Icons.calendar_month_rounded,
+                title: 'Défi quotidien',
+                subtitle: '10 QCM de cours ou un cas clinique · note sur 10',
+                meta: 'Calendrier · Chaque jour',
+                accent: PracticeColors.gameGold,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeDailyScreen(),
+                  ),
+                ),
+              ),
               _PracticePrimaryActionCard(
                 icon: Icons.add_circle_outline_rounded,
                 title: 'Ajouter un cas clinique',
