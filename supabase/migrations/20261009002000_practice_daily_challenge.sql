@@ -56,7 +56,7 @@ begin
  if not found then return jsonb_build_object('ready',false,'day',v_day,'mode',v_mode);end if;
  select jsonb_agg(
   jsonb_build_object('question',q.item->>'question','options',q.item->'options','topic',q.item->>'topic',
-   'selected_index',case when v_attempt.completed_at is not null then (v_attempt.answers->>(q.idx-1))::integer else null end,
+   'selected_index',case when v_attempt.completed_at is not null then (v_attempt.answers->>((q.idx-1)::integer))::integer else null end,
    'correct_index',case when v_attempt.completed_at is not null then (q.item->>'correct_index')::integer else null end,
    'correction',case when v_attempt.completed_at is not null then q.item->>'correction' else null end
   ) order by q.idx
