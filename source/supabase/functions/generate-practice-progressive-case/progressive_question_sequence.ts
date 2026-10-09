@@ -1,3 +1,4 @@
+import {medicalImagePrompt,emptyMedicalImageRequest} from './medical_image_contract.ts';
 /**
  * One clinical case, 10 QCMs, always the same progressive decision pathway.
  * The UI unlocks them in groups 2/3/3/2 across four stages.
@@ -31,7 +32,7 @@ export function progressiveJsonContract(batch:0|1):string{
    correction:'REMPLACER par explication précise conforme aux références vérifiées.',
    topic:topics[batch*5+i],
    references:[{url:'REMPLACER_PAR_URL_EXACTE_DU_CATALOGUE'}],
-   image_search_query:''
+   image_search_query:'',image_request:emptyMedicalImageRequest
   }))
  };
  return 'CONTRAT JSON OBLIGATOIRE : objet racine avec exactement la clé qcms '+
@@ -42,7 +43,7 @@ export function progressiveJsonContract(batch:0|1):string{
   'MODELE_JSON_DEBUT\n'+JSON.stringify(sample)+'\nMODELE_JSON_FIN\n'+
   'Chaque QCM comporte axis, question, options (4 chaînes), correct_index '+
   '(entier 0, 1, 2 ou 3), correction médicale détaillée, topic autorisé, '+
-  'references (1 à 3 objets {url} du catalogue uniquement), image_search_query. '+
+  'references (1 à 3 objets {url} du catalogue uniquement), image_search_query, image_request. '+medicalImagePrompt+' '+
   'L’ordre clinique est ABSOLUMENT imposé : '+
   steps.map((axis,i)=>(batch*5+i+1)+':'+axis).join(' → ')+'. '+
   'Chaque question doit correspondre réellement à son axis, aux données du patient '+
