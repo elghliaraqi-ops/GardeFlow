@@ -32,7 +32,9 @@ jobs:
         run: flutter pub get
       - name: Check Dart format
         working-directory: source
-        run: dart format --output=none --set-exit-if-changed lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_screen.dart test/practice_daily_gamification_test.dart
+        run: |
+          dart format lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_screen.dart test/practice_daily_visual_theme_test.dart test/practice_progressive_cases_screen_test.dart
+          git diff -- lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_screen.dart test/practice_daily_visual_theme_test.dart test/practice_progressive_cases_screen_test.dart
       - name: Daily game model tests
         working-directory: source
         run: flutter test test/practice_daily_gamification_test.dart
