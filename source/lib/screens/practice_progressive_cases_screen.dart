@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/practice_qcm_medical_illustration.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/practice_daily_models.dart';

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/practice_qcm_medical_illustration.dart';
+
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -154,9 +156,11 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
 
     return value
         .split(' ')
-        .map((word) => word.isEmpty
-            ? word
-            : '${word.substring(0, 1).toUpperCase()}${word.substring(1)}')
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word.substring(0, 1).toUpperCase()}${word.substring(1)}',
+        )
         .join(' ');
   }
 
@@ -207,15 +211,15 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   }
 
   String _specialtyKey(ClinicalCasePost post) =>
-      _specialtyLabel(post).toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+      _specialtyLabel(post)
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
 
   Map<String, _SpecialtyGroup> _groupedCases() {
     // Visible even when no synthetic case has been published yet.
     final groups = <String, _SpecialtyGroup>{
-      'cas fictifs': _SpecialtyGroup(
-        key: 'cas fictifs',
-        label: 'Cas fictifs',
-      ),
+      'cas fictifs': _SpecialtyGroup(key: 'cas fictifs', label: 'Cas fictifs'),
     };
     for (final post in _items) {
       final key = _specialtyKey(post);
@@ -286,8 +290,9 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   @override
   Widget build(BuildContext context) {
     final groups = _groupedCases();
-    final selectedGroup =
-        _selectedSpecialtyKey == null ? null : groups[_selectedSpecialtyKey];
+    final selectedGroup = _selectedSpecialtyKey == null
+        ? null
+        : groups[_selectedSpecialtyKey];
     ClinicalCasePost? selectedCase;
     if (_selectedCaseId != null) {
       for (final post in _items) {
@@ -309,8 +314,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
             subtitle: selectedCase != null
                 ? _specialtyLabel(selectedCase)
                 : selectedGroup != null
-                    ? '${selectedGroup.cases.length} cas · ${selectedGroup.label}'
-                    : '${_items.length} cas · ${groups.length} catégories',
+                ? '${selectedGroup.cases.length} cas · ${selectedGroup.label}'
+                : '${_items.length} cas · ${groups.length} catégories',
             onRefresh: () => _loadAll(),
           ),
           const SizedBox(height: 14),
@@ -424,8 +429,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
               final columns = constraints.maxWidth >= 760
                   ? 3
                   : constraints.maxWidth >= 500
-                      ? 2
-                      : 1;
+                  ? 2
+                  : 1;
               if (columns == 1) {
                 return Column(
                   children: [
@@ -497,8 +502,10 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
           decoration: InputDecoration(
             hintText: 'Rechercher un cas dans cette spécialité…',
             hintStyle: const TextStyle(color: _PracticeGame.secondary),
-            prefixIcon:
-                const Icon(Icons.search_rounded, color: _PracticeGame.purple),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              color: _PracticeGame.purple,
+            ),
             suffixIcon: _query.isEmpty
                 ? null
                 : Padding(
@@ -525,8 +532,10 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
-              borderSide:
-                  const BorderSide(color: _PracticeGame.purple, width: 1.4),
+              borderSide: const BorderSide(
+                color: _PracticeGame.purple,
+                width: 1.4,
+              ),
             ),
           ),
         ),
@@ -541,7 +550,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
                 : 'Aucun cas trouvé',
             body: group.label == 'Cas fictifs'
                 ? 'Depuis Practice, utilisez « Génère-moi un cas au hasard » '
-                    'puis validez-le pour le retrouver ici.'
+                      'puis validez-le pour le retrouver ici.'
                 : 'Essayez un autre mot-clé.',
           )
         else
@@ -580,8 +589,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
               label: _editingCaseId == post.id
                   ? 'Ouverture…'
                   : 'Modifier ce cas clinique',
-              onPressed:
-                  _editingCaseId == null ? () => _editCase(post) : null,
+              onPressed: _editingCaseId == null ? () => _editCase(post) : null,
             ),
           ),
           const SizedBox(height: 8),
@@ -788,49 +796,47 @@ class _BrowseToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 12,
+          vertical: compact ? 8 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: selected
+              ? _PracticeGame.purple.withOpacity(.22)
+              : _PracticeGame.surface,
           borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 10 : 12,
-              vertical: compact ? 8 : 10,
-            ),
-            decoration: BoxDecoration(
-              color: selected
-                  ? _PracticeGame.purple.withOpacity(.22)
-                  : _PracticeGame.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected ? _PracticeGame.purple : _PracticeGame.line,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon,
-                    size: 16,
-                    color: selected
-                        ? _PracticeGame.gold
-                        : _PracticeGame.secondary),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: selected
-                        ? _PracticeGame.text
-                        : _PracticeGame.secondary,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
+          border: Border.all(
+            color: selected ? _PracticeGame.purple : _PracticeGame.line,
           ),
         ),
-      );
+        child: Row(
+          mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: selected ? _PracticeGame.gold : _PracticeGame.secondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? _PracticeGame.text : _PracticeGame.secondary,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _SpecialtyCard extends StatelessWidget {
@@ -857,10 +863,14 @@ class _SpecialtyCard extends StatelessWidget {
     }
     if (value.contains('pneumo')) return Icons.air_rounded;
     if (value.contains('gastro')) return Icons.local_hospital_rounded;
-    if (value.contains('uro') || value.contains('néph') || value.contains('neph')) {
+    if (value.contains('uro') ||
+        value.contains('néph') ||
+        value.contains('neph')) {
       return Icons.water_drop_rounded;
     }
-    if (value.contains('urgence') || value.contains('réa') || value.contains('rea')) {
+    if (value.contains('urgence') ||
+        value.contains('réa') ||
+        value.contains('rea')) {
       return Icons.local_hospital_rounded;
     }
     return Icons.folder_rounded;
@@ -904,7 +914,9 @@ class _SpecialtyCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _PracticeGame.elevated,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _PracticeGame.gold.withOpacity(.28)),
+                  border: Border.all(
+                    color: _PracticeGame.gold.withOpacity(.28),
+                  ),
                 ),
                 child: Icon(
                   _iconFor(group.label),
@@ -946,7 +958,9 @@ class _SpecialtyCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _PracticeGame.purple.withOpacity(.17),
                   shape: BoxShape.circle,
-                  border: Border.all(color: _PracticeGame.purple.withOpacity(.30)),
+                  border: Border.all(
+                    color: _PracticeGame.purple.withOpacity(.30),
+                  ),
                 ),
                 child: const Icon(
                   Icons.chevron_right_rounded,
@@ -1010,7 +1024,9 @@ class _CaseListTile extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _PracticeGame.purple.withOpacity(.18),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _PracticeGame.purple.withOpacity(.30)),
+                  border: Border.all(
+                    color: _PracticeGame.purple.withOpacity(.30),
+                  ),
                 ),
                 child: Text(
                   number.toString().padLeft(2, '0'),
@@ -1190,10 +1206,14 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
         widget.post.id != oldWidget.post.id ||
         widget.post.qcms.length != oldWidget.post.qcms.length ||
         widget.post.qcms
-                .map((q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .map(
+                  (q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}',
+                )
                 .join('|') !=
             oldWidget.post.qcms
-                .map((q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}')
+                .map(
+                  (q) => '${q.id}:${q.mySelectedIndex}:${q.correction.length}',
+                )
                 .join('|');
     if (changed) {
       _syncQcms(resetIndex: widget.post.id != oldWidget.post.id);
@@ -1339,8 +1359,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   'seront prévisualisées avant leur publication.',
                 ),
                 const SizedBox(height: 14),
-                const Text('NOMBRE DE QCM',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'NOMBRE DE QCM',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -1355,8 +1377,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                const Text('DIFFICULTÉ',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'DIFFICULTÉ',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 7,
@@ -1389,10 +1413,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               child: const Text('Annuler'),
             ),
             FilledButton.icon(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                (count: quantity, level: difficulty),
-              ),
+              onPressed: () => Navigator.pop(dialogContext, (
+                count: quantity,
+                level: difficulty,
+              )),
               icon: const Icon(Icons.auto_awesome_rounded),
               label: const Text('Créer un aperçu'),
             ),
@@ -1403,12 +1427,12 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     if (selected == null || !mounted) return;
     setState(() => _addingQcms = true);
     try {
-      final preview =
-          await ClinicalCaseService.instance.prepareClinicalQcmPreview(
-        postId: widget.post.id,
-        quantity: selected.count,
-        difficulty: selected.level,
-      );
+      final preview = await ClinicalCaseService.instance
+          .prepareClinicalQcmPreview(
+            postId: widget.post.id,
+            quantity: selected.count,
+            difficulty: selected.level,
+          );
       if (!mounted) {
         await ClinicalCaseService.instance.discardClinicalQcmPreview(
           postId: widget.post.id,
@@ -1470,11 +1494,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
         );
         return;
       }
-      final total =
-          await ClinicalCaseService.instance.confirmClinicalQcmPreview(
-        postId: widget.post.id,
-        previewId: preview.id,
-      );
+      final total = await ClinicalCaseService.instance
+          .confirmClinicalQcmPreview(
+            postId: widget.post.id,
+            previewId: preview.id,
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1489,9 +1513,8 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
       final message = error is StateError
           ? error.message.toString()
           : 'Impossible de générer ou publier ces QCM.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _addingQcms = false);
     }
@@ -1528,7 +1551,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
             ),
             child: const Row(
               children: [
-                Icon(Icons.science_outlined, color: _PracticeGame.gold, size: 19),
+                Icon(
+                  Icons.science_outlined,
+                  color: _PracticeGame.gold,
+                  size: 19,
+                ),
                 SizedBox(width: 9),
                 Expanded(
                   child: Text(
@@ -1596,7 +1623,9 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               icon: _expanded
                   ? Icons.expand_less_rounded
                   : Icons.expand_more_rounded,
-              label: _expanded ? 'Réduire le dossier' : 'Voir le dossier complet',
+              label: _expanded
+                  ? 'Réduire le dossier'
+                  : 'Voir le dossier complet',
               onPressed: () => setState(() => _expanded = !_expanded),
             ),
           ),
@@ -1672,14 +1701,14 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
   }
 
   static bool _hasExtraDetails(ClinicalCasePost post) => <String>[
-        post.history,
-        post.clinicalExam,
-        post.complementaryExams,
-        post.imagingConclusion,
-        post.assessment,
-        post.plan,
-        post.disposition,
-      ].any((value) => value.trim().isNotEmpty);
+    post.history,
+    post.clinicalExam,
+    post.complementaryExams,
+    post.imagingConclusion,
+    post.assessment,
+    post.plan,
+    post.disposition,
+  ].any((value) => value.trim().isNotEmpty);
 }
 
 class _GamingTextButton extends StatelessWidget {
@@ -1969,8 +1998,11 @@ class _QcmPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.sports_esports_rounded,
-                  color: _PracticeGame.gold, size: 19),
+              const Icon(
+                Icons.sports_esports_rounded,
+                color: _PracticeGame.gold,
+                size: 19,
+              ),
               const SizedBox(width: 7),
               Text(
                 'DÉFI ${currentIndex + 1} / $total',
@@ -1983,8 +2015,11 @@ class _QcmPanel extends StatelessWidget {
               ),
               const Spacer(),
               if (current.generationSource == 'openai') ...[
-                const Icon(Icons.auto_awesome_rounded,
-                    color: _PracticeGame.purple, size: 13),
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: _PracticeGame.purple,
+                  size: 13,
+                ),
                 const SizedBox(width: 4),
               ],
               Text(
@@ -2199,7 +2234,9 @@ class _AnswerFeedback extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      correct ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                      correct
+                          ? Icons.check_circle_rounded
+                          : Icons.cancel_rounded,
                       color: semantic,
                       size: 20,
                     ),
@@ -2213,8 +2250,11 @@ class _AnswerFeedback extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    const Icon(Icons.auto_awesome_rounded,
-                        color: _PracticeGame.gold, size: 15),
+                    const Icon(
+                      Icons.auto_awesome_rounded,
+                      color: _PracticeGame.gold,
+                      size: 15,
+                    ),
                     const SizedBox(width: 5),
                     const Text(
                       'EXPLICATION IA',
@@ -2287,10 +2327,10 @@ class _QcmNavigation extends StatelessWidget {
               final Color color = q.myIsCorrect == true
                   ? AppColors.success
                   : q.answered
-                      ? AppColors.danger
-                      : active
-                          ? _PracticeGame.gold
-                          : _PracticeGame.purple;
+                  ? AppColors.danger
+                  : active
+                  ? _PracticeGame.gold
+                  : _PracticeGame.purple;
               return GestureDetector(
                 onTap: () => onSelect(index),
                 child: AnimatedContainer(
@@ -2362,24 +2402,28 @@ class _GuidelineCorrection extends StatelessWidget {
     String explanation,
     List<_ExternalImageReference> images,
     List<_GuidelineReference> references,
-  }) _parse() {
+  })
+  _parse() {
     const sourceMarker = '\n\n§SOURCES§\n';
     const imageMarker = '\n\n§IMAGES§\n';
     final raw = correction.trim();
 
     final sourceIndex = raw.indexOf(sourceMarker);
-    final beforeSources =
-        sourceIndex < 0 ? raw : raw.substring(0, sourceIndex).trim();
+    final beforeSources = sourceIndex < 0
+        ? raw
+        : raw.substring(0, sourceIndex).trim();
     final sourcesText = sourceIndex < 0
         ? ''
         : raw.substring(sourceIndex + sourceMarker.length).trim();
 
-    final beforeImageSpec=beforeSources.split('§IMAGE_SPEC§').first.trim();
-    final imageIndex=beforeImageSpec.indexOf(imageMarker);
-    final explanation=imageIndex<0?beforeImageSpec:
-      beforeImageSpec.substring(0,imageIndex).trim();
-    final imagesText=imageIndex<0?'':beforeImageSpec.substring(
-      imageIndex+imageMarker.length).trim();
+    final beforeImageSpec = beforeSources.split('§IMAGE_SPEC§').first.trim();
+    final imageIndex = beforeImageSpec.indexOf(imageMarker);
+    final explanation = imageIndex < 0
+        ? beforeImageSpec
+        : beforeImageSpec.substring(0, imageIndex).trim();
+    final imagesText = imageIndex < 0
+        ? ''
+        : beforeImageSpec.substring(imageIndex + imageMarker.length).trim();
 
     final images = <_ExternalImageReference>[];
     for (final line in imagesText.split('\n')) {
@@ -2426,11 +2470,7 @@ class _GuidelineCorrection extends StatelessWidget {
         ),
       );
     }
-    return (
-      explanation: explanation,
-      images: images,
-      references: references,
-    );
+    return (explanation: explanation, images: images, references: references);
   }
 
   Future<void> _expandExternalImage(
@@ -2442,9 +2482,7 @@ class _GuidelineCorrection extends StatelessWidget {
       builder: (dialogContext) => Dialog(
         backgroundColor: _PracticeGame.surface,
         insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 22),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: SafeArea(
           child: SizedBox(
             height: MediaQuery.sizeOf(dialogContext).height * .72,
@@ -2500,7 +2538,9 @@ class _GuidelineCorrection extends StatelessWidget {
                       mode: LaunchMode.externalApplication,
                     ),
                     icon: const Icon(Icons.open_in_new_rounded),
-                    label: const Text('Voir la source et les droits de réutilisation'),
+                    label: const Text(
+                      'Voir la source et les droits de réutilisation',
+                    ),
                   ),
                 ),
               ],
@@ -2622,8 +2662,11 @@ class _GuidelineCorrection extends StatelessWidget {
           const SizedBox(height: 12),
           const Row(
             children: [
-              Icon(Icons.menu_book_rounded,
-                  size: 15, color: _PracticeGame.mint),
+              Icon(
+                Icons.menu_book_rounded,
+                size: 15,
+                color: _PracticeGame.mint,
+              ),
               SizedBox(width: 6),
               Text(
                 'SOURCES DU COURS',
@@ -2646,13 +2689,16 @@ class _GuidelineCorrection extends StatelessWidget {
                     launchUrl(ref.url, mode: LaunchMode.externalApplication),
                 child: Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: _PracticeGame.surface,
                     borderRadius: BorderRadius.circular(13),
                     border: Border.all(
-                        color: _PracticeGame.purple.withOpacity(.28)),
+                      color: _PracticeGame.purple.withOpacity(.28),
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2685,8 +2731,11 @@ class _GuidelineCorrection extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 7),
-                      const Icon(Icons.open_in_new_rounded,
-                          size: 15, color: _PracticeGame.gold),
+                      const Icon(
+                        Icons.open_in_new_rounded,
+                        size: 15,
+                        color: _PracticeGame.gold,
+                      ),
                     ],
                   ),
                 ),
