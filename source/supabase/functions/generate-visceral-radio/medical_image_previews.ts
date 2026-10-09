@@ -129,7 +129,7 @@ export async function resolveMedicalPreviews(query:string,modality='') {
   // licensed thumbnails (especially historic French Groq image descriptors).
   if(candidates.length===0){
     const broad=/rectum|rectal|mesorect/i.test(normalized)?'rectum anatomy'
-      :normalized.split(/\\s+/).slice(0,2).join(' ');
+      :normalized.trim().split(' ').filter(Boolean).slice(0,2).join(' ');
     const fallback=await Promise.allSettled([
       fromCommons(broad),fromOpenverse(broad),
     ]);
