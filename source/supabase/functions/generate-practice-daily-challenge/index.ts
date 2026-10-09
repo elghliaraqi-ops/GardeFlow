@@ -86,9 +86,7 @@ async function commons(query:string):Promise<{name:string;url:string;source:stri
 
 const batchSchema={type:'object',additionalProperties:false,required:['qcms'],
  properties:{qcms:{type:'array',minItems:5,maxItems:5,items:itemSchema}}};
-const caseBatchSchema=JSON.parse(JSON.stringify(schema));
-caseBatchSchema.properties.qcms.minItems=5;
-caseBatchSchema.properties.qcms.maxItems=5;
+// QCM schema is now supplied dynamically via dailyBatchSchema(missing).
 
 async function newGroqBatch(
  prompt:string,format:Record<string,unknown>,overrideModel?:string,timeoutMs=30000
