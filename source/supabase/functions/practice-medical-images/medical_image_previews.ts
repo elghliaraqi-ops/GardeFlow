@@ -28,7 +28,7 @@ export type ImagePreview = {
 };
 
 const SEARCH_LIMIT=24;
-const ARTICLE_LIMIT=5;
+const ARTICLE_LIMIT=3;
 // Wikimedia Commons commonly hosts anatomical drawings as SVG originals.
 // These must be displayed through the PNG thumb supplied by imageinfo.
 export function rasterImageUrls(info:any):{thumbnail:string,full:string}|null{
@@ -359,7 +359,7 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     const card:MedicalArticlePreview={title,source,provider:'Europe PMC',summary,
       figure_page:source+'#figures'};
     articles.push(card);
-    if(request.allow_article_figures===false)continue;
+    if(request.allow_article_figures===false||figures.length>=2||articles.length>2)continue;
     try{
       const rr=await fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
         headers:REQUEST_HEADERS,signal:AbortSignal.timeout(6000)});
@@ -377,7 +377,7 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
           try{
             const head=await fetch(raw,{method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(3500)});
             if(!head.ok || !/^image\/(?:jpeg|png|webp)/i.test(head.headers.get('content-type')||''))continue;
-            const image:ImagePreview={thumbnail:raw,full:raw,source:source+'/figure/'+fig.id+'/',
+            const image:ImagePreview={thumbnail:raw,full:raw,source:source+'#figures',
               title:fig.caption||title,description:title+' '+fig.caption,
               license:'Open access (voir licence de l’article)',creator:summary,provider:'PubMed Central'};
             figures.push(image);
@@ -413,8 +413,10 @@ export async function resolveMedicalPreviews(input:any){
     candidates.push(...secondary.flat());
     images=candidates.filter(x=>imageIsTopical(x,request));
   }
+  const articleQuery=(request.image_type==='anatomical_diagram' && /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query)))?'rectum anatomy':
+    (request.image_type==='radiology_scan' && /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query)))?'rectal cancer MRI':queries[0];
   const articleResult=(images.length<2 && request.allow_page_preview!==false)
-    ? await articleSourcePreviews(request,queries[0])
+    ? await articleSourcePreviews(request,articleQuery)
     : {articles:[] as MedicalArticlePreview[],figures:[] as ImagePreview[]};
   // Article figures have a weaker caption filter than general image catalogs
   // but still require a relevant article and an actually accessible image.
