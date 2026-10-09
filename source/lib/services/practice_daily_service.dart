@@ -14,7 +14,7 @@ class PracticeDailyService {
     return id;
   }
 
-  Future<PracticeDailySession> current({String mode = 'cours'}) async {
+  Future<PracticeDailySession> current({String mode = 'cours_ia'}) async {
     _userId;
     final res = await _backend.client.rpc(
       'practice_daily_open',
@@ -26,7 +26,7 @@ class PracticeDailyService {
 
   Future<PracticeDailySession> start(String mode) async {
     _userId;
-    if (!const <String>['cours', 'cas_clinique'].contains(mode))
+    if (!const <String>['cours', 'cours_ia', 'cas_clinique'].contains(mode))
       throw ArgumentError('Mode invalide.');
     final existing = await current(mode: mode);
     if (existing.ready) return existing;
