@@ -440,8 +440,24 @@ export async function proxyMedicalImage(asset:string):Promise<Response>{
     'Cache-Control':'private, no-store, max-age=0','Vary':'Origin'};
   if(!allowedAsset(asset))return new Response(null,{status:400,headers:common});
   try {
-    const response=await fetch(asset,{redirect:'error',
-      signal:AbortSignal.timeout(10000),headers:{Accept:'image/jpeg,image/png,image/webp'}});
+    // Publisher figure endpoints sometimes redirect to their trusted CDN.
+    // Follow no more than two redirects, checking each target against the
+    // explicit image-host allowlist (never arbitrary destinations).
+    let target=asset;
+    let response:Response|null=null;
+    for(let hop=0;hop<3;hop++){
+      response=await fetch(target,{redirect:'manual',
+        signal:AbortSignal.timeout(9000),headers:{Accept:'image/jpeg,image/png,image/webp'}});
+      if(response.status>=300&&response.status<400){
+        const location=response.headers.get('location');
+        if(!location||hop===2)return new Response(null,{status:404,headers:common});
+        const next=new URL(location,target).toString();
+        if(!allowedAsset(next))return new Response(null,{status:403,headers:common});
+        target=next;continue;
+      }
+      break;
+    }
+    if(!response)return new Response(null,{status:502,headers:common});
     if(!response.ok||!response.body)return new Response(null,{status:404,headers:common});
     const type=(response.headers.get('content-type')||'').toLowerCase().split(';')[0];
     if(!['image/jpeg','image/png','image/webp'].includes(type))
