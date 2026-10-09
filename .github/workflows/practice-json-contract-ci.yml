@@ -70,5 +70,6 @@ jobs:
           assert.match(progressive, /progressiveJsonContract\(0\)/);
           assert.match(progressive, /progressiveJsonContract\(1\)/);
           assert.match(progressive, /validateProgressiveAxisSequence\(batch\.qcms,batchIndex\)/);
-          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm','preview-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }\n          console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
+          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm','preview-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }
+          console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
           NODE
