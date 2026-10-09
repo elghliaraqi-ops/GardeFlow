@@ -160,6 +160,6 @@ Deno.serve(async(req:Request)=>{
  const code=e instanceof Error?e.message:'generation_failed';
  return response(req,{ok:false,error:['literature_sources_unavailable','groq_rate_limited','groq_unavailable','duplicate_questions','invalid_generated_qcm','invalid_qcm_count','preview_staging_failed'].includes(code)?code:'generation_failed'},503);
  }finally{
- if(!done)await admin.rpc('clinical_case_finish_qcm_extension',{p_post_id:postId,p_success:false,p_error_code:'preview_failed'}).catch(()=>null);
+ if(!done){try{await admin.rpc('clinical_case_finish_qcm_extension',{p_post_id:postId,p_success:false,p_error_code:'preview_failed'});}catch(_){/* Best-effort unlock. */}}
  }
 });
