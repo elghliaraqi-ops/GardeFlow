@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/practice_daily_models.dart';
+import '../models/practice_external_medical_media_policy.dart';
 import '../screens/practice_daily_visual_theme.dart';
 
 /// Purely presentational: the source dossier is fictional, already generated
@@ -431,10 +432,7 @@ class ExternalMedicalImagePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final image = Uri.tryParse(data['preview_image_url'] ?? '');
     final source = Uri.tryParse(data['url'] ?? '');
-    if (image?.scheme != 'https' ||
-        image?.host != 'upload.wikimedia.org' ||
-        source?.scheme != 'https' ||
-        source?.host != 'commons.wikimedia.org') {
+    if (!isSupportedExternalMedicalPreview(image, source)) {
       return const SizedBox.shrink();
     }
     return Container(
