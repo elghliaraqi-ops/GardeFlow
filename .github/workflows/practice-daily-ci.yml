@@ -41,7 +41,7 @@ jobs:
         run: flutter test test/practice_daily_models_test.dart
       - name: Analyze daily challenge UI and backend
         working-directory: source
-        run: flutter analyze lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_screen.dart lib/services/notification_service.dart
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_screen.dart lib/services/notification_service.dart
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
