@@ -76,8 +76,10 @@ class _PracticeDailyHistoryScreenState
   @override
   Widget build(BuildContext context) {
     final completedCount = _entries.length;
-    final replayCount =
-        _entries.fold<int>(0, (count, item) => count + item.replayCount);
+    final replayCount = _entries.fold<int>(
+      0,
+      (count, item) => count + item.replayCount,
+    );
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
@@ -200,9 +202,7 @@ class _PracticeDailyHistoryScreenState
                         ),
                       Text(
                         '${item.replayCount} rejeu(x)',
-                        style: const TextStyle(
-                          color: Color(0xFFB9CBE0),
-                        ),
+                        style: const TextStyle(color: Color(0xFFB9CBE0)),
                       ),
                     ],
                   ),

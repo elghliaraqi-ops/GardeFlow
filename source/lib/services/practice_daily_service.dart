@@ -95,11 +95,14 @@ class PracticeDailyService {
       params: <String, dynamic>{'p_limit': limit, 'p_offset': offset},
     );
     if (res is! List) throw StateError('Historique indisponible.');
-    return res.whereType<Map>().map((item) {
-      return PracticeDailyHistoryEntry.fromMap(
-        Map<String, dynamic>.from(item),
-      );
-    }).toList(growable: false);
+    return res
+        .whereType<Map>()
+        .map((item) {
+          return PracticeDailyHistoryEntry.fromMap(
+            Map<String, dynamic>.from(item),
+          );
+        })
+        .toList(growable: false);
   }
 
   String _dayParam(DateTime day) =>
@@ -118,7 +121,9 @@ class PracticeDailyService {
     final session = PracticeDailySession.fromMap(
       Map<String, dynamic>.from(response),
     );
-    if (!session.ready || session.completed || !session.isReplay ||
+    if (!session.ready ||
+        session.completed ||
+        !session.isReplay ||
         session.officialScore == null) {
       throw StateError('Défi non éligible au rejeu.');
     }
@@ -132,7 +137,9 @@ class PracticeDailyService {
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    final hex = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
         '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
@@ -143,7 +150,8 @@ class PracticeDailyService {
     required String requestId,
   }) async {
     _userId;
-    if (answers.length != 10 || answers.any((answer) => answer < 0 || answer > 3)) {
+    if (answers.length != 10 ||
+        answers.any((answer) => answer < 0 || answer > 3)) {
       throw StateError('Les dix QCM doivent être complétés.');
     }
     final response = await _backend.client.rpc(
@@ -158,7 +166,9 @@ class PracticeDailyService {
     final session = PracticeDailySession.fromMap(
       Map<String, dynamic>.from(response),
     );
-    if (!session.isReplay || !session.completed || session.score == null ||
+    if (!session.isReplay ||
+        !session.completed ||
+        session.score == null ||
         session.officialScore == null) {
       throw StateError('Le résultat du rejeu n’a pas été confirmé.');
     }

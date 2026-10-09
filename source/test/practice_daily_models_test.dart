@@ -194,12 +194,15 @@ void main() {
       'score': 5,
       'replay_count': 2,
       'replay_id': 'd1901d5d-0cb4-43b2-95ec-70c0f22f4938',
-      'questions': List<Map<String, dynamic>>.generate(10, (i) => {
-        ...question(i),
-        'selected_index': 0,
-        'correct_index': 1,
-        'correction': 'Correction documentée',
-      }),
+      'questions': List<Map<String, dynamic>>.generate(
+        10,
+        (i) => {
+          ...question(i),
+          'selected_index': 0,
+          'correct_index': 1,
+          'correction': 'Correction documentée',
+        },
+      ),
     });
     expect(replay.officialScore, 8);
     expect(replay.score, 5);
@@ -232,5 +235,4 @@ void main() {
       throwsStateError,
     );
   });
-
 }

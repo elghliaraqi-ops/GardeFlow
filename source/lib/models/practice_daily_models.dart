@@ -210,8 +210,7 @@ class PracticeDailyHistoryEntry {
       officialScore: official,
       replayCount: int.tryParse('${data['replay_count'] ?? 0}') ?? 0,
       lastReplayScore: int.tryParse('${data['last_replay_score'] ?? ''}'),
-      lastReplayAt:
-          DateTime.tryParse('${data['last_replay_at'] ?? ''}'),
+      lastReplayAt: DateTime.tryParse('${data['last_replay_at'] ?? ''}'),
     );
   }
 }

@@ -159,10 +159,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               answers: _selected.cast<int>(),
               requestId: _replayRequestId,
             )
-          : await _service.finish(
-              mode: s.mode,
-              answers: _selected.cast<int>(),
-            );
+          : await _service.finish(mode: s.mode, answers: _selected.cast<int>());
       if (!mounted) return;
       setState(() {
         _session = updated;
@@ -184,18 +181,14 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
 
   Future<void> _openReplay(DateTime day) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => PracticeDailyScreen(replayDay: day),
-      ),
+      MaterialPageRoute(builder: (_) => PracticeDailyScreen(replayDay: day)),
     );
     if (mounted && !_replayMode) await _load();
   }
 
   Future<void> _openHistory() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => const PracticeDailyHistoryScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const PracticeDailyHistoryScreen()),
     );
     if (mounted && !_replayMode) await _load();
   }
@@ -204,9 +197,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     final day = widget.replayDay;
     if (day == null) return;
     Navigator.of(context).pushReplacement<void, void>(
-      MaterialPageRoute(
-        builder: (_) => PracticeDailyScreen(replayDay: day),
-      ),
+      MaterialPageRoute(builder: (_) => PracticeDailyScreen(replayDay: day)),
     );
   }
 
@@ -897,24 +888,24 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 16),
             _box(
               SwitchListTile(
-              value: _enabled,
-              onChanged: _toggle,
-              activeColor: _green,
-              title: const Text(
-                'Rappel quotidien',
-                style: TextStyle(color: _text, fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text(
-                'Notification FCM à 8 h (Casablanca) si le push est actif, '
-                'sinon rappel local sur mobile.',
-                style: TextStyle(color: _muted, fontSize: 12),
-              ),
-              secondary: const Icon(
-                Icons.notifications_active_rounded,
-                color: _gold,
+                value: _enabled,
+                onChanged: _toggle,
+                activeColor: _green,
+                title: const Text(
+                  'Rappel quotidien',
+                  style: TextStyle(color: _text, fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Notification FCM à 8 h (Casablanca) si le push est actif, '
+                  'sinon rappel local sur mobile.',
+                  style: TextStyle(color: _muted, fontSize: 12),
+                ),
+                secondary: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: _gold,
+                ),
               ),
             ),
-          ),
           ],
           const SizedBox(height: 12),
           const Text(
