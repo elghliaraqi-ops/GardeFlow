@@ -6,8 +6,8 @@ const referenceSchema={type:'object',additionalProperties:false,required:['url']
 const itemSchema={type:'object',additionalProperties:false,required:['question','options','correct_index','correction','topic','references','image_search_query'],
  properties:{question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
  correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}}};
-const schema={type:'object',additionalProperties:false,required:['case_title','case_stem','qcms'],
- properties:{case_title:{type:'string'},case_stem:{type:'string'},qcms:{type:'array',minItems:10,maxItems:10,items:itemSchema}}};
+const schema={type:'object',additionalProperties:false,required:['case_title','case_stem','case_stages','qcms'],
+ properties:{case_title:{type:'string'},case_stem:{type:'string'},case_stages:{type:'array',minItems:4,maxItems:4,items:{type:'object',additionalProperties:false,required:['title','narrative'],properties:{title:{type:'string'},narrative:{type:'string'}}}},qcms:{type:'array',minItems:10,maxItems:10,items:itemSchema}}};
 type Ref={title:string;url:string;year:string;organization:string;kind:string};
 function plain(value:unknown,max=2500):string {
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
@@ -90,6 +90,7 @@ Deno.serve(async(req:Request)=>{
  try {
    let questions:Record<string,unknown>[]=[];
    let caseTitle='',caseStem='';
+   let caseStages:{title:string;narrative:string}[]=[];
    if(mode==='cours'){
      const {data:qcms,error}=await admin.from('clinical_case_qcms')
        .select('id,post_id,question,options,correct_index,correction,topic')
@@ -110,7 +111,14 @@ Deno.serve(async(req:Request)=>{
      const referenceList=refs.map(r=>[r.kind,r.title,r.organization,r.year,r.url].join(' | ')).join('\n');
      const prompt='Crée un SEUL cas clinique FICTIF complet et totalement inventé, en français, dans la spécialité '+specialty+
       '. Le cas doit avoir une anamnèse, un examen clinique, un bilan biologique et/ou radiologique, et une évolution pédagogique. '+
-      'Il sert de fil rouge à EXACTEMENT 10 QCM progressifs, du diagnostic initial au traitement et aux recommandations. '+
+      'Il sert de fil rouge à EXACTEMENT 10 QCM progressifs. Fournis QUATRE étapes à révéler dans cet ordre : '+
+      '(1) Admission / symptômes et examen clinique : QCM 1 et 2 ; '+
+      '(2) Investigations (biologie, ECG/imagerie, résultats) : QCM 3, 4 et 5 ; '+
+      '(3) Décision thérapeutique / priorités : QCM 6, 7 et 8 ; '+
+      '(4) Évolution, complications et suivi : QCM 9 et 10. '+
+      'Retourne case_stages tableau de quatre objets avec pour chaque étape un récit autonome de 100 mots environ et un title. '+
+      'STRICTEMENT AUCUN SPOILER : le récit étape 1 n’annonce aucun examen futur, résultat, diagnostic final, prise en charge ou issue. '+
+      'Les QCM de chaque étape utilisent UNIQUEMENT les informations déjà révélées dans celle-ci ou avant. '+
       'Pour chaque QCM: 4 réponses possibles, une seule exacte, correction IA claire de 3-6 phrases, et 1-3 citations avec URL recopiées EXACTEMENT de la liste Europe PMC. '+
       'Ne donne JAMAIS d’informations sur un vrai patient et n’imagine pas de sources. Les images sont facultatives : image_search_query en ANGLAIS si une radio, ECG, TDM, scanner ou schéma aiderait, sinon chaîne vide. '+ 
       'case_title court; case_stem est un dossier fictif complet, cohérent et suffisamment détaillé. '+
@@ -128,9 +136,12 @@ Deno.serve(async(req:Request)=>{
      const raw=await res.json().catch(()=>null);
      const content=raw?.choices?.[0]?.message?.content;
      const text=typeof content==='string'?content:Array.isArray(content)?content.map((x:{text?:string})=>x.text??'').join(''):'';
-     const data=JSON.parse(text) as {case_title?:string;case_stem?:string;qcms?:Record<string,unknown>[]};
+     const data=JSON.parse(text) as {case_title?:string;case_stem?:string;case_stages?:{title?:string;narrative?:string}[];qcms?:Record<string,unknown>[]};
      caseTitle=plain(data.case_title,180);caseStem=plain(data.case_stem,6500);
-     if(!caseTitle||caseStem.length<150||!Array.isArray(data.qcms)||data.qcms.length!==10)throw Error('invalid_case_format');
+     if(!caseTitle||caseStem.length<150||!Array.isArray(data.qcms)||data.qcms.length!==10||
+       !Array.isArray(data.case_stages)||data.case_stages.length!==4)throw Error('invalid_case_format');
+     caseStages=data.case_stages.map(stage=>({title:plain(stage.title,140),narrative:plain(stage.narrative,2400)}));
+     if(caseStages.some(stage=>stage.title.length<5||stage.narrative.length<120))throw Error('invalid_stage_format');
      const seen=new Set<string>();
      for(const q of data.qcms){
        const question=plain(q.question,1300),opts=Array.isArray(q.options)?q.options.map(x=>plain(x,420)):[],cor=plain(q.correction,6500);
@@ -150,7 +161,7 @@ Deno.serve(async(req:Request)=>{
      }
    }
    if(questions.length!==10)throw Error('invalid_question_count');
-   const inserted=await admin.from('practice_daily_challenges').upsert({challenge_date:date,mode,case_title:caseTitle,case_stem:caseStem,questions},{onConflict:'challenge_date,mode',ignoreDuplicates:true});
+   const inserted=await admin.from('practice_daily_challenges').upsert({challenge_date:date,mode,case_title:caseTitle,case_stem:caseStem,case_stages:caseStages,questions},{onConflict:'challenge_date,mode',ignoreDuplicates:true});
    if(inserted.error)throw Error('database_write_failed');
    return send(req,{ok:true,ready:true,day:date,mode,generated:true});
  }catch(e){
