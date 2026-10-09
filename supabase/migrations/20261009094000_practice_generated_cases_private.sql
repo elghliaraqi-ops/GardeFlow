@@ -9,8 +9,13 @@ create table if not exists public.practice_generated_cases (
  case_stages jsonb not null check (
   jsonb_typeof(case_stages)='array' and jsonb_array_length(case_stages)=4
  ),
- questions jsonb not null check (
-  jsonb_typeof(questions)='array' and jsonb_array_length(questions)=10
+ case_payload jsonb not null check (jsonb_typeof(case_payload)='object'),
+ generation_status text not null default 'pending'
+  check (generation_status in ('pending','failed','ready')),
+ questions jsonb not null default '[]'::jsonb check (
+  jsonb_typeof(questions)='array' and
+  ((generation_status='ready' and jsonb_array_length(questions)=10) or
+   (generation_status<>'ready' and jsonb_array_length(questions)=0))
  ),
  created_at timestamptz not null default now()
 );
