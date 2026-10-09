@@ -1,0 +1,32 @@
+name: Validate private Viscéral Radio
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/screens/practice_visceral_radio_screen.dart'
+      - 'source/lib/screens/practice_screen.dart'
+      - 'source/test/practice_visceral_radio_test.dart'
+      - 'source/supabase/functions/generate-visceral-radio/**'
+      - '.github/workflows/visceral-radio-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - working-directory: source
+        run: flutter pub get
+      - working-directory: source
+        run: dart format --output=none --set-exit-if-changed lib/screens/practice_visceral_radio_screen.dart
+      - working-directory: source
+        run: flutter analyze lib/screens/practice_visceral_radio_screen.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
+      - working-directory: source
+        run: flutter test test/practice_visceral_radio_test.dart
