@@ -1,4 +1,5 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
+import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['Chirurgie viscérale','Orthopédie','Cardiologie','Neurologie','Urologie','ORL','Gynécologie','Réanimation','Pneumologie','Gastro-entérologie','Néphrologie','Endocrinologie','Dermatologie','Psychiatrie','Pédiatrie','Ophtalmologie','Neurochirurgie','Chirurgie thoracique','Chirurgie vasculaire','Maladies infectieuses','Médecine interne'];
@@ -173,7 +174,17 @@ async function externalMedicalIllustrations(dossier:Record<string,unknown>):
   searches.push({query:'CT scan anatomy medical',label:'Scanner anatomique illustratif',
    accept:/ct.scan|computed tomography|tomodensitom/i});
  // Parallel, bounded, all-optional external requests. Never store image bytes.
- const found=await Promise.all(searches.slice(0,2).map(verifiedExternalMedia));
+ const found=await Promise.all(searches.slice(0,2).map(async spec=>{
+  const primary=await verifiedExternalMedia(spec);
+  if(primary)return primary;
+  const candidate=await findOpenverseMedicalPreview(spec.query,spec.accept);
+  return candidate?{
+   stage:1,title:spec.label+' · '+candidate.title+
+    ' · '+candidate.creator+' · '+candidate.license,
+   url:candidate.source_url,preview_image_url:candidate.preview_url,
+   license:candidate.license+' · '+candidate.creator
+  }:null;
+ }));
  return found.filter((entry):entry is MedicalLink=>entry!==null);
 }
 
@@ -200,7 +211,10 @@ async function generateCaseDossier(specialty:string):Promise<Record<string,unkno
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
  const model=Deno.env.get('GROQ_CASE_MODEL')?.trim()||'openai/gpt-oss-20b';
- const prompt='Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine. '+
+ const evidence=await recentGuidelineCatalog(specialty);
+ const prompt=medicalEvidencePolicy+'\nRECOMMANDATIONS INDEXÉES :\n'+
+  (evidence||'Aucune recommandation actuelle confirmée par la recherche, ne fais pas d’affirmation datée.')+
+  '\nCrée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine. '+
   'Spécialité imposée : '+specialty+'. Niveau : intermédiaire ou complexe. '+
   'Pas de nom, initiales, date de naissance, adresse, téléphone ni identifiant réel. '+
   'Rédige en français médical précis, avec signes positifs ET négatifs utiles. '+
@@ -386,7 +400,12 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  // Parallel Wikimedia lookups avoid up to 60s sequential Edge timeout.
  return await Promise.all(output.map(async(item)=>{
   const query=String(item.illustration_query??'').trim();
-  const picture=query?await commons(query):null;
+  const primary=query?await commons(query):null;
+  const second=(!primary&&query)?await findOpenverseMedicalPreview(query):null;
+  const picture=primary??(second?{
+   name:second.title+' · '+second.creator+' · '+second.license+' · Openverse',
+   url:second.preview_url,source:second.source_url
+  }:null);
   const img=picture?'\n\n§IMAGES§\n'+
     [picture.name,picture.url,picture.source].join('|||'):'';
   const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
@@ -471,7 +490,7 @@ Deno.serve(async(req:Request)=>{
    // PHASE 2: QCMs are about this preexisting simulated clinical dossier, never a course bank.
    const context=JSON.stringify(simulated);
    const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
-   const common='Génère EXACTEMENT cinq QCM originaux et CONTEXTUALISÉS à ce patient fictif. '+
+   const common=medicalEvidencePolicy+'\nGénère EXACTEMENT cinq QCM originaux et CONTEXTUALISÉS à ce patient fictif. '+
     'Chaque question porte sur une décision motivée par les symptômes, constantes, examens ou évolution de CE dossier, '+
     'pas sur un chapitre de cours théorique. '+
     'Chaque QCM doit contenir exactement question, options (4 réponses distinctes), correct_index (0 à 3), '+
