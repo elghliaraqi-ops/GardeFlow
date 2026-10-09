@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, probeMedicalFigure, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -124,4 +124,24 @@ Deno.test('Article page OpenGraph preview only accepts explicitly permitted medi
  assert(image==='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/10/rectum-figure.jpg','verified article OG image is found');
  assert(openGraphImageFromHtml('<meta property="og:image" content="http://evil.invalid/banner.png">')===null,'unsafe http OG blocked');
  assert(openGraphImageFromHtml('<meta property="og:image" content="https://cdn.ncbi.nlm.nih.gov/logo.png">')===null,'publisher logo blocked');
+});
+
+Deno.test('PMC figure probe follows only allowed CDN redirects and checks image content',async()=>{
+  const source='https://pmc.ncbi.nlm.nih.gov/articles/PMC1234567/bin/rectal-fig1.jpg';
+  const cdn='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/abc/rectal-fig1.jpg';
+  const requests:string[]=[];
+  const mock=((input:RequestInfo|URL)=>{
+    const url=String(input);requests.push(url);
+    if(url===source)return Promise.resolve(new Response(null,{status:302,headers:{location:cdn}}));
+    if(url===cdn)return Promise.resolve(new Response(null,{status:200,headers:{'content-type':'image/jpeg'}}));
+    throw Error('unexpected network request');
+  }) as typeof fetch;
+  if(!await probeMedicalFigure(source,mock))throw Error('valid medical figure redirect should load');
+  if(JSON.stringify(requests)!==JSON.stringify([source,cdn]))throw Error('redirect source mix-up');
+  const unsafe=((_:RequestInfo|URL)=>Promise.resolve(
+    new Response(null,{status:302,headers:{location:'http://localhost:8080/secret.jpg'}}))) as typeof fetch;
+  if(await probeMedicalFigure(source,unsafe))throw Error('SSRF redirect must be denied');
+  const html=((_:RequestInfo|URL)=>Promise.resolve(
+    new Response('<html>Whole article</html>',{status:200,headers:{'content-type':'text/html'}}))) as typeof fetch;
+  if(await probeMedicalFigure(source,html))throw Error('article page must not be a medical figure');
 });
