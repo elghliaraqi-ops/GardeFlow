@@ -308,7 +308,7 @@ class _MedicalPreviewState extends State<_MedicalPreview>{
       Text(widget.caption.isEmpty?widget.query:widget.caption,
         style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:12)),
       if(images.isNotEmpty)SizedBox(height:118,child:ListView(scrollDirection:Axis.horizontal,
-        children:images.map((i)=>InkWell(onTap:()=>_open('source'=='source'?(i['source']??'').toString():''),
+        children:images.map((i)=>InkWell(onTap:()=>_open((i['source']??'').toString()),
           child:Padding(padding:const EdgeInsets.only(right:8),child:Column(children:[
             ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network((i['thumbnail']??'').toString(),
               width:135,height:88,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox(
