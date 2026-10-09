@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
+import {medicalImageSchema,medicalImagePrompt,emptyMedicalImageRequest,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
 
 const axes = ['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'];
 const topics = ['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
@@ -255,17 +256,17 @@ function providerRetrySeconds(payload,headers) {
 }
 
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
-const qcmSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],properties:{
+const qcmSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','image_request'],properties:{
   axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
   correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
-  references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}
+  references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},image_request:medicalImageSchema
 }};
 const outputSchema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:qcmSchema}}};
 const generic=[/dans ce cas(?: clinique)?/i,/document(?:é|ée|és|ées)/i,/quelle synthèse clinique a été retenue/i,/quelle prise en charge a été/i,/quelle orientation a été/i,/quel avis spécialisé a été/i];
 
-function correction(text,refs,images=[]) {
+function correction(text,refs,images=[],imageSpec=null,imageQuery='') {
   const media=images.length ? `\n\n§IMAGES§\n${images.map(i=>`${i.title}|||${i.preview_url}|||${i.source_url}`).join('\n')}` : '';
-  return `${text}${media}\n\n§SOURCES§\n${refs.map(r=>`${r.kind}|||${r.title}|||${r.organization}|||${r.year}|||${r.url}`).join('\n')}`.slice(0,11000);
+  return `${text}${medicalImageCorrectionSuffix(imageSpec,imageQuery)}\n\n§SOURCES§\n${refs.map(r=>`${r.kind}|||${r.title}|||${r.organization}|||${r.year}|||${r.url}`).join('\n')}`.slice(0,11000);
 }
 
 function retrySeconds(v){
@@ -470,12 +471,12 @@ Deno.serve(async(req)=>{
        options:['Proposition clinique A','Proposition clinique B','Proposition clinique C','Proposition clinique D'],
        correct_index:0,correction:'REMPLACER par une explication conforme aux références récupérées.',
        topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],
-       image_search_query:''
+       image_search_query:'',image_request:emptyMedicalImageRequest
      }))};
      const jsonContract='JSON RACINE {qcms: cinq objets}. Champs exacts de chaque QCM : '+
        Object.keys(qcmSchema.properties).join(', ')+
        '. Références au format {url} seulement, enrichies côté serveur. '+
-       'Axes dans l’ordre : '+axes.join(' → ')+
+       'Axes dans l’ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
        '. Exemple de JSON valide, à remplacer intégralement : '+JSON.stringify(exampleQcms)+
        '. Remplace tous les placeholders, sans JSON supplémentaire ni Markdown.';
      const prompt=medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
@@ -668,6 +669,7 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
           raw_correction:corr,
           references:refs.slice(0,3),
           image_search_query:scrub(q?.image_search_query,180),
+          image_request:q?.image_request,
           topic
         };
       });
@@ -678,23 +680,13 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
         throw new Error('duplicate_questions');
       }
 
-      const enriched=await Promise.all(normalized.map(async(q)=>{
-        let images=[];
-        if(q.image_search_query){
-          try { images=await fetchCommonsImages(q.image_search_query,1); }
-          catch(e) { log('external_image_lookup_failed',{...meta(),error_code:codeValue(e?.message,'image_lookup_error')}); }
-          if(!images.length){
-           const other=await findOpenverseMedicalPreview(q.image_search_query);
-           if(other)images=[{
-            title:other.title+' · '+other.creator+' · '+other.license+' · Openverse',
-            preview_url:other.preview_url,source_url:other.source_url}];
-          }
-          
-        }
-        return {...q,correction:correction(q.raw_correction,q.references,images)};
+      // No image file or URL is embedded into the generated QCM.
+      // The medically constrained JSON description is used at display time.
+      const enriched=normalized.map(q=>({
+        ...q,
+        correction:correction(q.raw_correction,q.references,[],q.image_request,q.image_search_query)
       }));
-
-      const persisted=enriched.map(({axis:_axis,raw_correction:_raw,references:_refs,image_search_query:_imageQuery,...q})=>q);
+      const persisted=enriched.map(({axis:_axis,raw_correction:_raw,references:_refs,image_search_query:_imageQuery,image_request:_imageSpec,...q})=>q);
       const commit=await admin.rpc(append?'clinical_case_append_generated_qcms':'clinical_case_commit_generated_qcms',{
         p_post_id:post.id,
         p_qcms:persisted,

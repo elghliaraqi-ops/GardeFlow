@@ -1,6 +1,7 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 import {progressiveAxes,progressiveJsonContract,validateProgressiveAxisSequence} from './progressive_question_sequence.ts';
+import {medicalImageSchema,medicalImagePrompt,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['Chirurgie viscérale','Orthopédie','Cardiologie','Neurologie','Urologie','ORL','Gynécologie','Réanimation','Pneumologie','Gastro-entérologie','Néphrologie','Endocrinologie','Dermatologie','Psychiatrie','Pédiatrie','Ophtalmologie','Neurochirurgie','Chirurgie thoracique','Chirurgie vasculaire','Maladies infectieuses','Médecine interne'];
@@ -35,9 +36,9 @@ const clinicalCaseJsonContract='Répondre par un seul objet JSON contenant uniqu
  '. Remplacer chaque placeholder par des données médicales cohérentes sans recopier les exemples.';
 
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
-const itemSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],
+const itemSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','image_request'],
  properties:{axis:{type:'string',enum:progressiveAxes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
- correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}}};
+ correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},image_request:medicalImageSchema}};
 type Ref={title:string;url:string;year:string;organization:string;kind:string};
 function plain(value:unknown,max=2500):string {
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
@@ -411,27 +412,21 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
   }
   seen.add(fingerprint);
   output.push({axis:progressiveAxes[batchIndex*5+index],question,options,correct_index:correct,correction,topic,
-   references,illustration_query:String(q.image_search_query??'')});
+   references,illustration_query:String(q.image_search_query??''),image_request:q.image_request});
  }
- // Parallel Wikimedia lookups avoid up to 60s sequential Edge timeout.
- return await Promise.all(output.map(async(item)=>{
-  const query=String(item.illustration_query??'').trim();
-  const primary=query?await commons(query):null;
-  const second=(!primary&&query)?await findOpenverseMedicalPreview(query):null;
-  const picture=primary??(second?{
-   name:second.title+' · '+second.creator+' · '+second.license+' · Openverse',
-   url:second.preview_url,source:second.source_url
-  }:null);
-  const img=picture?'\n\n§IMAGES§\n'+
-    [picture.name,picture.url,picture.source].join('|||'):'';
+ // Image requests accompany the explanation as JSON metadata only.
+ // Images are selected at view-time; no wrong or broken URLs are persisted.
+ return output.map(item=>{
   const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
     .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
    question:item.question,options:item.options,correct_index:item.correct_index,
-   axis:item.axis,topic:item.topic,correction:String(item.correction)+img+urls
+   axis:item.axis,topic:item.topic,
+   correction:String(item.correction)+medicalImageCorrectionSuffix(item.image_request,String(item.illustration_query??''))+urls
   };
- }));
+ });
 }
+
 
 Deno.serve(async(req:Request)=>{
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors(req)});
@@ -511,7 +506,7 @@ Deno.serve(async(req:Request)=>{
     'pas sur un chapitre de cours théorique. '+
     'Chaque QCM doit contenir exactement question, options (4 réponses distinctes), correct_index (0 à 3), '+
     'correction détaillée, topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
-    'references (1 à 3 objets {url}), image_search_query (vide si non pertinent). '+
+    'references (1 à 3 objets {url}), image_search_query (vide si non pertinent), image_request avec champs du schéma. '+medicalImagePrompt+' '+
     'Utilise seulement les liens bibliographiques suivants :\n'+refList;
    const early=progressiveJsonContract(0)+'\n'+
     'Génère exactement les QCM 1 à 5, pour CE patient et pas un cours : '+
