@@ -497,13 +497,23 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               child: OutlinedButton.icon(
                 onPressed: _busy ? null : () => _start('cas_clinique'),
                 icon: const Icon(Icons.medical_information_rounded),
-                label: const Text('Cas clinique complet · 10 QCM'),
+                label: const Text('Cas progressif · 10 QCM'),
               ),
             ),
           ],
         ),
       );
     final index = _current.clamp(0, 9), q = s.questions[index];
+    final stageIndex = PracticeDailyProgress.stageForQuestion(index);
+    final unlockedStage = s.completed
+        ? 3
+        : PracticeDailyProgress.unlockedStage(_selected);
+    final canAdvance = PracticeDailyProgress.canAdvance(
+      currentQuestion: index,
+      answers: _selected,
+      progressive: s.isProgressiveCase,
+      completed: s.completed,
+    );
     return _box(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,10 +530,86 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 10),
           ],
           Text(
-            s.mode == 'cours' ? 'Défi de cours' : 'Défi · cas clinique complet',
+            s.mode == 'cours' ? 'Défi de cours' : 'Défi · cas clinique progressif',
             style: const TextStyle(color: _gold, fontWeight: FontWeight.bold),
           ),
-          if (s.caseStem.isNotEmpty) ...[
+          if (s.isProgressiveCase) ...[
+            const SizedBox(height: 10),
+            Text(
+              s.caseTitle,
+              style: const TextStyle(
+                color: _text,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Étape ${stageIndex + 1}/4 · Répondez aux QCM '
+              'de chaque étape pour découvrir la suivante.',
+              style: const TextStyle(color: _gold, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            for (var stage = 0; stage < 4; stage++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: stage <= unlockedStage
+                    ? ExpansionTile(
+                        key: ValueKey('practice-case-stage-$stage-$stageIndex'),
+                        initiallyExpanded: stage == stageIndex,
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 9),
+                        childrenPadding:
+                            const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                        backgroundColor: const Color(0xFF17314E),
+                        collapsedBackgroundColor: const Color(0xFF17314E),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        collapsedShape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        iconColor: _green,
+                        collapsedIconColor: _gold,
+                        title: Text(
+                          '${stage + 1}. ${s.caseStages[stage].title}',
+                          style: const TextStyle(
+                            color: _text,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        children: [
+                          Text(
+                            s.caseStages[stage].narrative,
+                            style: const TextStyle(
+                              color: _muted,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 13,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF17314E),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.lock_outline_rounded,
+                                size: 18, color: _muted),
+                            const SizedBox(width: 10),
+                            Text('Étape ${stage + 1} · À débloquer',
+                                style: const TextStyle(
+                                    color: _muted, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+              ),
+          ] else if (s.caseStem.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
               s.caseTitle,
@@ -585,7 +671,9 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               const Spacer(),
               if (index < 9)
                 FilledButton(
-                  onPressed: () => setState(() => _current = index + 1),
+                  onPressed: canAdvance
+                      ? () => setState(() => _current = index + 1)
+                      : null,
                   child: const Text('Suivant'),
                 )
               else if (!s.completed)
@@ -599,6 +687,14 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 const Icon(Icons.verified_rounded, color: _green),
             ],
           ),
+          if (s.isProgressiveCase && !s.completed && index < 9 &&
+              !canAdvance) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Complétez les réponses de cette étape pour poursuivre.',
+              style: TextStyle(color: _gold, fontSize: 12),
+            ),
+          ],
           if (!s.completed)
             Text(
               '${_selected.where((x) => x != null).length}/10 réponses sélectionnées',
