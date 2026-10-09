@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/practice_qcm_medical_illustration.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -2373,13 +2374,12 @@ class _GuidelineCorrection extends StatelessWidget {
         ? ''
         : raw.substring(sourceIndex + sourceMarker.length).trim();
 
-    final imageIndex = beforeSources.indexOf(imageMarker);
-    final explanation = imageIndex < 0
-        ? beforeSources
-        : beforeSources.substring(0, imageIndex).trim();
-    final imagesText = imageIndex < 0
-        ? ''
-        : beforeSources.substring(imageIndex + imageMarker.length).trim();
+    final beforeImageSpec=beforeSources.split('§IMAGE_SPEC§').first.trim();
+    final imageIndex=beforeImageSpec.indexOf(imageMarker);
+    final explanation=imageIndex<0?beforeImageSpec:
+      beforeImageSpec.substring(0,imageIndex).trim();
+    final imagesText=imageIndex<0?'':beforeImageSpec.substring(
+      imageIndex+imageMarker.length).trim();
 
     final images = <_ExternalImageReference>[];
     for (final line in imagesText.split('\n')) {
@@ -2617,106 +2617,7 @@ class _GuidelineCorrection extends StatelessWidget {
             children: _explanationWidgets(explanation),
           ),
         ),
-        if (parsed.images.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          const Row(
-            children: [
-              Icon(Icons.image_search_rounded,
-                  size: 15, color: _PracticeGame.mint),
-              SizedBox(width: 6),
-              Text(
-                'IMAGE PÉDAGOGIQUE EXTERNE',
-                style: TextStyle(
-                  color: _PracticeGame.gold,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .55,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          for (final imageRef in parsed.images) ...[
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => _expandExternalImage(context, imageRef),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: _PracticeGame.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: _PracticeGame.purple.withOpacity(.28),
-                    ),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        height: 170,
-                        child: Image.network(
-                          imageRef.previewUrl.toString(),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                color: _PracticeGame.secondary,
-                                size: 34,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                imageRef.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: _PracticeGame.text,
-                                  fontSize: 10.5,
-                                  height: 1.3,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.open_in_new_rounded,
-                              size: 15,
-                              color: _PracticeGame.gold,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-          ],
-          const Text(
-            'Aperçu chargé depuis une source externe · aucune image n’est stockée dans GardeFlow.',
-            style: TextStyle(
-              color: _PracticeGame.secondary,
-              fontSize: 9.2,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        PracticeQcmMedicalIllustration(correction: correction),
         if (parsed.references.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Row(
