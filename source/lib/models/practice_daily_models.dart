@@ -32,7 +32,8 @@ class PracticeDailySession {
   final List<PracticeDailyStage> caseStages;
   final List<PracticeDailyQuestion> questions;
 
-  bool get isProgressiveCase => mode == 'cas_clinique' && caseStages.length == 4;
+  bool get isProgressiveCase =>
+      mode == 'cas_clinique' && caseStages.length == 4;
   final int? score;
   const PracticeDailySession({
     required this.ready,
@@ -58,13 +59,19 @@ class PracticeDailySession {
         : <PracticeDailyQuestion>[];
     final rawStages = m['case_stages'];
     final stages = rawStages is List
-        ? rawStages.whereType<Map>().map((row) =>
-            PracticeDailyStage.fromMap(Map<String, dynamic>.from(row)))
-            .toList(growable: false)
+        ? rawStages
+              .whereType<Map>()
+              .map(
+                (row) =>
+                    PracticeDailyStage.fromMap(Map<String, dynamic>.from(row)),
+              )
+              .toList(growable: false)
         : <PracticeDailyStage>[];
-    if (stages.isNotEmpty && (stages.length != 4 ||
-        stages.any((stage) =>
-            stage.title.isEmpty || stage.narrative.length < 120))) {
+    if (stages.isNotEmpty &&
+        (stages.length != 4 ||
+            stages.any(
+              (stage) => stage.title.isEmpty || stage.narrative.length < 120,
+            ))) {
       throw StateError('Les étapes du cas clinique sont incomplètes.');
     }
     final ready = m['ready'] == true, completed = m['completed'] == true;
@@ -108,7 +115,6 @@ class PracticeDailyCalendarEntry {
     );
   }
 }
-
 
 /// Four gated clinical milestones, with 10 questions distributed 2/3/3/2.
 class PracticeDailyStage {

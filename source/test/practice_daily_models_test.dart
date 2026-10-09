@@ -92,10 +92,10 @@ void main() {
       'mode': 'cas_clinique',
       'case_title': 'Cas progressif fictif',
       'case_stem': '',
-      'case_stages': List<Map<String, dynamic>>.generate(4, (i) => {
-        'title': 'Étape ${i + 1}',
-        'narrative': stageNarrative,
-      }),
+      'case_stages': List<Map<String, dynamic>>.generate(
+        4,
+        (i) => {'title': 'Étape ${i + 1}', 'narrative': stageNarrative},
+      ),
       'questions': List<Map<String, dynamic>>.generate(10, question),
     });
     expect(session.isProgressiveCase, true);
@@ -123,9 +123,13 @@ void main() {
     answers[0] = 0;
     answers[1] = 2;
     expect(PracticeDailyProgress.unlockedStage(answers), 1);
-    for (var i = 2; i < 5; i++) { answers[i] = 0; }
+    for (var i = 2; i < 5; i++) {
+      answers[i] = 0;
+    }
     expect(PracticeDailyProgress.unlockedStage(answers), 2);
-    for (var i = 5; i < 8; i++) { answers[i] = 1; }
+    for (var i = 5; i < 8; i++) {
+      answers[i] = 1;
+    }
     expect(PracticeDailyProgress.unlockedStage(answers), 3);
     expect(
       PracticeDailyProgress.canAdvance(
@@ -140,8 +144,11 @@ void main() {
 
   test('legacy cases remain fully accessible without stages', () {
     final session = PracticeDailySession.fromMap(<String, dynamic>{
-      'ready': true, 'completed': false, 'day': '2026-10-09',
-      'mode': 'cas_clinique', 'case_stem': 'Scénario historique',
+      'ready': true,
+      'completed': false,
+      'day': '2026-10-09',
+      'mode': 'cas_clinique',
+      'case_stem': 'Scénario historique',
       'questions': List<Map<String, dynamic>>.generate(10, question),
     });
     expect(session.isProgressiveCase, false);
@@ -149,10 +156,10 @@ void main() {
       PracticeDailyProgress.canAdvance(
         currentQuestion: 1,
         answers: List<int?>.filled(10, null),
-        progressive: false, completed: false,
+        progressive: false,
+        completed: false,
       ),
       true,
     );
   });
-
 }

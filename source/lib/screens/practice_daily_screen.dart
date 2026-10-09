@@ -530,7 +530,9 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 10),
           ],
           Text(
-            s.mode == 'cours' ? 'Défi de cours' : 'Défi · cas clinique progressif',
+            s.mode == 'cours'
+                ? 'Défi de cours'
+                : 'Défi · cas clinique progressif',
             style: const TextStyle(color: _gold, fontWeight: FontWeight.bold),
           ),
           if (s.isProgressiveCase) ...[
@@ -558,8 +560,12 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                         key: ValueKey('practice-case-stage-$stage-$stageIndex'),
                         initiallyExpanded: stage == stageIndex,
                         tilePadding: const EdgeInsets.symmetric(horizontal: 9),
-                        childrenPadding:
-                            const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          12,
+                          0,
+                          12,
+                          14,
+                        ),
                         backgroundColor: const Color(0xFF17314E),
                         collapsedBackgroundColor: const Color(0xFF17314E),
                         shape: RoundedRectangleBorder(
@@ -581,10 +587,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                         children: [
                           Text(
                             s.caseStages[stage].narrative,
-                            style: const TextStyle(
-                              color: _muted,
-                              height: 1.5,
-                            ),
+                            style: const TextStyle(color: _muted, height: 1.5),
                           ),
                         ],
                       )
@@ -599,12 +602,19 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.lock_outline_rounded,
-                                size: 18, color: _muted),
+                            const Icon(
+                              Icons.lock_outline_rounded,
+                              size: 18,
+                              color: _muted,
+                            ),
                             const SizedBox(width: 10),
-                            Text('Étape ${stage + 1} · À débloquer',
-                                style: const TextStyle(
-                                    color: _muted, fontSize: 13)),
+                            Text(
+                              'Étape ${stage + 1} · À débloquer',
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 13,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -687,7 +697,9 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 const Icon(Icons.verified_rounded, color: _green),
             ],
           ),
-          if (s.isProgressiveCase && !s.completed && index < 9 &&
+          if (s.isProgressiveCase &&
+              !s.completed &&
+              index < 9 &&
               !canAdvance) ...[
             const SizedBox(height: 6),
             const Text(
