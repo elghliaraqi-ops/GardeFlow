@@ -41,7 +41,7 @@ class VisceralFicheView extends StatelessWidget {
         borderRadius:BorderRadius.circular(19),
         border:Border.all(color:PracticeDailyVisualTheme.border)),
       clipBehavior:Clip.antiAlias,
-      child:Theme(data:ThemeData.dark().copyWith(dividerColor:Colors.transparent),
+      child:Material(color:Colors.transparent,child:Theme(data:ThemeData.dark().copyWith(dividerColor:Colors.transparent),
         child:ExpansionTile(
           key:PageStorageKey('vr-'+sessionId+'-'+i.toString()),
           initiallyExpanded:i<=1,
@@ -98,7 +98,7 @@ class VisceralFicheView extends StatelessWidget {
               ])),
           ],
         ),
-      ),
+      )),
     );
   }
   @override Widget build(BuildContext context){
@@ -170,7 +170,7 @@ class VisceralFicheView extends StatelessWidget {
         decoration:BoxDecoration(color:PracticeDailyVisualTheme.surface,
           border:Border.all(color:PracticeDailyVisualTheme.border),
           borderRadius:BorderRadius.circular(16)),
-        child:Theme(data:ThemeData.dark().copyWith(dividerColor:Colors.transparent),
+        child:Material(color:Colors.transparent,child:Theme(data:ThemeData.dark().copyWith(dividerColor:Colors.transparent),
           child:ExpansionTile(
             title:const Text('Bibliographie proposée par Groq',
               style:TextStyle(color:ink,fontSize:14,fontWeight:FontWeight.w800)),
@@ -183,7 +183,7 @@ class VisceralFicheView extends StatelessWidget {
               child:Text('• '+text(x),style:const TextStyle(
                 color:muted,fontSize:12,height:1.45)))).toList(),
           ),
-        ),
+        )),
       ),
     ]);
   }
