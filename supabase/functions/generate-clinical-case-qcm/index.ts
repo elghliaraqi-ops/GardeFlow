@@ -145,28 +145,70 @@ async function fetchEuropePmc(query,pageSize=10) {
   } finally { clearTimeout(timer); }
 }
 
+// Scientific-language terms from the PRESENTING PROBLEM, not from an unrelated
+// consultation service or an old operation in the patient's history.
+const clinicalSearchDictionary: Array<[RegExp,string]> = [
+  [/otite|otalgie|tympan/i,'otitis media'],[/vertig/i,'vertigo'],
+  [/rhinorrh|ecoulement nasal|écoulement nasal/i,'rhinorrhea'],
+  [/appendic/i,'appendicitis'],[/cholécyst|cholecyst/i,'cholecystitis'],
+  [/périton|periton/i,'peritonitis'],[/occlusi/i,'bowel obstruction'],
+  [/pancréat|pancreat/i,'pancreatitis'],[/diverticul/i,'diverticulitis'],
+  [/pneumon|pulmon/i,'pneumonia'],[/embolie pulmon/i,'pulmonary embolism'],
+  [/asthm/i,'asthma'],[/sepsis|septiqu/i,'sepsis'],
+  [/avc|accident vasculaire cérébral|ischemie cerebr|ischémie cérébr/i,'stroke'],
+  [/épileps|epilep|convuls/i,'seizures'],[/méningit|meningit/i,'meningitis'],
+  [/infarct|coronar/i,'acute coronary syndrome'],[/insuffisance cardiaque/i,'heart failure'],
+  [/fibrillation atrial|fibrillation auricul/i,'atrial fibrillation'],
+  [/fractur/i,'fracture'],[/arthrit/i,'arthritis'],
+  [/diabèt|diabet/i,'diabetes'],[/hypoglyc/i,'hypoglycemia'],
+  [/insuffisance rénale|insuffisance renale/i,'kidney injury'],
+  [/infection urin|pyélon|pyelon/i,'urinary tract infection'],
+  [/hématur|hematur/i,'hematuria'],[/lithiase|colique néphr|colique nephr/i,'urolithiasis'],
+  [/grossesse extra|ectopiqu/i,'ectopic pregnancy'],
+  [/prééclamps|preeclamps/i,'preeclampsia'],
+  [/hémorragie digest|hemorragie digest/i,'gastrointestinal bleeding'],
+  [/cholestase|ictèr|icter/i,'jaundice'],
+  [/anémie|anemie/i,'anemia'],[/thrombopén|thrombopen/i,'thrombocytopenia']
+];
+function clinicalFocus(clean) {
+  return scrub([clean.presentation,clean.assessment].filter(Boolean).join(' '),2700);
+}
+function clinicalSourceTerms(clean) {
+  const focus=clinicalFocus(clean);
+  const matches=clinicalSearchDictionary.filter(([re])=>re.test(focus)).map(([,term])=>term);
+  return [...new Set(matches)].slice(0,4);
+}
 async function getLiteratureSources(clean) {
-  const primary=scrub(clean.assessment||clean.imaging_conclusion||clean.presentation,360);
-  const service=scrub(clean.specialist_service,120);
-  const seed=[primary,service].filter(Boolean).join(' ');
-  if(!seed) return [];
-
-  const targeted=`(${seed}) AND (guideline OR consensus OR review OR recommendation)`;
+  const focus=clinicalFocus(clean);
+  if(!focus) return [];
+  const terms=clinicalSourceTerms(clean);
+  // Never seed the bibliography with specialist_service: this field can be
+  // inconsistent with the clinical story (e.g. orthopaedics for an ENT case).
+  const diagnosis=scrub(clean.assessment||clean.presentation,180).split(/[.;\n]/)[0];
+  const targeted=terms.length
+    ?'('+terms.map(t=>'"'+t+'"').join(' OR ')+')'
+    :diagnosis;
   const results=await Promise.allSettled([
-    fetchEuropePmc(seed,10),
-    fetchEuropePmc(targeted,8),
+    fetchEuropePmc(targeted+' AND (guideline OR consensus OR review OR recommendation)',16),
+    fetchEuropePmc(targeted,16),
   ]);
   const map=new Map();
   for(const result of results){
     if(result.status!=='fulfilled') continue;
     for(const source of result.value){
       const key=canonicalUrl(source.url);
-      if(key&&!map.has(key)) map.set(key,source);
+      if(!key||map.has(key)) continue;
+      // If we detected the presenting clinical topic, exclude unrelated papers
+      // before they enter the model's evidence catalog.
+      const sourceText=(source.title+' '+source.abstract).toLowerCase();
+      if(terms.length&&!terms.some(term=>
+        term.toLowerCase().split(' ').some(word=>word.length>3&&sourceText.includes(word))
+      ))continue;
+      map.set(key,source);
     }
   }
   return [...map.values()].slice(0,14);
 }
-
 
 function trustedImageUrl(value, expectedHost) {
   try {
@@ -256,12 +298,37 @@ function providerRetrySeconds(payload,headers) {
 const referenceSchema={type:'object',additionalProperties:false,required:['title','organization','year','url','kind'],properties:{
   title:{type:'string'},organization:{type:'string'},year:{type:'string'},url:{type:'string'},kind:{type:'string',enum:sourceKinds}
 }};
-const qcmSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],properties:{
+const qcmSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','case_evidence'],properties:{
   axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
   correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
-  references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}
+  references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},case_evidence:{type:'string'}
 }};
 const outputSchema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:qcmSchema}}};
+
+function normalizedClinicalText(value){
+  return String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+const nonClinicalWords=new Set(('patient patients clinique cliniques dossier cas cours quelle quel quels quelles lequel laquelle selon quelles lequel '+
+  'dans avec pour parmi cette celui cette premier premiere intention adultes adulte femme homme jeune enfant '+
+  'prise charge examen examens exploration explorations possible possibles recommandation recommandations '+
+  'traitement traitements diagnostic diagnostics bilan conduite plus moins avant apres apres deux trois jours heures '+
+  'droit droite gauche aigu aigue aigus aigues evaluation pathologie suspectee suspecte suspectes clinique '+
+  'recherche recherchee retrouve trouve recherche signes signe symptomatologie symptomes symptome les des une '+
+  'sans existe syndrome associe associee concerne initial initiale type apres presence absence demande').split(/\s+/));
+function focusWords(clean){
+  return new Set(normalizedClinicalText(clinicalFocus(clean)).split(' ').filter(w=>
+    w.length>=5&&!nonClinicalWords.has(w)));
+}
+function isClinicallyAnchored(question, evidence, clean){
+  const evidenceNorm=normalizedClinicalText(evidence);
+  if(evidenceNorm.length<25) return false;
+  const fields=['presentation','history','clinical_exam','complementary_exams','imaging_conclusion','assessment','plan'];
+  if(!fields.some(field=>normalizedClinicalText(clean[field]).includes(evidenceNorm))) return false;
+  const qWords=new Set(normalizedClinicalText(question).split(' '));
+  return [...focusWords(clean)].some(word=>qWords.has(word));
+}
+
 const generic=[/dans ce cas(?: clinique)?/i,/document(?:é|ée|és|ées)/i,/quelle synthèse clinique a été retenue/i,/quelle prise en charge a été/i,/quelle orientation a été/i,/quel avis spécialisé a été/i];
 
 function correction(text,refs,images=[]) {
@@ -388,13 +455,28 @@ Deno.serve(async(req)=>{
       log('database_read_failed',meta());
       return fail(503,'database_unavailable',true);
     }
-    if(!append&&(existing.data??[]).filter(q=>Number(q.position)<=5).length===5&&(existing.data??[]).filter(q=>Number(q.position)<=5).every(q=>q.generation_source==='openai')){
+    if(!force&&!append&&(existing.data??[]).filter(q=>Number(q.position)<=5).length===5&&(existing.data??[]).filter(q=>Number(q.position)<=5).every(q=>q.generation_source==='openai')){
       return reply(req,{ok:true,generated:false,status:'ready',count:5,post_id:post.id});
     }
 
     const isAdmin=String(profile.role??'').toLowerCase()==='admin';
     const canForce=force&&(isAdmin||post.author_id===uid);
+    if(force&&!canForce)return fail(403,'authorization_failed',false);
     if(append&&!isAdmin&&post.author_id!==uid)return fail(403,'authorization_failed',false);
+    // Do not silently rewrite scored questions while their answer records or
+    // attempt history still refer to the old correct answers.
+    if(force&&(existing.data??[]).length){
+      const ids=(existing.data??[]).map(q=>q.id);
+      const [answers,history,legacyAttempts]=await Promise.all([
+        admin.from('clinical_case_qcm_answers').select('id',{count:'exact',head:true}).in('qcm_id',ids),
+        admin.from('clinical_case_qcm_answer_history').select('id',{count:'exact',head:true}).in('qcm_id',ids),
+        admin.from('clinical_case_qcm_attempts').select('id',{count:'exact',head:true}).eq('post_id',post.id)
+      ]);
+      if(answers.error||history.error||legacyAttempts.error)
+        return fail(503,'database_unavailable',true);
+      if((answers.count??0)>0||(history.count??0)>0||(legacyAttempts.count??0)>0)
+        return fail(409,'case_has_answer_history_requires_archive',false);
+    }
     const claimResult=await admin.rpc(append?'clinical_case_claim_qcm_extension':'clinical_case_claim_qcm_generation',append?{p_post_id:post.id,p_user_id:uid}:{p_post_id:post.id,p_user_id:uid,p_force:canForce});
 
     if(claimResult.error||!Array.isArray(claimResult.data)||claimResult.data.length===0){
@@ -472,7 +554,12 @@ Le cas ci-dessous est ANONYMISÉ et sert d'ancrage pédagogique. N'essaie jamais
 Crée EXACTEMENT 5 QCM autonomes, exigeants et utiles, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.
 Chaque QCM comporte exactement 4 propositions distinctes, une seule meilleure réponse, et une correction factuelle de 3 à 6 phrases.
 Pour chaque QCM, renseigne image_search_query avec une requête courte EN ANGLAIS uniquement si une image pédagogique externe améliorerait réellement l'explication (radiographie, scanner, ECG, schéma anatomique, dermatologie, etc.) ; sinon renvoie exactement une chaîne vide. Cette requête ne doit contenir aucune donnée identifiable.
-Les questions doivent tester des connaissances médicales réelles et généralisables, pas simplement faire répéter le texte du dossier.
+Chaque question doit impérativement porter sur la maladie, le symptôme principal ou une décision de CE patient, sans digression vers un autre cours, une autre pathologie sans lien, ou un ancien antécédent accessoire.
+Chaque question doit mentionner explicitement un symptôme, un signe ou un diagnostic du motif clinique principal (pas seulement « patient » ou « adulte »).
+Le champ case_evidence DOIT contenir une citation textuelle exacte et CONTIGUË de 25 à 200 caractères, extraite d'une seule rubrique du CAS ANONYMISÉ (pas des sources).
+La question, la meilleure réponse et l'explication doivent être directement motivées par cette citation. N'invente aucun fait absent du dossier.
+Une question hors sujet sera rejetée dans son intégralité, même si sa réponse et ses références sont médicalement correctes.
+Les questions doivent tester des connaissances médicales applicables au cas, pas simplement recopier le dossier.
 Évite les formulations vagues comme « dans ce cas », « toutes les réponses » ou « aucune des réponses ».
 
 SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous pour les références. Chaque QCM doit citer 1 à 3 références du catalogue et recopier exactement leur URL. N'invente aucune référence ni URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
@@ -646,6 +733,7 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
           ci>3||
           !allowedTopics.has(topic)||
           !allowedAxes.has(axis)||
+          !isClinicallyAnchored(question,q?.case_evidence,clean)||
           refs.length<1||
           generic.some(p=>p.test(question))
         ) throw new Error(`invalid_qcm_${i+1}`);
