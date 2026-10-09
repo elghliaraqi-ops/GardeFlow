@@ -32,30 +32,52 @@ abstract final class PracticeDailyVisualTheme {
     stops: [0, .55, 1],
   );
 
+  /// Explicit ButtonStyles take precedence over nested host/card themes.
+  /// They prevent pale backgrounds with pale labels on mobile and Web.
+  static final ButtonStyle primaryButtonStyle = FilledButton.styleFrom(
+    backgroundColor: mint,
+    foregroundColor: background,
+    disabledBackgroundColor: const Color(0xFF28455A),
+    disabledForegroundColor: const Color(0xFFC1D1DD),
+    minimumSize: const Size(0, 48),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    textStyle: const TextStyle(
+      fontSize: 13, fontWeight: FontWeight.w900,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  );
+
+  static final ButtonStyle secondaryButtonStyle = OutlinedButton.styleFrom(
+    backgroundColor: const Color(0xFF193A50),
+    foregroundColor: text,
+    disabledBackgroundColor: const Color(0xFF162D3F),
+    disabledForegroundColor: const Color(0xFFACC0D0),
+    minimumSize: const Size(0, 47),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+    side: const BorderSide(color: Color(0xFF84B0C6), width: 1.3),
+    textStyle: const TextStyle(
+      fontSize: 13, fontWeight: FontWeight.w900,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  );
+
+  static final ButtonStyle toolbarButtonStyle = IconButton.styleFrom(
+    backgroundColor: const Color(0xFF204458),
+    foregroundColor: text,
+    disabledBackgroundColor: const Color(0xFF172C3C),
+    disabledForegroundColor: const Color(0xFFACC0D0),
+    padding: const EdgeInsets.all(9),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
+
+  static final ButtonStyle clearTextButtonStyle = TextButton.styleFrom(
+    backgroundColor: const Color(0xFF193A50),
+    foregroundColor: text,
+    textStyle: const TextStyle(fontWeight: FontWeight.w800),
+  );
+
   static ThemeData from(BuildContext context) {
     final base = Theme.of(context);
-    final primary = FilledButton.styleFrom(
-      backgroundColor: mint,
-      foregroundColor: background,
-      disabledBackgroundColor: elevated,
-      disabledForegroundColor: muted,
-      textStyle: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
-        letterSpacing: .15,
-      ),
-      minimumSize: const Size(0, 47),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    );
-    final secondary = OutlinedButton.styleFrom(
-      foregroundColor: text,
-      disabledForegroundColor: muted,
-      backgroundColor: elevated.withOpacity(.50),
-      side: const BorderSide(color: Color(0xFF55839A), width: 1.2),
-      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-      minimumSize: const Size(0, 46),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    );
     return base.copyWith(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: background,
@@ -82,19 +104,13 @@ abstract final class PracticeDailyVisualTheme {
           letterSpacing: .1,
         ),
       ),
-      filledButtonTheme: FilledButtonThemeData(style: primary),
-      outlinedButtonTheme: OutlinedButtonThemeData(style: secondary),
+      filledButtonTheme: FilledButtonThemeData(style: primaryButtonStyle),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: secondaryButtonStyle),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: mint,
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
-        ),
+        style: clearTextButtonStyle,
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          foregroundColor: text,
-          backgroundColor: Colors.transparent,
-        ),
+        style: toolbarButtonStyle,
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
