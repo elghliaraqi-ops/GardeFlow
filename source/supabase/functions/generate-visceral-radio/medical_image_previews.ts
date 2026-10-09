@@ -333,6 +333,35 @@ function articleTopical(text:string,request:MedicalImageRequest):boolean{
     return /anatom|diagram|sphinct|mesorect|pelvic floor|schematic|illustrat/.test(hay);
   return true;
 }
+export function openGraphImageFromHtml(html:string):string|null{
+  const tags=html.match(/<meta\b[^>]*>/gi)||[];
+  for(const tag of tags){
+    if(!/(?:property|name)\s*=\s*["']og:image["']/i.test(tag))continue;
+    const raw=tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1]||'';
+    const value=raw.replace(/&amp;/g,'&');
+    if(!allowedAsset(value))continue;
+    if(/logo|banner|default|social|favicon|journal.cover|site.icon|generic/i.test(value))continue;
+    return value;
+  }
+  return null;
+}
+async function articleOpenGraphPreview(pmcid:string):Promise<string|null>{
+  try {
+    // Only fetch a known public PMC article host, never user-provided pages.
+    const res=await fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
+      signal:AbortSignal.timeout(4200),headers:REQUEST_HEADERS});
+    if(!res.ok)return null;
+    const content=await res.text();
+    if(content.length>1100000)return null;
+    const img=openGraphImageFromHtml(content);
+    if(!img)return null;
+    const head=await fetch(img,{method:'HEAD',redirect:'manual',
+      signal:AbortSignal.timeout(3000)});
+    if(head.ok && /^image\/(?:jpeg|png|webp)/i.test(head.headers.get('content-type')||''))return img;
+  } catch (_) { /* A link-only preview is still useful. */ }
+  return null;
+}
+
 async function articleSourcePreviews(request:MedicalImageRequest,query:string):
   Promise<{articles:MedicalArticlePreview[];figures:ImagePreview[]}>{
   const articles:MedicalArticlePreview[]=[];
@@ -358,6 +387,10 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     const card:MedicalArticlePreview={title,source,provider:'Europe PMC',summary,
       figure_page:source+'#figures'};
     articles.push(card);
+    if(request.allow_open_graph_preview!==false && articles.length<=2){
+      const openGraph=await articleOpenGraphPreview(pmcid);
+      if(openGraph)card.thumbnail=openGraph;
+    }
     if(request.allow_article_figures===false||figures.length>=2||articles.length>2)continue;
     try{
       const rr=await fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
