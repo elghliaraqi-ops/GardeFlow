@@ -477,7 +477,7 @@ Les questions doivent tester des connaissances médicales réelles et générali
 Évite les formulations vagues comme « dans ce cas », « toutes les réponses » ou « aucune des réponses ».
 
 SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous pour les références. Chaque QCM doit citer 1 à 3 références du catalogue et recopier exactement leur URL. N'invente aucune référence ni URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
-Réponds en français et respecte strictement le schéma JSON.
+Réponds en français, exclusivement par un objet JSON racine {"qcms":[...]} comprenant exactement 5 objets. Chaque objet possède les champs axis, question, options (exactement 4 chaînes), correct_index (0 à 3), correction (explication médicale), topic, references (1 à 3 objets {"url":"URL autorisée"}), image_search_query (chaîne vide si non pertinent). Les axis doivent suivre cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations, dans cet ordre. Pas de Markdown, pas de texte hors JSON.
 
 CAS ANONYMISÉ :
 ${cleanJson}
@@ -514,14 +514,7 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
           reasoning_format:'hidden',
           max_completion_tokens:12000,
           stream:false,
-          response_format:{
-            type:'json_schema',
-            json_schema:{
-              name:'gardeflow_qcms',
-              strict:true,
-              schema:outputSchema
-            }
-          }
+          response_format:{type:'json_object'}
         }),
       });
     } catch(e) {
