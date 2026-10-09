@@ -7,6 +7,7 @@ import '../services/practice_daily_service.dart';
 import '../services/notification_service.dart';
 import '../services/push_notification_service.dart';
 import 'practice_daily_history_screen.dart';
+import 'practice_daily_visual_theme.dart';
 
 class PracticeDailyScreen extends StatefulWidget {
   const PracticeDailyScreen({super.key, this.replayDay});
@@ -34,6 +35,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
   int _current = 0;
   bool _busy = false, _enabled = true;
   String? _error;
+  String? _lastMode;
 
   @override
   void initState() {
@@ -127,6 +129,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     if (_busy) return;
     setState(() {
       _busy = true;
+      _lastMode = mode;
       _error = null;
     });
     try {
@@ -142,7 +145,18 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             : List<int?>.filled(10, null);
       });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) {
+        final raw = e.toString().toLowerCase();
+        final message = raw.contains('groq_auth_failed') ||
+                raw.contains('groq_configuration_missing')
+            ? 'Le service de génération IA nécessite une vérification de sa configuration.'
+            : raw.contains('groq_rate_limited')
+                ? 'Le service IA a atteint sa limite temporaire. Réessayez plus tard.'
+                : raw.contains('generation_in_progress')
+                    ? 'Le défi est en préparation. Réessayez dans quelques instants.'
+                    : 'La génération IA n’a pas abouti. Réessayez dans quelques instants.';
+        setState(() => _error = message);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -570,8 +584,9 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Deux formats au choix. Une seule note officielle par jour. '
-              'Les défis terminés sont rejouables depuis l’historique.',
+              'Deux formats générés spécialement pour le jour : '
+              '10 nouveaux QCM de cours ou un cas clinique fictif progressif. '
+              'Une seule note officielle est enregistrée par jour.',
               style: TextStyle(color: _muted),
             ),
             const SizedBox(height: 15),
@@ -580,7 +595,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               child: FilledButton.icon(
                 onPressed: _busy ? null : () => _start('cours'),
                 icon: const Icon(Icons.school_rounded),
-                label: const Text('10 QCM de cours'),
+                label: const Text('10 nouveaux QCM de cours · IA'),
               ),
             ),
             const SizedBox(height: 6),
@@ -589,7 +604,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               child: OutlinedButton.icon(
                 onPressed: _busy ? null : () => _start('cas_clinique'),
                 icon: const Icon(Icons.medical_information_rounded),
-                label: const Text('Cas progressif · 10 QCM'),
+                label: const Text('Cas clinique progressif · IA'),
               ),
             ),
           ],
@@ -835,17 +850,38 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     );
   }
 
+  void _leavePractice() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    navigator.popUntil((route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return Theme(
+      data: PracticeDailyVisualTheme.from(context),
+      child: Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
         backgroundColor: _bg,
         foregroundColor: _text,
         title: Text(
           _replayMode ? 'Rejouer · Practice' : 'Défi quotidien · Practice',
+          style: const TextStyle(
+            color: PracticeDailyVisualTheme.text,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Quitter le défi et revenir à Practice',
+            onPressed: _leavePractice,
+            icon: const Icon(Icons.exit_to_app_rounded),
+          ),
           if (!_replayMode)
             IconButton(
               tooltip: 'Historique et rejouer',
@@ -859,7 +895,11 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           ),
         ],
       ),
-      body: ListView(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: PracticeDailyVisualTheme.pageGradient,
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(15),
         children: [
           if (_busy) ...[
@@ -867,10 +907,48 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 12),
           ],
           if (_error != null) ...[
-            Text(_error!, style: const TextStyle(color: Color(0xFFF28C8C))),
+            _box(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Color(0xFFFF8D97)),
+                      SizedBox(width: 8),
+                      Text('Défi indisponible',
+                        style: TextStyle(
+                          color: PracticeDailyVisualTheme.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(_error!,
+                    style: const TextStyle(color: PracticeDailyVisualTheme.text),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : () =>
+                        _lastMode == null ? _load() : _start(_lastMode!),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Réessayer'),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
           ],
           _challenge(),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _leavePractice,
+              icon: const Icon(Icons.exit_to_app_rounded),
+              label: const Text('Quitter le défi'),
+            ),
+          ),
           if (!_replayMode) ...[
             const SizedBox(height: 18),
             _box(
@@ -914,6 +992,8 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             style: TextStyle(color: _muted, fontSize: 12),
           ),
         ],
+        ),
+      ),
       ),
     );
   }
