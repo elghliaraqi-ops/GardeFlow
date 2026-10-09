@@ -4,8 +4,10 @@ on:
     branches: [main]
     paths:
       - 'source/lib/screens/practice_visceral_radio_screen.dart'
+      - 'source/lib/screens/visceral_radio_*.dart'
       - 'source/lib/screens/practice_screen.dart'
       - 'source/test/practice_visceral_radio_test.dart'
+      - 'source/test/visceral_radio_course_widgets_test.dart'
       - 'source/supabase/functions/generate-visceral-radio/**'
       - '.github/workflows/visceral-radio-ci.yml'
   workflow_dispatch:
@@ -25,11 +27,11 @@ jobs:
       - working-directory: source
         run: flutter pub get
       - working-directory: source
-        run: dart format lib/screens/practice_visceral_radio_screen.dart
+        run: dart format lib/screens/practice_visceral_radio_screen.dart lib/screens/visceral_radio_course_widgets.dart lib/screens/visceral_radio_fiche_view.dart
       - working-directory: source
-        run: flutter analyze lib/screens/practice_visceral_radio_screen.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze lib/screens/practice_visceral_radio_screen.dart lib/screens/visceral_radio_course_widgets.dart lib/screens/visceral_radio_fiche_view.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
       - working-directory: source
-        run: flutter test test/practice_visceral_radio_test.dart
+        run: flutter test test/practice_visceral_radio_test.dart test/visceral_radio_course_widgets_test.dart
 
   deno:
     runs-on: ubuntu-latest
@@ -41,5 +43,9 @@ jobs:
           deno-version: v2.x
       - name: Type-check private Edge Function and JSON contract
         run: deno check source/supabase/functions/generate-visceral-radio/index.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts
+      - name: Type-check multi-source preview module
+        run: deno check source/supabase/functions/generate-visceral-radio/medical_image_previews.ts
+      - name: Test external medical image search terms
+        run: deno test source/supabase/functions/generate-visceral-radio/medical_image_previews_test.ts
       - name: Test four Groq prompt/JSON contracts (no API calls)
         run: deno test source/supabase/functions/generate-visceral-radio/generation_contract_test.ts
