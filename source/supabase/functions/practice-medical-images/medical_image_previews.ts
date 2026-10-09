@@ -363,6 +363,35 @@ async function articleOpenGraphPreview(pmcid:string):Promise<string|null>{
   return null;
 }
 
+/**
+ * Verify the article's actual image bytes endpoint (not its OpenGraph page).
+ * PMC article figure URLs frequently 302 to a safe CDN, so a HEAD request
+ * returning 302 must not cause a valid, medically relevant figure to be lost.
+ */
+export async function probeMedicalFigure(asset:string,fetcher:typeof fetch=fetch):Promise<boolean>{
+  if(!allowedAsset(asset))return false;
+  let target=asset;
+  try{
+    for(let hop=0;hop<3;hop++){
+      const response=await fetcher(target,{
+        method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(3500),
+        headers:{Accept:'image/jpeg,image/png,image/webp'}
+      });
+      if(response.status>=300&&response.status<400){
+        const location=response.headers.get('location');
+        if(!location||hop===2)return false;
+        const next=new URL(location,target).toString();
+        if(!allowedAsset(next))return false;
+        target=next;
+        continue;
+      }
+      return response.ok && /^image\/(?:jpeg|png|webp)(?:;|$)/i.test(
+        response.headers.get('content-type')||'');
+    }
+  }catch(_){/* Missing external source -> source link only. */}
+  return false;
+}
+
 async function articleSourcePreviews(request:MedicalImageRequest,query:string):
   Promise<{articles:MedicalArticlePreview[];figures:ImagePreview[]}>{
   const articles:MedicalArticlePreview[]=[];
@@ -388,10 +417,9 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     const card:MedicalArticlePreview={title,source,provider:'Europe PMC',summary,
       figure_page:source+'#figures'};
     articles.push(card);
-    if(request.allow_open_graph_preview!==false && articles.length<=2){
-      const openGraph=await articleOpenGraphPreview(pmcid);
-      if(openGraph)card.thumbnail=openGraph;
-    }
+    // An OpenGraph image identifies the page, not necessarily its medical figure.
+    // NEVER show a generic article preview as an illustration in a course/QCM.
+    // A thumbnail is set below only after a relevant <fig> has an image asset.
     if(request.allow_article_figures===false||figures.length>=2||articles.length>2)continue;
     try{
       const rr=await fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
@@ -408,8 +436,7 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
           if(!allowedAsset(raw))continue;
           // Never claim a real thumbnail until the upstream responds as an image.
           try{
-            const head=await fetch(raw,{method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(3500)});
-            if(!head.ok || !/^image\/(?:jpeg|png|webp)/i.test(head.headers.get('content-type')||''))continue;
+            if(!await probeMedicalFigure(raw))continue;
             const image:ImagePreview={thumbnail:raw,full:raw,source:source+'#figures',
               title:fig.caption||title,description:title+' '+fig.caption,
               license:'Open access (voir licence de l’article)',creator:summary,provider:'PubMed Central'};
