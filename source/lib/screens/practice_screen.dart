@@ -15,6 +15,7 @@ import '../state/app_state.dart';
 import '../widgets/profile_avatar.dart';
 import 'practice_qcm_screen.dart';
 import 'practice_daily_screen.dart';
+import 'practice_daily_gamification_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
 
@@ -314,23 +315,19 @@ class _PracticeScreenState extends State<PracticeScreen> {
             ),
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
             children: [
-              _PracticeGameHeader(
-                level: level,
-                xp: _all.xp,
-                streak: _all.streak,
-                unlocked: unlocked,
-              ),
+              const PracticeDailyGameHubCard(),
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
 
-              // 1. L'objectif principal de Practice reste l'entraînement.
-              const SizedBox(height: 18),
+              // Le défi quotidien est l'accès prioritaire. Les modules
+              // existants restent tous disponibles dans la bibliothèque.
+              const SizedBox(height: 22),
               const _PracticeHubSectionHeader(
-                icon: Icons.school_rounded,
-                title: 'S’entraîner',
-                subtitle: 'Les deux accès principaux, immédiatement disponibles',
+                icon: Icons.menu_book_rounded,
+                title: 'Bibliothèque médicale',
+                subtitle: 'S’entraîner librement, indépendamment du défi du jour',
               ),
               const SizedBox(height: 9),
               Row(
@@ -371,38 +368,59 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 9),
-              const SizedBox(height: 9),
-              _PracticePrimaryActionCard(
-                icon: Icons.calendar_month_rounded,
-                title: 'Défi quotidien',
-                subtitle: '10 QCM de cours ou un cas clinique · note sur 10',
-                meta: 'Calendrier · Chaque jour',
-                accent: PracticeColors.gameGold,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PracticeDailyScreen(),
+              const SizedBox(height: 11),
+              Container(
+                decoration: BoxDecoration(
+                  color: PracticeColors.surface.withOpacity(.88),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: PracticeColors.line.withOpacity(.72),
                   ),
                 ),
-              ),
-              _PracticePrimaryActionCard(
-                icon: Icons.add_circle_outline_rounded,
-                title: 'Ajouter un cas clinique',
-                subtitle:
-                    'Documenter un cas rencontré en dehors d’une garde aux urgences',
-                meta: 'Hors garde',
-                accent: PracticeColors.specialist,
-                onTap: _newStandaloneCase,
-              ),
-              const SizedBox(height: 9),
-              _PracticePrimaryActionCard(
-                icon: Icons.auto_awesome_rounded,
-                title: 'Génère-moi un cas au hasard',
-                subtitle: 'Cas fictif créé par IA, modifiable avant publication',
-                meta: 'IA · Aléatoire',
-                accent: PracticeColors.gameGold,
-                onTap: _newRandomClinicalCase,
+                child: ExpansionTile(
+                  initiallyExpanded: false,
+                  tilePadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 4,
+                  ),
+                  childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  iconColor: PracticeColors.accent,
+                  collapsedIconColor: PracticeColors.textSecondary,
+                  leading: const Icon(Icons.add_circle_outline_rounded,
+                      color: PracticeColors.specialist),
+                  title: const Text(
+                    'Outils & création de cas',
+                    style: TextStyle(
+                      color: PracticeColors.text,
+                      fontWeight: FontWeight.w800, fontSize: 14,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Publier un cas ou en générer un avec l’IA',
+                    style: TextStyle(
+                      color: PracticeColors.textSecondary, fontSize: 11,
+                    ),
+                  ),
+                  children: [
+                    _PracticePrimaryActionCard(
+                      icon: Icons.add_circle_outline_rounded,
+                      title: 'Ajouter un cas clinique',
+                      subtitle:
+                          'Documenter un cas rencontré en dehors d’une garde aux urgences',
+                      meta: 'Hors garde',
+                      accent: PracticeColors.specialist,
+                      onTap: _newStandaloneCase,
+                    ),
+                    const SizedBox(height: 9),
+                    _PracticePrimaryActionCard(
+                      icon: Icons.auto_awesome_rounded,
+                      title: 'Génère-moi un cas au hasard',
+                      subtitle: 'Cas fictif créé par IA, modifiable avant publication',
+                      meta: 'IA · Aléatoire',
+                      accent: PracticeColors.gameGold,
+                      onTap: _newRandomClinicalCase,
+                    ),
+                  ],
+                ),
               ),
 
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
@@ -457,6 +475,20 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 month: _qcmMonth,
                 total: _qcmAll,
                 loading: _loading,
+              ),
+              const SizedBox(height: 9),
+              const SizedBox(height: 11),
+              const _PracticeHubSectionHeader(
+                icon: Icons.medical_information_outlined,
+                title: 'Progression clinique',
+                subtitle: 'XP et séries des activités Practice historiques',
+              ),
+              const SizedBox(height: 9),
+              _PracticeGameHeader(
+                level: level,
+                xp: _all.xp,
+                streak: _all.streak,
+                unlocked: unlocked,
               ),
               const SizedBox(height: 9),
               _PracticeHubProgressPanel(
@@ -3941,7 +3973,8 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
     if (_loading) return const SizedBox(height: 6);
     final guard = _guard;
     final showRank = _ranks.leaderboardOptIn;
-    if (guard == null && !showRank) return const SizedBox.shrink();
+    // The Practice home card must remain visible for every signed-in doctor,
+    // even without an active guard or leaderboard opt-in.
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -3952,19 +3985,19 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF6E56E8), Color(0xFF247FD5), Color(0xFF13A982)],
+            colors: [Color(0xFF183C51), Color(0xFF14304A), Color(0xFF122D37)],
             stops: [0, .54, 1],
           ),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: Colors.white.withOpacity(.28)),
           boxShadow: [
             BoxShadow(
-              color: PracticeColors.gamePurple.withOpacity(.30),
+              color: PracticeColors.accent.withOpacity(.10),
               blurRadius: 28,
               offset: const Offset(0, 12),
             ),
             BoxShadow(
-              color: PracticeColors.gameBlue.withOpacity(.12),
+              color: PracticeColors.gameBlue.withOpacity(.08),
               blurRadius: 42,
               spreadRadius: 2,
             ),
@@ -4014,7 +4047,7 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'MODE JEU · progression clinique',
+                        'APPRENDRE · JOUER · PROGRESSER',
                         style: TextStyle(
                           color: Color(0xFFDCEBE4),
                           fontSize: 10.5,
@@ -4060,6 +4093,8 @@ class _PracticeHomeSummaryState extends State<PracticeHomeSummary> {
                   ),
               ],
             ),
+            const SizedBox(height: 12),
+            const PracticeDailyHomePulse(),
             if (guard != null) ...[
               const SizedBox(height: 12),
               Material(
