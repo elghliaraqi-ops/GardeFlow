@@ -34,19 +34,21 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: PracticeClinicalDossier(
-            stages: stages,
-            data: patient,
-            unlocked: 0,
-            current: 0,
-            completed: false,
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PracticeClinicalDossier(
+              stages: stages,
+              data: patient,
+              unlocked: 0,
+              current: 0,
+              completed: false,
+            ),
           ),
         ),
       ),
-    ));
+    );
     expect(find.text('Motif de consultation'), findsOneWidget);
     expect(find.text('Histoire de la maladie'), findsOneWidget);
     expect(find.text('Constantes et examen clinique'), findsOneWidget);
@@ -65,36 +67,45 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: PracticeClinicalDossier(
-            stages: stages,
-            data: patient,
-            unlocked: 3,
-            current: 3,
-            completed: true,
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PracticeClinicalDossier(
+              stages: stages,
+              data: patient,
+              unlocked: 3,
+              current: 3,
+              completed: true,
+            ),
           ),
         ),
       ),
-    ));
+    );
     expect(find.text('Synthèse et orientation diagnostique'), findsOneWidget);
     expect(find.text('Décisions et stratégie thérapeutique'), findsOneWidget);
     expect(find.text('Surveillance et suivi documentés'), findsOneWidget);
-    expect(find.textContaining('Hospitalisation en Cardiologie'), findsOneWidget);
+    expect(
+      find.textContaining('Hospitalisation en Cardiologie'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('External images reject non-Wikimedia URLs', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(
-        body: ExternalMedicalImagePreview(data: {
-          'url': 'https://malicious.example/other',
-          'preview_image_url': 'https://malicious.example/preview.png',
-          'title': 'Untrusted image',
-        }),
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ExternalMedicalImagePreview(
+            data: {
+              'url': 'https://malicious.example/other',
+              'preview_image_url': 'https://malicious.example/preview.png',
+              'title': 'Untrusted image',
+            },
+          ),
+        ),
       ),
-    ));
+    );
     expect(find.text('Untrusted image'), findsNothing);
     expect(tester.takeException(), isNull);
   });

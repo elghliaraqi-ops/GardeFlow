@@ -269,9 +269,7 @@ class _PracticeProgressiveCasesScreenState
   Widget _stagePanel() => PracticeClinicalDossier(
     stages: _stages,
     data: _casePayload,
-    unlocked: _submitted
-        ? 3
-        : PracticeDailyProgress.unlockedStage(_answers),
+    unlocked: _submitted ? 3 : PracticeDailyProgress.unlockedStage(_answers),
     current: PracticeDailyProgress.stageForQuestion(_question),
     completed: _submitted,
   );
