@@ -7,6 +7,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/app_user.dart';
 import '../models/practice_models.dart';
+import '../models/practice_achievement_categories.dart';
 import '../models/qcm_models.dart';
 import '../services/practice_service.dart';
 import '../services/clinical_case_service.dart';
@@ -3590,6 +3591,8 @@ class _PracticeAchievementsScreenState
   bool _loading = true;
   List<PracticeAchievement> _items = const [];
   PracticeStats _all = const PracticeStats();
+  String _category = 'Tous';
+  bool _onlyPending = false;
 
   @override
   void initState() {
@@ -3598,134 +3601,179 @@ class _PracticeAchievementsScreenState
   }
 
   Future<void> _load() async {
-    final results = await Future.wait<dynamic>([
-      PracticeService.instance.achievements(),
-      PracticeService.instance.summary(scope: 'all'),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      _items = results[0] as List<PracticeAchievement>;
-      _all = results[1] as PracticeStats;
-      _loading = false;
-    });
+    try {
+      final results = await Future.wait<dynamic>([
+        PracticeService.instance.achievements(),
+        PracticeService.instance.summary(scope: 'all'),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _items = results[0] as List<PracticeAchievement>;
+        _all = results[1] as PracticeStats;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
+
+  Widget _achievementTile(PracticeAchievement item) => Container(
+    margin: const EdgeInsets.only(bottom: 9),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: PracticeColors.surface,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color:
+        item.unlocked ? PracticeColors.accent : PracticeColors.line),
+    ),
+    child: Row(children: [
+      Container(width: 44, height: 44,
+        decoration: BoxDecoration(
+          color: (item.unlocked ? PracticeColors.accent
+            : PracticeColors.elevated).withOpacity(.16),
+          borderRadius: BorderRadius.circular(13)),
+        child: Icon(_achievementIcon(item.icon),
+          color: item.unlocked ? PracticeColors.accent
+            : PracticeColors.textSecondary)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(item.name, style: const TextStyle(color: Colors.white,
+            fontWeight: FontWeight.w900)),
+          const SizedBox(height: 3),
+          Text(item.description, style: const TextStyle(
+            color: PracticeColors.textSecondary, fontSize: 11, height: 1.35)),
+          const SizedBox(height: 8),
+          ClipRRect(borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(value: item.ratio, minHeight: 6,
+              backgroundColor: PracticeColors.background,
+              color: item.unlocked
+                ? PracticeColors.gameGold : PracticeColors.accent)),
+          const SizedBox(height: 5),
+          Text(item.progress.toString() + ' / ' + item.threshold.toString(),
+            style: const TextStyle(color: PracticeColors.textSecondary,
+              fontSize: 10, fontWeight: FontWeight.w800)),
+        ])),
+      if (item.unlocked) const Padding(
+        padding: EdgeInsets.only(left: 8),
+        child: Icon(Icons.check_circle_rounded, color: PracticeColors.accent)),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
     final level = practiceLevelForXp(_all.xp);
+    final unlocked = _items.where((a) => a.unlocked).length;
+    final visible = _items.where((a) {
+      if (_onlyPending && a.unlocked) return false;
+      return _category == 'Tous' ||
+          practiceAchievementCategory(a) == _category;
+    }).toList()..sort((a, b) {
+      if (a.unlocked != b.unlocked) return a.unlocked ? 1 : -1;
+      final progress = b.ratio.compareTo(a.ratio);
+      return progress != 0 ? progress : a.name.compareTo(b.name);
+    });
     return DecorScaffold(
       scene: ScreenDecorScene.practice,
       backgroundColor: PracticeColors.background,
       appBar: AppBar(
         backgroundColor: PracticeColors.background,
         foregroundColor: Colors.white,
-        title: const Text('Succès'),
+        title: const Text('Succès · Practice'),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: PracticeColors.accent),
-            )
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(15, 8, 15, 30),
+        ? const Center(child: CircularProgressIndicator(
+            color: PracticeColors.accent))
+        : RefreshIndicator(
+          onRefresh: _load,
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(15, 8, 15, 30),
+            itemCount: visible.length + 1,
+            itemBuilder: (context, index) {
+              if (index > 0) return _achievementTile(visible[index - 1]);
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _LevelCard(level: level, xp: _all.xp, streak: _all.streak),
-                  const SizedBox(height: 16),
-                  ..._items.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 9),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: PracticeColors.surface,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: item.unlocked
-                                ? PracticeColors.accent
-                                : PracticeColors.line,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color:
-                                    (item.unlocked
-                                            ? PracticeColors.accent
-                                            : PracticeColors.elevated)
-                                        .withOpacity(.16),
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              child: Icon(
-                                _achievementIcon(item.icon),
-                                color: item.unlocked
-                                    ? PracticeColors.accent
-                                    : PracticeColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    item.description,
-                                    style: const TextStyle(
-                                      color: PracticeColors.textSecondary,
-                                      fontSize: 11,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(99),
-                                    child: LinearProgressIndicator(
-                                      value: item.ratio,
-                                      minHeight: 6,
-                                      backgroundColor:
-                                          PracticeColors.background,
-                                      color: PracticeColors.accent,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    '${item.progress} / ${item.threshold}',
-                                    style: const TextStyle(
-                                      color: PracticeColors.textSecondary,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (item.unlocked)
-                              const Padding(
-                                padding: EdgeInsets.only(left: 8),
-                                child: Icon(
-                                  Icons.check_circle_rounded,
-                                  color: PracticeColors.accent,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
+                  _LevelCard(level: level, xp: _all.xp,
+                    streak: _all.streak),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: PracticeColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: PracticeColors.gameGold
+                        .withOpacity(.4)),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(unlocked.toString() + ' / ' +
+                          _items.length.toString() + ' succès débloqués',
+                          style: const TextStyle(color: PracticeColors.text,
+                            fontSize: 17, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 10),
+                        ClipRRect(borderRadius: BorderRadius.circular(99),
+                          child: LinearProgressIndicator(
+                            value: _items.isEmpty ? 0 : unlocked / _items.length,
+                            minHeight: 8,
+                            backgroundColor: PracticeColors.elevated,
+                            color: PracticeColors.gameGold)),
+                        const SizedBox(height: 10),
+                        const Text('Choisissez une collection pour consulter '
+                          'ses objectifs et suivre votre progression.',
+                          style: TextStyle(color: PracticeColors.textSecondary,
+                            fontSize: 11)),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(children: [
+                      for (final category in practiceAchievementCategories)
+                        Padding(padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(category +
+                              (category == 'Tous' ? '' :
+                                ' · ' + _items.where((a) =>
+                                  practiceAchievementCategory(a) == category
+                                  && a.unlocked).length.toString() + '/' +
+                                  _items.where((a) =>
+                                    practiceAchievementCategory(a) == category)
+                                    .length.toString())),
+                            selected: _category == category,
+                            showCheckmark: false,
+                            onSelected: (_) =>
+                              setState(() => _category = category),
+                            selectedColor: PracticeColors.elevated,
+                            backgroundColor: PracticeColors.surface,
+                            side: BorderSide(color: _category == category
+                              ? PracticeColors.accent : PracticeColors.line),
+                            labelStyle: TextStyle(
+                              color: _category == category
+                                ? PracticeColors.accent : PracticeColors.text,
+                              fontSize: 11, fontWeight: FontWeight.w800),
+                          )),
+                    ]),
+                  ),
+                  const SizedBox(height: 6),
+                  SwitchListTile.adaptive(
+                    title: const Text('Afficher seulement les succès à débloquer',
+                      style: TextStyle(color: PracticeColors.text,
+                        fontSize: 12, fontWeight: FontWeight.w800)),
+                    value: _onlyPending,
+                    activeColor: PracticeColors.accent,
+                    onChanged: (value) =>
+                      setState(() => _onlyPending = value),
+                  ),
+                  Text(visible.length.toString() + ' objectifs',
+                    style: const TextStyle(color: PracticeColors.textSecondary,
+                      fontSize: 11, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 9),
                 ],
-              ),
-            ),
+              );
+            },
+          ),
+        ),
     );
   }
 }
