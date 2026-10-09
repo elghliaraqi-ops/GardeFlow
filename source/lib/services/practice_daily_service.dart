@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../models/practice_daily_models.dart';
 import 'supabase_backend_service.dart';
 
@@ -80,6 +82,87 @@ class PracticeDailyService {
               PracticeDailyCalendarEntry.fromMap(Map<String, dynamic>.from(m)),
         )
         .toList(growable: false);
+  }
+
+  /// Completed daily challenges only. Original scores never change.
+  Future<List<PracticeDailyHistoryEntry>> history({
+    int limit = 40,
+    int offset = 0,
+  }) async {
+    _userId;
+    final res = await _backend.client.rpc(
+      'practice_daily_history',
+      params: <String, dynamic>{'p_limit': limit, 'p_offset': offset},
+    );
+    if (res is! List) throw StateError('Historique indisponible.');
+    return res.whereType<Map>().map((item) {
+      return PracticeDailyHistoryEntry.fromMap(
+        Map<String, dynamic>.from(item),
+      );
+    }).toList(growable: false);
+  }
+
+  String _dayParam(DateTime day) =>
+      '${day.year.toString().padLeft(4, '0')}-'
+      '${day.month.toString().padLeft(2, '0')}-'
+      '${day.day.toString().padLeft(2, '0')}';
+
+  /// Opens replay without the answer keys. The daily attempt must be completed.
+  Future<PracticeDailySession> openReplay(DateTime day) async {
+    _userId;
+    final response = await _backend.client.rpc(
+      'practice_daily_replay_open',
+      params: <String, dynamic>{'p_day': _dayParam(day)},
+    );
+    if (response is! Map) throw StateError('Rejeu indisponible.');
+    final session = PracticeDailySession.fromMap(
+      Map<String, dynamic>.from(response),
+    );
+    if (!session.ready || session.completed || !session.isReplay ||
+        session.officialScore == null) {
+      throw StateError('Défi non éligible au rejeu.');
+    }
+    return session;
+  }
+
+  /// Creates an idempotent request ID: repeated network submissions
+  /// cannot inflate replay counts or overwrite original scores.
+  String createReplayRequestId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
+  Future<PracticeDailySession> finishReplay({
+    required DateTime day,
+    required List<int> answers,
+    required String requestId,
+  }) async {
+    _userId;
+    if (answers.length != 10 || answers.any((answer) => answer < 0 || answer > 3)) {
+      throw StateError('Les dix QCM doivent être complétés.');
+    }
+    final response = await _backend.client.rpc(
+      'practice_daily_replay_finish',
+      params: <String, dynamic>{
+        'p_day': _dayParam(day),
+        'p_answers': answers,
+        'p_replay_id': requestId,
+      },
+    );
+    if (response is! Map) throw StateError('Résultat du rejeu indisponible.');
+    final session = PracticeDailySession.fromMap(
+      Map<String, dynamic>.from(response),
+    );
+    if (!session.isReplay || !session.completed || session.score == null ||
+        session.officialScore == null) {
+      throw StateError('Le résultat du rejeu n’a pas été confirmé.');
+    }
+    return session;
   }
 
   Future<bool> remindersEnabled() async {
