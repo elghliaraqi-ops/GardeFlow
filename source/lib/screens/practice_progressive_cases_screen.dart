@@ -278,7 +278,11 @@ class _PracticeProgressiveCasesScreenState
     completed: _submitted,
   );
 
-  Widget _explanation(String correction, {String question = '', String topic = ''}) {
+  Widget _explanation(
+    String correction, {
+    String question = '',
+    String topic = '',
+  }) {
     final sections = correction.split('§SOURCES§');
     final parts = sections.first.split('§IMAGES§');
     final images = parts.length > 1 ? parts[1].trim().split('\n') : <String>[];
@@ -303,7 +307,11 @@ class _PracticeProgressiveCasesScreenState
             height: 1.5,
           ),
         ),
-        PracticeQcmMedicalIllustration(correction: correction, question: question, caseContext: topic),
+        PracticeQcmMedicalIllustration(
+          correction: correction,
+          question: question,
+          caseContext: topic,
+        ),
         if (refs.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Text(

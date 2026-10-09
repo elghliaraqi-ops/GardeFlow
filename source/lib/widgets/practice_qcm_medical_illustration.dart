@@ -62,12 +62,16 @@ class PracticeQcmImageMetadata {
     var oldTitle = '';
     final idx = correction.indexOf('§IMAGES§');
     if (idx >= 0) {
-      final line = correction.substring(idx + '§IMAGES§'.length)
-          .trim().split('\n').first;
+      final line = correction
+          .substring(idx + '§IMAGES§'.length)
+          .trim()
+          .split('\n')
+          .first;
       oldTitle = line.split('|||').first.trim();
     }
     final focused = '$oldTitle $question'.toLowerCase();
-    final isAnatomy = RegExp(r'anatom|mésorect|mesorect|sphinct|levator|rapport')
+    final isAnatomy =
+        RegExp(r'anatom|mésorect|mesorect|sphinct|levator|rapport')
             .hasMatch(focused) &&
         !RegExp(r'\b(irm|mri|tdm|scanner|dwi|adc|t1|t2|t3|t4|diffusion)\b')
             .hasMatch(focused);
@@ -96,14 +100,19 @@ class PracticeQcmImageMetadata {
       'modality': isScan ? 'medical radiology' : 'anatomical illustration',
       'image_type': isAnatomy
           ? 'anatomical_diagram'
-          : isScan ? 'radiology_scan' : 'operative_diagram',
+          : isScan
+          ? 'radiology_scan'
+          : 'operative_diagram',
       'anatomy': contextShort,
       'plane': 'not_applicable',
       'required_features': <String>[],
-      'excluded_features': <String>['book cover','annual report','wrong organ'],
+      'excluded_features': <String>[
+        'book cover',
+        'annual report',
+        'wrong organ',
+      ],
     };
   }
-
 }
 
 /// Image preview fetched only when a QCM explanation is visible.

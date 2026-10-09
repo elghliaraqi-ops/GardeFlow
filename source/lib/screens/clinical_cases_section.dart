@@ -1647,7 +1647,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               expanded: _explanationExpanded[current.id] ?? false,
               correction: current.correction,
               question: current.question,
-              caseContext: [post.topicLabel, post.presentation, post.imagingConclusion].where((x) => x.trim().isNotEmpty).join(' · '),
+              caseContext: [
+                post.topicLabel,
+                post.presentation,
+                post.imagingConclusion,
+              ].where((x) => x.trim().isNotEmpty).join(' · '),
               onToggle: () => setState(() {
                 _explanationExpanded[current.id] =
                     !(_explanationExpanded[current.id] ?? false);
@@ -2291,7 +2295,11 @@ class _AnswerFeedback extends StatelessWidget {
             firstChild: const SizedBox(width: double.infinity),
             secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: _GuidelineCorrection(correction: correction, question: question, caseContext: caseContext),
+              child: _GuidelineCorrection(
+                correction: correction,
+                question: question,
+                caseContext: caseContext,
+              ),
             ),
           ),
         ],
@@ -2404,7 +2412,11 @@ class _GuidelineCorrection extends StatelessWidget {
   final String question;
   final String caseContext;
 
-  const _GuidelineCorrection({required this.correction, required this.question, required this.caseContext});
+  const _GuidelineCorrection({
+    required this.correction,
+    required this.question,
+    required this.caseContext,
+  });
 
   ({
     String explanation,
@@ -2665,7 +2677,11 @@ class _GuidelineCorrection extends StatelessWidget {
             children: _explanationWidgets(explanation),
           ),
         ),
-        PracticeQcmMedicalIllustration(correction: correction, question: question, caseContext: caseContext),
+        PracticeQcmMedicalIllustration(
+          correction: correction,
+          question: question,
+          caseContext: caseContext,
+        ),
         if (parsed.references.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Row(
