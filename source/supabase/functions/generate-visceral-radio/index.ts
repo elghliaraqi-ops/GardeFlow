@@ -1,0 +1,205 @@
+import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+
+// GardeFlow Practice · Viscéral × Radio. Private, on-demand generation.
+// Only technical JSON parsing/count checks; no secondary medical reviewer.
+const OWNER = 'a6ab90cd-aa2c-41f3-a5e8-be00aedd019c';
+const TABLE = 'practice_visceral_radio_sessions';
+const topics = [
+  'Appendicite aiguë et appendicectomie','Occlusion du grêle sur bride','Hernie inguinale et cure TAPP',
+  'Hernie étranglée','Cholécystite aiguë et cholécystectomie','Lithiase de la voie biliaire principale',
+  'Angiocholite aiguë','Pancréatite aiguë','Nécrose pancréatique infectée','Cancer de la tête du pancréas',
+  'Cancer du rectum et IRM de stadification','Cancer du côlon droit','Diverticulite sigmoïdienne compliquée',
+  'Péritonite par perforation digestive','Ulcère gastroduodénal perforé','Cancer gastrique',
+  'Hémorragie digestive haute','Achalasie et myotomie','Reflux gastro-œsophagien et fundoplicature',
+  'Hernie hiatale para-œsophagienne','Ischémie mésentérique aiguë','Traumatisme splénique',
+  'Abcès hépatique','Carcinome hépatocellulaire et résection hépatique','Métastases hépatiques colorectales',
+  'Kyste hydatique hépatique','Cholangiocarcinome hilaire','Fistule digestive postopératoire',
+  'Fuite anastomotique colorectale','Occlusion colique tumorale','Maladie de Crohn et résection iléocæcale',
+  'Rectocolite hémorragique et colectomie','Hémorroïdes et complications','Fissure et fistule anales',
+  'Goitre multinodulaire et thyroïdectomie','Tumeur surrénalienne et surrénalectomie',
+  'Éventration et reconstruction pariétale','Abcès intra-abdominal postopératoire',
+  'Syndrome du compartiment abdominal','Traumatisme abdominal fermé et TDM'
+];
+const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, x-client-info, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
+function answer(body: unknown, status=200): Response { return new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}}); }
+function str(v: unknown, max=20000):string { return String(v??'').slice(0,max); }
+function compact(x:unknown,max=26000){return JSON.stringify(x).slice(0,max);}
+function object(properties: Record<string,unknown>, required=Object.keys(properties)){return {type:'object',additionalProperties:false,required,properties};}
+const S={type:'string'}, N={type:'integer'}, SA={type:'array',items:S};
+const pic=object({query:S,modality:S,purpose:S});
+const section=object({key:S,title:S,content:S,key_points:SA,image_requests:{type:'array',items:pic}});
+const option=object({key:{type:'string',enum:['A','B','C','D','E']},text:S,correct:{type:'boolean'},explanation:S});
+const question=object({phase:N,category:S,statement:S,options:{type:'array',items:option,minItems:5,maxItems:5},global_explanation:S,reference:S,image_requests:{type:'array',items:pic}});
+const ficheSchema=object({title:S,summary:S,sections:{type:'array',items:section},study_core:SA,references:SA});
+const qcmSchema=object({questions:{type:'array',items:question,minItems:5,maxItems:10}});
+const stage=object({phase:N,title:S,narrative:S,clinical_findings:S,imaging_findings:S,decisions:S,image_requests:{type:'array',items:pic}});
+const caseSchema=object({title:S,patient:S,difficulty:{type:'string',enum:['simple','intermediaire','complexe']},recommended_qcms:{type:'integer',enum:[10,15,20]},stages:{type:'array',items:stage,minItems:4,maxItems:4},final_diagnosis:S,learning_points:SA,references:SA});
+function extract(payload:any): string {
+  if(typeof payload?.output_text==='string')return payload.output_text;
+  for(const item of payload?.output??[])for(const c of item?.content??[])if(typeof c?.text==='string')return c.text;
+  return '';
+}
+async function groq(schema:any,name:string,prompt:string) {
+  const key=Deno.env.get('GROQ_API_KEY');
+  if(!key)throw new Error('groq_key_missing');
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),110000);
+  try {
+    const r=await fetch('https://api.groq.com/openai/v1/responses',{
+      method:'POST',signal:controller.signal,
+      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:Deno.env.get('GROQ_TEXT_MODEL')||'openai/gpt-oss-120b',
+        instructions:'Réponds uniquement avec un JSON conforme au schéma. Aucun texte additionnel.',
+        input:prompt,reasoning:{effort:'medium'},
+        text:{format:{type:'json_schema',name,schema}},
+        max_output_tokens:16000,store:false
+      })
+    });
+    const data=await r.json().catch(()=>null);
+    if(!r.ok)throw new Error('groq_http_'+r.status+':'+str(data?.error?.code||data?.error?.message,150));
+    const raw=extract(data);
+    if(!raw)throw new Error('groq_empty_response');
+    return JSON.parse(raw);
+  } finally {clearTimeout(timer);}
+}
+async function guidelines(topic:string):Promise<string> {
+  // Retrieval is input context, not a separate verification/reviewer pipeline.
+  const query='('+topic+') AND (GUIDELINE OR CONSENSUS OR RECOMMENDATION)';
+  try{
+    const u='https://www.ebi.ac.uk/europepmc/webservices/rest/search?'+new URLSearchParams({query,format:'json',pageSize:'5',sort:'FIRST_PDATE_D desc'}).toString();
+    const r=await fetch(u,{signal:AbortSignal.timeout(6500)});
+    if(!r.ok)return 'Aucune référence en ligne fournie. Ne prétends pas avoir vérifié une mise à jour.';
+    const d=await r.json();
+    return (d?.resultList?.result??[]).map((x:any)=>[str(x.title,230),str(x.authorString,130),str(x.firstPublicationDate,25),x.doi?'https://doi.org/'+x.doi:'https://europepmc.org/article/MED/'+x.id].join(' | ')).join('\n').slice(0,2800) || 'Aucune recommandation vérifiée fournie.';
+  }catch(_){return 'Aucune recommandation récupérée. Ne prétends pas avoir vérifié les dernières mises à jour.';}
+}
+const medicalRules=[
+ 'Tu es professeur de chirurgie viscérale et radiologue abdominal. Enseigne à un résident de chirurgie sur cinq ans, en français.',
+ 'Allie systématiquement chirurgie viscérale, radiologie, anatomie et techniques opératoires.',
+ 'Applique les recommandations les plus récentes dont tu disposes; ne dis jamais avoir vérifié une source non fournie.',
+ 'Ne crée ni citation ni année ni lien fictif. Distingue consensus, controverse et incertitude.',
+ 'Pour les images: fournis seulement des requêtes de recherche et des descriptions précises, jamais des URL.',
+ 'Les images doivent correspondre aux signes radiologiques/techniques discutés et servir d’illustration externe, pas d’image du patient fictif.',
+ 'Ne fais aucun contrôle indépendant après génération; auto-cohérence interne dans ta production.'
+].join('\n');
+function sourcePrompt(topic:string, refs:string){return medicalRules+'\nSUJET CENTRAL (IMMUTABLE): '+topic+'\nRÉFÉRENCES RÉCUPÉRÉES (ne cite que des références réellement pertinentes):\n'+refs+'\n';}
+function validQuestions(obj:any,count:number,phaseLimit=4) {
+  if(!Array.isArray(obj?.questions)||obj.questions.length!==count)throw new Error('invalid_question_count');
+  for(const q of obj.questions) {
+    if(!Array.isArray(q.options)||q.options.length!==5||q.options.map((o:any)=>o.key).join('')!=='ABCDE'||!q.options.some((o:any)=>o.correct===true))throw new Error('invalid_question_format');
+    if(!Number.isInteger(q.phase)||q.phase<1||q.phase>phaseLimit)throw new Error('invalid_question_phase');
+  }
+}
+function sanitized(x:any):any {
+  if(Array.isArray(x))return x.map(sanitized);
+  if(x&&typeof x==='object') {
+    const out:any={};
+    for(const [k,v]of Object.entries(x))if(!/(^|_)(image_url|thumbnail_url|preview_url|external_image_url)$/i.test(k))out[k]=sanitized(v);
+    return out;
+  }
+  return x;
+}
+async function transientImages(query:string) {
+  const results:any[]=[];
+  try {
+    const u='https://api.openverse.org/v1/images/?'+new URLSearchParams({q:query,page_size:'12',license:'by,by-sa,cc0,pdm'}).toString();
+    const r=await fetch(u,{signal:AbortSignal.timeout(6000)});
+    if(r.ok){
+      const d=await r.json();
+      for(const x of d?.results??[]) {
+        const thumb=str(x.thumbnail,1000),page=str(x.foreign_landing_url||x.url,1000),provider=str(x.provider,100);
+        if(!thumb.startsWith('https://')||!page.startsWith('https://'))continue;
+        results.push({thumbnail:thumb,source:page,title:str(x.title,160),license:str(x.license,25),provider});
+      }
+    }
+  }catch(_){}
+  const external=[
+    {title:'Radiopaedia',source:'https://radiopaedia.org/search?'+new URLSearchParams({q:query}).toString()},
+    {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query}).toString()},
+    {title:'Eurorad',source:'https://www.eurorad.org/search?'+new URLSearchParams({keys:query}).toString()}
+  ];
+  return {images:results.slice(0,8),medical_searches:external};
+}
+Deno.serve(async(req)=>{
+  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+  if(req.method!=='POST')return answer({error:'method_not_allowed'},405);
+  const url=Deno.env.get('SUPABASE_URL'),service=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if(!url||!service)return answer({error:'backend_not_configured'},503);
+  const token=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');
+  if(!token)return answer({error:'unauthorized'},401);
+  const db=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
+  const {data:{user},error:authError}=await db.auth.getUser(token);
+  if(authError||!user)return answer({error:'unauthorized'},401);
+  if(user.id!==OWNER)return answer({error:'forbidden'},403);
+  try{
+    const input=await req.json().catch(()=>({})),action=str(input.action,40),id=str(input.id,45);
+    if(action==='images')return answer(await transientImages(str(input.query,200)));
+    if(action==='list'){
+      const {data,error}=await db.from(TABLE).select('*').eq('owner_id',user.id).order('created_at',{ascending:false}).limit(80);
+      if(error)throw error;
+      return answer({sessions:data});
+    }
+    if(action==='create') {
+      const {data:recent}=await db.from(TABLE).select('topic').eq('owner_id',user.id).order('created_at',{ascending:false}).limit(8);
+      const avoid=new Set((recent||[]).map((x:any)=>x.topic));
+      const candidates=topics.filter(t=>!avoid.has(t));
+      const pool=candidates.length?candidates:topics;
+      const topic=pool[crypto.getRandomValues(new Uint32Array(1))[0]%pool.length];
+      const evidence=await guidelines(topic);
+      const prompt=sourcePrompt(topic,evidence)+
+        '\nMODE FICHE: rédige un cours synthétique mais complet en 10 sections : définition, anatomie, physiopathologie, clinique, biologie, radiologie (protocoles, sémiologie, complications), prise en charge actualisée, techniques opératoires étape par étape, suites/complications, dix points-clés. Chaque section donne du contenu substantiel, précis et utile au bloc. Le contenu image_requests décrit les signes à illustrer. study_core condense les notions à utiliser pour les QCM.';
+      const fiche=sanitized(await groq(ficheSchema,'visceral_radio_fiche',prompt));
+      if(!fiche?.title||!Array.isArray(fiche?.sections))throw new Error('incomplete_fiche');
+      const {data,error}=await db.from(TABLE).insert({owner_id:user.id,topic,title:str(fiche.title,220),fiche,medical_sources:evidence}).select().single();
+      if(error)throw error;
+      return answer({session:data});
+    }
+    if(!/^[0-9a-f-]{36}$/i.test(id))return answer({error:'invalid_id'},400);
+    const {data:session,error:readError}=await db.from(TABLE).select('*').eq('id',id).eq('owner_id',user.id).single();
+    if(readError||!session)return answer({error:'session_not_found'},404);
+    let patch:any={updated_at:new Date().toISOString()};
+    if(action==='course_qcms'){
+      const existing=Array.isArray(session.course_qcms)?session.course_qcms:[];
+      if(existing.length>=20)return answer({session});
+      const count=Math.min(10,20-existing.length);
+      const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
+        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite.\nFICHE:\n'+compact(session.fiche,34000)+
+        '\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>q.statement),4000);
+      const produced=await groq(qcmSchema,'visceral_radio_course_questions',prompt);
+      validQuestions(produced,count);
+      patch.course_qcms=[...existing,...sanitized(produced.questions)];
+    }else if(action==='case'){
+      if(session.case_data)return answer({session});
+      const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
+        '\nMODE CAS CLINIQUE: construis un patient FICTIF, même sujet médical exact que la fiche. Quatre étapes chronologiques: (1) admission/examen, (2) biologie et imagerie, (3) diagnostic/prise en charge/intervention, (4) suites/complications/suivi. Les décisions respectent les recommandations. Radiologie réellement centrale, prévoir images de sémiologie qui correspondent à ton scénario; les images sont externes, illustratives, jamais du patient fictif. Ne révèle pas le diagnostic dans la phase 1. Le dossier complet contient le diagnostic pour les générations ultérieures. Propose recommended_qcms 10 (simple), 15 (intermédiaire) ou 20 (complexe).\nSYNTHÈSE FICHE:\n'+compact(session.fiche?.study_core,9000);
+      const scenario=sanitized(await groq(caseSchema,'visceral_radio_case',prompt));
+      if(!Array.isArray(scenario.stages)||scenario.stages.length!==4)throw new Error('invalid_case_stages');
+      patch.case_data=scenario;patch.case_target=scenario.recommended_qcms;
+    }else if(action==='case_qcms'){
+      if(!session.case_data)return answer({error:'case_required'},409);
+      const existing=Array.isArray(session.case_qcms)?session.case_qcms:[];
+      const target=[10,15,20].includes(session.case_target)?session.case_target:10;
+      if(existing.length>=target)return answer({session});
+      const count=Math.min(10,target-existing.length);
+      const offset=existing.length;
+      const phaseSequence=Array.from({length:count},(_,i)=>Math.min(4,1+Math.floor((offset+i)/target*4)));
+      const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
+        '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER COMPLET (NE PAS divulguer précocement):\n'+compact(session.case_data,31000)+
+        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>q.statement),4000);
+      const produced=await groq(qcmSchema,'visceral_radio_progressive_questions',prompt);
+      validQuestions(produced,count);
+      produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];});
+      patch.case_qcms=[...existing,...sanitized(produced.questions)];
+    }else if(action==='progress'){
+      patch.progress={...(session.progress||{}),...(input.progress||{})};
+    }else return answer({error:'unknown_action'},400);
+    const {data,error}=await db.from(TABLE).update(patch).eq('id',session.id).eq('owner_id',user.id).select().single();
+    if(error)throw error;
+    return answer({session:data});
+  }catch(e){
+    const msg=str((e as Error).message,260);
+    console.error('visceral_radio_error',{error:msg});
+    return answer({error:'generation_failed',detail:msg},502);
+  }
+});
