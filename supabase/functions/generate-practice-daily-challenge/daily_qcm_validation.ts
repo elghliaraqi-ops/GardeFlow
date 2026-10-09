@@ -2,7 +2,7 @@
 export type DailyRef={title:string;url:string;year:string;organization:string;kind:string};
 export type DailyCandidate={
  question:string;options:string[];correct_index:number;correction:string;topic:string;
- references:DailyRef[];illustration_query:string;
+ references:DailyRef[];illustration_query:string;image_request:Record<string,unknown>;
 };
 export type Rejection={position:number;reason:string};
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
@@ -64,7 +64,9 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
   seen.add(fingerprint);
   accepted.push({
    question,options,correct_index:correct,correction,topic,references,
-   illustration_query:plain(q.image_search_query,140)
+   illustration_query:plain(q.image_search_query,140),
+   image_request:q.image_request&&typeof q.image_request==='object'&&!Array.isArray(q.image_request)
+     ?q.image_request as Record<string,unknown>:{}
   });
  }
  if(input.qcms.length>8)rejected.push({position:9,reason:'too_many_questions'});
