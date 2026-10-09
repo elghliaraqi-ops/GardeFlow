@@ -346,18 +346,7 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
             'XP des défis uniquement · Rejouer ne donne pas de nouveaux XP.',
             style: TextStyle(color: _soft, fontSize: 10),
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: const Icon(Icons.exit_to_app_rounded),
-              label: const Text('Quitter le classement'),
-            ),
-          ),
         ],
-        ),
-      ),
       ),
     );
   }
@@ -539,11 +528,15 @@ class _PracticeDailyLeaderboardScreenState
     return Theme(
       data: PracticeDailyVisualTheme.from(context),
       child: Scaffold(
-      backgroundColor: _ink,
-      appBar: AppBar(
+        backgroundColor: _ink,
+        appBar: AppBar(
         title: const Text('Classement · Défis quotidiens',
-          style: TextStyle(color: PracticeDailyVisualTheme.text,
-            fontWeight: FontWeight.w800, fontSize: 17)),
+          style: TextStyle(
+            color: PracticeDailyVisualTheme.text,
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+          ),
+        ),
         backgroundColor: _ink,
         foregroundColor: Colors.white,
         actions: [
@@ -674,7 +667,18 @@ class _PracticeDailyLeaderboardScreenState
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.exit_to_app_rounded),
+              label: const Text('Quitter le classement'),
+            ),
+          ),
         ],
+        ),
+      ),
       ),
     );
   }
