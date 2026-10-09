@@ -123,7 +123,9 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         : <String,dynamic>{};
       if(!mounted||generation!=n)return;
       if(result['error']!=null)throw StateError('Images indisponibles');
-      _cache[cacheKey]=result;
+      // Do not preserve negative searches: adding new sources should refresh
+      // already-generated fiches without re-generating the course.
+      if(rows(result['images']).isNotEmpty){_cache[cacheKey]=result;}else{_cache.remove(cacheKey);}
       setState((){
         images=rows(result['images']).where((v)=>
           (v['thumbnail']??'').toString().startsWith('https://') &&
@@ -221,7 +223,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       ],
       if(!busy&&images.isEmpty)...[
         const SizedBox(height:12),
-        Text(message??'Aucun aperçu libre accessible pour ce sujet.',
+        Text(message??'Aucun aperçu médical correspondant trouvé. Consultez les sources ci-dessous ou relancez la recherche.',
           style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:12)),
         TextButton.icon(onPressed:()=>_fetch(refresh:true),
           icon:const Icon(Icons.refresh_rounded,size:17),
