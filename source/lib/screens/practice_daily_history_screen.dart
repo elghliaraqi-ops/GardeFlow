@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/practice_daily_models.dart';
 import '../services/practice_daily_service.dart';
 import 'practice_daily_screen.dart';
+import 'practice_daily_visual_theme.dart';
 
 /// Personal archive. Replays can be done repeatedly; the official score is immutable.
 class PracticeDailyHistoryScreen extends StatefulWidget {
@@ -80,13 +81,22 @@ class _PracticeDailyHistoryScreenState
       0,
       (count, item) => count + item.replayCount,
     );
-    return Scaffold(
+    return Theme(
+      data: PracticeDailyVisualTheme.from(context),
+      child: Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
-        title: const Text('Historique Practice'),
+        title: const Text('Historique Practice',
+          style: TextStyle(color: PracticeDailyVisualTheme.text,
+            fontSize: 18, fontWeight: FontWeight.w800)),
         foregroundColor: Colors.white,
         backgroundColor: _background,
         actions: [
+          IconButton(
+            tooltip: 'Quitter l’historique',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.exit_to_app_rounded),
+          ),
           IconButton(
             tooltip: 'Actualiser l’historique',
             onPressed: _busy ? null : () => _load(reset: true),
@@ -94,13 +104,17 @@ class _PracticeDailyHistoryScreenState
           ),
         ],
       ),
-      body: ListView(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: PracticeDailyVisualTheme.pageGradient,
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: _surface,
+              gradient: PracticeDailyVisualTheme.cardGradient,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -226,7 +240,18 @@ class _PracticeDailyHistoryScreenState
               child: const Text('Afficher plus de défis'),
             ),
           ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.exit_to_app_rounded),
+              label: const Text('Quitter l’historique'),
+            ),
+          ),
         ],
+        ),
+      ),
       ),
     );
   }

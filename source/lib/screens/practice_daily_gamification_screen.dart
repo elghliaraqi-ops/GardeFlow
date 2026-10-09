@@ -4,6 +4,7 @@ import '../models/practice_daily_gamification_models.dart';
 import '../services/practice_daily_gamification_service.dart';
 import 'practice_daily_history_screen.dart';
 import 'practice_daily_screen.dart';
+import 'practice_daily_visual_theme.dart';
 
 const _ink = Color(0xFF071526);
 const _surface = Color(0xFF10243A);
@@ -345,7 +346,18 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
             'XP des défis uniquement · Rejouer ne donne pas de nouveaux XP.',
             style: TextStyle(color: _soft, fontSize: 10),
           ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.exit_to_app_rounded),
+              label: const Text('Quitter le classement'),
+            ),
+          ),
         ],
+        ),
+      ),
       ),
     );
   }
@@ -524,14 +536,29 @@ class _PracticeDailyLeaderboardScreenState
       }
     })();
 
-    return Scaffold(
+    return Theme(
+      data: PracticeDailyVisualTheme.from(context),
+      child: Scaffold(
       backgroundColor: _ink,
       appBar: AppBar(
-        title: const Text('Classement · Défis quotidiens'),
+        title: const Text('Classement · Défis quotidiens',
+          style: TextStyle(color: PracticeDailyVisualTheme.text,
+            fontWeight: FontWeight.w800, fontSize: 17)),
         backgroundColor: _ink,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Quitter le classement',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.exit_to_app_rounded),
+          ),
+        ],
       ),
-      body: ListView(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: PracticeDailyVisualTheme.pageGradient,
+        ),
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           const Text(

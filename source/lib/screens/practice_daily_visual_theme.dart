@@ -91,7 +91,7 @@ abstract final class PracticeDailyVisualTheme {
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(foregroundColor: text),
+        style: IconButton.styleFrom(foregroundColor: text, backgroundColor: Colors.transparent),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
