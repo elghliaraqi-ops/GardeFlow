@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/practice_qcm_medical_illustration.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -457,7 +458,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
   Widget _explanation(String correction) {
     final sources = correction.split('§SOURCES§');
     final before = sources.first.split('§IMAGES§');
-    final explanation = before.first.trim();
+    final explanation = PracticeQcmImageMetadata.visibleText(correction);
     final lines = before.length > 1
         ? before[1].trim().split('\n')
         : const <String>[];
@@ -474,47 +475,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
         ),
         const SizedBox(height: 6),
         Text(explanation, style: const TextStyle(color: _text, height: 1.5)),
-        for (final line in lines)
-          Builder(
-            builder: (context) {
-              final parts = line.split('|||');
-              if (parts.length != 3) return const SizedBox.shrink();
-              final image = Uri.tryParse(parts[1]),
-                  page = Uri.tryParse(parts[2]);
-              if (!isSupportedExternalMedicalPreview(image, page))
-                return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: InkWell(
-                  onTap: () =>
-                      launchUrl(page!, mode: LaunchMode.externalApplication),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        parts[0],
-                        style: const TextStyle(color: _gold, fontSize: 12),
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          image.toString(),
-                          height: 170,
-                          width: double.infinity,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Text(
-                            'Aperçu indisponible',
-                            style: TextStyle(color: _muted),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+        PracticeQcmMedicalIllustration(correction: correction),
         if (refs.isNotEmpty) ...[
           const SizedBox(height: 12),
           const Text(
