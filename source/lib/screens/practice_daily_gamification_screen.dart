@@ -44,23 +44,24 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
   Future<void> _load() async {
     try {
       final profile = await PracticeDailyGamificationService.instance.profile();
-      if (mounted) setState(() {
-        _profile = profile;
-        _error = null;
-        _busy = false;
-      });
+      if (mounted)
+        setState(() {
+          _profile = profile;
+          _error = null;
+          _busy = false;
+        });
     } catch (_) {
-      if (mounted) setState(() {
-        _busy = false;
-        _error = 'Progression indisponible hors connexion';
-      });
+      if (mounted)
+        setState(() {
+          _busy = false;
+          _error = 'Progression indisponible hors connexion';
+        });
     }
   }
 
   Future<void> _navigate(Widget destination) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => destination),
-    );
+    await Navigator.of(context)
+        .push<void>(MaterialPageRoute(builder: (_) => destination));
     if (mounted) await _load();
   }
 
@@ -77,11 +78,20 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
             children: [
               Icon(icon, color: color, size: 17),
               const SizedBox(height: 6),
-              Text(value, style: const TextStyle(
-                color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800,
-              )),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _soft, fontSize: 10)),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _soft, fontSize: 10),
+              ),
             ],
           ),
         ),
@@ -94,7 +104,8 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
       padding: const EdgeInsets.fromLTRB(16, 17, 16, 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [Color(0xFF193C56), Color(0xFF10243A), Color(0xFF102A35)],
         ),
         borderRadius: BorderRadius.circular(24),
@@ -118,15 +129,24 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('TON DÉFI QUOTIDIEN', style: TextStyle(
-                      color: _mint, fontWeight: FontWeight.w900,
-                      fontSize: 10.5, letterSpacing: 1.1,
-                    )),
+                    Text(
+                      'TON DÉFI QUOTIDIEN',
+                      style: TextStyle(
+                        color: _mint,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10.5,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('10 QCM. Chaque jour.', style: TextStyle(
-                      color: Colors.white, fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    )),
+                    Text(
+                      '10 QCM. Chaque jour.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -142,22 +162,36 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
             style: const TextStyle(color: _soft, fontSize: 12, height: 1.4),
           ),
           const SizedBox(height: 16),
-          if (_busy) const LinearProgressIndicator(color: _mint, minHeight: 3)
+          if (_busy)
+            const LinearProgressIndicator(color: _mint, minHeight: 3)
           else if (value != null) ...[
-            Row(children: [
-              Text('Niveau ${value.level} · ${value.levelName}',
-                style: const TextStyle(color: Colors.white,
-                  fontWeight: FontWeight.bold, fontSize: 12)),
-              const Spacer(),
-              Text('${value.totalXp} XP',
-                style: const TextStyle(color: _gold,
-                  fontWeight: FontWeight.w900, fontSize: 13)),
-            ]),
+            Row(
+              children: [
+                Text(
+                  'Niveau ${value.level} · ${value.levelName}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${value.totalXp} XP',
+                  style: const TextStyle(
+                    color: _gold,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
-                value: value.levelProgress, minHeight: 7,
+                value: value.levelProgress,
+                minHeight: 7,
                 backgroundColor: Colors.white.withOpacity(.09),
                 valueColor: const AlwaysStoppedAnimation<Color>(_mint),
               ),
@@ -170,59 +204,94 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
               style: const TextStyle(color: _soft, fontSize: 10.5),
             ),
             const SizedBox(height: 13),
-            Row(children: [
-              _metric(Icons.local_fire_department_rounded,
-                '${value.currentStreak} j', 'Série', _gold),
-              const SizedBox(width: 7),
-              _metric(Icons.check_circle_outline_rounded,
-                '${value.daysCompleted}', 'Défis', _mint),
-              const SizedBox(width: 7),
-              _metric(Icons.workspace_premium_rounded,
-                '${value.unlockedCount}/${value.badges.length}',
-                'Badges', _violet),
-            ]),
+            Row(
+              children: [
+                _metric(
+                  Icons.local_fire_department_rounded,
+                  '${value.currentStreak} j',
+                  'Série',
+                  _gold,
+                ),
+                const SizedBox(width: 7),
+                _metric(
+                  Icons.check_circle_outline_rounded,
+                  '${value.daysCompleted}',
+                  'Défis',
+                  _mint,
+                ),
+                const SizedBox(width: 7),
+                _metric(
+                  Icons.workspace_premium_rounded,
+                  '${value.unlockedCount}/${value.badges.length}',
+                  'Badges',
+                  _violet,
+                ),
+              ],
+            ),
             if (value.badges.isNotEmpty) ...[
               const SizedBox(height: 13),
-              const Text('MES BADGES', style: TextStyle(
-                color: _soft, fontWeight: FontWeight.bold,
-                fontSize: 10, letterSpacing: 1.0,
-              )),
+              const Text(
+                'MES BADGES',
+                style: TextStyle(
+                  color: _soft,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                  letterSpacing: 1.0,
+                ),
+              ),
               const SizedBox(height: 7),
-              SizedBox(height: 69, child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: value.badges.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final badge = value.badges[index];
-                  return Tooltip(
-                    message: '${badge.title} · ${badge.description}',
-                    child: Container(
-                      width: 80, padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: badge.unlocked
-                            ? _gold.withOpacity(.11)
-                            : Colors.white.withOpacity(.035),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: badge.unlocked
-                            ? _gold.withOpacity(.34)
-                            : Colors.white.withOpacity(.06)),
+              SizedBox(
+                height: 69,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: value.badges.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final badge = value.badges[index];
+                    return Tooltip(
+                      message: '${badge.title} · ${badge.description}',
+                      child: Container(
+                        width: 80,
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: badge.unlocked
+                              ? _gold.withOpacity(.11)
+                              : Colors.white.withOpacity(.035),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: badge.unlocked
+                                ? _gold.withOpacity(.34)
+                                : Colors.white.withOpacity(.06),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              _badgeIcon(badge.icon),
+                              size: 21,
+                              color: badge.unlocked
+                                  ? _gold
+                                  : _soft.withOpacity(.4),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              badge.title,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9,
+                                height: 1.1,
+                                color: badge.unlocked ? Colors.white : _soft,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Column(children: [
-                        Icon(_badgeIcon(badge.icon), size: 21,
-                          color: badge.unlocked ? _gold : _soft.withOpacity(.4)),
-                        const SizedBox(height: 5),
-                        Text(badge.title,
-                          textAlign: TextAlign.center, maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 9, height: 1.1,
-                            color: badge.unlocked ? Colors.white : _soft,
-                          )),
-                      ]),
-                    ),
-                  );
-                },
-              )),
+                    );
+                  },
+                ),
+              ),
             ],
           ] else if (_error != null)
             Text(_error!, style: const TextStyle(color: _soft, fontSize: 12)),
@@ -231,36 +300,51 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: () => _navigate(const PracticeDailyScreen()),
-              icon: Icon(value?.finishedToday == true
-                ? Icons.check_circle_outline_rounded
-                : Icons.play_arrow_rounded),
-              label: Text(value?.finishedToday == true
-                ? 'Voir mon défi du jour'
-                : 'Commencer le défi du jour'),
+              icon: Icon(
+                value?.finishedToday == true
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.play_arrow_rounded,
+              ),
+              label: Text(
+                value?.finishedToday == true
+                    ? 'Voir mon défi du jour'
+                    : 'Commencer le défi du jour',
+              ),
               style: FilledButton.styleFrom(
-                backgroundColor: _mint, foregroundColor: _ink,
+                backgroundColor: _mint,
+                foregroundColor: _ink,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: OutlinedButton.icon(
-              onPressed: () => _navigate(const PracticeDailyLeaderboardScreen()),
-              icon: const Icon(Icons.leaderboard_rounded, size: 17),
-              label: const Text('Classement'),
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: OutlinedButton.icon(
-              onPressed: () => _navigate(const PracticeDailyHistoryScreen()),
-              icon: const Icon(Icons.history_rounded, size: 17),
-              label: const Text('Historique'),
-            )),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _navigate(const PracticeDailyLeaderboardScreen()),
+                  icon: const Icon(Icons.leaderboard_rounded, size: 17),
+                  label: const Text('Classement'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _navigate(const PracticeDailyHistoryScreen()),
+                  icon: const Icon(Icons.history_rounded, size: 17),
+                  label: const Text('Historique'),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
-          const Text('XP des défis uniquement · Rejouer ne donne pas de nouveaux XP.',
-            style: TextStyle(color: _soft, fontSize: 10)),
+          const Text(
+            'XP des défis uniquement · Rejouer ne donne pas de nouveaux XP.',
+            style: TextStyle(color: _soft, fontSize: 10),
+          ),
         ],
       ),
     );
@@ -272,8 +356,7 @@ class PracticeDailyHomePulse extends StatefulWidget {
   const PracticeDailyHomePulse({super.key});
 
   @override
-  State<PracticeDailyHomePulse> createState() =>
-      _PracticeDailyHomePulseState();
+  State<PracticeDailyHomePulse> createState() => _PracticeDailyHomePulseState();
 }
 
 class _PracticeDailyHomePulseState extends State<PracticeDailyHomePulse> {
@@ -295,9 +378,8 @@ class _PracticeDailyHomePulseState extends State<PracticeDailyHomePulse> {
   }
 
   Future<void> _open(Widget page) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => page),
-    );
+    await Navigator.of(context)
+        .push<void>(MaterialPageRoute(builder: (_) => page));
     if (mounted) await _refresh();
   }
 
@@ -314,24 +396,31 @@ class _PracticeDailyHomePulseState extends State<PracticeDailyHomePulse> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Icon(Icons.bolt_rounded, size: 23, color: _gold),
-            const SizedBox(width: 8),
-            const Expanded(child: Text(
-              'DÉFI DU JOUR · 10 QCM',
-              style: TextStyle(color: Colors.white,
-                fontSize: 12, fontWeight: FontWeight.w900),
-            )),
-            if (data?.finishedToday == true)
-              const Icon(Icons.check_circle_rounded, size: 18, color: _mint),
-          ]),
+          Row(
+            children: [
+              const Icon(Icons.bolt_rounded, size: 23, color: _gold),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'DÉFI DU JOUR · 10 QCM',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (data?.finishedToday == true)
+                const Icon(Icons.check_circle_rounded, size: 18, color: _mint),
+            ],
+          ),
           const SizedBox(height: 9),
           Text(
             data == null
                 ? 'Cours ou cas clinique progressif · Un défi chaque jour'
                 : 'Niv. ${data.level} · ${data.totalXp} XP  •  '
-                  '${data.currentStreak} jour(s) de série  •  '
-                  '${data.unlockedCount} badges',
+                      '${data.currentStreak} jour(s) de série  •  '
+                      '${data.unlockedCount} badges',
             style: const TextStyle(color: _soft, fontSize: 11.5),
           ),
           if (data != null) ...[
@@ -347,28 +436,37 @@ class _PracticeDailyHomePulseState extends State<PracticeDailyHomePulse> {
             ),
           ],
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: FilledButton.icon(
-              onPressed: () => _open(const PracticeDailyScreen()),
-              icon: const Icon(Icons.play_arrow_rounded, size: 17),
-              label: Text(data?.finishedToday == true
-                  ? 'Mon défi' : 'Jouer'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _mint, foregroundColor: _ink,
-                visualDensity: VisualDensity.compact,
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => _open(const PracticeDailyScreen()),
+                  icon: const Icon(Icons.play_arrow_rounded, size: 17),
+                  label: Text(
+                    data?.finishedToday == true ? 'Mon défi' : 'Jouer',
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _mint,
+                    foregroundColor: _ink,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
               ),
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: OutlinedButton.icon(
-              onPressed: () => _open(const PracticeDailyLeaderboardScreen()),
-              icon: const Icon(Icons.emoji_events_outlined, size: 17),
-              label: const Text('Classement'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                visualDensity: VisualDensity.compact,
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _open(const PracticeDailyLeaderboardScreen()),
+                  icon: const Icon(Icons.emoji_events_outlined, size: 17),
+                  label: const Text('Classement'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
               ),
-            )),
-          ]),
+            ],
+          ),
         ],
       ),
     );
@@ -402,8 +500,10 @@ class _PracticeDailyLeaderboardScreenState
       _error = null;
     });
     try {
-      final rows = await PracticeDailyGamificationService.instance
-          .leaderboard(period: _period, limit: 50);
+      final rows = await PracticeDailyGamificationService.instance.leaderboard(
+        period: _period,
+        limit: 50,
+      );
       if (mounted) setState(() => _rows = rows);
     } catch (_) {
       if (mounted) {
@@ -431,95 +531,124 @@ class _PracticeDailyLeaderboardScreenState
         backgroundColor: _ink,
         foregroundColor: Colors.white,
       ),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('LE PODIUM DES DÉFIS', style: TextStyle(
-          color: _gold, fontWeight: FontWeight.w900, letterSpacing: 1)),
-        const SizedBox(height: 8),
-        const Text(
-          'Un classement distinct des QCM et des gardes. '
-          'Seuls les premiers résultats quotidiens rapportent des XP. '
-          'Les profils ayant désactivé leur participation sont exclus.',
-          style: TextStyle(color: _soft, fontSize: 12, height: 1.5),
-        ),
-        const SizedBox(height: 14),
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: 'month', label: Text('Ce mois')),
-            ButtonSegment(value: 'all', label: Text('Tout le temps')),
-          ],
-          selected: {_period},
-          onSelectionChanged: (values) {
-            setState(() => _period = values.first);
-            _load();
-          },
-        ),
-        if (_loading) ...[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(color: _mint),
-        ],
-        if (_error != null) ...[
-          const SizedBox(height: 15),
-          Text(_error!, style: const TextStyle(color: _soft)),
-          OutlinedButton(onPressed: _load, child: const Text('Réessayer')),
-        ],
-        if (!_loading && _rows.isEmpty && _error == null) ...[
-          const SizedBox(height: 30),
-          const Center(child: Text(
-            'Aucun défi terminé pour cette période.',
-            style: TextStyle(color: _soft),
-          )),
-        ],
-        for (final item in _rows) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(13),
-            decoration: BoxDecoration(
-              color: item.userId == user
-                  ? _mint.withOpacity(.14) : _surface,
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(color: item.userId == user
-                  ? _mint.withOpacity(.50)
-                  : const Color(0xFF244B68)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'LE PODIUM DES DÉFIS',
+            style: TextStyle(
+              color: _gold,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
             ),
-            child: Row(children: [
-              SizedBox(width: 35, child: Text(
-                '#${item.rank}',
-                style: TextStyle(
-                  color: item.rank <= 3 ? _gold : _soft,
-                  fontSize: 17, fontWeight: FontWeight.w900,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Un classement distinct des QCM et des gardes. '
+            'Seuls les premiers résultats quotidiens rapportent des XP. '
+            'Les profils ayant désactivé leur participation sont exclus.',
+            style: TextStyle(color: _soft, fontSize: 12, height: 1.5),
+          ),
+          const SizedBox(height: 14),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: 'month', label: Text('Ce mois')),
+              ButtonSegment(value: 'all', label: Text('Tout le temps')),
+            ],
+            selected: {_period},
+            onSelectionChanged: (values) {
+              setState(() => _period = values.first);
+              _load();
+            },
+          ),
+          if (_loading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(color: _mint),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 15),
+            Text(_error!, style: const TextStyle(color: _soft)),
+            OutlinedButton(onPressed: _load, child: const Text('Réessayer')),
+          ],
+          if (!_loading && _rows.isEmpty && _error == null) ...[
+            const SizedBox(height: 30),
+            const Center(
+              child: Text(
+                'Aucun défi terminé pour cette période.',
+                style: TextStyle(color: _soft),
+              ),
+            ),
+          ],
+          for (final item in _rows) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: item.userId == user ? _mint.withOpacity(.14) : _surface,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(
+                  color: item.userId == user
+                      ? _mint.withOpacity(.50)
+                      : const Color(0xFF244B68),
                 ),
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    item.userId == user
-                        ? '${item.displayName} · Vous'
-                        : item.displayName,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white,
-                      fontWeight: FontWeight.w800),
+                  SizedBox(
+                    width: 35,
+                    child: Text(
+                      '#${item.rank}',
+                      style: TextStyle(
+                        color: item.rank <= 3 ? _gold : _soft,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.userId == user
+                              ? '${item.displayName} · Vous'
+                              : item.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${item.completedDays} défis · '
+                          '${item.perfectDays} sans-faute'
+                          '${item.hospital.isNotEmpty ? ' · ${item.hospital}' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: _soft, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Text(
-                    '${item.completedDays} défis · '
-                    '${item.perfectDays} sans-faute'
-                    '${item.hospital.isNotEmpty ? ' · ${item.hospital}' : ''}',
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _soft, fontSize: 11),
+                    '${item.xp} XP',
+                    style: const TextStyle(
+                      color: _mint,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
-              )),
-              const SizedBox(width: 8),
-              Text('${item.xp} XP', style: const TextStyle(
-                color: _mint, fontWeight: FontWeight.w900, fontSize: 14,
-              )),
-            ]),
-          ),
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }

@@ -74,9 +74,14 @@ class PracticeDailyGameProfile {
       levelFloorXp: _number(map['level_floor_xp']),
       nextLevelXp: _number(map['next_level_xp']),
       badges: items is List
-          ? items.whereType<Map>().map((item) =>
-              PracticeDailyBadge.fromMap(Map<String, dynamic>.from(item)))
-              .toList(growable: false)
+          ? items
+                .whereType<Map>()
+                .map(
+                  (item) => PracticeDailyBadge.fromMap(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList(growable: false)
           : const <PracticeDailyBadge>[],
     );
   }

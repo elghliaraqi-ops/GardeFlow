@@ -33,8 +33,8 @@ jobs:
       - name: Check Dart format
         working-directory: source
         run: |
-          dart format lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart test/practice_daily_gamification_test.dart
-          git diff -- lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart test/practice_daily_gamification_test.dart
+          dart format lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_screen.dart test/practice_daily_gamification_test.dart
+          git diff -- lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_screen.dart test/practice_daily_gamification_test.dart
       - name: Daily game model tests
         working-directory: source
         run: flutter test test/practice_daily_gamification_test.dart

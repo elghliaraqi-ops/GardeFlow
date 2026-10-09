@@ -19,8 +19,7 @@ class PracticeDailyGamificationService {
 
   Future<PracticeDailyGameProfile> profile() async {
     currentUserId;
-    final response =
-        await _backend.client.rpc('practice_daily_game_profile');
+    final response = await _backend.client.rpc('practice_daily_game_profile');
     if (response is! Map) {
       throw StateError('Progression des défis indisponible.');
     }
@@ -39,18 +38,16 @@ class PracticeDailyGamificationService {
     }
     final response = await _backend.client.rpc(
       'practice_daily_game_leaderboard',
-      params: <String, dynamic>{
-        'p_period': period,
-        'p_limit': limit,
-      },
+      params: <String, dynamic>{'p_period': period, 'p_limit': limit},
     );
     if (response is! List) {
       throw StateError('Classement des défis indisponible.');
     }
-    return response.whereType<Map>().map((row) {
-      return PracticeDailyGameRank.fromMap(
-        Map<String, dynamic>.from(row),
-      );
-    }).toList(growable: false);
+    return response
+        .whereType<Map>()
+        .map((row) {
+          return PracticeDailyGameRank.fromMap(Map<String, dynamic>.from(row));
+        })
+        .toList(growable: false);
   }
 }

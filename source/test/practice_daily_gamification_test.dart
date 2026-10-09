@@ -17,12 +17,20 @@ void main() {
       'level_floor_xp': 300,
       'next_level_xp': 800,
       'badges': [
-        {'key': 'pioneer', 'title': 'Premier défi',
-          'description': 'Premier défi terminé', 'icon': 'flag',
-          'unlocked': true},
-        {'key': 'week_streak', 'title': '7 jours de suite',
-          'description': 'Série de 7', 'icon': 'fire',
-          'unlocked': false},
+        {
+          'key': 'pioneer',
+          'title': 'Premier défi',
+          'description': 'Premier défi terminé',
+          'icon': 'flag',
+          'unlocked': true,
+        },
+        {
+          'key': 'week_streak',
+          'title': '7 jours de suite',
+          'description': 'Série de 7',
+          'icon': 'fire',
+          'unlocked': false,
+        },
       ],
     });
     expect(result.level, 2);
