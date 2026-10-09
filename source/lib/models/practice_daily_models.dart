@@ -35,6 +35,10 @@ class PracticeDailySession {
   bool get isProgressiveCase =>
       mode == 'cas_clinique' && caseStages.length == 4;
   final int? score;
+  final int? officialScore;
+  final int replayCount;
+  final bool isReplay;
+  final String? replayId;
   const PracticeDailySession({
     required this.ready,
     required this.completed,
@@ -45,6 +49,10 @@ class PracticeDailySession {
     this.caseStages = const <PracticeDailyStage>[],
     required this.questions,
     required this.score,
+    this.officialScore,
+    this.replayCount = 0,
+    this.isReplay = false,
+    this.replayId,
   });
   factory PracticeDailySession.fromMap(Map<String, dynamic> m) {
     final source = m['questions'];
@@ -92,6 +100,10 @@ class PracticeDailySession {
       caseStages: stages,
       questions: q,
       score: int.tryParse('${m['score'] ?? ''}'),
+      officialScore: int.tryParse('${m['official_score'] ?? ''}'),
+      replayCount: int.tryParse('${m['replay_count'] ?? 0}') ?? 0,
+      isReplay: m['replay'] == true,
+      replayId: m['replay_id']?.toString(),
     );
   }
 }
@@ -162,5 +174,43 @@ abstract final class PracticeDailyProgress {
     if (currentQuestion >= 9) return false;
     if (!progressive || completed) return true;
     return stageForQuestion(currentQuestion + 1) <= unlockedStage(answers);
+  }
+}
+
+/// Archived official daily result; replay scores are strictly separate.
+class PracticeDailyHistoryEntry {
+  final DateTime day;
+  final String mode;
+  final String title;
+  final int officialScore;
+  final int replayCount;
+  final int? lastReplayScore;
+  final DateTime? lastReplayAt;
+
+  const PracticeDailyHistoryEntry({
+    required this.day,
+    required this.mode,
+    required this.title,
+    required this.officialScore,
+    required this.replayCount,
+    this.lastReplayScore,
+    this.lastReplayAt,
+  });
+
+  factory PracticeDailyHistoryEntry.fromMap(Map<String, dynamic> data) {
+    final day = DateTime.tryParse('${data['challenge_date'] ?? ''}');
+    final official = int.tryParse('${data['official_score'] ?? ''}');
+    if (day == null || official == null || official < 0 || official > 10) {
+      throw StateError('Historique Practice incomplet.');
+    }
+    return PracticeDailyHistoryEntry(
+      day: day,
+      mode: '${data['mode'] ?? ''}',
+      title: '${data['case_title'] ?? 'Défi quotidien'}',
+      officialScore: official,
+      replayCount: int.tryParse('${data['replay_count'] ?? 0}') ?? 0,
+      lastReplayScore: int.tryParse('${data['last_replay_score'] ?? ''}'),
+      lastReplayAt: DateTime.tryParse('${data['last_replay_at'] ?? ''}'),
+    );
   }
 }

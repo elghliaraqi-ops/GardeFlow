@@ -7,6 +7,8 @@ on:
       - 'source/lib/models/practice_daily_models.dart'
       - 'source/lib/services/practice_daily_service.dart'
       - 'source/lib/screens/practice_daily_screen.dart'
+      - 'source/lib/screens/practice_daily_history_screen.dart'
+      - 'supabase/migrations/*practice_daily_replay*'
       - 'source/lib/screens/practice_screen.dart'
       - 'source/lib/services/notification_service.dart'
       - 'source/test/practice_daily_models_test.dart'
@@ -36,13 +38,13 @@ jobs:
         run: flutter pub get
       - name: Check Dart formatting
         working-directory: source
-        run: dart format --output=none --set-exit-if-changed lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart test/practice_daily_models_test.dart
+        run: dart format --output=none --set-exit-if-changed lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart test/practice_daily_models_test.dart
       - name: Test daily challenge models
         working-directory: source
         run: flutter test test/practice_daily_models_test.dart
       - name: Analyze daily challenge UI and backend
         working-directory: source
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_screen.dart lib/services/notification_service.dart
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart lib/screens/practice_screen.dart lib/services/notification_service.dart lib/screens/practice_daily_history_screen.dart
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -57,3 +59,5 @@ jobs:
           grep -Fq "questions jsonb not null" supabase/migrations/20261009002000_practice_daily_challenge.sql
           grep -Fq 'grant execute on function public.practice_daily_generation_claim(date,text) to service_role' supabase/migrations/20261009002500_practice_daily_generation_claim.sql
           grep -Fq 'case_stages' supabase/migrations/20261009030000_practice_progressive_case_stages.sql
+          grep -Fq 'revoke all on public.practice_daily_replay_attempts from public,anon,authenticated;' supabase/migrations/20261009034500_practice_daily_replay_history.sql
+          grep -Fq 'on conflict(id) do nothing' supabase/migrations/20261009034500_practice_daily_replay_history.sql

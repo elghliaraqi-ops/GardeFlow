@@ -6,9 +6,13 @@ import '../models/practice_daily_models.dart';
 import '../services/practice_daily_service.dart';
 import '../services/notification_service.dart';
 import '../services/push_notification_service.dart';
+import 'practice_daily_history_screen.dart';
 
 class PracticeDailyScreen extends StatefulWidget {
-  const PracticeDailyScreen({super.key});
+  const PracticeDailyScreen({super.key, this.replayDay});
+
+  /// Non-null opens a past completed challenge in unscored practice mode.
+  final DateTime? replayDay;
   @override
   State<PracticeDailyScreen> createState() => _PracticeDailyScreenState();
 }
@@ -21,6 +25,8 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       _green = Color(0xFF5BE7B0),
       _gold = Color(0xFFFFD166);
   final _service = PracticeDailyService.instance;
+  bool get _replayMode => widget.replayDay != null;
+  late final String _replayRequestId;
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   Map<int, PracticeDailyCalendarEntry> _days = {};
   PracticeDailySession? _session;
@@ -32,12 +38,32 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
   @override
   void initState() {
     super.initState();
+    _replayRequestId = _service.createReplayRequestId();
     _load();
   }
 
   Future<void> _load() async {
     if (!mounted) return;
     setState(() => _busy = true);
+    if (_replayMode) {
+      try {
+        final session = await _service.openReplay(widget.replayDay!);
+        if (!mounted) return;
+        setState(() {
+          _session = session;
+          _selected = List<int?>.filled(10, null);
+          _current = 0;
+          _error = null;
+        });
+      } catch (error) {
+        if (mounted) {
+          setState(() => _error = 'Rejeu indisponible : $error');
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
     try {
       final parts = await Future.wait<dynamic>([
         _service.calendar(_month),
@@ -127,25 +153,52 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     if (s == null || _busy || _selected.any((x) => x == null)) return;
     setState(() => _busy = true);
     try {
-      final updated = await _service.finish(
-        mode: s.mode,
-        answers: _selected.cast<int>(),
-      );
+      final updated = _replayMode
+          ? await _service.finishReplay(
+              day: widget.replayDay!,
+              answers: _selected.cast<int>(),
+              requestId: _replayRequestId,
+            )
+          : await _service.finish(mode: s.mode, answers: _selected.cast<int>());
       if (!mounted) return;
       setState(() {
         _session = updated;
         _current = 0;
         _error = null;
       });
-      final entries = await _service.calendar(_month);
-      if (!mounted) return;
-      setState(() => _days = {for (final e in entries) e.day.day: e});
-      await _scheduleReminders(entries);
+      if (!_replayMode) {
+        final entries = await _service.calendar(_month);
+        if (!mounted) return;
+        setState(() => _days = {for (final e in entries) e.day.day: e});
+        await _scheduleReminders(entries);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'Validation du score échouée : $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openReplay(DateTime day) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => PracticeDailyScreen(replayDay: day)),
+    );
+    if (mounted && !_replayMode) await _load();
+  }
+
+  Future<void> _openHistory() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const PracticeDailyHistoryScreen()),
+    );
+    if (mounted && !_replayMode) await _load();
+  }
+
+  void _replayAgain() {
+    final day = widget.replayDay;
+    if (day == null) return;
+    Navigator.of(context).pushReplacement<void, void>(
+      MaterialPageRoute(builder: (_) => PracticeDailyScreen(replayDay: day)),
+    );
   }
 
   Future<void> _toggle(bool enabled) async {
@@ -259,6 +312,14 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                             TextButton(
                               onPressed: () => Navigator.pop(c),
                               child: const Text('Fermer'),
+                            ),
+                            FilledButton.icon(
+                              onPressed: () {
+                                Navigator.pop(c);
+                                _openReplay(date);
+                              },
+                              icon: const Icon(Icons.replay_rounded),
+                              label: const Text('Rejouer'),
                             ),
                           ],
                         ),
@@ -464,6 +525,36 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
 
   Widget _challenge() {
     final s = _session;
+    if (_replayMode && (s == null || !s.ready)) {
+      return _box(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Rejouer un défi terminé',
+              style: TextStyle(
+                color: _text,
+                fontWeight: FontWeight.bold,
+                fontSize: 19,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _busy
+                  ? 'Chargement du défi archivé…'
+                  : 'Défi inaccessible ou non encore terminé.',
+              style: const TextStyle(color: _muted),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _load,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
+    }
     if (s == null || !s.ready)
       return _box(
         Column(
@@ -479,7 +570,8 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Deux formats au choix. Une seule note est enregistrée par jour.',
+              'Deux formats au choix. Une seule note officielle par jour. '
+              'Les défis terminés sont rejouables depuis l’historique.',
               style: TextStyle(color: _muted),
             ),
             const SizedBox(height: 15),
@@ -520,11 +612,37 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
         children: [
           if (s.completed) ...[
             Text(
-              'Défi terminé · ${s.score}/10',
+              _replayMode
+                  ? 'Rejeu terminé · ${s.score}/10'
+                  : 'Défi terminé · ${s.score}/10',
               style: const TextStyle(
                 color: _green,
                 fontSize: 23,
                 fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (_replayMode) ...[
+            Text(
+              'Note officielle inchangée : ${s.officialScore}/10',
+              style: const TextStyle(
+                color: _gold,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (s.completed) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: _replayMode
+                    ? _replayAgain
+                    : () => _openReplay(s.day),
+                icon: const Icon(Icons.replay_rounded),
+                label: Text(_replayMode ? 'Rejouer encore' : 'Rejouer'),
               ),
             ),
             const SizedBox(height: 10),
@@ -724,9 +842,18 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       appBar: AppBar(
         backgroundColor: _bg,
         foregroundColor: _text,
-        title: const Text('Défi quotidien · Practice'),
+        title: Text(
+          _replayMode ? 'Rejouer · Practice' : 'Défi quotidien · Practice',
+        ),
         actions: [
+          if (!_replayMode)
+            IconButton(
+              tooltip: 'Historique et rejouer',
+              onPressed: _busy ? null : _openHistory,
+              icon: const Icon(Icons.history_rounded),
+            ),
           IconButton(
+            tooltip: 'Actualiser',
             onPressed: _busy ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -744,29 +871,42 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 12),
           ],
           _challenge(),
-          const SizedBox(height: 18),
-          _calendar(),
-          const SizedBox(height: 16),
-          _box(
-            SwitchListTile(
-              value: _enabled,
-              onChanged: _toggle,
-              activeColor: _green,
-              title: const Text(
-                'Rappel quotidien',
-                style: TextStyle(color: _text, fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text(
-                'Notification FCM à 8 h (Casablanca) si le push est actif, '
-                'sinon rappel local sur mobile.',
-                style: TextStyle(color: _muted, fontSize: 12),
-              ),
-              secondary: const Icon(
-                Icons.notifications_active_rounded,
-                color: _gold,
+          if (!_replayMode) ...[
+            const SizedBox(height: 18),
+            _box(
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _openHistory,
+                  icon: const Icon(Icons.history_rounded),
+                  label: const Text('Historique · Rejouer mes défis'),
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 18),
+            _calendar(),
+            const SizedBox(height: 16),
+            _box(
+              SwitchListTile(
+                value: _enabled,
+                onChanged: _toggle,
+                activeColor: _green,
+                title: const Text(
+                  'Rappel quotidien',
+                  style: TextStyle(color: _text, fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Notification FCM à 8 h (Casablanca) si le push est actif, '
+                  'sinon rappel local sur mobile.',
+                  style: TextStyle(color: _muted, fontSize: 12),
+                ),
+                secondary: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: _gold,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           const Text(
             'Les corrections et les images externes apparaissent après validation des 10 réponses. '
