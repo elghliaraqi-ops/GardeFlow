@@ -173,7 +173,7 @@ Deno.serve(async(req:Request)=>{
  if(!profile||profile.account_status!=='active')return send(req,{ok:false,error:'account_inactive'},403);
  const body=await req.json().catch(()=>null);
  const mode=String(body?.mode??'');
- if(!['cours','cas_clinique'].includes(mode))return send(req,{ok:false,error:'invalid_mode'},400);
+ if(!['cours','cours_ia','cas_clinique'].includes(mode))return send(req,{ok:false,error:'invalid_mode'},400);
  const date=casablancaDay();
  const existing=await admin.from('practice_daily_challenges').select('challenge_date').eq('challenge_date',date).eq('mode',mode).maybeSingle();
  if(existing.data)return send(req,{ok:true,ready:true,day:date,mode,generated:false});
@@ -201,7 +201,7 @@ Deno.serve(async(req:Request)=>{
     'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
     'SOURCES VERIFIABLES :\n'+refList;
    const seen=new Set<string>();
-   if(mode==='cours'){
+   if(mode==='cours'||mode==='cours_ia'){
     // Always generate 10 NEW course questions with Groq, never reuse the local bank.
     for(let index=0;index<2;index++){
      const goal=index===0?'Diagnostic, démarche clinique, examens et interprétation.':

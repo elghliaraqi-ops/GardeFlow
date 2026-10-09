@@ -594,7 +594,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _busy ? null : () => _start('cours'),
+                onPressed: _busy ? null : () => _start('cours_ia'),
                 icon: const Icon(Icons.school_rounded),
                 label: const Text('10 nouveaux QCM de cours · IA'),
               ),
