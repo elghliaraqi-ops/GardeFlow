@@ -20,6 +20,20 @@ for(const field of caseBoolFields)caseProperties[field]={type:'boolean'};
 const clinicalCaseSchema={type:'object',additionalProperties:false,required:['case'],
  properties:{case:{type:'object',additionalProperties:false,
  required:['age','sex',...caseTextFields,...caseBoolFields],properties:caseProperties}}};
+// Exactly the clinicalCaseSchema case fields; no unrelated QCMs in this response.
+const clinicalCaseJsonExample={case:{
+ age:58,sex:'M',
+ ...Object.fromEntries(caseTextFields.map(field=>[field,'REMPLACER par une donnée clinique cohérente'])),
+ ...Object.fromEntries(caseBoolFields.map(field=>[field,false]))
+}};
+const clinicalCaseJsonContract='Répondre par un seul objet JSON contenant uniquement case. '+
+ 'L’objet case doit avoir exactement les champs '+
+ Object.keys((clinicalCaseSchema.properties.case as {properties:Record<string,unknown>}).properties).join(', ')+
+ '. Tous les textes sont des chaînes, age est entier, sex vaut F/M/Autre/Non précisé, '+
+ 'les décisions sont booléennes. Exemple JSON SYNTAXIQUEMENT VALIDE : '+
+ JSON.stringify(clinicalCaseJsonExample)+
+ '. Remplacer chaque placeholder par des données médicales cohérentes sans recopier les exemples.';
+
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const itemSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],
  properties:{axis:{type:'string',enum:progressiveAxes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
@@ -223,7 +237,7 @@ async function generateCaseDossier(specialty:string):Promise<Record<string,unkno
   'Examen, résultats, synthèse et conduite à tenir doivent être cohérents. '+
   'Dans plan, détailler décisions de traitement, surveillance et évolution clinique ou suivi. '+
   'Les booléens des décisions doivent correspondre à la prise en charge. '+
-  'Aucune fausse bibliographie, pas de conseils pour un vrai patient. Réponds au schéma JSON.';
+  'Aucune fausse bibliographie, pas de conseils pour un vrai patient. '+clinicalCaseJsonContract;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);
  try{
   const response=await fetch('https://api.groq.com/openai/v1/responses',{
