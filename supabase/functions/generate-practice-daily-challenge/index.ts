@@ -173,7 +173,7 @@ Deno.serve(async(req:Request)=>{
  if(!profile||profile.account_status!=='active')return send(req,{ok:false,error:'account_inactive'},403);
  const body=await req.json().catch(()=>null);
  const mode=String(body?.mode??'');
- if(!['cours','cours_ia','cas_clinique'].includes(mode))return send(req,{ok:false,error:'invalid_mode'},400);
+ if(mode!=='cours_ia')return send(req,{ok:false,error:'daily_challenge_ai_only'},400);
  const date=casablancaDay();
  const existing=await admin.from('practice_daily_challenges').select('challenge_date').eq('challenge_date',date).eq('mode',mode).maybeSingle();
  if(existing.data)return send(req,{ok:true,ready:true,day:date,mode,generated:false});
@@ -201,7 +201,7 @@ Deno.serve(async(req:Request)=>{
     'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
     'SOURCES VERIFIABLES :\n'+refList;
    const seen=new Set<string>();
-   if(mode==='cours'||mode==='cours_ia'){
+   if(mode==='cours_ia'){
     // Always generate 10 NEW course questions with Groq, never reuse the local bank.
     for(let index=0;index<2;index++){
      const goal=index===0?'Diagnostic, démarche clinique, examens et interprétation.':
@@ -212,32 +212,6 @@ Deno.serve(async(req:Request)=>{
      const part=await newGroqBatch(prompt,batchSchema);
      questions.push(...await checkAndFormat(part,refs,seen));
     }
-   }else{
-    const prompt='Crée un SEUL cas clinique intégralement FICTIF en '+specialty+
-     ', avec case_title, case_stem (au moins 150 caractères) et EXACTEMENT 4 case_stages '+
-     'avec chacun un title et un narrative de 120 caractères minimum. '+
-     'Étape 1 admission/examen ; étape 2 investigations/biologie/imagerie ; '+
-     'étape 3 thérapeutique ; étape 4 évolution/suivi. Ne révèle jamais à une étape '+
-     'les résultats ni le diagnostic des étapes suivantes. '+
-     'Pour ce PREMIER lot, génère exactement 5 QCM : deux pour la première étape, '+
-     'trois pour la deuxième, ne citant que les informations déjà disponibles. '+common;
-    const first=await newGroqBatch(prompt,caseBatchSchema);
-    caseTitle=plain(first.case_title,180);caseStem=plain(first.case_stem,6500);
-    const stages=first.case_stages;
-    if(!caseTitle||caseStem.length<150||!Array.isArray(stages)||stages.length!==4)
-     throw Error('invalid_case_format');
-    caseStages=stages.map((s:{title?:string;narrative?:string})=>({
-     title:plain(s.title,140),narrative:plain(s.narrative,2400)
-    }));
-    if(caseStages.some(s=>s.title.length<5||s.narrative.length<120))
-     throw Error('invalid_stage_format');
-    questions.push(...await checkAndFormat(first,refs,seen));
-    const prompt2='CONTINUE CE MEME cas clinique FICTIF avec uniquement les cinq QCM 6-10. '+
-     'Étapes : '+JSON.stringify(caseStages)+'. Contexte : '+caseStem+
-     '. QCM 6,7,8 sur traitement et décisions ; QCM 9,10 sur évolution et suivi. '+
-     'Questions déjà posées : '+questions.map(q=>String(q.question)).join(' / ')+'. '+common;
-    const second=await newGroqBatch(prompt2,batchSchema);
-    questions.push(...await checkAndFormat(second,refs,seen));
    }
    if(questions.length!==10)throw Error('invalid_question_count');
    const inserted=await admin.from('practice_daily_challenges').upsert({challenge_date:date,mode,case_title:caseTitle,case_stem:caseStem,case_stages:caseStages,questions},{onConflict:'challenge_date,mode',ignoreDuplicates:true});
