@@ -151,9 +151,12 @@ async function externalMedicalIllustrations(dossier:Record<string,unknown>):
  const text=[dossier.complementary_exams,dossier.imaging_conclusion]
   .map(x=>String(x??'').toLowerCase()).join(' ');
  const searches:MedicalImageSearch[]=[];
- if(/\becg\b|électrocardio|electrocardio/.test(text))
-  searches.push({query:'normal sinus rhythm 12 lead ECG',label:'Exemple d’ECG',
-    accept:/ecg|electrocardio/i});
+ // Only illustrate a resting normal/sinus ECG when those findings are actually described.
+ // For other ECG findings, omit the thumbnail rather than implying the wrong trace.
+ if((/\becg\b|électrocardio|electrocardio/.test(text))&&
+    /rythme sinusal|ecg[^.]{0,80}normal|sans[^.]{0,50}décalage/.test(text))
+  searches.push({query:'normal sinus rhythm 12 lead ECG',label:'ECG sinusal illustratif',
+    accept:/^(?=.*(?:ecg|electrocardio))(?=.*(?:normal|sinus|12.lead))/i});
  if(/coronarograph|cathétérisme coronair|coronary angio|sténose.*coronair/i.test(text))
   searches.push({query:'coronary arteries anatomical illustration',
    label:'Schéma des artères coronaires',accept:/coronary|coronaire/i});
