@@ -67,53 +67,55 @@ const caseBatchSchema=JSON.parse(JSON.stringify(schema));
 caseBatchSchema.properties.qcms.minItems=5;
 caseBatchSchema.properties.qcms.maxItems=5;
 
-async function newGroqBatch(prompt:string,format:Record<string,unknown>):Promise<Record<string,unknown>> {
+async function newGroqBatch(
+ prompt:string,format:Record<string,unknown>,overrideModel?:string
+):Promise<Record<string,unknown>> {
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
- const config=(Deno.env.get('GROQ_TEXT_MODEL')??'').trim();
- const model=['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(config)
-  ?config:'openai/gpt-oss-120b';
- let code='groq_unavailable';
- for(const strict of [true,false]){
-  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),48000);
-  try{
-   const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
-    method:'POST',signal:ctrl.signal,
-    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-    body:JSON.stringify({
-     model,messages:[{role:'user',content:prompt}],
-     temperature:0.2,reasoning_effort:'low',reasoning_format:'hidden',
-     max_completion_tokens:7000,stream:false,
-     response_format:strict
-      ?{type:'json_schema',json_schema:{name:'practice_daily_batch',strict:true,schema:format}}
-      :{type:'json_object'}
-    })
-   });
-   if(!response.ok){
-    const raw=await response.json().catch(()=>null);
-    console.warn('daily_groq_http',{status:response.status,model,
-     reason:String(raw?.error?.code??raw?.error?.type??'').slice(0,70)});
-    if(response.status===401||response.status===403)throw Error('groq_auth_failed');
-    if(response.status===429)throw Error('groq_rate_limited');
-    code=response.status===400?'groq_request_rejected':'groq_provider_unavailable';
-    continue;
-   }
+ // Prefer smaller model to reduce token consumption; one backup attempt per batch.
+ const configured=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
+ const model=overrideModel??(
+  ['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
+   ?configured:'openai/gpt-oss-20b');
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),42000);
+ try{
+  const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+   method:'POST',signal:ctrl.signal,
+   headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+   body:JSON.stringify({
+    model,messages:[{role:'user',content:prompt}],
+    temperature:0.12,reasoning_effort:'low',reasoning_format:'hidden',
+    max_completion_tokens:5400,stream:false,
+    // Strict json_schema caused Groq json_validate_failed 400 in production.
+    response_format:{type:'json_object'}
+   })
+  });
+  if(!response.ok){
    const raw=await response.json().catch(()=>null);
-   const content=raw?.choices?.[0]?.message?.content;
-   if(typeof content==='string'){
-    try{const parsed=JSON.parse(content);
-     if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
-    }catch{/* If JSON mode fails, retry with the fallback. */}
-   }
-   code='groq_invalid_json';
-  }catch(err){
-   const e=err instanceof Error?err:Error('groq_network_error');
-   if(['groq_auth_failed','groq_rate_limited'].includes(e.message))throw e;
-   code=e.name==='AbortError'?'groq_timeout':e.message;
-   console.warn('daily_groq_exception',{code,model});
-  }finally{clearTimeout(timer);}
- }
- throw Error(code);
+   const reason=String(raw?.error?.code??raw?.error?.type??'').slice(0,65);
+   console.warn('daily_groq_http',{status:response.status,model,reason});
+   if(response.status===401||response.status===403)throw Error('groq_auth_failed');
+   if(response.status===429)throw Error('groq_rate_limited');
+   if(response.status>=500)throw Error('groq_provider_unavailable');
+   throw Error('groq_request_rejected');
+  }
+  const raw=await response.json().catch(()=>null);
+  const content=raw?.choices?.[0]?.message?.content;
+  if(typeof content==='string'){
+   try{
+    const parsed=JSON.parse(content);
+    if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
+   }catch{/* Object mode can occasionally still be invalid. */}
+  }
+  throw Error('groq_invalid_json');
+ }catch(err){
+  const e=err instanceof Error?err:Error('groq_network_error');
+  if(e.name==='AbortError')throw Error('groq_timeout');
+  if(['groq_auth_failed','groq_rate_limited','groq_provider_unavailable',
+    'groq_request_rejected','groq_invalid_json'].includes(e.message))throw e;
+  console.warn('daily_groq_exception',{model,code:'network_error'});
+  throw Error('groq_network_error');
+ }finally{clearTimeout(timer);}
 }
 
 async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>)
@@ -121,7 +123,7 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  if(!Array.isArray(batch.qcms)||batch.qcms.length!==5)throw Error('invalid_generated_question_count');
  const map=new Map(refs.map(x=>[canon(x.url),x]));
  const output:Record<string,unknown>[]=[];
- for(const raw of batch.qcms){
+ for(const [index,raw] of batch.qcms.entries()){
   const q=raw as Record<string,unknown>;
   const question=plain(q.question,1400),options=Array.isArray(q.options)
    ?q.options.map(x=>plain(x,450)):[];
@@ -132,10 +134,20 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
    const source=map.get(canon((r as {url?:string})?.url));
    return source?[[canon(source.url),source]]:[];
   }) as [string,Ref][]).values()].slice(0,3);
-  if(question.length<12||options.length!==4||options.some(x=>x.length<1)||
-   new Set(options.map(cleanKey)).size!==4||correction.length<25||
-   !Number.isInteger(correct)||correct<0||correct>3||!references.length||
-   !topics.includes(topic)||seen.has(fingerprint))throw Error('invalid_generated_questions');
+  const failure=question.length<12?'question_too_short':
+   options.length!==4?'option_count':
+   options.some(x=>x.length<1)?'empty_option':
+   new Set(options.map(cleanKey)).size!==4?'duplicate_options':
+   correction.length<25?'correction_too_short':
+   !Number.isInteger(correct)||correct<0||correct>3?'invalid_answer_index':
+   !references.length?'unverified_source':
+   !topics.includes(topic)?'invalid_topic':
+   seen.has(fingerprint)?'duplicate_question':'';
+  if(failure){
+   // Log reason and position only: never log a user identity or generated question.
+   console.warn('daily_ai_question_rejected',{position:index+1,reason:failure});
+   throw Error('invalid_generated_questions');
+  }
   seen.add(fingerprint);
   output.push({question,options,correct_index:correct,correction,topic,
    references,illustration_query:String(q.image_search_query??'')});
@@ -189,15 +201,16 @@ Deno.serve(async(req:Request)=>{
    const specialty=specialties[numericSeed(date+mode)%specialties.length];
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
-   const refList=refs.map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
-   const common='Réponds UNIQUEMENT en JSON. Format exigé : objet {qcms:[cinq objets]} ; '+
+   const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url}`).join('\n');
+   const common='Retourne seulement un objet JSON racine contenant uniquement la clé qcms avec EXACTEMENT cinq objets ; '+
     'chaque QCM a exactement les clés question (texte), options (tableau de 4 chaînes), '+
     'correct_index (entier de 0 à 3), correction (texte), topic (texte), '+
     'references (tableau de 1 à 3 objets {url}), image_search_query (texte ou chaîne vide). '+
     'Cinq QCM originaux EXACTEMENT par lot, quatre options distinctes, une seule correcte, '+
     'correction médicale claire (3 à 5 phrases), '+
     'topic parmi motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise, '+
-    'references: liste de 1 à 3 objets {url} issus UNIQUEMENT des URL Europe PMC ci-dessous. '+
+    'references: 1 à 3 objets {url} qui copient CARACTÈRE PAR CARACTÈRE les URL fournies ci-dessous, '+
+    'sans paramètres ajoutés ou URL inventées. '+
     'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
     'SOURCES VERIFIABLES :\n'+refList;
    const seen=new Set<string>();
@@ -209,8 +222,36 @@ Deno.serve(async(req:Request)=>{
      const prompt='Crée 5 NOUVEAUX QCM de cours niveau internat, français, discipline '+specialty+
       '. Lot '+(index+1)+'/2. '+goal+' Questions déjà générées à ne pas répéter : '+
       questions.map(q=>String(q.question)).join(' / ')+'. '+common;
-     const part=await newGroqBatch(prompt,batchSchema);
-     questions.push(...await checkAndFormat(part,refs,seen));
+     let accepted:Record<string,unknown>[]|null=null;
+     let batchError='generation_failed';
+     for(let attempt=0;attempt<2;attempt++){
+      try{
+       // First request defaults to 20B, second uses the other model as fallback.
+       const firstModel=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
+       const backup=firstModel==='openai/gpt-oss-120b'
+        ?'openai/gpt-oss-20b':'openai/gpt-oss-120b';
+       const instruction=attempt===0?prompt:prompt+
+        '\nCORRECTION DU LOT : EXACTEMENT cinq QCM, quatre réponses DISTINCTES par question, '+
+        'réponse correcte index 0 à 3, correction détaillée, un topic autorisé, '+
+        'au moins une URL bibliographique copiée exactement depuis la liste de SOURCES. '+
+        'Retourne du JSON pur, aucune explication hors de qcms.';
+       const part=attempt===0
+        ?await newGroqBatch(prompt,batchSchema)
+        :await newGroqBatch(instruction,batchSchema,backup);
+       const localSeen=new Set(seen);
+       const tested=await checkAndFormat(part,refs,localSeen);
+       if(tested.length!==5)throw Error('invalid_generated_question_count');
+       accepted=tested;
+       for(const key of localSeen)seen.add(key);
+       break;
+      }catch(err){
+       batchError=err instanceof Error?err.message:'generation_failed';
+       console.warn('daily_ai_batch_retry',{batch:index+1,attempt:attempt+1,code:batchError});
+       if(['groq_auth_failed','groq_configuration_missing'].includes(batchError))throw err;
+      }
+     }
+     if(!accepted)throw Error(batchError);
+     questions.push(...accepted);
     }
    }
    if(questions.length!==10)throw Error('invalid_question_count');
