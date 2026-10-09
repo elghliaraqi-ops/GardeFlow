@@ -348,12 +348,15 @@ Deno.serve(async(req:Request)=>{
    // Completely independent from official daily challenges, scores and XP.
    // Validated cases are stored in a private owner-scoped table, never Storage.
    const specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
-   const refs=await literature(specialty);
-   if(!refs.length)throw Error('literature_unavailable');
-   // PHASE 1: same Groq Responses + clinical form schema as the working random-case generator.
+   // PHASE 1: first generate the fictional case before researching case-specific sources.
    const simulated=await generateCaseDossier(specialty);
    const display=narrativeFromCase(simulated);
    const caseTitle=display.title,caseStem=display.stem,stages=display.stages;
+   // Find actual medical references for this scenario, with specialty-level fallback.
+   const targetedQuery=plain(simulated.assessment,90);
+   let refs=targetedQuery.length>8?await literature(targetedQuery):[];
+   if(!refs.length)refs=await literature(specialty);
+   if(!refs.length)throw Error('literature_unavailable');
    // PHASE 2: QCMs are about this preexisting simulated clinical dossier, never a course bank.
    const context=JSON.stringify(simulated);
    const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
