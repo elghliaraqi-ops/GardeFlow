@@ -1,0 +1,53 @@
+name: Verify Practice Daily FCM Push
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/*practice_daily_remote_push*'
+      - 'supabase/functions/send-practice-daily-reminder/**'
+      - 'source/supabase/functions/send-practice-daily-reminder/**'
+      - 'source/lib/services/push_notification_service.dart'
+      - 'source/lib/screens/practice_daily_screen.dart'
+      - '.github/workflows/practice-daily-fcm-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remote-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verify both Edge copies type-check
+        run: |
+          deno check supabase/functions/send-practice-daily-reminder/index.ts
+          deno check source/supabase/functions/send-practice-daily-reminder/index.ts
+      - name: Security invariants
+        run: |
+          set -euo pipefail
+          SQL=supabase/migrations/20261009004500_practice_daily_remote_push.sql
+          grep -Fq "vault.create_secret" "$SQL"
+          grep -Fq "practice_daily_validate_cron" "$SQL"
+          grep -Fq "to service_role" "$SQL"
+          grep -Fq "0 7,8 * * *" "$SQL"
+          grep -Fq "X-Practice-Cron-Token" supabase/functions/send-practice-daily-reminder/index.ts
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Flutter dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Analyze push and daily screens
+        working-directory: source
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/services/push_notification_service.dart lib/screens/practice_daily_screen.dart
+      - name: Re-run daily challenge model tests
+        working-directory: source
+        run: flutter test test/practice_daily_models_test.dart
