@@ -156,7 +156,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
   Widget _quiz(bool caseQuiz){
     final list=_records(_session?[caseQuiz?'case_qcms':'course_qcms']);
     if(list.isEmpty)return const SizedBox.shrink();
-    final current=(caseQuiz?_casePosition:_coursePosition).clamp(0,list.length-1);
+    final current=(caseQuiz?_casePosition:_coursePosition).clamp(0,list.length-1).toInt();
     final q=list[current];
     final selections=caseQuiz?_caseSelected:_courseSelected;
     final done=caseQuiz?_caseDone:_courseDone;
@@ -166,7 +166,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
     return _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       _title(caseQuiz?'QCM clinique progressif':'QCM de la fiche',
         'Question '+(current+1).toString()+'/'+list.length.toString()+' · cible '+_str(countTarget)),
-      if(caseQuiz)..._clinicalPhase((q['phase'] is int ? q['phase'] as int : 1).clamp(1,4)),
+      if(caseQuiz)..._clinicalPhase((q['phase'] is int ? q['phase'] as int : 1).clamp(1,4).toInt()),
       _label(_str(q['statement']),heavy:true,size:15),
       const SizedBox(height:12),
       ..._records(q['options']).map((o){
