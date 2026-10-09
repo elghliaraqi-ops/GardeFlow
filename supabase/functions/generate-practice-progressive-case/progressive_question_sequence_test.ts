@@ -24,7 +24,7 @@ Deno.test('JSON contracts specify the correct five questions per generation call
   assert(example);
   const parsed=JSON.parse(example) as {qcms:{axis:string}[]};
   assertEquals(parsed.qcms.length,5);
-  assertEquals(parsed.qcms.map(x=>x.axis),expectedProgressiveAxes(index));
+  assertEquals(parsed.qcms.map(x=>x.axis),[...expectedProgressiveAxes(index)]);
   for(const axis of expectedProgressiveAxes(index))assert(contract.includes(axis));
  }
 });
