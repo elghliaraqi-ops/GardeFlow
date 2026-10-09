@@ -253,7 +253,7 @@ Deno.serve(async(req:Request)=>{
      console.warn('independent_case_first_batch_retry',{code,attempt:attempt+1});
     }
    }
-   if(questions.length!==5)throw Error(firstError);
+   if(Number(questions.length)!==5)throw Error(firstError);
    const seen=new Set(questions.map(x=>cleanKey(String(x.question))));
    const continuation='Continue EXACTEMENT le même cas FICTIF, sans recréer un patient, en cinq nouveaux QCM (6-10). '+
      'Dossier complet : '+caseStem+'. Étapes : '+JSON.stringify(stages)+
