@@ -9,6 +9,8 @@ on:
       - 'supabase/functions/generate-practice-progressive-case/**'
       - 'source/supabase/functions/generate-practice-progressive-case/**'
       - 'source/lib/screens/practice_progressive_cases_screen.dart'
+      - 'source/lib/widgets/practice_clinical_dossier.dart'
+      - 'source/test/practice_clinical_dossier_test.dart'
       - 'source/lib/screens/practice_screen.dart'
       - 'supabase/migrations/*practice_daily_ai_only*'
       - 'source/test/practice_progressive_cases_screen_test.dart'
@@ -71,7 +73,7 @@ jobs:
       - name: Strict Dart formatting
         working-directory: source
         run: |
-          dart format --output=none --set-exit-if-changed lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart test/practice_daily_visual_theme_test.dart test/practice_progressive_cases_screen_test.dart
+          dart format --output=none --set-exit-if-changed lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart lib/widgets/practice_clinical_dossier.dart test/practice_clinical_dossier_test.dart test/practice_daily_visual_theme_test.dart test/practice_progressive_cases_screen_test.dart
       - name: Analyze changed Practice pages
         working-directory: source
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/practice_daily_screen.dart lib/screens/practice_daily_history_screen.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_daily_visual_theme.dart lib/screens/practice_progressive_cases_screen.dart
@@ -81,3 +83,4 @@ jobs:
           flutter test test/practice_daily_visual_theme_test.dart
           flutter test test/practice_daily_models_test.dart
           flutter test test/practice_progressive_cases_screen_test.dart
+          flutter test test/practice_clinical_dossier_test.dart
