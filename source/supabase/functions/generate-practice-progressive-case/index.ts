@@ -344,14 +344,53 @@ Deno.serve(async(req:Request)=>{
  const admin=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
  const {data:profile,error:profileError}=await admin.from('profiles').select('id,account_status').eq('id',uid).maybeSingle();
  if(profileError||!profile||profile.account_status!=='active')return send(req,{ok:false,error:'account_inactive'},403);
+ let draftId:string|null=null;
  try {
    // Completely independent from official daily challenges, scores and XP.
    // Validated cases are stored in a private owner-scoped table, never Storage.
-   const specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
-   // PHASE 1: first generate the fictional case before researching case-specific sources.
-   const simulated=await generateCaseDossier(specialty);
-   const display=narrativeFromCase(simulated);
-   const caseTitle=display.title,caseStem=display.stem,stages=display.stages;
+   const body=await req.json().catch(()=>({})) as Record<string,unknown>;
+   const requestedId=plain(body?.case_id,40);
+   let specialty:string;
+   let simulated:Record<string,unknown>;
+   let caseTitle:string,caseStem:string,stages:{title:string;narrative:string}[];
+   if(requestedId){
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedId))
+     return send(req,{ok:false,error:'invalid_case_id'},400);
+    const {data:stored,error:readError}=await admin.from('practice_generated_cases')
+     .select('id,specialty,case_title,case_stem,case_stages,case_payload,generation_status,questions,created_at')
+     .eq('owner_id',uid).eq('id',requestedId).maybeSingle();
+    if(readError||!stored)return send(req,{ok:false,error:'case_not_found'},404);
+    if(stored.generation_status==='ready')return send(req,{
+     ok:true,mode:'cas_progressif_independant',case_id:stored.id,
+     created_at:stored.created_at,specialty:stored.specialty,
+     case_title:stored.case_title,case_stem:stored.case_stem,
+     case_stages:stored.case_stages,questions:stored.questions});
+    draftId=stored.id;
+    specialty=String(stored.specialty);
+    simulated=stored.case_payload as Record<string,unknown>;
+    caseTitle=String(stored.case_title);caseStem=String(stored.case_stem);
+    stages=stored.case_stages as {title:string;narrative:string}[];
+    if(!simulated||typeof simulated!=='object'||!Array.isArray(stages)||stages.length!==4)
+     throw Error('saved_dossier_invalid');
+    console.info('progressive_case_draft_resumed',{draft:true});
+   }else{
+    specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
+    // PHASE 1: first generate a full fictional dossier as in random clinical cases.
+    simulated=await generateCaseDossier(specialty);
+    const display=narrativeFromCase(simulated);
+    caseTitle=display.title;caseStem=display.stem;stages=display.stages;
+    // Persist this valid dossier BEFORE its QCMs so failures can be resumed later.
+    const {data:draft,error:saveError}=await admin.from('practice_generated_cases')
+     .insert({owner_id:uid,specialty,case_title:caseTitle,case_stem:caseStem,
+      case_stages:stages,case_payload:simulated,generation_status:'pending',questions:[]})
+     .select('id').single();
+    if(saveError||!draft?.id){
+     console.warn('progressive_case_draft_storage_failure',{code:saveError?.code??'empty'});
+     throw Error('case_storage_failed');
+    }
+    draftId=draft.id;
+    console.info('progressive_case_draft_saved',{saved:true});
+   }
    // Find actual medical references for this scenario, with specialty-level fallback.
    const targetedQuery=plain(simulated.assessment,90);
    let refs=targetedQuery.length>8?await literature(targetedQuery):[];
@@ -402,11 +441,11 @@ Deno.serve(async(req:Request)=>{
    const second=await newGroqBatch(continuation,batchSchema);
    questions.push(...await checkAndFormat(second,refs,seen));
    if(questions.length!==10)throw Error('invalid_question_count');
-   // Persist only the final validated fiction, never a partial or rejected batch.
-   // Image previews are HTTPS links inside correction text; no Storage upload.
+   // Finalize the already persisted dossier only when all 10 QCMs pass validation.
+   // Image previews remain external HTTPS links; never store binary images.
    const {data:saved,error:saveErr}=await admin.from('practice_generated_cases')
-    .insert({owner_id:uid,specialty,case_title:caseTitle,case_stem:caseStem,
-     case_stages:stages,questions})
+    .update({questions,generation_status:'ready'})
+    .eq('owner_id',uid).eq('id',draftId)
     .select('id,created_at').single();
    if(saveErr||!saved?.id){
     console.warn('progressive_case_storage_failure',{code:saveErr?.code??'empty'});
@@ -418,7 +457,14 @@ Deno.serve(async(req:Request)=>{
      case_title:caseTitle,case_stem:caseStem,case_stages:stages,questions});
  }catch(err){
    const code=err instanceof Error?err.message:'case_generation_failed';
+   if(draftId){
+    const {error:updateErr}=await admin.from('practice_generated_cases')
+     .update({generation_status:'failed'}).eq('owner_id',uid).eq('id',draftId)
+     .neq('generation_status','ready');
+    if(updateErr)console.warn('progressive_case_draft_status_failure',{code:updateErr.code});
+   }
    console.warn('independent_case_generation_failure',{code});
-   return send(req,{ok:false,error:code,retryable:!['groq_auth_failed','groq_configuration_missing'].includes(code)},503);
+   return send(req,{ok:false,error:code,case_id:draftId,
+    retryable:!['groq_auth_failed','groq_configuration_missing'].includes(code)},503);
  }
 });
