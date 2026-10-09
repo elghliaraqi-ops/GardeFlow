@@ -61,3 +61,27 @@ Deno.test('20 course questions in 10+10 and 15 clinical questions in 10+5',()=>{
     for(const count of batches)qcmSchema(count,[1,2,3,4]);
   }
 });
+Deno.test('all four generator prompts and schemas enforce the same image-selection contract',()=>{
+  for(const mode of ['fiche','course_qcms','case','case_qcms'] as const){
+    const contract=generationContract(mode);
+    const instructions=contract.outputInstructions;
+    let images:any;
+    if(mode==='fiche')images=field(field(ficheSchema,'sections').items,'image_requests');
+    else if(mode==='case')images=field(field(caseSchema,'stages').items,'image_requests');
+    else images=field(field(qcmSchema(10,[1,2,3,4]),'questions').items,'image_requests');
+    const props=Object.keys(images.items.properties);
+    for(const key of [
+      'query','modality','purpose','image_type','anatomy',
+      'plane','required_features','excluded_features',
+    ]){
+      assert(props.includes(key),mode+' schema missing '+key);
+      assert(instructions.includes(key),mode+' prompt missing '+key);
+    }
+    const types=images.items.properties.image_type.enum;
+    for(const type of ['anatomical_diagram','radiology_scan','operative_diagram','clinical_photo']){
+      assert(types.includes(type),mode+' missing image type '+type);
+      assert(instructions.includes(type),mode+' missing visual selection rule '+type);
+    }
+    assert(images.items.additionalProperties===false,'extraneous image URL must not be allowed');
+  }
+});

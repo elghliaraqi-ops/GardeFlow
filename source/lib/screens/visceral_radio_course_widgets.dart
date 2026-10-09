@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../config/backend_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_backend_service.dart';
 import 'practice_daily_visual_theme.dart';
@@ -63,11 +65,24 @@ class VisceralCourseText extends StatelessWidget {
   }
 }
 
+/// The authenticated image proxy solves Flutter Web CanvasKit image CORS and
+/// keeps medical images outside the application database and storage.
+String visceralImageProxyUrl(String external) =>
+    '${BackendConfig.supabaseUrl}/functions/v1/generate-visceral-radio?asset=${Uri.encodeComponent(external)}';
+Map<String,String> visceralImageHeaders() {
+  final token=SupabaseBackendService.instance.client.auth.currentSession?.accessToken;
+  return {
+    'apikey': BackendConfig.supabasePublishableKey,
+    if(token!=null) 'Authorization':'Bearer '+token,
+  };
+}
+
 /// Thumbnails and source links are resolved at display time and cached in RAM.
 /// No images or image URLs are stored in Supabase database / Storage.
 class VisceralMedicalGallery extends StatefulWidget {
-  const VisceralMedicalGallery({super.key,required this.query,required this.caption,this.modality=''});
+  const VisceralMedicalGallery({super.key,required this.query,required this.caption,this.modality='',this.imageRequest=const {}});
   final String query, caption, modality;
+  final Map<String,dynamic> imageRequest;
   @override State<VisceralMedicalGallery> createState()=>_VisceralMedicalGalleryState();
 }
 
@@ -77,14 +92,14 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   bool busy=false;
   String? message;
   int generation=0;
-  String get cacheKey => widget.modality+'|'+widget.query;
+  String get cacheKey => jsonEncode(widget.imageRequest.isEmpty?{'query':widget.query,'modality':widget.modality}:widget.imageRequest);
   List<Map<String,dynamic>> rows(dynamic raw) => raw is List
     ? raw.whereType<Map>().map((v)=>Map<String,dynamic>.from(v)).toList()
     : <Map<String,dynamic>>[];
   @override void initState(){super.initState();_fetch();}
   @override void didUpdateWidget(covariant VisceralMedicalGallery old){
     super.didUpdateWidget(old);
-    if(old.query!=widget.query||old.modality!=widget.modality)_fetch();
+    if(old.query!=widget.query||old.modality!=widget.modality||jsonEncode(old.imageRequest)!=jsonEncode(widget.imageRequest))_fetch();
   }
   Future<void> _fetch({bool refresh=false})async{
     if(widget.query.trim().isEmpty)return;
@@ -102,7 +117,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
     try {
       final response=await SupabaseBackendService.instance.client.functions.invoke(
         'generate-visceral-radio',
-        body:{'action':'images','query':widget.query,'modality':widget.modality});
+        body:{'action':'images','image_request':widget.imageRequest.isNotEmpty?widget.imageRequest:{'query':widget.query,'modality':widget.modality,'purpose':widget.caption}});
       final result=response.data is Map
         ? Map<String,dynamic>.from(response.data as Map)
         : <String,dynamic>{};
@@ -130,7 +145,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
     if(!url.startsWith('https://'))return;
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder:(_)=>_MedicalZoomViewer(
-        url:url,source:(item['source']??'').toString(),
+        url:visceralImageProxyUrl(url),source:(item['source']??'').toString(),
         title:(item['title']??widget.caption).toString(),
         credits:(item['creator']??'').toString()+' · '+(item['license']??'').toString(),
       )));
@@ -172,13 +187,16 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                 child:SizedBox(width:210,child:Column(children:[
                   Expanded(child:Stack(fit:StackFit.expand,children:[
                     ClipRRect(borderRadius:BorderRadius.circular(12),
-                      child:Image.network((item['thumbnail']??'').toString(),
-                        fit:BoxFit.contain,
+                      child:Image.network(visceralImageProxyUrl((item['thumbnail']??'').toString()),
+                        headers:visceralImageHeaders(),fit:BoxFit.contain,
                         errorBuilder:(_,__,___)=>Container(
                           alignment:Alignment.center,
                           color:PracticeDailyVisualTheme.elevated,
-                          child:const Text('Miniature inaccessible',
-                            style:TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:11)))),
+                          child:const Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+                            Icon(Icons.image_not_supported_outlined,color:PracticeDailyVisualTheme.muted),
+                            SizedBox(height:7),
+                            Text('Aperçu inaccessible',style:TextStyle(
+                              color:PracticeDailyVisualTheme.muted,fontSize:11))]))),
                     ),
                     Positioned(top:6,right:6,child:Container(
                       padding:const EdgeInsets.all(5),
@@ -224,35 +242,78 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
     ]));
 }
 
-class _MedicalZoomViewer extends StatelessWidget {
+class _MedicalZoomViewer extends StatefulWidget {
   const _MedicalZoomViewer({required this.url,required this.source,
     required this.title,required this.credits});
   final String url,source,title,credits;
+  @override State<_MedicalZoomViewer> createState()=>_MedicalZoomViewerState();
+}
+class _MedicalZoomViewerState extends State<_MedicalZoomViewer> {
+  final TransformationController controller=TransformationController();
+  @override void dispose(){controller.dispose();super.dispose();}
+  void zoom(double factor){
+    final value=(controller.value.getMaxScaleOnAxis()*factor).clamp(.7,8.0);
+    setState(()=>controller.value=Matrix4.identity()..scale(value));
+  }
+  void reset()=>setState(()=>controller.value=Matrix4.identity());
+  void openSource(){
+    final uri=Uri.tryParse(widget.source);
+    if(uri?.scheme=='https')launchUrl(uri!,mode:LaunchMode.externalApplication);
+  }
   @override Widget build(BuildContext context)=>Scaffold(
     backgroundColor:const Color(0xFF03080F),
-    appBar:AppBar(title:const Text('Visionneuse médicale'),
-      backgroundColor:PracticeDailyVisualTheme.background,actions:[
-      IconButton(tooltip:'Ouvrir la source originale',
-        icon:const Icon(Icons.open_in_new_rounded),
-        onPressed:(){
-          final uri=Uri.tryParse(source);
-          if(uri?.scheme=='https')launchUrl(uri!,mode:LaunchMode.externalApplication);
-        }),
-    ]),
+    appBar:AppBar(
+      title:const Text('Visionneuse médicale'),
+      backgroundColor:PracticeDailyVisualTheme.background,
+      actions:[IconButton(tooltip:'Voir le document source',
+        onPressed:openSource,icon:const Icon(Icons.open_in_new_rounded))],
+    ),
     body:SafeArea(child:Column(children:[
-      Expanded(child:InteractiveViewer(minScale:.5,maxScale:8,
-        boundaryMargin:const EdgeInsets.all(90),
-        child:Center(child:Image.network(url,fit:BoxFit.contain,
-          errorBuilder:(_,__,___)=>const Text('Image non disponible',
-            style:TextStyle(color:Colors.white70)))))),
-      Container(width:double.infinity,color:const Color(0xFF11283A),
-        padding:const EdgeInsets.all(15),child:Column(
-          crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text(title,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w800)),
+      Expanded(child:InteractiveViewer(
+        transformationController:controller,
+        minScale:.7,maxScale:8,
+        boundaryMargin:const EdgeInsets.all(120),
+        panEnabled:true,scaleEnabled:true,
+        child:Center(child:Image.network(widget.url,
+          headers:visceralImageHeaders(),
+          fit:BoxFit.contain,
+          loadingBuilder:(context,child,loading)=>loading==null?child:
+            const Center(child:CircularProgressIndicator(
+              color:PracticeDailyVisualTheme.mint)),
+          errorBuilder:(_,__,___)=>Column(
+            mainAxisAlignment:MainAxisAlignment.center,
+            children:[
+              const Icon(Icons.broken_image_outlined,
+                color:Colors.white70,size:36),
+              const SizedBox(height:8),
+              const Text('Image externe indisponible',
+                style:TextStyle(color:Colors.white70)),
+              TextButton(onPressed:openSource,
+                child:const Text('Ouvrir le site source')),
+            ]),
+        )),
+      )),
+      Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+        IconButton(tooltip:'Zoom arrière',onPressed:()=>zoom(.72),
+          icon:const Icon(Icons.remove_circle_outline,color:Colors.white)),
+        IconButton(tooltip:'Réinitialiser le zoom',onPressed:reset,
+          icon:const Icon(Icons.center_focus_strong,color:Colors.white)),
+        IconButton(tooltip:'Zoom avant',onPressed:()=>zoom(1.45),
+          icon:const Icon(Icons.add_circle_outline,color:Colors.white)),
+      ]),
+      Container(
+        width:double.infinity,color:const Color(0xFF11283A),
+        padding:const EdgeInsets.all(15),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(widget.title,style:const TextStyle(
+            color:Colors.white,fontWeight:FontWeight.w800)),
           const SizedBox(height:4),
-          Text(credits,style:const TextStyle(color:Colors.white70,fontSize:12)),
-          const Text('Zoom tactile · Déplacement · Source en haut à droite',
+          Text(widget.credits,style:const TextStyle(
+            color:Colors.white70,fontSize:12)),
+          const Text('Pincer pour zoomer · Glisser · Commandes + / −',
             style:TextStyle(color:Colors.white54,fontSize:11)),
-        ])),
-    ])));
+        ]),
+      ),
+    ])),
+  );
 }
