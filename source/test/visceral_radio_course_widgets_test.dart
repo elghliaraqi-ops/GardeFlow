@@ -5,11 +5,11 @@ import 'package:huim6_planning/screens/visceral_radio_fiche_view.dart';
 
 void main() {
   test('Ten numbered historic points render as separate pieces', () {
-    final text=List.generate(10,(i)=>(i+1).toString()+'. Point médical '+(i+1).toString()+'.').join(' ');
+    final text=List.generate(10,(i)=>(i+1).toString()+'. Information médicale à retenir.').join(' ');
     final parts=VisceralCourseText.numberedParts(text);
     expect(parts.length,10);
-    expect(parts.first,startsWith('Point médical 1'));
-    expect(parts.last,startsWith('Point médical 10'));
+    expect(parts.first,startsWith('Information médicale'));
+    expect(parts.last,startsWith('Information médicale'));
   });
   test('Ordinary anatomy paragraphs remain paragraphs', () {
     expect(VisceralCourseText.numberedParts(
