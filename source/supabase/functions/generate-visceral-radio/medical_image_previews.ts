@@ -29,6 +29,7 @@ export function allowedAsset(raw: string) {
     const uri=new URL(raw);
     return uri.protocol==='https:' && !uri.username && !uri.password &&
       !uri.port && clinicalHosts.has(uri.hostname.toLowerCase()) &&
+      (uri.hostname.toLowerCase()!=='upload.wikimedia.org'||uri.pathname.startsWith('/wikipedia/commons/')) &&
       uri.pathname.length<1100 && !uri.pathname.includes('..') &&
       !uri.searchParams.has('download') &&
       /\.(?:jpg|jpeg|png|webp)(?:$)/i.test(uri.pathname);
