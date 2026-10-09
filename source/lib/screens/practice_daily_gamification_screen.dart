@@ -324,7 +324,8 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () =>
+                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                    onPressed: () =>
                       _navigate(const PracticeDailyLeaderboardScreen()),
                   icon: const Icon(Icons.leaderboard_rounded, size: 17),
                   label: const Text('Classement'),
@@ -333,7 +334,8 @@ class _PracticeDailyGameHubCardState extends State<PracticeDailyGameHubCard> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () =>
+                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                    onPressed: () =>
                       _navigate(const PracticeDailyHistoryScreen()),
                   icon: const Icon(Icons.history_rounded, size: 17),
                   label: const Text('Historique'),
@@ -456,7 +458,8 @@ class _PracticeDailyHomePulseState extends State<PracticeDailyHomePulse> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () =>
+                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                    onPressed: () =>
                       _open(const PracticeDailyLeaderboardScreen()),
                   icon: const Icon(Icons.emoji_events_outlined, size: 17),
                   label: const Text('Classement'),
@@ -542,7 +545,8 @@ class _PracticeDailyLeaderboardScreenState
           foregroundColor: Colors.white,
           actions: [
             IconButton(
-              tooltip: 'Quitter le classement',
+                    style: PracticeDailyVisualTheme.toolbarButtonStyle,
+                    tooltip: 'Quitter le classement',
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(Icons.exit_to_app_rounded),
             ),
@@ -572,6 +576,21 @@ class _PracticeDailyLeaderboardScreenState
               ),
               const SizedBox(height: 14),
               SegmentedButton<String>(
+          style: ButtonStyle(
+            foregroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? PracticeDailyVisualTheme.background
+                  : PracticeDailyVisualTheme.text,
+            ),
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? PracticeDailyVisualTheme.mint
+                  : PracticeDailyVisualTheme.elevated,
+            ),
+            side: const WidgetStatePropertyAll(
+              BorderSide(color: PracticeDailyVisualTheme.border),
+            ),
+          ),
                 showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(value: 'month', label: Text('Ce mois')),
@@ -591,7 +610,8 @@ class _PracticeDailyLeaderboardScreenState
                 const SizedBox(height: 15),
                 Text(_error!, style: const TextStyle(color: _soft)),
                 OutlinedButton(
-                  onPressed: _load,
+                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                    onPressed: _load,
                   child: const Text('Réessayer'),
                 ),
               ],
@@ -680,7 +700,8 @@ class _PracticeDailyLeaderboardScreenState
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).maybePop(),
+                    style: PracticeDailyVisualTheme.secondaryButtonStyle,
+                    onPressed: () => Navigator.of(context).maybePop(),
                   icon: const Icon(Icons.exit_to_app_rounded),
                   label: const Text('Quitter le classement'),
                 ),
