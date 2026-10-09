@@ -42,6 +42,16 @@ jobs:
             grep -Fq 'medicalEvidencePolicy' "supabase/functions/$fn/index.ts"
             grep -Fq 'findOpenverseMedicalPreview' "supabase/functions/$fn/index.ts"
           done
+          deno check supabase/functions/generate-practice-progressive-case/progressive_question_sequence.ts
+          deno check source/supabase/functions/generate-practice-progressive-case/progressive_question_sequence.ts
+          cmp supabase/functions/generate-practice-progressive-case/progressive_question_sequence.ts source/supabase/functions/generate-practice-progressive-case/progressive_question_sequence.ts
+          deno test supabase/functions/generate-practice-progressive-case/progressive_question_sequence_test.ts
+          # JSON-mode outputs remain subject to lightweight parse and field guards.
+          grep -Fq "progressiveJsonContract(0)" supabase/functions/generate-practice-progressive-case/index.ts
+          grep -Fq "progressiveJsonContract(1)" supabase/functions/generate-practice-progressive-case/index.ts
+          grep -Fq "validateProgressiveAxisSequence" supabase/functions/generate-practice-progressive-case/index.ts
+          grep -Fq "response_format:{type:'json_object'}" supabase/functions/preview-clinical-case-qcm/index.ts
+          grep -Fq "response_format:{type:'json_object'}" supabase/functions/generate-clinical-case-qcm/index.ts
           deno test supabase/functions/generate-practice-daily-challenge/medical_evidence_media_test.ts
           deno test supabase/functions/generate-practice-daily-challenge/daily_qcm_validation_test.ts
           if grep -RE 'storage\.from\(|base64|data:image/' supabase/functions/generate-*/medical_evidence_media.ts; then
