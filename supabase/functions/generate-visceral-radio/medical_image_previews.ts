@@ -125,6 +125,19 @@ export async function resolveMedicalPreviews(query:string,modality='') {
     ...(commons.status==='fulfilled'?commons.value:[]),
     ...(openverse.status==='fulfilled'?openverse.value:[]),
   ];
+  // Broad-but-topical second lookup when precise radiological wording has no
+  // licensed thumbnails (especially historic French Groq image descriptors).
+  if(candidates.length===0){
+    const broad=/rectum|rectal|mesorect/i.test(normalized)?'rectum anatomy'
+      :normalized.trim().split(' ').filter(Boolean).slice(0,2).join(' ');
+    const fallback=await Promise.allSettled([
+      fromCommons(broad),fromOpenverse(broad),
+    ]);
+    candidates.push(
+      ...(fallback[0].status==='fulfilled'?fallback[0].value:[]),
+      ...(fallback[1].status==='fulfilled'?fallback[1].value:[]),
+    );
+  }
   const used=new Set<string>();
   const images=candidates.filter(image=>{
     const key=image.full||image.thumbnail;
