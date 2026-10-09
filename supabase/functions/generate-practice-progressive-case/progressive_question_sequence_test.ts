@@ -19,8 +19,8 @@ Deno.test('JSON contracts specify the correct five questions per generation call
   assert(contract.includes('"correct_index"'));
   assert(contract.includes('"references"'));
   assert(contract.includes('EXACTEMENT cinq objets'));
-  const example=contract.split('MODELE_JSON_DEBUT\\n')[1]
-    ?.split('\\nMODELE_JSON_FIN')[0];
+  const example=contract.split('MODELE_JSON_DEBUT\n')[1]
+    ?.split('\nMODELE_JSON_FIN')[0];
   assert(example);
   const parsed=JSON.parse(example) as {qcms:{axis:string}[]};
   assertEquals(parsed.qcms.length,5);
