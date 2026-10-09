@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -83,4 +83,23 @@ Deno.test('search broadens a specific request while keeping the right modality',
     title:'Rectum annual report book cover',
     description:'rectal cancer anatomy imaging'},anatomy),
     'Broad search does not reintroduce irrelevant book covers');
+});
+
+Deno.test('Wikimedia SVG rectum diagram uses generated PNG for BOTH preview and zoom',()=>{
+  const svg='https://upload.wikimedia.org/wikipedia/commons/a/ab/Rectum_anatomy_en.svg';
+  const png='https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Rectum_anatomy_en.svg/750px-Rectum_anatomy_en.svg.png';
+  const images=rasterImageUrls({url:svg,thumburl:png});
+  assert(images!==null,'a real SVG with raster PNG must not be silently discarded');
+  assert(images!.thumbnail===png&&images!.full===png,'viewer must never request raw SVG');
+  const req=legacyImageRequest({query:"Illustrer l'orientation anatomique du rectum, mésorectum et sphincters",modality:'schéma'});
+  assert(imageIsTopical({...good,thumbnail:images!.thumbnail,full:images!.full,
+    title:'Rectum anatomy en.svg',description:'English diagram of human rectum'},req),'valid CC rectum diagram should pass the medical filter');
+});
+Deno.test('non-renderable SVG and unrelated publication covers never become previews',()=>{
+  assert(rasterImageUrls({url:'https://upload.wikimedia.org/wikipedia/commons/a/ab/test.svg'})===null,
+    'SVG without PNG must be refused');
+  const req=legacyImageRequest({query:'Rectum anatomy'});
+  const png='https://upload.wikimedia.org/wikipedia/commons/a/ab/Rectum.jpg';
+  assert(!imageIsTopical({...good,thumbnail:png,full:png,title:'Rectum anatomy annual report book cover',
+    description:'Annual report'},req),'irrelevant covers must still be excluded');
 });
