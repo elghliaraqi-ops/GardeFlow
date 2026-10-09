@@ -39,5 +39,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Type-check private Edge Function
-        run: deno check source/supabase/functions/generate-visceral-radio/index.ts
+      - name: Type-check private Edge Function and JSON contract
+        run: deno check source/supabase/functions/generate-visceral-radio/index.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts
+      - name: Test four Groq prompt/JSON contracts (no API calls)
+        run: deno test source/supabase/functions/generate-visceral-radio/generation_contract_test.ts
