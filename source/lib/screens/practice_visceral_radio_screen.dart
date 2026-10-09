@@ -101,6 +101,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
       ..._records(raw).take(3).map((x)=>VisceralMedicalGallery(
         query:_str(x['query']), caption:_str(x['purpose']),
         modality:_str(x['modality']),
+        imageRequest:x,
       )),
     ]);
   }
