@@ -68,11 +68,6 @@ jobs:
       - name: Install Flutter packages
         working-directory: source
         run: flutter pub get
-      - name: Temporary Dart formatting diff diagnostics
-        working-directory: source
-        run: |
-          dart format lib/screens/practice_progressive_cases_screen.dart
-          git diff -- lib/screens/practice_progressive_cases_screen.dart
       - name: Strict Dart formatting
         working-directory: source
         run: |
