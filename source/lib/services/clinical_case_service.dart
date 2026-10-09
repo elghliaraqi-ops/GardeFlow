@@ -196,8 +196,11 @@ class ClinicalCaseService {
       throw StateError('Authentification requise.');
     }
     if (!const <int>[5, 10, 20].contains(quantity) ||
-        !const <String>['facile', 'intermediaire', 'avance']
-            .contains(difficulty)) {
+        !const <String>[
+          'facile',
+          'intermediaire',
+          'avance',
+        ].contains(difficulty)) {
       throw ArgumentError('Paramètres incorrects.');
     }
     try {
@@ -217,7 +220,9 @@ class ClinicalCaseService {
       return ClinicalQcmPreview.fromMap(Map<String, dynamic>.from(data));
     } catch (error) {
       if (error is StateError || error is ArgumentError) rethrow;
-      throw StateError('Génération indisponible. Les anciens QCM restent intacts.');
+      throw StateError(
+        'Génération indisponible. Les anciens QCM restent intacts.',
+      );
     }
   }
 
@@ -247,7 +252,9 @@ class ClinicalCaseService {
       return count;
     } catch (error) {
       if (error is StateError) rethrow;
-      throw StateError('Publication impossible. Les anciens QCM sont conservés.');
+      throw StateError(
+        'Publication impossible. Les anciens QCM sont conservés.',
+      );
     }
   }
 
@@ -650,7 +657,6 @@ class _QcmRetryState {
   }
 }
 
-
 /// Un aperçu ne contient que les énoncés et propositions, jamais le corrigé.
 class ClinicalQcmPreview {
   final String id;
@@ -668,14 +674,19 @@ class ClinicalQcmPreview {
   factory ClinicalQcmPreview.fromMap(Map<String, dynamic> data) {
     final items = data['questions'];
     final questions = items is List
-        ? items.whereType<Map>().map((entry) =>
-            ClinicalQcmPreviewQuestion.fromMap(
-              Map<String, dynamic>.from(entry),
-            )).toList(growable: false)
+        ? items
+              .whereType<Map>()
+              .map(
+                (entry) => ClinicalQcmPreviewQuestion.fromMap(
+                  Map<String, dynamic>.from(entry),
+                ),
+              )
+              .toList(growable: false)
         : <ClinicalQcmPreviewQuestion>[];
     final quantity = int.tryParse('${data['quantity'] ?? 0}') ?? 0;
     final id = '${data['preview_id'] ?? ''}'.trim();
-    if (id.isEmpty || quantity != questions.length ||
+    if (id.isEmpty ||
+        quantity != questions.length ||
         !const <int>[5, 10, 20].contains(quantity)) {
       throw StateError('Aperçu incomplet.');
     }
