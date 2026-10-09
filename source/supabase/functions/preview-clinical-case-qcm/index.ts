@@ -6,7 +6,7 @@ type Item={position:number;question:string;options:string[];correct_index:number
 const axes=['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'] as const;
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'] as const;
 const kinds=['recommandation','consensus','revue','cours'] as const;
-const refSchema={type:'object',additionalProperties:false,required:['title','organization','year','url','kind'],properties:{title:{type:'string'},organization:{type:'string'},year:{type:'string'},url:{type:'string'},kind:{type:'string',enum:kinds}}};
+const refSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const schema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],properties:{
  axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
  correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
@@ -125,7 +125,19 @@ Deno.serve(async(req:Request)=>{
  complementary:clean(post.complementary_exams),imaging:clean(post.imaging_conclusion),assessment:clean(post.assessment),plan:clean(post.plan)});
  for(let part=0;part<qty/5;part++){
  const forbidden=past.concat(proposed.map(q=>q.question)).slice(-100).join('\n');
- const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON STRUCTURÉ sans markdown : {"qcms":[cinq objets ayant exactement les champs axis, question, options (4 textes), correct_index (entier 0 à 3), correction, topic, references ([{"url":"URL fournie"}]), image_search_query]}. Les 5 axis suivent exactement l’ordre demandé.\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
+ const exampleQcms={qcms:axes.map(axis=>({
+  axis,question:'REMPLACER par une question médicale pour '+axis,
+  options:['Option clinique A','Option clinique B','Option clinique C','Option clinique D'],
+  correct_index:0,correction:'REMPLACER par une explication médicale fondée sur les sources fournies.',
+  topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],image_search_query:''
+ }))};
+ const jsonContract='Objet JSON racine {qcms:[5 objets]} avec les champs EXACTS : '+
+  Object.keys(((schema.properties.qcms as {items:{properties:Record<string,unknown>}}).items).properties).join(', ')+
+  '. references doit être une liste de 1 à 3 objets {url}, jamais des sources inventées. '+
+  'Axes strictement dans cet ordre : '+axes.join(' → ')+
+  '. Exemple JSON valide dont tous les contenus sont À REMPLACER : '+JSON.stringify(exampleQcms)+
+  '. Ne pas recopier les placeholders. Aucun Markdown.';
+ const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
  try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
  body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:9500,
