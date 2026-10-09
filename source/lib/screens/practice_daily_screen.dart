@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/practice_daily_models.dart';
 import '../services/practice_daily_service.dart';
 import '../services/notification_service.dart';
+import '../services/push_notification_service.dart';
 
 class PracticeDailyScreen extends StatefulWidget {
   const PracticeDailyScreen({super.key});
@@ -70,7 +71,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     List<PracticeDailyCalendarEntry> entries,
   ) async {
     await NotificationService.instance.schedulePracticeDailyChallengeReminders(
-      enabled: _enabled,
+      enabled: _enabled && !PushNotificationService.instance.hasActiveRemotePush,
       completedDays: entries
           .map((e) => DateFormat('yyyy-MM-dd').format(e.day))
           .toSet(),
@@ -646,7 +647,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 style: TextStyle(color: _text, fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Notification à 8 h, heure de Casablanca, sur cet appareil (Android/iOS).',
+                'Notification FCM à 8 h (Casablanca) si le push est actif, sinon rappel local sur mobile.',
                 style: TextStyle(color: _muted, fontSize: 12),
               ),
               secondary: const Icon(
