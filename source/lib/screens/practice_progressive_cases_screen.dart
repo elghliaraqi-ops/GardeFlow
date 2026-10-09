@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/practice_daily_models.dart';
 import '../services/supabase_backend_service.dart';
+import '../widgets/practice_clinical_dossier.dart';
 import 'practice_daily_visual_theme.dart';
 
 /// Standalone clinical practice. Its answers and scores never enter the
@@ -25,6 +26,7 @@ class _PracticeProgressiveCasesScreenState
   List<Map<String, dynamic>> _savedCases = const [];
   String _title = '';
   String _stem = '';
+  Map<String, dynamic> _casePayload = const {};
   List<PracticeDailyStage> _stages = const [];
   List<PracticeDailyQuestion> _questions = const [];
   List<int?> _answers = List<int?>.filled(10, null);
@@ -79,7 +81,7 @@ class _PracticeProgressiveCasesScreenState
       final backend = SupabaseBackendService.instance;
       final data = await backend.client
           .from('practice_generated_cases')
-          .select('case_title,case_stem,case_stages,questions')
+          .select('case_title,case_stem,case_stages,case_payload,questions')
           .eq('id', id)
           .single();
       final rawStages = data['case_stages'];
@@ -118,6 +120,9 @@ class _PracticeProgressiveCasesScreenState
       setState(() {
         _title = '${data['case_title'] ?? ''}';
         _stem = '${data['case_stem'] ?? ''}';
+        _casePayload = data['case_payload'] is Map
+            ? Map<String, dynamic>.from(data['case_payload'] as Map)
+            : const {};
         _stages = stages;
         _questions = questions;
         _answers = List<int?>.filled(10, null);
@@ -139,6 +144,7 @@ class _PracticeProgressiveCasesScreenState
     setState(() {
       _questions = const [];
       _stages = const [];
+      _casePayload = const {};
       _error = null;
       _submitted = false;
       _question = 0;
@@ -210,6 +216,9 @@ class _PracticeProgressiveCasesScreenState
       setState(() {
         _title = '${map['case_title'] ?? 'Cas clinique fictif'}';
         _stem = '${map['case_stem'] ?? ''}';
+        _casePayload = map['case_payload'] is Map
+            ? Map<String, dynamic>.from(map['case_payload'] as Map)
+            : const {};
         _stages = stages;
         _questions = questions;
         _answers = List<int?>.filled(10, null);
@@ -257,69 +266,15 @@ class _PracticeProgressiveCasesScreenState
     child: content,
   );
 
-  Widget _stagePanel() {
-    final stageIndex = PracticeDailyProgress.stageForQuestion(_question);
-    final unlocked = _submitted
+  Widget _stagePanel() => PracticeClinicalDossier(
+    stages: _stages,
+    data: _casePayload,
+    unlocked: _submitted
         ? 3
-        : PracticeDailyProgress.unlockedStage(_answers);
-    return Column(
-      children: [
-        for (var stage = 0; stage < 4; stage++) ...[
-          _panel(
-            stage <= unlocked
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${stage + 1}. ${_stages[stage].title}',
-                        style: const TextStyle(
-                          color: PracticeDailyVisualTheme.gold,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _stages[stage].narrative,
-                        style: const TextStyle(
-                          color: PracticeDailyVisualTheme.text,
-                          height: 1.45,
-                          fontSize: 13,
-                        ),
-                      ),
-                      if (!_submitted && stage == stageIndex) ...[
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Étape en cours · répondez aux questions avant de poursuivre',
-                          style: TextStyle(
-                            color: PracticeDailyVisualTheme.mint,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ],
-                  )
-                : Row(
-                    children: [
-                      const Icon(
-                        Icons.lock_outline_rounded,
-                        color: PracticeDailyVisualTheme.muted,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Étape ${stage + 1} · À débloquer',
-                        style: const TextStyle(
-                          color: PracticeDailyVisualTheme.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ],
-    );
-  }
+        : PracticeDailyProgress.unlockedStage(_answers),
+    current: PracticeDailyProgress.stageForQuestion(_question),
+    completed: _submitted,
+  );
 
   Widget _explanation(String correction) {
     final sections = correction.split('§SOURCES§');
