@@ -41,20 +41,24 @@ void main() {
     });
     var open = 0;
     var ranking = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: SingleChildScrollView(
-        child: PracticeHomeHero(
-          answered: 88,
-          accuracy: 73.4,
-          xp: 420,
-          streak: 3,
-          level: 7,
-          loading: false,
-          onStart: () => open++,
-          onQcmRanking: () => ranking++,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: PracticeHomeHero(
+              answered: 88,
+              accuracy: 73.4,
+              xp: 420,
+              streak: 3,
+              level: 7,
+              loading: false,
+              onStart: () => open++,
+              onQcmRanking: () => ranking++,
+            ),
+          ),
         ),
-      )),
-    ));
+      ),
+    );
     expect(find.text('88'), findsOneWidget);
     expect(find.text('73%'), findsOneWidget);
     expect(find.text('Explorer les cas et leurs QCM'), findsOneWidget);
@@ -67,16 +71,20 @@ void main() {
 
   testWidgets('Clinical modes have real tap targets', (tester) async {
     var tapped = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: PracticeCompactModeCard(
-        icon: Icons.auto_awesome,
-        title: 'Cas IA aléatoire',
-        subtitle: 'Créer un cas fictif',
-        label: 'CRÉATION IA',
-        accent: Colors.amber,
-        onTap: () => tapped++,
-      )),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PracticeCompactModeCard(
+            icon: Icons.auto_awesome,
+            title: 'Cas IA aléatoire',
+            subtitle: 'Créer un cas fictif',
+            label: 'CRÉATION IA',
+            accent: Colors.amber,
+            onTap: () => tapped++,
+          ),
+        ),
+      ),
+    );
     await tester.tap(find.text('Cas IA aléatoire'));
     expect(tapped, 1);
     expect(tester.takeException(), isNull);

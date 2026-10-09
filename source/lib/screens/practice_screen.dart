@@ -324,8 +324,17 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 streak: _all.streak,
                 level: level.number,
                 loading: _loading,
-                onStart: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClinicalCasesScreen(onEditCase: _editPublishedCase))),
-                onQcmRanking: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PracticeQcmScreen())),
+                onStart: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClinicalCasesScreen(onEditCase: _editPublishedCase),
+                  ),
+                ),
+                onQcmRanking: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PracticeQcmScreen()),
+                ),
               ),
               const SizedBox(height: 12),
               const PracticeDailyGameHubCard(),
@@ -340,62 +349,95 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 subtitle: 'Des cas réels documentés et des simulations IA',
               ),
               const SizedBox(height: 10),
-              LayoutBuilder(builder: (context, constraints) {
-                final modes = <Widget>[
-                  PracticeCompactModeCard(
-                    icon: Icons.note_add_outlined,
-                    title: 'Cas rencontré',
-                    subtitle: 'Documenter un cas hors garde',
-                    label: 'DOCUMENTATION',
-                    accent: PracticeColors.gameBlue,
-                    onTap: _newStandaloneCase,
-                  ),
-                  PracticeCompactModeCard(
-                    icon: Icons.auto_awesome_rounded,
-                    title: 'Cas IA aléatoire',
-                    subtitle: 'Générer, adapter et publier',
-                    label: 'CRÉATION IA',
-                    accent: PracticeColors.gameGold,
-                    onTap: _newRandomClinicalCase,
-                  ),
-                ];
-                return constraints.maxWidth >= 345
-                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: modes[0]), const SizedBox(width: 10),
-                      Expanded(child: modes[1]),
-                    ])
-                  : Column(children: [
-                      modes[0], const SizedBox(height: 10), modes[1],
-                    ]);
-              }),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final modes = <Widget>[
+                    PracticeCompactModeCard(
+                      icon: Icons.note_add_outlined,
+                      title: 'Cas rencontré',
+                      subtitle: 'Documenter un cas hors garde',
+                      label: 'DOCUMENTATION',
+                      accent: PracticeColors.gameBlue,
+                      onTap: _newStandaloneCase,
+                    ),
+                    PracticeCompactModeCard(
+                      icon: Icons.auto_awesome_rounded,
+                      title: 'Cas IA aléatoire',
+                      subtitle: 'Générer, adapter et publier',
+                      label: 'CRÉATION IA',
+                      accent: PracticeColors.gameGold,
+                      onTap: _newRandomClinicalCase,
+                    ),
+                  ];
+                  return constraints.maxWidth >= 345
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: modes[0]),
+                            const SizedBox(width: 10),
+                            Expanded(child: modes[1]),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            modes[0],
+                            const SizedBox(height: 10),
+                            modes[1],
+                          ],
+                        );
+                },
+              ),
               const SizedBox(height: 11),
               _PracticePrimaryActionCard(
                 icon: Icons.account_tree_rounded,
                 title: 'Simulation clinique progressive',
-                subtitle: 'Un patient fictif · 4 étapes · 10 QCM contextualisés',
+                subtitle:
+                    'Un patient fictif · 4 étapes · 10 QCM contextualisés',
                 meta: 'SIMULATION LIBRE · REPRENDRE UN DOSSIER',
                 accent: PracticeColors.gamePurple,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PracticeProgressiveCasesScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: 11),
               PracticeInlineNavigation(
                 icon: Icons.menu_book_rounded,
                 title: 'Bibliothèque de cas cliniques',
                 subtitle: 'Parcourir les cas publiés et leurs QCM',
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClinicalCasesScreen(onEditCase: _editPublishedCase))),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClinicalCasesScreen(onEditCase: _editPublishedCase),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
               PracticeInlineNavigation(
                 icon: Icons.bookmark_added_outlined,
                 title: 'Reprendre une simulation enregistrée',
                 subtitle: 'Retrouver les cas progressifs et terminer leurs QCM',
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PracticeProgressiveCasesScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: 18),
               PracticeAchievementsPreview(
                 achievements: _achievements,
                 loading: _loading,
-                onOpen: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PracticeAchievementsScreen(appState: widget.appState))),
+                onOpen: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PracticeAchievementsScreen(appState: widget.appState),
+                  ),
+                ),
               ),
 
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
@@ -3623,56 +3665,101 @@ class _PracticeAchievementsScreenState
     decoration: BoxDecoration(
       color: PracticeColors.surface,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color:
-        item.unlocked ? PracticeColors.accent : PracticeColors.line),
+      border: Border.all(
+        color: item.unlocked ? PracticeColors.accent : PracticeColors.line,
+      ),
     ),
-    child: Row(children: [
-      Container(width: 44, height: 44,
-        decoration: BoxDecoration(
-          color: (item.unlocked ? PracticeColors.accent
-            : PracticeColors.elevated).withOpacity(.16),
-          borderRadius: BorderRadius.circular(13)),
-        child: Icon(_achievementIcon(item.icon),
-          color: item.unlocked ? PracticeColors.accent
-            : PracticeColors.textSecondary)),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(item.name, style: const TextStyle(color: Colors.white,
-            fontWeight: FontWeight.w900)),
-          const SizedBox(height: 3),
-          Text(item.description, style: const TextStyle(
-            color: PracticeColors.textSecondary, fontSize: 11, height: 1.35)),
-          const SizedBox(height: 8),
-          ClipRRect(borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(value: item.ratio, minHeight: 6,
-              backgroundColor: PracticeColors.background,
-              color: item.unlocked
-                ? PracticeColors.gameGold : PracticeColors.accent)),
-          const SizedBox(height: 5),
-          Text(item.progress.toString() + ' / ' + item.threshold.toString(),
-            style: const TextStyle(color: PracticeColors.textSecondary,
-              fontSize: 10, fontWeight: FontWeight.w800)),
-        ])),
-      if (item.unlocked) const Padding(
-        padding: EdgeInsets.only(left: 8),
-        child: Icon(Icons.check_circle_rounded, color: PracticeColors.accent)),
-    ]),
+    child: Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color:
+                (item.unlocked
+                        ? PracticeColors.accent
+                        : PracticeColors.elevated)
+                    .withOpacity(.16),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(
+            _achievementIcon(item.icon),
+            color: item.unlocked
+                ? PracticeColors.accent
+                : PracticeColors.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                item.description,
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: item.ratio,
+                  minHeight: 6,
+                  backgroundColor: PracticeColors.background,
+                  color: item.unlocked
+                      ? PracticeColors.gameGold
+                      : PracticeColors.accent,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                item.progress.toString() + ' / ' + item.threshold.toString(),
+                style: const TextStyle(
+                  color: PracticeColors.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (item.unlocked)
+          const Padding(
+            padding: EdgeInsets.only(left: 8),
+            child: Icon(
+              Icons.check_circle_rounded,
+              color: PracticeColors.accent,
+            ),
+          ),
+      ],
+    ),
   );
 
   @override
   Widget build(BuildContext context) {
     final level = practiceLevelForXp(_all.xp);
     final unlocked = _items.where((a) => a.unlocked).length;
-    final visible = _items.where((a) {
-      if (_onlyPending && a.unlocked) return false;
-      return _category == 'Tous' ||
-          practiceAchievementCategory(a) == _category;
-    }).toList()..sort((a, b) {
-      if (a.unlocked != b.unlocked) return a.unlocked ? 1 : -1;
-      final progress = b.ratio.compareTo(a.ratio);
-      return progress != 0 ? progress : a.name.compareTo(b.name);
-    });
+    final visible =
+        _items.where((a) {
+          if (_onlyPending && a.unlocked) return false;
+          return _category == 'Tous' ||
+              practiceAchievementCategory(a) == _category;
+        }).toList()..sort((a, b) {
+          if (a.unlocked != b.unlocked) return a.unlocked ? 1 : -1;
+          final progress = b.ratio.compareTo(a.ratio);
+          return progress != 0 ? progress : a.name.compareTo(b.name);
+        });
     return DecorScaffold(
       scene: ScreenDecorScene.practice,
       backgroundColor: PracticeColors.background,
@@ -3682,98 +3769,162 @@ class _PracticeAchievementsScreenState
         title: const Text('Succès · Practice'),
       ),
       body: _loading
-        ? const Center(child: CircularProgressIndicator(
-            color: PracticeColors.accent))
-        : RefreshIndicator(
-          onRefresh: _load,
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(15, 8, 15, 30),
-            itemCount: visible.length + 1,
-            itemBuilder: (context, index) {
-              if (index > 0) return _achievementTile(visible[index - 1]);
-              return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _LevelCard(level: level, xp: _all.xp,
-                    streak: _all.streak),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: PracticeColors.surface,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: PracticeColors.gameGold
-                        .withOpacity(.4)),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(unlocked.toString() + ' / ' +
-                          _items.length.toString() + ' succès débloqués',
-                          style: const TextStyle(color: PracticeColors.text,
-                            fontSize: 17, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 10),
-                        ClipRRect(borderRadius: BorderRadius.circular(99),
-                          child: LinearProgressIndicator(
-                            value: _items.isEmpty ? 0 : unlocked / _items.length,
-                            minHeight: 8,
-                            backgroundColor: PracticeColors.elevated,
-                            color: PracticeColors.gameGold)),
-                        const SizedBox(height: 10),
-                        const Text('Choisissez une collection pour consulter '
-                          'ses objectifs et suivre votre progression.',
-                          style: TextStyle(color: PracticeColors.textSecondary,
-                            fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(children: [
-                      for (final category in practiceAchievementCategories)
-                        Padding(padding: const EdgeInsets.only(right: 6),
-                          child: ChoiceChip(
-                            label: Text(category +
-                              (category == 'Tous' ? '' :
-                                ' · ' + _items.where((a) =>
-                                  practiceAchievementCategory(a) == category
-                                  && a.unlocked).length.toString() + '/' +
-                                  _items.where((a) =>
-                                    practiceAchievementCategory(a) == category)
-                                    .length.toString())),
-                            selected: _category == category,
-                            showCheckmark: false,
-                            onSelected: (_) =>
-                              setState(() => _category = category),
-                            selectedColor: PracticeColors.elevated,
-                            backgroundColor: PracticeColors.surface,
-                            side: BorderSide(color: _category == category
-                              ? PracticeColors.accent : PracticeColors.line),
-                            labelStyle: TextStyle(
-                              color: _category == category
-                                ? PracticeColors.accent : PracticeColors.text,
-                              fontSize: 11, fontWeight: FontWeight.w800),
-                          )),
-                    ]),
-                  ),
-                  const SizedBox(height: 6),
-                  SwitchListTile.adaptive(
-                    title: const Text('Afficher seulement les succès à débloquer',
-                      style: TextStyle(color: PracticeColors.text,
-                        fontSize: 12, fontWeight: FontWeight.w800)),
-                    value: _onlyPending,
-                    activeColor: PracticeColors.accent,
-                    onChanged: (value) =>
-                      setState(() => _onlyPending = value),
-                  ),
-                  Text(visible.length.toString() + ' objectifs',
-                    style: const TextStyle(color: PracticeColors.textSecondary,
-                      fontSize: 11, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 9),
-                ],
-              );
-            },
-          ),
-        ),
+          ? const Center(
+              child: CircularProgressIndicator(color: PracticeColors.accent),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(15, 8, 15, 30),
+                itemCount: visible.length + 1,
+                itemBuilder: (context, index) {
+                  if (index > 0) return _achievementTile(visible[index - 1]);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _LevelCard(
+                        level: level,
+                        xp: _all.xp,
+                        streak: _all.streak,
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: PracticeColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: PracticeColors.gameGold.withOpacity(.4),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              unlocked.toString() +
+                                  ' / ' +
+                                  _items.length.toString() +
+                                  ' succès débloqués',
+                              style: const TextStyle(
+                                color: PracticeColors.text,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(99),
+                              child: LinearProgressIndicator(
+                                value: _items.isEmpty
+                                    ? 0
+                                    : unlocked / _items.length,
+                                minHeight: 8,
+                                backgroundColor: PracticeColors.elevated,
+                                color: PracticeColors.gameGold,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Choisissez une collection pour consulter '
+                              'ses objectifs et suivre votre progression.',
+                              style: TextStyle(
+                                color: PracticeColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final category
+                                in practiceAchievementCategories)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ChoiceChip(
+                                  label: Text(
+                                    category +
+                                        (category == 'Tous'
+                                            ? ''
+                                            : ' · ' +
+                                                  _items
+                                                      .where(
+                                                        (a) =>
+                                                            practiceAchievementCategory(
+                                                                  a,
+                                                                ) ==
+                                                                category &&
+                                                            a.unlocked,
+                                                      )
+                                                      .length
+                                                      .toString() +
+                                                  '/' +
+                                                  _items
+                                                      .where(
+                                                        (a) =>
+                                                            practiceAchievementCategory(
+                                                              a,
+                                                            ) ==
+                                                            category,
+                                                      )
+                                                      .length
+                                                      .toString()),
+                                  ),
+                                  selected: _category == category,
+                                  showCheckmark: false,
+                                  onSelected: (_) =>
+                                      setState(() => _category = category),
+                                  selectedColor: PracticeColors.elevated,
+                                  backgroundColor: PracticeColors.surface,
+                                  side: BorderSide(
+                                    color: _category == category
+                                        ? PracticeColors.accent
+                                        : PracticeColors.line,
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: _category == category
+                                        ? PracticeColors.accent
+                                        : PracticeColors.text,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SwitchListTile.adaptive(
+                        title: const Text(
+                          'Afficher seulement les succès à débloquer',
+                          style: TextStyle(
+                            color: PracticeColors.text,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        value: _onlyPending,
+                        activeColor: PracticeColors.accent,
+                        onChanged: (value) =>
+                            setState(() => _onlyPending = value),
+                      ),
+                      Text(
+                        visible.length.toString() + ' objectifs',
+                        style: const TextStyle(
+                          color: PracticeColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                    ],
+                  );
+                },
+              ),
+            ),
     );
   }
 }
