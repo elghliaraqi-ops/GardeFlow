@@ -38,7 +38,13 @@ class _PracticeProgressiveCasesScreenState
 
   Future<void> _loadSavedCases() async {
     final backend = SupabaseBackendService.instance;
-    if (!backend.enabled || backend.client.auth.currentUser == null) return;
+    if (!backend.enabled) return;
+    try {
+      if (backend.client.auth.currentUser == null) return;
+    } catch (_) {
+      // Widget tests can render Practice before Supabase.initialize.
+      return;
+    }
     if (mounted) setState(() => _loadingSaved = true);
     try {
       final rows = await backend.client
@@ -78,25 +84,34 @@ class _PracticeProgressiveCasesScreenState
           .single();
       final rawStages = data['case_stages'];
       final rawQuestions = data['questions'];
-      if (rawStages is! List || rawStages.length != 4 ||
-          rawQuestions is! List || rawQuestions.length != 10) {
+      if (rawStages is! List ||
+          rawStages.length != 4 ||
+          rawQuestions is! List ||
+          rawQuestions.length != 10) {
         throw StateError('saved_case_invalid');
       }
       final stages = rawStages
           .whereType<Map>()
-          .map((entry) => PracticeDailyStage.fromMap(
-                Map<String, dynamic>.from(entry),
-              ))
+          .map(
+            (entry) =>
+                PracticeDailyStage.fromMap(Map<String, dynamic>.from(entry)),
+          )
           .toList();
       final questions = rawQuestions
           .whereType<Map>()
-          .map((entry) => PracticeDailyQuestion.fromMap(
-                Map<String, dynamic>.from(entry),
-              ))
+          .map(
+            (entry) =>
+                PracticeDailyQuestion.fromMap(Map<String, dynamic>.from(entry)),
+          )
           .toList();
-      if (stages.length != 4 || questions.length != 10 ||
-          questions.any((q) => q.options.length != 4 ||
-              q.correctIndex == null || q.correction.isEmpty)) {
+      if (stages.length != 4 ||
+          questions.length != 10 ||
+          questions.any(
+            (q) =>
+                q.options.length != 4 ||
+                q.correctIndex == null ||
+                q.correction.isEmpty,
+          )) {
         throw StateError('saved_case_invalid');
       }
       if (!mounted) return;
@@ -657,9 +672,7 @@ class _PracticeProgressiveCasesScreenState
                       if (_savedError != null)
                         Text(
                           _savedError!,
-                          style: const TextStyle(
-                            color: Color(0xFFFFB2B2),
-                          ),
+                          style: const TextStyle(color: Color(0xFFFFB2B2)),
                         ),
                       if (!_loadingSaved && _savedCases.isEmpty)
                         const Text(
