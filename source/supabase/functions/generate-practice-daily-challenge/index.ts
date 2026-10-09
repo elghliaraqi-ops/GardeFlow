@@ -68,7 +68,7 @@ caseBatchSchema.properties.qcms.minItems=5;
 caseBatchSchema.properties.qcms.maxItems=5;
 
 async function newGroqBatch(
- prompt:string,format:Record<string,unknown>,overrideModel?:string
+ prompt:string,format:Record<string,unknown>,overrideModel?:string,timeoutMs=30000
 ):Promise<Record<string,unknown>> {
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
@@ -77,7 +77,7 @@ async function newGroqBatch(
  const model=overrideModel??(
   ['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
    ?configured:'openai/gpt-oss-20b');
- const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),42000);
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),Math.min(30000,Math.max(8000,timeoutMs)));
  try{
   const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
    method:'POST',signal:ctrl.signal,
@@ -93,7 +93,7 @@ async function newGroqBatch(
   if(!response.ok){
    const raw=await response.json().catch(()=>null);
    const reason=String(raw?.error?.code??raw?.error?.type??'').slice(0,65);
-   console.warn('daily_groq_http',{status:response.status,model,reason});
+   console.warn('daily_groq_http',{status:response.status,model,reason,retry_after:response.headers.get('retry-after')??''});
    if(response.status===401||response.status===403)throw Error('groq_auth_failed');
    if(response.status===429)throw Error('groq_rate_limited');
    if(response.status>=500)throw Error('groq_provider_unavailable');
@@ -118,22 +118,43 @@ async function newGroqBatch(
  }finally{clearTimeout(timer);}
 }
 
+// Treat malformed questions individually. Keep already-validated material;
+// callers request only the number of replacement questions still needed.
 async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>)
  :Promise<Record<string,unknown>[]>{
- if(!Array.isArray(batch.qcms)||batch.qcms.length!==5)throw Error('invalid_generated_question_count');
+ if(!Array.isArray(batch.qcms)){
+  console.warn('daily_ai_bad_batch',{reason:'qcms_not_array'});
+  return [];
+ }
  const map=new Map(refs.map(x=>[canon(x.url),x]));
  const output:Record<string,unknown>[]=[];
- for(const [index,raw] of batch.qcms.entries()){
+ for(const [index,raw] of batch.qcms.slice(0,8).entries()){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)){
+   console.warn('daily_ai_question_rejected',{position:index+1,reason:'invalid_object'});
+   continue;
+  }
   const q=raw as Record<string,unknown>;
-  const question=plain(q.question,1400),options=Array.isArray(q.options)
-   ?q.options.map(x=>plain(x,450)):[];
+  const question=plain(q.question,1400);
+  const options=Array.isArray(q.options)?q.options.map(x=>plain(x,450)):[];
   const correct=Number(q.correct_index),correction=plain(q.correction,6500);
   const topic=String(q.topic??'synthese'),fingerprint=cleanKey(question);
+  // Only resolve to actual, server-fetched Europe PMC references.
+  // Source IDs avoid fragile LLM reproduction of long DOI/PMID URLs.
   const refObjects=Array.isArray(q.references)?q.references:[];
-  const references=[...new Map(refObjects.flatMap((r:unknown)=>{
-   const source=map.get(canon((r as {url?:string})?.url));
-   return source?[[canon(source.url),source]]:[];
-  }) as [string,Ref][]).values()].slice(0,3);
+  const refIds=Array.isArray(q.source_ids)?q.source_ids:[];
+  const validatedSources:Ref[]=[];
+  for(const item of refObjects){
+   const entry=item as {url?:unknown}|null;
+   const source=map.get(canon(entry?.url));
+   if(source)validatedSources.push(source);
+  }
+  for(const id of refIds){
+   const n=Number(id);
+   if(Number.isInteger(n)&&n>=1&&n<=Math.min(8,refs.length))
+    validatedSources.push(refs[n-1]);
+  }
+  const references=[...new Map(validatedSources.map(r=>[canon(r.url),r])).values()]
+   .slice(0,3);
   const failure=question.length<12?'question_too_short':
    options.length!==4?'option_count':
    options.some(x=>x.length<1)?'empty_option':
@@ -144,27 +165,37 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
    !topics.includes(topic)?'invalid_topic':
    seen.has(fingerprint)?'duplicate_question':'';
   if(failure){
-   // Log reason and position only: never log a user identity or generated question.
    console.warn('daily_ai_question_rejected',{position:index+1,reason:failure});
-   throw Error('invalid_generated_questions');
+   continue;
   }
   seen.add(fingerprint);
   output.push({question,options,correct_index:correct,correction,topic,
-   references,illustration_query:String(q.image_search_query??'')});
+   references,illustration_query:plain(q.image_search_query,140)});
  }
- // Parallel Wikimedia lookups avoid up to 60s sequential Edge timeout.
+ // Optional external thumbnails must not be able to invalidate a sound QCM.
  return await Promise.all(output.map(async(item)=>{
   const query=String(item.illustration_query??'').trim();
   const picture=query?await commons(query):null;
   const img=picture?'\n\n§IMAGES§\n'+
     [picture.name,picture.url,picture.source].join('|||'):'';
   const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
-    .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
+   .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
    question:item.question,options:item.options,correct_index:item.correct_index,
    topic:item.topic,correction:String(item.correction)+img+urls
   };
  }));
+}
+function validCachedQuestion(raw:unknown):raw is Record<string,unknown>{
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return false;
+ const q=raw as Record<string,unknown>;
+ return typeof q.question==='string'&&q.question.length>=12&&
+  Array.isArray(q.options)&&q.options.length===4&&
+  q.options.every(x=>typeof x==='string'&&x.trim())&&
+  new Set(q.options.map(x=>cleanKey(String(x)))).size===4&&
+  Number.isInteger(q.correct_index)&&Number(q.correct_index)>=0&&
+  Number(q.correct_index)<=3&&typeof q.correction==='string'&&
+  q.correction.length>=25&&topics.includes(String(q.topic));
 }
 
 Deno.serve(async(req:Request)=>{
@@ -205,52 +236,93 @@ Deno.serve(async(req:Request)=>{
    const common='Retourne seulement un objet JSON racine contenant uniquement la clé qcms avec EXACTEMENT cinq objets ; '+
     'chaque QCM a exactement les clés question (texte), options (tableau de 4 chaînes), '+
     'correct_index (entier de 0 à 3), correction (texte), topic (texte), '+
-    'references (tableau de 1 à 3 objets {url}), image_search_query (texte ou chaîne vide). '+
+    'references (tableau de 1 à 3 objets {url}) et source_ids (1 à 3 indices entiers de sources ci-dessous), image_search_query (texte ou chaîne vide). '+
     'Cinq QCM originaux EXACTEMENT par lot, quatre options distinctes, une seule correcte, '+
     'correction médicale claire (3 à 5 phrases), '+
     'topic parmi motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise, '+
-    'references: 1 à 3 objets {url} qui copient CARACTÈRE PAR CARACTÈRE les URL fournies ci-dessous, '+
-    'sans paramètres ajoutés ou URL inventées. '+
+    'Références obligatoires : donne 1 à 3 source_ids (indices 1 à 8 tirés de la liste fournie) ; '+
+    'references peut être vide si source_ids est correctement renseigné. N’invente pas de sources. '+
     'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
     'SOURCES VERIFIABLES :\n'+refList;
+   // A shared date-scoped checkpoint keeps good AI questions after a transient failure.
+   const {data:checkpoint,error:checkpointReadError}=
+    await admin.from('practice_daily_generation_batches')
+      .select('batch_index,questions')
+      .eq('challenge_date',date).eq('mode',mode);
+   if(checkpointReadError){
+    console.warn('daily_checkpoint_read_failed',{code:checkpointReadError.code});
+    throw Error('checkpoint_unavailable');
+   }
    const seen=new Set<string>();
+   const runtimeDeadline=Date.now()+102000;
    if(mode==='cours_ia'){
-    // Always generate 10 NEW course questions with Groq, never reuse the local bank.
     for(let index=0;index<2;index++){
      const goal=index===0?'Diagnostic, démarche clinique, examens et interprétation.':
       'Traitements, décisions, recommandations, complications et suivi.';
-     const prompt='Crée 5 NOUVEAUX QCM de cours niveau internat, français, discipline '+specialty+
-      '. Lot '+(index+1)+'/2. '+goal+' Questions déjà générées à ne pas répéter : '+
-      questions.map(q=>String(q.question)).join(' / ')+'. '+common;
-     let accepted:Record<string,unknown>[]|null=null;
+     const existingBatch=(checkpoint??[]).find(x=>x.batch_index===index);
+     const rawCached=Array.isArray(existingBatch?.questions)?existingBatch.questions:[];
+     const accepted:Record<string,unknown>[]=[];
+     for(const q of rawCached){
+      if(!validCachedQuestion(q))continue;
+      const fingerprint=cleanKey(String(q.question));
+      if(seen.has(fingerprint))continue;
+      seen.add(fingerprint);
+      accepted.push(q);
+      if(accepted.length>=5)break;
+     }
+     if(accepted.length>0)
+      console.info('daily_batch_checkpoint_loaded',{batch:index+1,count:accepted.length});
      let batchError='generation_failed';
-     for(let attempt=0;attempt<2;attempt++){
+     for(let attempt=0;attempt<3&&accepted.length<5;attempt++){
+      const available=runtimeDeadline-Date.now();
+      if(available<11000)throw Error('generation_time_budget');
+      const missing=5-accepted.length;
+      const prompt='Crée EXACTEMENT '+missing+
+       ' QCM IA NOUVEAUX de cours, niveau internat, en français, discipline '+specialty+
+       '. Lot '+(index+1)+'/2. '+goal+
+       ' Ne répète aucune de ces questions déjà conservées : '+
+       [...questions,...accepted].map(q=>String(q.question)).join(' / ')+'. '+
+       'Format JSON : {"qcms":[...]} avec exactement '+missing+' questions. '+
+       'Sources sous forme source_ids: indices entiers 1 à 8 ; '+
+       'references peut contenir les URL correspondantes. '+common;
+      const firstModel=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
+      const backup=firstModel==='openai/gpt-oss-120b'
+       ?'openai/gpt-oss-20b':'openai/gpt-oss-120b';
+      const selectedModel=attempt===1?backup:undefined;
       try{
-       // First request defaults to 20B, second uses the other model as fallback.
-       const firstModel=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
-       const backup=firstModel==='openai/gpt-oss-120b'
-        ?'openai/gpt-oss-20b':'openai/gpt-oss-120b';
-       const instruction=attempt===0?prompt:prompt+
-        '\nCORRECTION DU LOT : EXACTEMENT cinq QCM, quatre réponses DISTINCTES par question, '+
-        'réponse correcte index 0 à 3, correction détaillée, un topic autorisé, '+
-        'au moins une URL bibliographique copiée exactement depuis la liste de SOURCES. '+
-        'Retourne du JSON pur, aucune explication hors de qcms.';
-       const part=attempt===0
-        ?await newGroqBatch(prompt,batchSchema)
-        :await newGroqBatch(instruction,batchSchema,backup);
-       const localSeen=new Set(seen);
-       const tested=await checkAndFormat(part,refs,localSeen);
-       if(tested.length!==5)throw Error('invalid_generated_question_count');
-       accepted=tested;
-       for(const key of localSeen)seen.add(key);
-       break;
+       const response=await newGroqBatch(prompt,batchSchema,selectedModel,
+        Math.min(30000,available-2000));
+       const candidateSeen=new Set(seen);
+       const replacement=await checkAndFormat(response,refs,candidateSeen);
+       for(const q of replacement){
+        if(accepted.length>=5)break;
+        const fingerprint=cleanKey(String(q.question));
+        if(seen.has(fingerprint))continue;
+        seen.add(fingerprint);
+        accepted.push(q);
+       }
+       if(accepted.length>0){
+        const {error:saveError}=await admin.from('practice_daily_generation_batches')
+         .upsert({challenge_date:date,mode,batch_index:index,questions:accepted,
+          updated_at:new Date().toISOString()},{onConflict:'challenge_date,mode,batch_index'});
+        if(saveError){
+         console.warn('daily_checkpoint_write_failed',{code:saveError.code});
+         throw Error('checkpoint_unavailable');
+        }
+       }
+       if(accepted.length<5)
+        batchError='invalid_generated_questions';
+       else batchError='';
       }catch(err){
        batchError=err instanceof Error?err.message:'generation_failed';
-       console.warn('daily_ai_batch_retry',{batch:index+1,attempt:attempt+1,code:batchError});
-       if(['groq_auth_failed','groq_configuration_missing'].includes(batchError))throw err;
+       console.warn('daily_ai_batch_retry',{batch:index+1,attempt:attempt+1,
+        accepted:accepted.length,code:batchError});
+       if(['groq_auth_failed','groq_configuration_missing',
+        'checkpoint_unavailable'].includes(batchError))throw err;
+       if(batchError==='groq_rate_limited'&&attempt>=1)break;
       }
      }
-     if(!accepted)throw Error(batchError);
+     if(accepted.length!==5)throw Error(batchError||'invalid_generated_questions');
      questions.push(...accepted);
     }
    }
