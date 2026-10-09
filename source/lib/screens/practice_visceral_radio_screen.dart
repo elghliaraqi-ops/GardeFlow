@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_backend_service.dart';
 import 'practice_daily_visual_theme.dart';
+import 'visceral_radio_fiche_view.dart';
+import 'visceral_radio_course_widgets.dart';
 
 /// Private, independent Practice training space. Images are fetched at viewing time.
 class PracticeVisceralRadioScreen extends StatefulWidget {
@@ -96,31 +97,18 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
       if(info.isNotEmpty)_label(info,size:12,color:PracticeDailyVisualTheme.muted),
     ]));
   Widget _imageQueries(dynamic raw) {
-    final images=_records(raw);
-    if(images.isEmpty)return const SizedBox.shrink();
-    return Column(crossAxisAlignment:CrossAxisAlignment.start,children:images.take(2).map((x)=>_MedicalPreview(
-      query:_str(x['query']),caption:_str(x['purpose']))).toList());
+    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      ..._records(raw).take(3).map((x)=>VisceralMedicalGallery(
+        query:_str(x['query']), caption:_str(x['purpose']),
+        modality:_str(x['modality']),
+      )),
+    ]);
   }
-  Widget _fiche(){
-    final f=_obj(_session?['fiche']);
-    return _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      _title('Fiche · Chirurgie viscérale × Radiologie',_str(f['summary'])),
-      ..._records(f['sections']).map((s)=>Theme(data:Theme.of(context).copyWith(dividerColor:Colors.transparent),
-        child:ExpansionTile(tilePadding:EdgeInsets.zero,childrenPadding:const EdgeInsets.only(bottom:12),
-          title:_label(_str(s['title']),heavy:true),iconColor:PracticeDailyVisualTheme.mint,
-          collapsedIconColor:PracticeDailyVisualTheme.muted,
-          children:[Align(alignment:Alignment.centerLeft,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            _label(_str(s['content'])),
-            ..._arr(s['key_points']).map((p)=>_label('• '+_str(p),size:12,color:PracticeDailyVisualTheme.muted)),
-            _imageQueries(s['image_requests']),
-          ]))]))),
-      if(_arr(f['references']).isNotEmpty)...[
-        const Divider(color:PracticeDailyVisualTheme.border),
-        _label('Références proposées par Groq',heavy:true),
-        ..._arr(f['references']).map((x)=>_label('• '+_str(x),size:11,color:PracticeDailyVisualTheme.muted)),
-      ],
-    ]));
-  }
+  Widget _fiche()=>VisceralFicheView(
+    key:ValueKey(_str(_session?['id'])),
+    fiche:_obj(_session?['fiche']),
+    sessionId:_str(_session?['id']),
+  );
   List<Widget> _clinicalPhase(int currentPhase) {
     final data=_obj(_session?['case_data']);
     final stages=_records(data['stages']);
@@ -272,54 +260,3 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
   }
 }
 
-class _MedicalPreview extends StatefulWidget {
-  const _MedicalPreview({required this.query,required this.caption});
-  final String query,caption;
-  @override State<_MedicalPreview> createState()=>_MedicalPreviewState();
-}
-class _MedicalPreviewState extends State<_MedicalPreview>{
-  List<Map<String,dynamic>> images=[],searches=[];
-  @override void initState(){super.initState();_fetch();}
-  @override void didUpdateWidget(covariant _MedicalPreview old){
-    super.didUpdateWidget(old);
-    if(old.query!=widget.query)_fetch();
-  }
-  Future<void> _fetch()async{
-    if(widget.query.isEmpty)return;
-    try{
-      final result=await SupabaseBackendService.instance.client.functions.invoke(
-        'generate-visceral-radio',body:{'action':'images','query':widget.query});
-      final obj=result.data is Map?Map<String,dynamic>.from(result.data as Map):<String,dynamic>{};
-      if(!mounted)return;
-      setState((){
-        images=(obj['images'] is List?obj['images'] as List:const []).whereType<Map>()
-          .map((x)=>Map<String,dynamic>.from(x)).take(3).toList();
-        searches=(obj['medical_searches'] is List?obj['medical_searches'] as List:const []).whereType<Map>()
-          .map((x)=>Map<String,dynamic>.from(x)).toList();
-      });
-    }catch(_){/* External imagery is optional and never blocks the medical text. */}
-  }
-  Future<void> _open(String value)async{
-    final uri=Uri.tryParse(value);
-    if(uri!=null&&uri.scheme=='https')await launchUrl(uri,mode:LaunchMode.externalApplication);
-  }
-  @override Widget build(BuildContext context)=>Padding(padding:const EdgeInsets.symmetric(vertical:9),
-    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Text(widget.caption.isEmpty?widget.query:widget.caption,
-        style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:12)),
-      if(images.isNotEmpty)SizedBox(height:118,child:ListView(scrollDirection:Axis.horizontal,
-        children:images.map((i)=>InkWell(onTap:()=>_open((i['source']??'').toString()),
-          child:Padding(padding:const EdgeInsets.only(right:8),child:Column(children:[
-            ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network((i['thumbnail']??'').toString(),
-              width:135,height:88,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox(
-                width:135,height:88,child:Icon(Icons.image_not_supported,color:PracticeDailyVisualTheme.muted)))),
-            SizedBox(width:135,child:Text((i['title']??'Illustration externe').toString(),
-              overflow:TextOverflow.ellipsis,style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:10))),
-          ])))) .toList())),
-      Wrap(spacing:5,children:searches.map((x)=>TextButton(
-        onPressed:()=>_open((x['source']??'').toString()),
-        child:Text((x['title']??'Source externe').toString(),style:const TextStyle(fontSize:11)))).toList()),
-      const Text('Images externes représentatives, distinctes du patient fictif.',
-        style:TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:10)),
-    ]));
-}
