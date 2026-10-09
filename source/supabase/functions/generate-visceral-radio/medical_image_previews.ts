@@ -95,7 +95,7 @@ export function imageSearchTerms(request:MedicalImageRequest):string{
 export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!allowedAsset(image.thumbnail)||!allowedAsset(image.full))return false;
   if(!/^https:\/\//i.test(image.source))return false;
-  if(!/(CC BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA)/i.test(image.license))return false;
+  if(!/(CC BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA)/i.test(image.license) && !['by','by-sa','cc0','pdm'].includes(image.license.toLowerCase()))return false;
   const hay=ascii(image.title+' '+image.description);
   if(banned.test(hay))return false;
   const raw=ascii(request.anatomy+' '+request.purpose+' '+request.query);
