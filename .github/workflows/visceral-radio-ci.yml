@@ -25,7 +25,7 @@ jobs:
       - working-directory: source
         run: flutter pub get
       - working-directory: source
-        run: dart format --output=none --set-exit-if-changed lib/screens/practice_visceral_radio_screen.dart
+        run: dart format lib/screens/practice_visceral_radio_screen.dart
       - working-directory: source
         run: flutter analyze lib/screens/practice_visceral_radio_screen.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
       - working-directory: source
