@@ -257,7 +257,7 @@ class NotificationService {
           '${date.month.toString().padLeft(2, '0')}-'
           '${date.day.toString().padLeft(2, '0')}';
       final notificationId =
-          820000 + date.difference(tz.TZDateTime(tz.local, 2020)).inDays;
+          820000 + DateTime.utc(date.year, date.month, date.day).difference(DateTime.utc(2020)).inDays;
       try {
         await _plugin.cancel(notificationId);
         if (!enabled || !scheduled.isAfter(now) ||

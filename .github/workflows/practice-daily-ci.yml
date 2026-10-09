@@ -35,9 +35,7 @@ jobs:
         run: flutter pub get
       - name: Check Dart formatting
         working-directory: source
-        run: |
-          dart format lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart test/practice_daily_models_test.dart
-          git diff -- lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart test/practice_daily_models_test.dart
+        run: dart format --output=none --set-exit-if-changed lib/models/practice_daily_models.dart lib/services/practice_daily_service.dart lib/screens/practice_daily_screen.dart test/practice_daily_models_test.dart
       - name: Test daily challenge models
         working-directory: source
         run: flutter test test/practice_daily_models_test.dart
