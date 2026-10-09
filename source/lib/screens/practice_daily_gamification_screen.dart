@@ -463,10 +463,6 @@ class _PracticeDailyHomePulseState extends State<PracticeDailyHomePulse> {
                       _open(const PracticeDailyLeaderboardScreen()),
                   icon: const Icon(Icons.emoji_events_outlined, size: 17),
                   label: const Text('Classement'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    visualDensity: VisualDensity.compact,
-                  ),
                 ),
               ),
             ],
