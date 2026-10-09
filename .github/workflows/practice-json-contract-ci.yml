@@ -49,7 +49,7 @@ jobs:
           const daily = get('generate-practice-daily-challenge');
           assert.match(daily, /dailyJsonContract\(missing\)/);
           assert.match(daily, /dailyBatchSchema\(missing\)/);
-          assert.match(daily, /required:\['question','options','correct_index','correction','topic','references','source_ids','image_search_query'\]/);
+          assert.match(daily, /required:\['question','options','correct_index','correction','topic','references','source_ids','image_search_query','image_request'\]/);
           assert.match(daily, /references:\{type:'array',minItems:0/);
           assert.doesNotMatch(daily, /const common=[^;]*EXACTEMENT cinq objets/);
           const published = get('generate-clinical-case-qcm');
@@ -70,5 +70,5 @@ jobs:
           assert.match(progressive, /progressiveJsonContract\(0\)/);
           assert.match(progressive, /progressiveJsonContract\(1\)/);
           assert.match(progressive, /validateProgressiveAxisSequence\(batch\.qcms,batchIndex\)/);
-          console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
+          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm','preview-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }\n          console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
           NODE
