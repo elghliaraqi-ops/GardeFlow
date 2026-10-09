@@ -26,7 +26,7 @@ function casablancaDay():string {
  const v=Object.fromEntries(parts.map(x=>[x.type,x.value]));
  return v.year+'-'+v.month+'-'+v.day;
 }
-async function literature(specialty:string):Promise<Ref[]> {
+async function literatureEuropePmc(specialty:string):Promise<Ref[]> {
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),12000);
  try{
  const qs=new URLSearchParams({query:specialty+' AND (guideline OR consensus OR review OR recommendation)',format:'json',resultType:'core',pageSize:'20'});
@@ -43,6 +43,37 @@ async function literature(specialty:string):Promise<Ref[]> {
  kind:/guideline|recommendation/.test(titleLower)?'recommandation':/consensus/.test(titleLower)?'consensus':'revue'});
  }return [...found.values()].slice(0,14);
  }catch{return [];}finally{clearTimeout(timer);}
+}
+async function literaturePubMed(specialty:string):Promise<Ref[]> {
+ // NCBI fallback: retain only references with PubMed identifiers confirmed by the API.
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
+ try{
+  const qs=new URLSearchParams({db:'pubmed',term:specialty+' AND (practice guideline[Publication Type] OR systematic review[Publication Type] OR review[Publication Type])',retmode:'json',retmax:'12'});
+  const res=await fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?'+qs,{signal:ctrl.signal});
+  if(!res.ok)return [];
+  const search=await res.json() as {esearchresult?:{idlist?:string[]}};
+  const ids=(search.esearchresult?.idlist??[]).filter(id=>/^\d+$/.test(id)).slice(0,12);
+  if(!ids.length)return [];
+  const lookup=new URLSearchParams({db:'pubmed',id:ids.join(','),retmode:'json'});
+  const summary=await fetch('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?'+lookup,{signal:ctrl.signal});
+  if(!summary.ok)return [];
+  const data=await summary.json() as {result?:Record<string,unknown>};
+  return ids.flatMap((id):Ref[]=>{
+   const item=data.result?.[id] as Record<string,unknown>|undefined;
+   const title=plain(item?.title,350);
+   if(!title)return [];
+   const date=String(item?.pubdate??'');
+   const year=date.match(/\b(?:19|20)\d{2}\b/)?.[0]??'';
+   const kind=/guideline|recommendation/i.test(title)?'recommandation':/consensus/i.test(title)?'consensus':'revue';
+   return [{title,url:'https://pubmed.ncbi.nlm.nih.gov/'+id+'/',year,organization:plain(item?.fulljournalname??'PubMed',160),kind}];
+  });
+ }catch{return [];}finally{clearTimeout(timer);}
+}
+async function literature(specialty:string):Promise<Ref[]> {
+ const primary=await literatureEuropePmc(specialty);
+ if(primary.length)return primary;
+ console.warn('independent_case_literature_primary_unavailable',{provider:'europe_pmc'});
+ return await literaturePubMed(specialty);
 }
 async function commons(query:string):Promise<{name:string;url:string;source:string}|null> {
  if(!query.trim())return null;
@@ -191,18 +222,39 @@ Deno.serve(async(req:Request)=>{
     'étape 3 décisions thérapeutiques; étape 4 complications, évolution et suivi. '+
     'Pas de spoiler dans une étape précoce. '+
     'Les cinq premiers QCM concernent l’admission (QCM 1-2) puis les investigations (QCM 3-5). '+common;
-   const first=await newGroqBatch(prompt,caseBatchSchema);
-   const caseTitle=plain(first.case_title,180),caseStem=plain(first.case_stem,6500);
-   const rawStages=first.case_stages;
-   if(!caseTitle||caseStem.length<150||!Array.isArray(rawStages)||rawStages.length!==4)
-    throw Error('invalid_case_format');
-   const stages=rawStages.map((stage:{title?:string;narrative?:string})=>({
-     title:plain(stage.title,140),narrative:plain(stage.narrative,2400)
-   }));
-   if(stages.some(stage=>stage.title.length<5||stage.narrative.length<120))
-    throw Error('invalid_stage_format');
-   const seen=new Set<string>();
-   const questions=await checkAndFormat(first,refs,seen);
+   let caseTitle='',caseStem='',stages:{title:string;narrative:string}[]=[];
+   let questions:Record<string,unknown>[]=[];
+   let firstError='invalid_case_format';
+   // Retry only malformed/temporary Groq responses; never retry authentication or rate-limit failures.
+   for(let attempt=0;attempt<2;attempt++){
+    try{
+     const instruction=attempt===0?prompt:prompt+
+      '\nREGENERATION : objet racine avec case_title, case_stem (minimum 150 caracteres), '+
+      'case_stages (4 etapes, narrative minimum 120 caracteres) et qcms (EXACTEMENT 5 questions). '+
+      'Aucun Markdown, aucune cle manquante ni texte hors JSON.';
+     const first=await newGroqBatch(instruction,caseBatchSchema);
+     const title=plain(first.case_title,180),stem=plain(first.case_stem,6500);
+     const rawStages=first.case_stages;
+     if(!title||stem.length<150||!Array.isArray(rawStages)||rawStages.length!==4)
+      throw Error('invalid_case_format');
+     const parsedStages=rawStages.map((stage:{title?:string;narrative?:string})=>({
+      title:plain(stage.title,140),narrative:plain(stage.narrative,2400)
+     }));
+     if(parsedStages.some(stage=>stage.title.length<5||stage.narrative.length<120))
+      throw Error('invalid_stage_format');
+     const seenAttempt=new Set<string>();
+     const parsedQuestions=await checkAndFormat(first,refs,seenAttempt);
+     caseTitle=title;caseStem=stem;stages=parsedStages;questions=parsedQuestions;
+     break;
+    }catch(err){
+     const code=err instanceof Error?err.message:'groq_invalid_response';
+     if(['groq_auth_failed','groq_rate_limited','groq_configuration_missing'].includes(code))throw err;
+     firstError=code;
+     console.warn('independent_case_first_batch_retry',{code,attempt:attempt+1});
+    }
+   }
+   if(Number(questions.length)!==5)throw Error(firstError);
+   const seen=new Set(questions.map(x=>cleanKey(String(x.question))));
    const continuation='Continue EXACTEMENT le même cas FICTIF, sans recréer un patient, en cinq nouveaux QCM (6-10). '+
      'Dossier complet : '+caseStem+'. Étapes : '+JSON.stringify(stages)+
      '. Questions 6,7,8 : décision thérapeutique; questions 9,10 : évolution/suivi. '+
