@@ -1,16 +1,17 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
+import {medicalImageSchema,medicalImagePrompt,emptyMedicalImageRequest,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
 type Ref={title:string;url:string;kind:string;organization:string;year:string};
-type Choice={axis:string;question:string;options:string[];correct_index:number;correction:string;topic:string;references:Ref[];image_search_query:string};
+type Choice={axis:string;question:string;options:string[];correct_index:number;correction:string;topic:string;references:Ref[];image_search_query:string;image_request:Record<string,unknown>};
 type Item={position:number;question:string;options:string[];correct_index:number;correction:string;topic:string};
 const axes=['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'] as const;
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'] as const;
 const kinds=['recommandation','consensus','revue','cours'] as const;
 const refSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
-const schema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],properties:{
+const schema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','image_request'],properties:{
  axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
  correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
- references:{type:'array',minItems:1,maxItems:3,items:refSchema},image_search_query:{type:'string'}
+ references:{type:'array',minItems:1,maxItems:3,items:refSchema},image_search_query:{type:'string'},image_request:medicalImageSchema
 }}}}};
 function clean(x:unknown,n=1600):string {
  let s=String(x??'').replace(/<[^>]*>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim();
@@ -129,12 +130,12 @@ Deno.serve(async(req:Request)=>{
   axis,question:'REMPLACER par une question médicale pour '+axis,
   options:['Option clinique A','Option clinique B','Option clinique C','Option clinique D'],
   correct_index:0,correction:'REMPLACER par une explication médicale fondée sur les sources fournies.',
-  topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],image_search_query:''
+  topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],image_search_query:'',image_request:emptyMedicalImageRequest
  }))};
  const jsonContract='Objet JSON racine {qcms:[5 objets]} avec les champs EXACTS : '+
   Object.keys(((schema.properties.qcms as {items:{properties:Record<string,unknown>}}).items).properties).join(', ')+
   '. references doit être une liste de 1 à 3 objets {url}, jamais des sources inventées. '+
-  'Axes strictement dans cet ordre : '+axes.join(' → ')+
+  'Axes strictement dans cet ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
   '. Exemple JSON valide dont tous les contenus sont À REMPLACER : '+JSON.stringify(exampleQcms)+
   '. Ne pas recopier les placeholders. Aucun Markdown.';
  const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
@@ -158,15 +159,10 @@ Deno.serve(async(req:Request)=>{
  throw Error('invalid_generated_qcm');
  const normalize=(s:string)=>s.toLowerCase().replace(/\s+/g,' ').trim();
  if(past.some(x=>normalize(x)===normalize(question))||proposed.some(x=>normalize(x.question)===normalize(question)))throw Error('duplicate_questions');
- const primary=q.image_search_query?await wikimedia(q.image_search_query):null;
- const other=(!primary&&q.image_search_query)?
-  await findOpenverseMedicalPreview(q.image_search_query):null;
- const image=primary??(other?{
-  name:other.title+' · '+other.creator+' · '+other.license+' · Openverse',
-  url:other.preview_url,source:other.source_url
- }:null);
- const links=image?'\n\n§IMAGES§\n'+[image.name,image.url,image.source].join('|||'):'';
- const correction=(cor+links+'\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
+ // Preview and confirmed QCM use the same JSON image requirements.
+ // No randomly matched thumbnails or external URLs enter QCM corrections.
+ const correction=(cor+medicalImageCorrectionSuffix(q.image_request,q.image_search_query)+
+   '\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
  proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:q.topic});
  }
  }
