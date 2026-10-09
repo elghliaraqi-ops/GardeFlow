@@ -31,6 +31,15 @@ jobs:
           git config user.name 'github-actions[bot]'
           git add source/lib/models/practice_external_medical_media_policy.dart source/lib/screens/practice_daily_screen.dart source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_external_medical_media_policy_test.dart
           git commit -m 'style(practice): format multi-source external medical preview UI'
-          git fetch origin feature/practice-guidelines-multisource-media-20261009
-          git rebase origin/feature/practice-guidelines-multisource-media-20261009
-          git push origin HEAD:feature/practice-guidelines-multisource-media-20261009
+          for attempt in 1 2 3 4; do
+            git fetch origin feature/practice-guidelines-multisource-media-20261009
+            git rebase origin/feature/practice-guidelines-multisource-media-20261009
+            if git push origin HEAD:feature/practice-guidelines-multisource-media-20261009; then
+              echo 'Formatted files pushed'
+              exit 0
+            fi
+            echo "Retrying after concurrent commit: $attempt"
+            sleep 3
+          done
+          echo 'Unable to push formatter result' >&2
+          exit 1
