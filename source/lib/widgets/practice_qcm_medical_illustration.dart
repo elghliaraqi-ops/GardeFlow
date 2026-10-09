@@ -227,7 +227,8 @@ class _PracticeQcmMedicalIllustrationState
       for (final article in _articles.take(2)) {
         if (!mounted || id != _version) break;
         final thumb = (article['thumbnail'] ?? '').toString();
-        if (thumb.startsWith('https://')) await _getBytes(thumb,id);
+        if (thumb.startsWith('https://') &&
+            (article['figure_caption']??'').toString().isNotEmpty) await _getBytes(thumb,id);
       }
     } catch (_) {
       if (mounted && id == _version)
@@ -401,7 +402,7 @@ class _PracticeQcmMedicalIllustrationState
           ],
           if(_articles.isNotEmpty)...[
             const SizedBox(height:12),
-            const Text('Articles et figures associés',
+            const Text('Articles sources — figures à consulter',
               style:TextStyle(color:Color(0xFF4FDBA8),fontWeight:FontWeight.w800,fontSize:12)),
             const SizedBox(height:8),
             for(final article in _articles.take(3))
@@ -417,11 +418,13 @@ class _PracticeQcmMedicalIllustrationState
                   child:Padding(
                     padding:const EdgeInsets.all(11),
                     child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                      if(_bytes.containsKey((article['thumbnail']??'').toString()))
+                      if((article['figure_caption']??'').toString().isNotEmpty &&
+                        _bytes.containsKey((article['thumbnail']??'').toString()))
                         ClipRRect(borderRadius:BorderRadius.circular(8),
                           child:Image.memory(_bytes[(article['thumbnail']??'').toString()]!,
                             width:60,height:65,fit:BoxFit.contain)),
-                      if(!_bytes.containsKey((article['thumbnail']??'').toString()))
+                      if((article['figure_caption']??'').toString().isEmpty ||
+                        !_bytes.containsKey((article['thumbnail']??'').toString()))
                         const Icon(Icons.article_outlined,color:Color(0xFF4FDBA8)),
                       const SizedBox(width:9),
                       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -433,7 +436,7 @@ class _PracticeQcmMedicalIllustrationState
                           maxLines:2,style:const TextStyle(
                             color:Color(0xFFB6CDDD),fontSize:11)),
                         const SizedBox(height:4),
-                        const Text('Ouvrir les figures ↗',style:TextStyle(
+                        const Text('Ouvrir l’article source et les figures ↗',style:TextStyle(
                           color:Color(0xFF4FDBA8),fontSize:11)),
                       ])),
                     ]),
