@@ -224,6 +224,11 @@ class _PracticeQcmMedicalIllustrationState
         final raw = (image['thumbnail'] ?? '').toString();
         await _getBytes(raw, id);
       }
+      for (final article in _articles.take(2)) {
+        if (!mounted || id != _version) break;
+        final thumb = (article['thumbnail'] ?? '').toString();
+        if (thumb.startsWith('https://')) await _getBytes(thumb,id);
+      }
     } catch (_) {
       if (mounted && id == _version)
         setState(() {
@@ -412,7 +417,12 @@ class _PracticeQcmMedicalIllustrationState
                   child:Padding(
                     padding:const EdgeInsets.all(11),
                     child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                      const Icon(Icons.article_outlined,color:Color(0xFF4FDBA8)),
+                      if(_bytes.containsKey((article['thumbnail']??'').toString()))
+                        ClipRRect(borderRadius:BorderRadius.circular(8),
+                          child:Image.memory(_bytes[(article['thumbnail']??'').toString()]!,
+                            width:60,height:65,fit:BoxFit.contain)),
+                      if(!_bytes.containsKey((article['thumbnail']??'').toString()))
+                        const Icon(Icons.article_outlined,color:Color(0xFF4FDBA8)),
                       const SizedBox(width:9),
                       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                         Text((article['title']??'Article médical').toString(),
