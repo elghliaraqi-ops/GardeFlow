@@ -125,11 +125,11 @@ Deno.serve(async(req:Request)=>{
  complementary:clean(post.complementary_exams),imaging:clean(post.imaging_conclusion),assessment:clean(post.assessment),plan:clean(post.plan)});
  for(let part=0;part<qty/5;part++){
  const forbidden=past.concat(proposed.map(q=>q.question)).slice(-100).join('\n');
- const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON strict.\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
+ const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON STRUCTURÉ sans markdown : {"qcms":[cinq objets ayant exactement les champs axis, question, options (4 textes), correct_index (entier 0 à 3), correction, topic, references ([{"url":"URL fournie"}]), image_search_query]}. Les 5 axis suivent exactement l’ordre demandé.\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
  try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
  body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:9500,
- response_format:{type:'json_schema',json_schema:{name:'practice_preview',strict:true,schema}}})});}
+ response_format:{type:'json_object'}})});}
  finally{clearTimeout(timer);}
  const raw=await remote.json().catch(()=>null);
  if(!remote.ok)throw Error(remote.status===429?'groq_rate_limited':'groq_unavailable');
