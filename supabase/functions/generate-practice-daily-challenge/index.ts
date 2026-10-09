@@ -4,12 +4,33 @@ import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evide
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
 const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology'];
+// Prompts and data contract share one count and one set of fields.
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
-const itemSchema={type:'object',additionalProperties:false,required:['question','options','correct_index','correction','topic','references','image_search_query'],
- properties:{question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
- correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}}};
-const schema={type:'object',additionalProperties:false,required:['case_title','case_stem','case_stages','qcms'],
- properties:{case_title:{type:'string'},case_stem:{type:'string'},case_stages:{type:'array',minItems:4,maxItems:4,items:{type:'object',additionalProperties:false,required:['title','narrative'],properties:{title:{type:'string'},narrative:{type:'string'}}}},qcms:{type:'array',minItems:10,maxItems:10,items:itemSchema}}};
+const itemSchema={type:'object',additionalProperties:false,
+ required:['question','options','correct_index','correction','topic','references','source_ids','image_search_query'],
+ properties:{question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
+  correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},
+  topic:{type:'string',enum:topics},references:{type:'array',minItems:0,maxItems:3,items:referenceSchema},
+  source_ids:{type:'array',minItems:1,maxItems:3,items:{type:'integer',minimum:1,maximum:8}},
+  image_search_query:{type:'string'}}};
+function dailyBatchSchema(count:number){
+ return {type:'object',additionalProperties:false,required:['qcms'],
+  properties:{qcms:{type:'array',minItems:count,maxItems:count,items:itemSchema}}};
+}
+function dailyJsonContract(count:number):string{
+ const sample={qcms:Array.from({length:count},(_,i)=>({
+  question:'REMPLACER par une vraie question médicale '+(i+1),
+  options:['Proposition clinique A','Proposition clinique B','Proposition clinique C','Proposition clinique D'],
+  correct_index:0,correction:'REMPLACER par une explication clinique conforme aux sources fournies.',
+  topic:'examen',references:[],source_ids:[1],image_search_query:''}))};
+ return 'CONTRAT JSON : '+count+' QCM dans un objet racine contenant uniquement qcms. '+
+  'Champs exacts pour chaque QCM : '+Object.keys(itemSchema.properties).join(', ')+'. '+
+  'references peut être [] car source_ids (1 à 3 indices de la bibliographie vérifiée) suffit. '+
+  'Quatre options distinctes, correct_index entre 0 et 3, topic parmi '+topics.join('/')+
+  '. Ne jamais recopier les placeholders. Exemple JSON valide : '+JSON.stringify(sample)+
+  '. Aucun Markdown, préambule ni champ supplémentaire.';
+}
+
 type Ref={title:string;url:string;year:string;organization:string;kind:string};
 function plain(value:unknown,max=2500):string {
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
@@ -65,9 +86,7 @@ async function commons(query:string):Promise<{name:string;url:string;source:stri
 
 const batchSchema={type:'object',additionalProperties:false,required:['qcms'],
  properties:{qcms:{type:'array',minItems:5,maxItems:5,items:itemSchema}}};
-const caseBatchSchema=JSON.parse(JSON.stringify(schema));
-caseBatchSchema.properties.qcms.minItems=5;
-caseBatchSchema.properties.qcms.maxItems=5;
+// QCM schema is now supplied dynamically via dailyBatchSchema(missing).
 
 async function newGroqBatch(
  prompt:string,format:Record<string,unknown>,overrideModel?:string,timeoutMs=30000
@@ -179,17 +198,10 @@ Deno.serve(async(req:Request)=>{
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
    const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url}`).join('\n');
-   const common=medicalEvidencePolicy+'\nBIBLIOGRAPHIE VÉRIFIÉE :\n'+refList+'\n'+'Retourne seulement un objet JSON racine contenant uniquement la clé qcms avec EXACTEMENT cinq objets ; '+
-    'chaque QCM a exactement les clés question (texte), options (tableau de 4 chaînes), '+
-    'correct_index (entier de 0 à 3), correction (texte), topic (texte), '+
-    'references (tableau de 1 à 3 objets {url}) et source_ids (1 à 3 indices entiers de sources ci-dessous), image_search_query (texte ou chaîne vide). '+
-    'Cinq QCM originaux EXACTEMENT par lot, quatre options distinctes, une seule correcte, '+
-    'correction médicale claire (3 à 5 phrases), '+
-    'topic parmi motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise, '+
-    'Références obligatoires : donne 1 à 3 source_ids (indices 1 à 8 tirés de la liste fournie) ; '+
-    'references peut être vide si source_ids est correctement renseigné. N’invente pas de sources. '+
-    'Pas de données d’un vrai patient. image_search_query en anglais si une image aiderait, sinon vide. '+
-    'SOURCES VERIFIABLES :\n'+refList;
+   const common=medicalEvidencePolicy+'\nSOURCES NUMÉROTÉES VÉRIFIÉES :\n'+refList+
+    '\nChaque question est inédite, niveau internat, avec correction détaillée (3-5 phrases) '+ 
+    'fondée sur ces sources et sans données personnelles. '+ 
+    'image_search_query en anglais si une image externe aide, sinon vide.\n';
    // A shared date-scoped checkpoint keeps good AI questions after a transient failure.
    const {data:checkpoint,error:checkpointReadError}=
     await admin.from('practice_daily_generation_batches')
@@ -228,15 +240,13 @@ Deno.serve(async(req:Request)=>{
        '. Lot '+(index+1)+'/2. '+goal+
        ' Ne répète aucune de ces questions déjà conservées : '+
        [...questions,...accepted].map(q=>String(q.question)).join(' / ')+'. '+
-       'Format JSON : {"qcms":[...]} avec exactement '+missing+' questions. '+
-       'Sources sous forme source_ids: indices entiers 1 à 8 ; '+
-       'references peut contenir les URL correspondantes. '+common;
+       common+'\n'+dailyJsonContract(missing);
       const firstModel=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
       const backup=firstModel==='openai/gpt-oss-120b'
        ?'openai/gpt-oss-20b':'openai/gpt-oss-120b';
       const selectedModel=attempt===1?backup:undefined;
       try{
-       const response=await newGroqBatch(prompt,batchSchema,selectedModel,
+       const response=await newGroqBatch(prompt,dailyBatchSchema(missing),selectedModel,
         Math.min(30000,available-2000));
        const candidateSeen=new Set(seen);
        const replacement=await checkAndFormat(response,refs,candidateSeen);

@@ -39,6 +39,20 @@ const outputSchema = {
   required: ['case'], properties: { case: caseSchema },
 };
 
+// From the SAME caseSchema that the Groq Responses JSON format consumes.
+const caseJsonExample={case:{
+ age:58,sex:'M',
+ ...Object.fromEntries(textFields.map(field=>[field,'REMPLACER par des faits fictifs cohérents'])),
+ ...Object.fromEntries(boolFields.map(field=>[field,false]))
+}};
+const caseJsonContract='Un seul objet JSON racine contenant case; ce dernier contient '+
+ 'EXACTEMENT les champs '+Object.keys(caseProperties).join(', ')+'. '+
+ 'age est entier, sex vaut F/M/Autre/Non précisé, les champs narratifs sont '+
+ 'des chaînes et les décisions sont booléennes. '+
+ 'Voici un exemple JSON valide : '+JSON.stringify(caseJsonExample)+
+ '. Remplacer tous les placeholders par un seul cas fictif cohérent et personnalisé, '+
+ 'sans commentaire ni Markdown hors JSON.';
+
 function cors(req: Request): Record<string, string> {
   const origin = (req.headers.get('Origin') ?? '').trim();
   const allowed = (Deno.env.get('GARDEFLOW_ALLOWED_ORIGINS') ?? '')
@@ -173,7 +187,7 @@ les examens utiles, la décision thérapeutique, la surveillance et l'orientatio
 Les booléens des décisions doivent correspondre à la prise en charge décrite.
 N'invente ni références bibliographiques ni recommandations datées.
 Tu écris un exercice d'apprentissage, pas une ordonnance ni la description d'un vrai patient.
-Réponds exclusivement avec l'objet JSON structuré demandé.`;
+Réponds exclusivement avec l'objet JSON structuré demandé.`+'\n'+caseJsonContract;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 45000);
