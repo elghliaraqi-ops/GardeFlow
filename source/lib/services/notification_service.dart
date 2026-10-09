@@ -226,6 +226,59 @@ class NotificationService {
     }
   }
 
+  /// Rappels locaux indépendants des alarmes de garde, heure de Casablanca.
+  Future<void> schedulePracticeDailyChallengeReminders({
+    required bool enabled,
+    required Set<String> completedDays,
+  }) async {
+    if (kIsWeb || !await _ensureInitialized()) return;
+    final now = tz.TZDateTime.now(tz.local);
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        practiceChannelId,
+        'Practice',
+        channelDescription: 'Défi médical quotidien de 10 QCM',
+        icon: 'ic_stat_huim6',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+    for (var step = 0; step < 35; step++) {
+      final date = tz.TZDateTime(tz.local, now.year, now.month, now.day + step);
+      final scheduled =
+          tz.TZDateTime(tz.local, date.year, date.month, date.day, 8);
+      final key =
+          '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+      final notificationId =
+          820000 + date.difference(tz.TZDateTime(tz.local, 2020)).inDays;
+      try {
+        await _plugin.cancel(notificationId);
+        if (!enabled || !scheduled.isAfter(now) ||
+            completedDays.contains(key)) {
+          continue;
+        }
+        await _plugin.zonedSchedule(
+          notificationId,
+          'Défi quotidien · GardeFlow Practice',
+          'Vos 10 QCM du jour vous attendent. Quel score ferez-vous ?',
+          scheduled,
+          details,
+          payload: 'push:practice_daily_challenge',
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } catch (e) {
+        debugPrint('Programmation du défi quotidien ignorée: $e');
+      }
+    }
+  }
+
   Future<void> schedulePracticeMoment({
     required String ownerPhone,
     required String guardId,
