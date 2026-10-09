@@ -19,6 +19,7 @@ jobs:
       - name: Format touched Practice Dart files
         run: |
           set -euo pipefail
+          (cd source && flutter pub get)
           dart format source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_clinical_dossier_test.dart
           git diff --check
           if git diff --quiet -- source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_clinical_dossier_test.dart; then
@@ -29,4 +30,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git add source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_clinical_dossier_test.dart
           git commit -m 'style(practice): format structured dossier UI'
+          git fetch origin feature/practice-structured-dossier-external-previews-20261009
+          git rebase origin/feature/practice-structured-dossier-external-previews-20261009
           git push origin HEAD:feature/practice-structured-dossier-external-previews-20261009
