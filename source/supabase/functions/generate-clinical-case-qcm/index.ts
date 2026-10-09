@@ -254,9 +254,7 @@ function providerRetrySeconds(payload,headers) {
   return 60;
 }
 
-const referenceSchema={type:'object',additionalProperties:false,required:['title','organization','year','url','kind'],properties:{
-  title:{type:'string'},organization:{type:'string'},year:{type:'string'},url:{type:'string'},kind:{type:'string',enum:sourceKinds}
-}};
+const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const qcmSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],properties:{
   axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
   correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
@@ -467,7 +465,20 @@ Deno.serve(async(req)=>{
     const effortRaw=String(Deno.env.get('GROQ_REASONING_EFFORT')??'medium').trim().toLowerCase();
     const reasoningEffort=['low','medium','high'].includes(effortRaw)?effortRaw:'medium';
 
-    const prompt=medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
+    const exampleQcms={qcms:axes.map(axis=>({
+       axis,question:'REMPLACER : question médicale contextualisée sur '+axis,
+       options:['Proposition clinique A','Proposition clinique B','Proposition clinique C','Proposition clinique D'],
+       correct_index:0,correction:'REMPLACER par une explication conforme aux références récupérées.',
+       topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],
+       image_search_query:''
+     }))};
+     const jsonContract='JSON RACINE {qcms: cinq objets}. Champs exacts de chaque QCM : '+
+       Object.keys(qcmSchema.properties).join(', ')+
+       '. Références au format {url} seulement, enrichies côté serveur. '+
+       'Axes dans l’ordre : '+axes.join(' → ')+
+       '. Exemple de JSON valide, à remplacer intégralement : '+JSON.stringify(exampleQcms)+
+       '. Remplace tous les placeholders, sans JSON supplémentaire ni Markdown.';
+     const prompt=medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
 Le cas ci-dessous est ANONYMISÉ et sert d'ancrage pédagogique. N'essaie jamais d'identifier le patient et ne restitue jamais de données d'identification.
 
 Crée EXACTEMENT 5 QCM autonomes, exigeants et utiles, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.
@@ -477,7 +488,7 @@ Les questions doivent tester des connaissances médicales réelles et générali
 Évite les formulations vagues comme « dans ce cas », « toutes les réponses » ou « aucune des réponses ».
 
 SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous pour les références. Chaque QCM doit citer 1 à 3 références du catalogue et recopier exactement leur URL. N'invente aucune référence ni URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
-Réponds en français, exclusivement par un objet JSON racine {"qcms":[...]} comprenant exactement 5 objets. Chaque objet possède les champs axis, question, options (exactement 4 chaînes), correct_index (0 à 3), correction (explication médicale), topic, references (1 à 3 objets {"url":"URL autorisée"}), image_search_query (chaîne vide si non pertinent). Les axis doivent suivre cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations, dans cet ordre. Pas de Markdown, pas de texte hors JSON.
+Réponds uniquement en JSON, sans Markdown. ${jsonContract}
 
 CAS ANONYMISÉ :
 ${cleanJson}
