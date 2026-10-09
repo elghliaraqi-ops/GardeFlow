@@ -106,6 +106,74 @@ async function commons(query:string):Promise<{name:string;url:string;source:stri
 }
 
 
+
+type MedicalLink={stage:number;title:string;url:string;preview_image_url:string;license:string};
+type MedicalImageSearch={query:string;label:string;accept:RegExp};
+async function verifiedExternalMedia(spec:MedicalImageSearch):Promise<MedicalLink|null>{
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),5500);
+ try{
+  const args=new URLSearchParams({
+   action:'query',format:'json',generator:'search',
+   gsrsearch:spec.query,gsrnamespace:'6',gsrlimit:'8',
+   prop:'imageinfo',iiprop:'url|mime|extmetadata',iiurlwidth:'600'
+  });
+  const response=await fetch('https://commons.wikimedia.org/w/api.php?'+args,{
+   signal:ctrl.signal,headers:{Accept:'application/json'}
+  });
+  if(!response.ok)return null;
+  const payload=await response.json() as {query?:{pages?:Record<string,{
+   title?:string;imageinfo?:{thumburl?:string;descriptionurl?:string;
+    mime?:string;extmetadata?:{LicenseShortName?:{value?:string}}}[]
+  }>}};
+  for(const page of Object.values(payload.query?.pages??{})){
+   const title=plain(page.title,180);
+   if(!spec.accept.test(title))continue;
+   const item=page.imageinfo?.[0];
+   if(!item||!/^image\/(png|jpeg|gif|svg\+xml|webp)$/.test(String(item.mime??'')))continue;
+   const preview=String(item.thumburl??''),url=String(item.descriptionurl??'');
+   const license=plain(item.extmetadata?.LicenseShortName?.value,90);
+   if(!/CC[\s-]?(?:BY|0)|public\s*domain|PD-/i.test(license))continue;
+   try{
+    if(new URL(preview).protocol!=='https:'||
+       new URL(preview).hostname!=='upload.wikimedia.org'||
+       new URL(url).protocol!=='https:'||
+       new URL(url).hostname!=='commons.wikimedia.org')continue;
+   }catch{continue;}
+   return {stage:1,title:spec.label+' · '+title.replace(/^File:/i,''),
+    url,preview_image_url:preview,license};
+  }
+  return null;
+ }catch{return null;}finally{clearTimeout(timer);}
+}
+async function externalMedicalIllustrations(dossier:Record<string,unknown>):
+ Promise<MedicalLink[]>{
+ // Generic anatomical/ECG educational material only, not reconstructed patient exams.
+ const text=[dossier.complementary_exams,dossier.imaging_conclusion]
+  .map(x=>String(x??'').toLowerCase()).join(' ');
+ const searches:MedicalImageSearch[]=[];
+ if(/\becg\b|électrocardio|electrocardio/.test(text))
+  searches.push({query:'normal sinus rhythm 12 lead ECG',label:'Exemple d’ECG',
+    accept:/ecg|electrocardio/i});
+ if(/coronarograph|cathétérisme coronair|coronary angio|sténose.*coronair/i.test(text))
+  searches.push({query:'coronary arteries anatomical illustration',
+   label:'Schéma des artères coronaires',accept:/coronary|coronaire/i});
+ if(/radiographie|x-ray|radiograph/.test(text)&&searches.length<2)
+  searches.push({query:'chest x ray anatomy labeled',label:'Radiographie illustrative',
+   accept:/chest.*x.ray|thorax.*radiograph|chest.*radiograph/i});
+ if(/irm|mri/.test(text)&&searches.length<2)
+  searches.push({query:'brain MRI anatomy',label:'IRM anatomique illustrative',
+   accept:/mri|magnetic resonance|irm/i});
+ if(/échographie|echographie|ultrasound/.test(text)&&searches.length<2)
+  searches.push({query:'ultrasound anatomy medical',label:'Échographie illustrative',
+   accept:/ultrasound|ultrason|echograph/i});
+ if(/scanner|tomodensitom|ct scan/.test(text)&&searches.length<2)
+  searches.push({query:'CT scan anatomy medical',label:'Scanner anatomique illustratif',
+   accept:/ct.scan|computed tomography|tomodensitom/i});
+ // Parallel, bounded, all-optional external requests. Never store image bytes.
+ const found=await Promise.all(searches.slice(0,2).map(verifiedExternalMedia));
+ return found.filter((entry):entry is MedicalLink=>entry!==null);
+}
+
 const batchSchema={type:'object',additionalProperties:false,required:['qcms'],
  properties:{qcms:{type:'array',minItems:5,maxItems:5,items:itemSchema}}};
 
@@ -364,7 +432,8 @@ Deno.serve(async(req:Request)=>{
      ok:true,mode:'cas_progressif_independant',case_id:stored.id,
      created_at:stored.created_at,specialty:stored.specialty,
      case_title:stored.case_title,case_stem:stored.case_stem,
-     case_stages:stored.case_stages,questions:stored.questions});
+     case_stages:stored.case_stages,case_payload:stored.case_payload,
+     questions:stored.questions});
     draftId=stored.id;
     specialty=String(stored.specialty);
     simulated=stored.case_payload as Record<string,unknown>;
@@ -441,10 +510,12 @@ Deno.serve(async(req:Request)=>{
    const second=await newGroqBatch(continuation,batchSchema);
    questions.push(...await checkAndFormat(second,refs,seen));
    if(questions.length!==10)throw Error('invalid_question_count');
+   // Optional Wikimedia Commons link metadata only; no remote media file storage.
+   const illustrations=await externalMedicalIllustrations(simulated);
+   const persistedPayload={...simulated,external_media:illustrations};
    // Finalize the already persisted dossier only when all 10 QCMs pass validation.
-   // Image previews remain external HTTPS links; never store binary images.
    const {data:saved,error:saveErr}=await admin.from('practice_generated_cases')
-    .update({questions,generation_status:'ready'})
+    .update({questions,case_payload:persistedPayload,generation_status:'ready'})
     .eq('owner_id',uid).eq('id',draftId)
     .select('id,created_at').single();
    if(saveErr||!saved?.id){
@@ -454,7 +525,8 @@ Deno.serve(async(req:Request)=>{
    console.info('progressive_case_saved',{specialty,question_count:questions.length});
    return send(req,{ok:true,mode:'cas_progressif_independant',
      case_id:saved.id,created_at:saved.created_at,specialty,
-     case_title:caseTitle,case_stem:caseStem,case_stages:stages,questions});
+     case_title:caseTitle,case_stem:caseStem,case_stages:stages,
+     case_payload:persistedPayload,questions});
  }catch(err){
    const code=err instanceof Error?err.message:'case_generation_failed';
    if(draftId){
