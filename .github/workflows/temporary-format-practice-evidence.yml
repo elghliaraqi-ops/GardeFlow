@@ -1,0 +1,36 @@
+name: Temporary Formatter Practice Evidence
+on:
+  push:
+    branches:
+      - feature/practice-guidelines-multisource-media-20261009
+    paths:
+      - .github/workflows/temporary-format-practice-evidence.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+      - name: Canonical Flutter formatting
+        run: |
+          set -euo pipefail
+          (cd source && flutter pub get)
+          dart format source/lib/models/practice_external_medical_media_policy.dart source/lib/screens/practice_daily_screen.dart source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_external_medical_media_policy_test.dart
+          git diff --check
+          if git diff --quiet -- source/lib/models/practice_external_medical_media_policy.dart source/lib/screens/practice_daily_screen.dart source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_external_medical_media_policy_test.dart; then
+            echo 'Already formatted'
+            exit 0
+          fi
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git add source/lib/models/practice_external_medical_media_policy.dart source/lib/screens/practice_daily_screen.dart source/lib/screens/practice_progressive_cases_screen.dart source/lib/widgets/practice_clinical_dossier.dart source/test/practice_external_medical_media_policy_test.dart
+          git commit -m 'style(practice): format multi-source external medical preview UI'
+          git fetch origin feature/practice-guidelines-multisource-media-20261009
+          git rebase origin/feature/practice-guidelines-multisource-media-20261009
+          git push origin HEAD:feature/practice-guidelines-multisource-media-20261009
