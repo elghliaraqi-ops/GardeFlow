@@ -36,6 +36,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
   bool _busy = false, _enabled = true;
   String? _error;
   String? _lastMode;
+  int? _legacyOfficialScore;
 
   @override
   void initState() {
@@ -78,6 +79,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       setState(() {
         _days = {for (final d in entries) d.day.day: d};
         _session = session.ready ? session : null;
+        _legacyOfficialScore = !session.ready ? session.officialScore : null;
         _enabled = parts[2] == true;
         _selected = session.completed
             ? session.questions
@@ -262,10 +264,12 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 ),
               ),
               IconButton(
+                style: PracticeDailyVisualTheme.toolbarButtonStyle,
                 onPressed: () => _changeMonth(-1),
                 icon: const Icon(Icons.chevron_left, color: _text),
               ),
               IconButton(
+                style: PracticeDailyVisualTheme.toolbarButtonStyle,
                 onPressed: () => _changeMonth(1),
                 icon: const Icon(Icons.chevron_right, color: _text),
               ),
@@ -321,14 +325,16 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                         builder: (c) => AlertDialog(
                           title: Text(DateFormat('d MMMM', 'fr').format(date)),
                           content: Text(
-                            'Défi terminé : ${entry.score}/10\nFormat : ${entry.mode == 'cours' ? 'Cours' : 'Cas clinique'}',
+                            'Défi terminé : ${entry.score}/10\nFormat : ${entry.mode == 'cas_clinique' ? 'Ancien cas clinique' : 'QCM de cours'}',
                           ),
                           actions: [
                             TextButton(
+                style: PracticeDailyVisualTheme.clearTextButtonStyle,
                               onPressed: () => Navigator.pop(c),
                               child: const Text('Fermer'),
                             ),
                             FilledButton.icon(
+                style: PracticeDailyVisualTheme.primaryButtonStyle,
                               onPressed: () {
                                 Navigator.pop(c);
                                 _openReplay(date);
@@ -522,6 +528,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 final uri = Uri.tryParse(parts.length == 5 ? parts[4] : '');
                 if (uri?.scheme != 'https') return const SizedBox.shrink();
                 return TextButton.icon(
+                style: PracticeDailyVisualTheme.clearTextButtonStyle,
                   onPressed: () =>
                       launchUrl(uri!, mode: LaunchMode.externalApplication),
                   icon: const Icon(Icons.open_in_new, size: 14),
@@ -562,6 +569,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
+                style: PracticeDailyVisualTheme.secondaryButtonStyle,
               onPressed: _busy ? null : _load,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Réessayer'),
@@ -585,27 +593,28 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Deux formats générés spécialement pour le jour : '
-              '10 nouveaux QCM de cours ou un cas clinique fictif progressif. '
-              'Une seule note officielle est enregistrée par jour.',
+              'Exactement 10 nouveaux QCM intégralement générés par IA. '
+              'Les cas cliniques progressifs se trouvent dans la bibliothèque Practice.',
               style: TextStyle(color: _muted),
             ),
+            if (_legacyOfficialScore != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Note historique : $_legacyOfficialScore/10. '
+                'Ce nouveau défi IA sera un entraînement sans modifier cette note.',
+                style: const TextStyle(
+                  color: _gold, fontSize: 12, height: 1.4,
+                ),
+              ),
+            ],
             const SizedBox(height: 15),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
+                style: PracticeDailyVisualTheme.primaryButtonStyle,
                 onPressed: _busy ? null : () => _start('cours_ia'),
                 icon: const Icon(Icons.school_rounded),
-                label: const Text('10 nouveaux QCM de cours · IA'),
-              ),
-            ),
-            const SizedBox(height: 6),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : () => _start('cas_clinique'),
-                icon: const Icon(Icons.medical_information_rounded),
-                label: const Text('Cas clinique progressif · IA'),
+                label: const Text('Commencer · 10 QCM IA inédits'),
               ),
             ),
           ],
@@ -628,8 +637,8 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
         children: [
           if (s.completed) ...[
             Text(
-              _replayMode
-                  ? 'Rejeu terminé · ${s.score}/10'
+              _replayMode || s.isReplay
+                  ? 'Entraînement terminé · ${s.score}/10'
                   : 'Défi terminé · ${s.score}/10',
               style: const TextStyle(
                 color: _green,
@@ -639,7 +648,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
             const SizedBox(height: 10),
           ],
-          if (_replayMode) ...[
+          if ((_replayMode || s.isReplay) && s.officialScore != null) ...[
             Text(
               'Note officielle inchangée : ${s.officialScore}/10',
               style: const TextStyle(
@@ -654,6 +663,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: OutlinedButton.icon(
+                style: PracticeDailyVisualTheme.secondaryButtonStyle,
                 onPressed: _replayMode
                     ? _replayAgain
                     : () => _openReplay(s.day),
@@ -664,9 +674,9 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             const SizedBox(height: 10),
           ],
           Text(
-            s.mode == 'cours'
-                ? 'Défi de cours'
-                : 'Défi · cas clinique progressif',
+            s.mode == 'cas_clinique'
+                ? 'Ancien défi · cas clinique (historique)'
+                : 'Défi du jour · 10 nouveaux QCM IA',
             style: const TextStyle(color: _gold, fontWeight: FontWeight.bold),
           ),
           if (s.isProgressiveCase) ...[
@@ -807,6 +817,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           Row(
             children: [
               OutlinedButton(
+                style: PracticeDailyVisualTheme.secondaryButtonStyle,
                 onPressed: index == 0
                     ? null
                     : () => setState(() => _current = index - 1),
@@ -815,6 +826,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               const Spacer(),
               if (index < 9)
                 FilledButton(
+                style: PracticeDailyVisualTheme.primaryButtonStyle,
                   onPressed: canAdvance
                       ? () => setState(() => _current = index + 1)
                       : null,
@@ -822,6 +834,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                 )
               else if (!s.completed)
                 FilledButton(
+                style: PracticeDailyVisualTheme.primaryButtonStyle,
                   onPressed: _busy || _selected.any((x) => x == null)
                       ? null
                       : _finish,
@@ -879,17 +892,20 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           ),
           actions: [
             IconButton(
+                style: PracticeDailyVisualTheme.toolbarButtonStyle,
               tooltip: 'Quitter le défi et revenir à Practice',
               onPressed: _leavePractice,
               icon: const Icon(Icons.exit_to_app_rounded),
             ),
             if (!_replayMode)
               IconButton(
+                style: PracticeDailyVisualTheme.toolbarButtonStyle,
                 tooltip: 'Historique et rejouer',
                 onPressed: _busy ? null : _openHistory,
                 icon: const Icon(Icons.history_rounded),
               ),
             IconButton(
+                style: PracticeDailyVisualTheme.toolbarButtonStyle,
               tooltip: 'Actualiser',
               onPressed: _busy ? null : _load,
               icon: const Icon(Icons.refresh_rounded),
@@ -934,6 +950,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
+                style: PracticeDailyVisualTheme.secondaryButtonStyle,
                         onPressed: _busy
                             ? null
                             : () => _lastMode == null
@@ -952,6 +969,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
+                style: PracticeDailyVisualTheme.secondaryButtonStyle,
                   onPressed: _leavePractice,
                   icon: const Icon(Icons.exit_to_app_rounded),
                   label: const Text('Quitter le défi'),
@@ -963,6 +981,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
+                style: PracticeDailyVisualTheme.primaryButtonStyle,
                       onPressed: _openHistory,
                       icon: const Icon(Icons.history_rounded),
                       label: const Text('Historique · Rejouer mes défis'),
