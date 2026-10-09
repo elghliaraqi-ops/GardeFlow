@@ -40,29 +40,46 @@ class PracticeQcmImageMetadata {
   static bool containsVisual(String correction) =>
       correction.contains('§IMAGE_SPEC§') || correction.contains('§IMAGES§');
 
+  /// Retroactive enrichment: existing QCMs do not need to be regenerated.
+  /// The patient/case title and question are used to formulate the request,
+  /// never the obsolete URL itself. Only explicit image-oriented lessons are
+  /// searched; all other old questions keep their existing text.
   static Map<String, dynamic>? legacyRequest(
     String correction,
-    String question,
-  ) {
-    if (!containsVisual(correction)) return null;
-    final start = correction.indexOf('§IMAGES§');
-    String title = '';
-    if (start >= 0) {
-      final line = correction
-          .substring(start + '§IMAGES§'.length)
-          .trim()
-          .split('\n')
-          .first;
-      title = line.split('|||').first.trim();
+    String question, {
+    String context = '',
+  }) {
+    final visualMarker = containsVisual(correction);
+    final cleanCorrection = visibleText(correction);
+    final readable = '$question $cleanCorrection'.toLowerCase();
+    final hasVisualIntent = RegExp(
+      r'\b(irm|mri|tdm|scanner|ct scan|radiograph|rx|echograph|ultrasound|'
+      r'diffusion|dwi|adc|t2|t1|image|imagerie|anatom|mesorect|sphincter|'
+      r'séquence|sequence|échograph|radiolog)\b',
+      caseSensitive: false,
+    ).hasMatch(readable);
+    if (!visualMarker && !hasVisualIntent) return null;
+    var oldTitle = '';
+    final idx = correction.indexOf('§IMAGES§');
+    if (idx >= 0) {
+      final line = correction.substring(idx + '§IMAGES§'.length)
+          .trim().split('\n').first;
+      oldTitle = line.split('|||').first.trim();
     }
-    final text = question.trim().isNotEmpty ? question : title;
-    if (text.isEmpty) return null;
+    final descriptor = [
+      if (context.trim().isNotEmpty) context.trim(),
+      if (oldTitle.isNotEmpty) oldTitle,
+      if (question.trim().isNotEmpty) question.trim(),
+    ].join(' — ').trim();
+    if (descriptor.isEmpty) return null;
+    final text = descriptor.length > 290 ? descriptor.substring(0, 290) : descriptor;
     return <String, dynamic>{
-      'query': text.substring(0, text.length > 230 ? 230 : text.length),
-      'purpose': 'Illustration médicale de la question',
+      'query': text,
+      'purpose': oldTitle.isNotEmpty ? oldTitle : 'Illustration de la question médicale',
       'modality': '',
     };
   }
+
 }
 
 /// Image preview fetched only when a QCM explanation is visible.
@@ -72,8 +89,9 @@ class PracticeQcmMedicalIllustration extends StatefulWidget {
     super.key,
     required this.correction,
     this.question = '',
+    this.caseContext = '',
   });
-  final String correction, question;
+  final String correction, question, caseContext;
   @override
   State<PracticeQcmMedicalIllustration> createState() =>
       _PracticeQcmMedicalIllustrationState();
@@ -98,6 +116,7 @@ class _PracticeQcmMedicalIllustrationState
       PracticeQcmImageMetadata.legacyRequest(
         widget.correction,
         widget.question,
+        context: widget.caseContext,
       );
 
   @override
@@ -109,8 +128,11 @@ class _PracticeQcmMedicalIllustrationState
   @override
   void didUpdateWidget(covariant PracticeQcmMedicalIllustration old) {
     super.didUpdateWidget(old);
-    if (old.correction != widget.correction || old.question != widget.question)
+    if (old.correction != widget.correction ||
+        old.question != widget.question ||
+        old.caseContext != widget.caseContext) {
       _load();
+    }
   }
 
   Map<String, String> _auth() {
