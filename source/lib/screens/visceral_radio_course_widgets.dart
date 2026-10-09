@@ -225,7 +225,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       ],
       if(articles.isNotEmpty)...[
         const SizedBox(height:12),
-        const Text('Figures et articles médicaux associés',
+        const Text('Articles sources (liens vers les figures)',
           style:TextStyle(color:PracticeDailyVisualTheme.mint,fontSize:12,fontWeight:FontWeight.w800)),
         const SizedBox(height:7),
         ...articles.take(4).map((a)=>Container(
@@ -237,7 +237,8 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
             borderRadius:BorderRadius.circular(11),
             child:Padding(padding:const EdgeInsets.all(11),
               child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                if((a['thumbnail']??'').toString().startsWith('https://'))
+                if((a['figure_caption']??'').toString().isNotEmpty &&
+                  (a['thumbnail']??'').toString().startsWith('https://'))
                   Padding(padding:const EdgeInsets.only(right:9),
                     child:ClipRRect(borderRadius:BorderRadius.circular(8),
                       child:Image.network(
@@ -245,7 +246,8 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                         headers:visceralImageHeaders(),width:65,height:65,fit:BoxFit.contain,
                         errorBuilder:(_,__,___)=>const Icon(Icons.article_outlined,
                           color:PracticeDailyVisualTheme.mint,size:22)))),
-                if(!(a['thumbnail']??'').toString().startsWith('https://'))
+                if((a['figure_caption']??'').toString().isEmpty ||
+                  !(a['thumbnail']??'').toString().startsWith('https://'))
                   const Icon(Icons.article_outlined,color:PracticeDailyVisualTheme.mint,size:20),
                 const SizedBox(width:10),
                 Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -257,7 +259,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                     maxLines:2,style:const TextStyle(
                       color:PracticeDailyVisualTheme.muted,fontSize:11)),
                   const SizedBox(height:4),
-                  const Text('Ouvrir l’article et ses figures ↗',style:TextStyle(
+                  const Text('Consulter l’article source et ses figures ↗',style:TextStyle(
                     color:PracticeDailyVisualTheme.mint,fontSize:11)),
                 ])),
               ])),
