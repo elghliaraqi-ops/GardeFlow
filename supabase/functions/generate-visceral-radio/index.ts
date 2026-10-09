@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { generationContract, type GenerationContract } from './generation_contract.ts';
-import { resolveMedicalPreviews } from './medical_image_previews.ts';
+import { resolveMedicalPreviews, proxyMedicalImage } from './medical_image_previews.ts';
 
 // GardeFlow Practice · Viscéral × Radio. Private, on-demand generation.
 // Only technical JSON parsing/count checks; no secondary medical reviewer.
@@ -22,7 +22,7 @@ const topics = [
   'Éventration et reconstruction pariétale','Abcès intra-abdominal postopératoire',
   'Syndrome du compartiment abdominal','Traumatisme abdominal fermé et TDM'
 ];
-const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, x-client-info, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'};
+const cors = {'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, x-client-info, content-type','Access-Control-Allow-Methods':'GET, POST, OPTIONS'};
 function answer(body: unknown, status=200): Response { return new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}}); }
 function str(v: unknown, max=20000):string { return String(v??'').slice(0,max); }
 // Never clip a JSON string in the middle of a quotation/escape sequence.
@@ -155,7 +155,7 @@ function sanitized(x:any):any {
 }
 Deno.serve(async(req)=>{
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
-  if(req.method!=='POST')return answer({error:'method_not_allowed'},405);
+  if(req.method!=='POST'&&req.method!=='GET')return answer({error:'method_not_allowed'},405);
   const url=Deno.env.get('SUPABASE_URL'),service=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if(!url||!service)return answer({error:'backend_not_configured'},503);
   const token=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');
@@ -164,9 +164,14 @@ Deno.serve(async(req)=>{
   const {data:{user},error:authError}=await db.auth.getUser(token);
   if(authError||!user)return answer({error:'unauthorized'},401);
   if(user.id!==OWNER)return answer({error:'forbidden'},403);
+  if(req.method==='GET'){
+    const asset=new URL(req.url).searchParams.get('asset')||'';
+    if(!asset)return answer({error:'asset_missing'},400);
+    return proxyMedicalImage(asset);
+  }
   try{
     const input=await req.json().catch(()=>({})),action=str(input.action,40),id=str(input.id,45);
-    if(action==='images')return answer(await resolveMedicalPreviews(str(input.query,240),str(input.modality,60)));
+    if(action==='images')return answer(await resolveMedicalPreviews(input.image_request&&typeof input.image_request==='object' ? input.image_request : {query:str(input.query,260),modality:str(input.modality,60),purpose:str(input.purpose,200)}));
     if(action==='list'){
       const {data,error}=await db.from(TABLE).select('*').eq('owner_id',user.id).order('created_at',{ascending:false}).limit(80);
       if(error)throw error;
