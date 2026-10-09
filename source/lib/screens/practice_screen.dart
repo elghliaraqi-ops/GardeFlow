@@ -13,6 +13,7 @@ import '../services/clinical_case_service.dart';
 import '../services/random_clinical_case_service.dart';
 import '../state/app_state.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/practice_hub_cards.dart';
 import 'practice_qcm_screen.dart';
 import 'practice_daily_screen.dart';
 import 'practice_progressive_cases_screen.dart';
@@ -300,9 +301,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
         : _ranks.promotionRank != null
         ? '#${_ranks.promotionRank} promo'
         : 'Ouvrir';
-    final qcmMeta = _loading
-        ? 'Chargement…'
-        : '${_qcmMonth.answered} répondus · ${_qcmMonth.accuracy.toStringAsFixed(0)}%';
 
     return ScreenDecorBackdrop(
       scene: ScreenDecorScene.practice,
@@ -318,133 +316,85 @@ class _PracticeScreenState extends State<PracticeScreen> {
             ),
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
             children: [
+              PracticeHomeHero(
+                answered: _qcmAll.answered,
+                accuracy: _qcmAll.accuracy,
+                xp: _all.xp,
+                streak: _all.streak,
+                level: level.number,
+                loading: _loading,
+                onStart: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClinicalCasesScreen(onEditCase: _editPublishedCase))),
+                onQcmRanking: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PracticeQcmScreen())),
+              ),
+              const SizedBox(height: 12),
               const PracticeDailyGameHubCard(),
               if (_error != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 11),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
-
-              // Le défi quotidien est l'accès prioritaire. Les modules
-              // existants restent tous disponibles dans la bibliothèque.
-              const SizedBox(height: 22),
+              const SizedBox(height: 19),
               const _PracticeHubSectionHeader(
-                icon: Icons.menu_book_rounded,
-                title: 'Bibliothèque médicale',
-                subtitle:
-                    'S’entraîner librement, indépendamment du défi du jour',
+                icon: Icons.grid_view_rounded,
+                title: 'Explorer & s’entraîner',
+                subtitle: 'Des cas réels documentés et des simulations IA',
               ),
-              const SizedBox(height: 9),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _PracticePrimaryActionCard(
-                      icon: Icons.medical_information_rounded,
-                      title: 'Cas cliniques',
-                      subtitle: 'Cas interactifs et défis associés',
-                      meta: 'Cas + QCM',
-                      accent: PracticeColors.gamePurple,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ClinicalCasesScreen(
-                            onEditCase: _editPublishedCase,
-                          ),
-                        ),
-                      ),
-                    ),
+              const SizedBox(height: 10),
+              LayoutBuilder(builder: (context, constraints) {
+                final modes = <Widget>[
+                  PracticeCompactModeCard(
+                    icon: Icons.note_add_outlined,
+                    title: 'Cas rencontré',
+                    subtitle: 'Documenter un cas hors garde',
+                    label: 'DOCUMENTATION',
+                    accent: PracticeColors.gameBlue,
+                    onTap: _newStandaloneCase,
                   ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: _PracticePrimaryActionCard(
-                      icon: Icons.quiz_rounded,
-                      title: 'QCM',
-                      subtitle: 'Répondre, corriger et progresser',
-                      meta: qcmMeta,
-                      accent: PracticeColors.accent,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PracticeQcmScreen(),
-                        ),
-                      ),
-                    ),
+                  PracticeCompactModeCard(
+                    icon: Icons.auto_awesome_rounded,
+                    title: 'Cas IA aléatoire',
+                    subtitle: 'Générer, adapter et publier',
+                    label: 'CRÉATION IA',
+                    accent: PracticeColors.gameGold,
+                    onTap: _newRandomClinicalCase,
                   ),
-                ],
-              ),
+                ];
+                return constraints.maxWidth >= 345
+                  ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: modes[0]), const SizedBox(width: 10),
+                      Expanded(child: modes[1]),
+                    ])
+                  : Column(children: [
+                      modes[0], const SizedBox(height: 10), modes[1],
+                    ]);
+              }),
               const SizedBox(height: 11),
               _PracticePrimaryActionCard(
                 icon: Icons.account_tree_rounded,
-                title: 'Cas cliniques progressifs · IA',
-                subtitle:
-                    'Un dossier fictif en 4 étapes et 10 QCM, '
-                    'indépendant du défi quotidien, sans XP ni classement',
-                meta: 'Simulation libre · 10 QCM',
-                accent: PracticeColors.gameBlue,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PracticeProgressiveCasesScreen(),
-                  ),
-                ),
+                title: 'Simulation clinique progressive',
+                subtitle: 'Un patient fictif · 4 étapes · 10 QCM contextualisés',
+                meta: 'SIMULATION LIBRE · REPRENDRE UN DOSSIER',
+                accent: PracticeColors.gamePurple,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PracticeProgressiveCasesScreen())),
               ),
               const SizedBox(height: 11),
-              Container(
-                decoration: BoxDecoration(
-                  color: PracticeColors.surface.withOpacity(.88),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: PracticeColors.line.withOpacity(.72),
-                  ),
-                ),
-                child: ExpansionTile(
-                  initiallyExpanded: false,
-                  tilePadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 4,
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  iconColor: PracticeColors.accent,
-                  collapsedIconColor: PracticeColors.textSecondary,
-                  leading: const Icon(
-                    Icons.add_circle_outline_rounded,
-                    color: PracticeColors.specialist,
-                  ),
-                  title: const Text(
-                    'Outils & création de cas',
-                    style: TextStyle(
-                      color: PracticeColors.text,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Publier un cas ou en générer un avec l’IA',
-                    style: TextStyle(
-                      color: PracticeColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                  children: [
-                    _PracticePrimaryActionCard(
-                      icon: Icons.add_circle_outline_rounded,
-                      title: 'Ajouter un cas clinique',
-                      subtitle: 'Documenter un cas rencontré en dehors d’une garde aux urgences',
-                      meta: 'Hors garde',
-                      accent: PracticeColors.specialist,
-                      onTap: _newStandaloneCase,
-                    ),
-                    const SizedBox(height: 9),
-                    _PracticePrimaryActionCard(
-                      icon: Icons.auto_awesome_rounded,
-                      title: 'Génère-moi un cas au hasard',
-                      subtitle: 'Cas fictif créé par IA, modifiable avant publication',
-                      meta: 'IA · Aléatoire',
-                      accent: PracticeColors.gameGold,
-                      onTap: _newRandomClinicalCase,
-                    ),
-                  ],
-                ),
+              PracticeInlineNavigation(
+                icon: Icons.menu_book_rounded,
+                title: 'Bibliothèque de cas cliniques',
+                subtitle: 'Parcourir les cas publiés et leurs QCM',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ClinicalCasesScreen(onEditCase: _editPublishedCase))),
+              ),
+              const SizedBox(height: 10),
+              PracticeInlineNavigation(
+                icon: Icons.bookmark_added_outlined,
+                title: 'Reprendre une simulation enregistrée',
+                subtitle: 'Retrouver les cas progressifs et terminer leurs QCM',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PracticeProgressiveCasesScreen())),
+              ),
+              const SizedBox(height: 18),
+              PracticeAchievementsPreview(
+                achievements: _achievements,
+                loading: _loading,
+                onOpen: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PracticeAchievementsScreen(appState: widget.appState))),
               ),
 
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
