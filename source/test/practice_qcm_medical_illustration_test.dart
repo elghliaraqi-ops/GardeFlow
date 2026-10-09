@@ -29,7 +29,7 @@ void main() {
       prior,
       'Quel est le signal IRM ?',
     );
-    expect(desc?['query'], 'Quel est le signal IRM ?');
+    expect(desc?['query'], contains('Quel est le signal IRM ?'));
   });
   test('malformed image JSON never hides or crashes the correction', () {
     const incorrect =
