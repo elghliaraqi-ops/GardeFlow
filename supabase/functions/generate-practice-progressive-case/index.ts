@@ -1,13 +1,27 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
-const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology'];
+const specialties=['Chirurgie viscérale','Orthopédie','Cardiologie','Neurologie','Urologie','ORL','Gynécologie','Réanimation','Pneumologie','Gastro-entérologie','Néphrologie','Endocrinologie','Dermatologie','Psychiatrie','Pédiatrie','Ophtalmologie','Neurochirurgie','Chirurgie thoracique','Chirurgie vasculaire','Maladies infectieuses','Médecine interne'];
+// Reuse the same clinical dossier fields and Groq Responses contract as generate-random-clinical-case.
+const caseTextFields=['location','chief_complaint','interrogatoire','personal_surgical_history',
+ 'personal_medical_history','family_surgical_history','family_medical_history','consultation_reason',
+ 'illness_history','clinical_exam','complementary_exams','imaging_conclusion','assessment','plan',
+ 'specialist_service','hospitalization_service'] as const;
+const caseBoolFields=['specialist_opinion_requested','specialist_opinion_done','waiting',
+ 'prescription_done','discharged','hospitalized'] as const;
+const caseProperties:Record<string,unknown>={
+ age:{type:'integer',minimum:1,maximum:105},
+ sex:{type:'string',enum:['F','M','Autre','Non précisé']}
+};
+for(const field of caseTextFields)caseProperties[field]={type:'string'};
+for(const field of caseBoolFields)caseProperties[field]={type:'boolean'};
+const clinicalCaseSchema={type:'object',additionalProperties:false,required:['case'],
+ properties:{case:{type:'object',additionalProperties:false,
+ required:['age','sex',...caseTextFields,...caseBoolFields],properties:caseProperties}}};
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const itemSchema={type:'object',additionalProperties:false,required:['question','options','correct_index','correction','topic','references','image_search_query'],
  properties:{question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
  correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'}}};
-const schema={type:'object',additionalProperties:false,required:['case_title','case_stem','case_stages','qcms'],
- properties:{case_title:{type:'string'},case_stem:{type:'string'},case_stages:{type:'array',minItems:4,maxItems:4,items:{type:'object',additionalProperties:false,required:['title','narrative'],properties:{title:{type:'string'},narrative:{type:'string'}}}},qcms:{type:'array',minItems:10,maxItems:10,items:itemSchema}}};
 type Ref={title:string;url:string;year:string;organization:string;kind:string};
 function plain(value:unknown,max=2500):string {
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
@@ -94,9 +108,104 @@ async function commons(query:string):Promise<{name:string;url:string;source:stri
 
 const batchSchema={type:'object',additionalProperties:false,required:['qcms'],
  properties:{qcms:{type:'array',minItems:5,maxItems:5,items:itemSchema}}};
-const caseBatchSchema=JSON.parse(JSON.stringify(schema));
-caseBatchSchema.properties.qcms.minItems=5;
-caseBatchSchema.properties.qcms.maxItems=5;
+
+// Call the exact Groq Responses API pathway used by the existing fictitious case generator.
+// Unlike the previous combined request, this call contains NO QCMs.
+function extractCaseOutput(payload:Record<string,unknown>):string {
+ if(typeof payload.output_text==='string')return payload.output_text.trim();
+ const parts:string[]=[];
+ for(const raw of (Array.isArray(payload.output)?payload.output:[])){
+  const item=raw as Record<string,unknown>;
+  if(item.type!=='message')continue;
+  for(const rawPart of (Array.isArray(item.content)?item.content:[])){
+   const part=rawPart as Record<string,unknown>;
+   if((part.type==='output_text'||part.type==='text')&&typeof part.text==='string')
+    parts.push(part.text);
+  }
+ }
+ return parts.join('').trim();
+}
+async function generateCaseDossier(specialty:string):Promise<Record<string,unknown>> {
+ const key=Deno.env.get('GROQ_API_KEY');
+ if(!key)throw Error('groq_configuration_missing');
+ const model=Deno.env.get('GROQ_CASE_MODEL')?.trim()||'openai/gpt-oss-20b';
+ const prompt='Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine. '+
+  'Spécialité imposée : '+specialty+'. Niveau : intermédiaire ou complexe. '+
+  'Pas de nom, initiales, date de naissance, adresse, téléphone ni identifiant réel. '+
+  'Rédige en français médical précis, avec signes positifs ET négatifs utiles. '+
+  'Remplis toutes les rubriques du formulaire, constantes et biologie chiffrées plausibles, imagerie si utile. '+
+  'Examen, résultats, synthèse et conduite à tenir doivent être cohérents. '+
+  'Dans plan, détailler décisions de traitement, surveillance et évolution clinique ou suivi. '+
+  'Les booléens des décisions doivent correspondre à la prise en charge. '+
+  'Aucune fausse bibliographie, pas de conseils pour un vrai patient. Réponds au schéma JSON.';
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);
+ try{
+  const response=await fetch('https://api.groq.com/openai/v1/responses',{
+   method:'POST',signal:ctrl.signal,
+   headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+   body:JSON.stringify({model,instructions:'Réponds seulement selon le schéma JSON fourni.',
+    input:prompt,reasoning:{effort:'low'},text:{format:{
+     type:'json_schema',name:'random_clinical_case',schema:clinicalCaseSchema
+    }},store:false,max_output_tokens:5500})
+  });
+  if(!response.ok){
+   console.warn('progressive_case_dossier_http',{status:response.status,model});
+   if(response.status===429)throw Error('groq_rate_limited');
+   if(response.status===401||response.status===403)throw Error('groq_auth_failed');
+   throw Error(response.status===400?'groq_request_rejected':'groq_provider_unavailable');
+  }
+  const payload=await response.json().catch(()=>null) as Record<string,unknown>|null;
+  let decoded:Record<string,unknown>;
+  try{decoded=JSON.parse(extractCaseOutput(payload??{})) as Record<string,unknown>;}
+  catch{throw Error('invalid_case_json');}
+  const raw=decoded.case as Record<string,unknown>|undefined;
+  if(!raw||typeof raw!=='object')throw Error('invalid_case_format');
+  const age=Number(raw.age),sex=plain(raw.sex,20);
+  if(!Number.isInteger(age)||age<1||age>105||!['F','M','Autre','Non précisé'].includes(sex))
+   throw Error('invalid_case_demographics');
+  const result:Record<string,unknown>={age,sex};
+  for(const field of caseTextFields)result[field]=plain(raw[field],2600);
+  for(const field of caseBoolFields)result[field]=raw[field]===true;
+  for(const [field,min] of Object.entries({consultation_reason:15,illness_history:30,
+   clinical_exam:30,assessment:20,plan:30})){
+   if(String(result[field]).length<min)throw Error('invalid_case_format');
+  }
+  result.location='Simulation pédagogique · '+specialty;
+  const requested=result.specialist_opinion_requested===true;
+  result.specialist_service=requested?plain(result.specialist_service,140):'';
+  result.specialist_opinion_done=requested&&result.specialist_opinion_done===true;
+  if(result.hospitalized===true)result.discharged=false;
+  if(result.discharged===true)result.hospitalized=false;
+  if(result.hospitalized!==true)result.hospitalization_service='';
+  return result;
+ }finally{clearTimeout(timer);}
+}
+function narrativeFromCase(c:Record<string,unknown>):
+ {title:string;stem:string;stages:{title:string;narrative:string}[]} {
+ const field=(name:string,max=1700)=>plain(c[name],max);
+ const stem=plain('Patient fictif de '+String(c.age)+' ans, sexe '+String(c.sex)+
+  '. '+field('consultation_reason',500)+'. '+field('illness_history',1200),2400);
+ const stages=[
+  {title:'Admission et examen clinique',
+   narrative:plain(stem+' Examen clinique : '+field('clinical_exam'),2400)},
+  {title:'Examens complémentaires et diagnostic',
+   narrative:plain('Bilan demandé et obtenu : '+field('complementary_exams')+
+    '. Imagerie : '+(field('imaging_conclusion')||'Non indiquée dans ce scénario.')+
+    '. Interrogatoire complémentaire : '+field('interrogatoire',800),2400)},
+  {title:'Décisions thérapeutiques et conduite à tenir',
+   narrative:plain('Synthèse diagnostique : '+field('assessment')+
+    '. Stratégie thérapeutique : '+field('plan'),2400)},
+  {title:'Évolution, surveillance et suivi',
+   narrative:plain('Orientation et évolution du patient fictif : '+
+    (c.hospitalized===true?'Hospitalisation en '+field('hospitalization_service',140)+'. ':
+     c.discharged===true?'Retour à domicile organisé. ':'Surveillance en cours. ')+
+    'Plan de surveillance et suivi : '+field('plan')+
+    '. Contexte clinique : '+field('assessment'),2400)}
+ ];
+ if(stem.length<150||stages.some(stage=>stage.narrative.length<120))
+  throw Error('invalid_stage_format');
+ return {title:plain('Cas fictif · '+field('chief_complaint',140),180),stem,stages};
+}
 
 async function newGroqBatch(
  prompt:string,format:Record<string,unknown>,preferred?:string
