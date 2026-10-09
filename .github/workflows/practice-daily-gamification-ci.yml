@@ -1,0 +1,49 @@
+name: Verify Practice Daily Gamification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/*practice_daily_gamification*'
+      - 'source/lib/models/practice_daily_gamification_models.dart'
+      - 'source/lib/services/practice_daily_gamification_service.dart'
+      - 'source/lib/screens/practice_daily_gamification_screen.dart'
+      - 'source/lib/screens/practice_screen.dart'
+      - 'source/test/practice_daily_gamification_test.dart'
+      - '.github/workflows/practice-daily-gamification-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  daily-gamification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Check Dart format
+        working-directory: source
+        run: dart format --output=none --set-exit-if-changed lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_screen.dart test/practice_daily_gamification_test.dart
+      - name: Daily game model tests
+        working-directory: source
+        run: flutter test test/practice_daily_gamification_test.dart
+      - name: Analyze gamified screens
+        working-directory: source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/models/practice_daily_gamification_models.dart lib/services/practice_daily_gamification_service.dart lib/screens/practice_daily_gamification_screen.dart lib/screens/practice_screen.dart
+      - name: SQL gamification invariants
+        run: |
+          set -euo pipefail
+          SQL=supabase/migrations/20261009042000_practice_daily_gamification.sql
+          grep -Fq 'practice_daily_attempts' "$SQL"
+          grep -Fq 'leaderboard_opt_in' "$SQL"
+          grep -Fq 'revoke all on function public.practice_daily_game_profile() from public,anon;' "$SQL"
+          ! grep -Fq 'practice_daily_replay_attempts' "$SQL"
