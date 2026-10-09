@@ -7,9 +7,12 @@ on:
       - 'source/lib/services/clinical_case_service.dart'
       - 'source/lib/services/qcm_generation_retry_policy.dart'
       - 'source/supabase/functions/generate-clinical-case-qcm/**'
+      - 'source/supabase/functions/preview-clinical-case-qcm/**'
+      - 'supabase/functions/preview-clinical-case-qcm/**'
       - 'source/test/qcm_generation_retry_policy_test.dart'
       - 'source/test/qcm_models_test.dart'
       - 'source/test/clinical_case_post_test.dart'
+      - 'source/test/clinical_case_qcm_preview_test.dart'
       - 'supabase/migrations/*qcm*'
       - '.github/workflows/qcm-security-ci.yml'
   workflow_dispatch:
@@ -45,7 +48,7 @@ jobs:
 
       - name: QCM unit tests
         working-directory: source
-        run: flutter test test/qcm_generation_retry_policy_test.dart test/qcm_models_test.dart test/clinical_case_post_test.dart
+        run: flutter test test/qcm_generation_retry_policy_test.dart test/qcm_models_test.dart test/clinical_case_post_test.dart test/clinical_case_qcm_preview_test.dart
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -53,7 +56,10 @@ jobs:
           deno-version: v2.x
 
       - name: Type-check QCM Edge Function
-        run: deno check source/supabase/functions/generate-clinical-case-qcm/index.ts
+        run: |
+          deno check source/supabase/functions/generate-clinical-case-qcm/index.ts
+          deno check source/supabase/functions/preview-clinical-case-qcm/index.ts
+          deno check supabase/functions/preview-clinical-case-qcm/index.ts
 
       - name: SQL security assertions
         shell: bash
@@ -61,6 +67,9 @@ jobs:
           set -euo pipefail
           HARDEN='supabase/migrations/20261001223000_qcm_generation_security_hardening.sql'
           FEED='supabase/migrations/20261001220900_clinical_qcm_rpc_security_hardening.sql'
+          PREVIEW='supabase/migrations/20261009100000_practice_qcm_preview.sql'
+          grep -Fq 'private.practice_qcm_previews' "$PREVIEW"
+          grep -Fq 'revoke all on function public.clinical_case_confirm_qcm_preview' "$PREVIEW"
           grep -Fq 'clinical_case_commit_generated_qcms' "$HARDEN"
           grep -Fq 'clinical_case_qcm_generation_jobs' "$HARDEN"
           grep -Fq 'rate_limit_exceeded' "$HARDEN"
