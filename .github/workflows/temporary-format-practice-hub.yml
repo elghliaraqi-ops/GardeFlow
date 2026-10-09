@@ -1,0 +1,35 @@
+name: Temporary Practice Hub Formatter
+on:
+  push:
+    branches:
+      - feature/practice-hub-138-achievements-20261009
+    paths:
+      - .github/workflows/temporary-format-practice-hub.yml
+permissions:
+  contents: write
+jobs:
+  format-practice:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+      - name: Canonical formatter
+        run: |
+          set -euo pipefail
+          (cd source && flutter pub get)
+          dart format source/lib/screens/practice_screen.dart source/lib/widgets/practice_hub_cards.dart source/lib/models/practice_achievement_categories.dart source/test/practice_hub_reorganization_test.dart
+          git diff --check
+          if git diff --quiet -- source/lib/screens/practice_screen.dart source/lib/widgets/practice_hub_cards.dart source/lib/models/practice_achievement_categories.dart source/test/practice_hub_reorganization_test.dart; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git add source/lib/screens/practice_screen.dart source/lib/widgets/practice_hub_cards.dart source/lib/models/practice_achievement_categories.dart source/test/practice_hub_reorganization_test.dart
+          git commit -m 'style(practice): format reorganized hub'
+          git fetch origin feature/practice-hub-138-achievements-20261009
+          git rebase origin/feature/practice-hub-138-achievements-20261009
+          git push origin HEAD:feature/practice-hub-138-achievements-20261009
