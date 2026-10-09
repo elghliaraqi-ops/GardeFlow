@@ -31,6 +31,11 @@ export const imageRequestSchema = object({
   query: stringType,
   modality: stringType,
   purpose: stringType,
+  image_type: { type: 'string', enum: ['anatomical_diagram', 'radiology_scan', 'operative_diagram', 'clinical_photo'] },
+  anatomy: stringType,
+  plane: { type: 'string', enum: ['axial', 'sagittal', 'coronal', 'multiplanar', 'not_applicable'] },
+  required_features: stringList,
+  excluded_features: stringList,
 });
 export const sectionSchema = object({
   key: stringType,
@@ -134,6 +139,12 @@ export function generationContract(
       : mode === 'case_qcms'
       ? 'Phases autorisées: ' + [...new Set(phases)].join(', ') + '.'
       : '',
+    'CONTRAT DES IMAGES OBLIGATOIRE POUR CHAQUE image_requests (dans sections, stages ou questions) : les champs query, modality, purpose, image_type, anatomy, plane, required_features et excluded_features sont tous requis. Ne jamais ajouter d’URL d’image.',
+    'Choisir image_type de façon clinique : anatomical_diagram uniquement pour les rapports anatomiques (schéma annoté; pas de radiographie ou ouvrage), radiology_scan pour une vraie coupe médicale (IRM/TDM/échographie) avec modalité, plan, séquence et signes attendus, operative_diagram pour les gestes chirurgicaux; clinical_photo uniquement si pertinent.',
+    'query doit être une requête visuelle précise en anglais combinant organe + modalité/type + anomalie ou repères recherchés. required_features énumère 2 à 4 éléments réellement visibles et nécessaires; excluded_features proscrit couvertures de livres, publicités, graphiques, tableaux, pages d’articles, images d’un autre organe ou autre examen, photographies sans rapport.',
+    'Exemple anatomie rectale : image_type=anatomical_diagram, anatomy=rectum mesorectum sphincter, query=rectum mesorectum levator ani labeled sagittal anatomy illustration, required_features=[rectum,mesorectum,levator ani], excluded_features=[book cover,prostate screening,annual report].',
+    'Exemple stade T3/T4 rectal : image_type=radiology_scan, modality=IRM T2, plane=axial, anatomy=rectum, query=rectal cancer T2 axial pelvic MRI extramural invasion, required_features=[rectal tumor,T2 MRI], excluded_features=[book cover,non medical photo,wrong organ].',
+    'Les aperçus recherchés doivent illustrer fidèlement les signes et structures demandés, sans affirmer qu’ils viennent du patient fictif. Si aucun visuel fiable n’est approprié, image_requests=[] plutôt qu’une proposition hors sujet.',
     prescriptions[mode],
     'Tous les objets doivent renseigner chaque champ required du schéma, même si un tableau est vide.',
     'Ne créer aucune clé supplémentaire ni champ manquant, aucun Markdown, aucun texte hors JSON.',
