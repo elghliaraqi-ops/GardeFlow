@@ -183,10 +183,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
     final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => PracticeCaseFormScreen(
-          appState: widget.appState,
-          standalone: true,
-        ),
+        builder: (_) =>
+            PracticeCaseFormScreen(appState: widget.appState, standalone: true),
       ),
     );
     if (!mounted) return;
@@ -218,7 +216,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
       if (!mounted) return;
       if (existing == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ce cas ne peut pas être modifié depuis ce compte.')),
+          const SnackBar(
+            content: Text('Ce cas ne peut pas être modifié depuis ce compte.'),
+          ),
         );
         return;
       }
@@ -236,7 +236,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir ce cas en modification.')),
+        const SnackBar(
+          content: Text('Impossible d’ouvrir ce cas en modification.'),
+        ),
       );
     }
   }
@@ -327,7 +329,8 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const _PracticeHubSectionHeader(
                 icon: Icons.menu_book_rounded,
                 title: 'Bibliothèque médicale',
-                subtitle: 'S’entraîner librement, indépendamment du défi du jour',
+                subtitle:
+                    'S’entraîner librement, indépendamment du défi du jour',
               ),
               const SizedBox(height: 9),
               Row(
@@ -380,32 +383,36 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 child: ExpansionTile(
                   initiallyExpanded: false,
                   tilePadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 4,
+                    horizontal: 14,
+                    vertical: 4,
                   ),
                   childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                   iconColor: PracticeColors.accent,
                   collapsedIconColor: PracticeColors.textSecondary,
-                  leading: const Icon(Icons.add_circle_outline_rounded,
-                      color: PracticeColors.specialist),
+                  leading: const Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: PracticeColors.specialist,
+                  ),
                   title: const Text(
                     'Outils & création de cas',
                     style: TextStyle(
                       color: PracticeColors.text,
-                      fontWeight: FontWeight.w800, fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
                     ),
                   ),
                   subtitle: const Text(
                     'Publier un cas ou en générer un avec l’IA',
                     style: TextStyle(
-                      color: PracticeColors.textSecondary, fontSize: 11,
+                      color: PracticeColors.textSecondary,
+                      fontSize: 11,
                     ),
                   ),
                   children: [
                     _PracticePrimaryActionCard(
                       icon: Icons.add_circle_outline_rounded,
                       title: 'Ajouter un cas clinique',
-                      subtitle:
-                          'Documenter un cas rencontré en dehors d’une garde aux urgences',
+                      subtitle: 'Documenter un cas rencontré en dehors d’une garde aux urgences',
                       meta: 'Hors garde',
                       accent: PracticeColors.specialist,
                       onTap: _newStandaloneCase,
@@ -699,11 +706,7 @@ class _PracticePrimaryActionCard extends StatelessWidget {
               Positioned(
                 right: -8,
                 top: -10,
-                child: Icon(
-                  icon,
-                  size: 66,
-                  color: accent.withOpacity(.07),
-                ),
+                child: Icon(icon, size: 66, color: accent.withOpacity(.07)),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2140,8 +2143,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         existing?.clientId ??
         '${DateTime.now().microsecondsSinceEpoch}-${_me?.id ?? 'local'}';
     _patientNumber = existing?.patientNumber ?? widget.suggestedNumber ?? 1;
-    _standaloneDate = DateTime.tryParse(existing?.guardDate ?? '') ??
-        DateTime.now();
+    _standaloneDate =
+        DateTime.tryParse(existing?.guardDate ?? '') ?? DateTime.now();
     if (existing != null) _apply(existing);
     for (final controller in _controllers) {
       controller.addListener(_changed);
@@ -2166,7 +2169,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
 
   Future<void> _restoreDraft() async {
     final me = _me;
-    final guardId = widget.existing?.guardId ??
+    final guardId =
+        widget.existing?.guardId ??
         widget.guard?.id ??
         (_isStandalone ? practiceStandaloneLocalGuardId : null);
     if (me == null || guardId == null) {
@@ -2189,8 +2193,10 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       }
     }
     if (mounted) setState(() => _restoring = false);
-    if (widget.autoGenerateRandomCase && widget.existing == null &&
-        _isStandalone && mounted) {
+    if (widget.autoGenerateRandomCase &&
+        widget.existing == null &&
+        _isStandalone &&
+        mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_generateRandomCase());
       });
@@ -2227,8 +2233,12 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   }
 
   Future<void> _generateRandomCase() async {
-    if (_generatingRandomCase || _saving || _restoring ||
-        !_isStandalone || widget.existing != null) return;
+    if (_generatingRandomCase ||
+        _saving ||
+        _restoring ||
+        !_isStandalone ||
+        widget.existing != null)
+      return;
 
     // Never silently overwrite a restored or user-edited draft.
     if (_controllers.any((field) => field.text.trim().isNotEmpty)) {
@@ -2282,15 +2292,17 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         _specialistService = _specialist
             ? (practiceSpecialties.contains(specialty) ? specialty : 'Autre')
             : null;
-        _specialistDone = _specialist &&
-            generated.flag('specialist_opinion_done');
+        _specialistDone =
+            _specialist && generated.flag('specialist_opinion_done');
         _waiting = generated.flag('waiting');
         _prescription = generated.flag('prescription_done');
         _discharged = generated.flag('discharged');
         _hospitalized = generated.flag('hospitalized');
         final destination = generated.text('hospitalization_service');
         _hospitalizationService = _hospitalized
-            ? (practiceSpecialties.contains(destination) ? destination : 'Autre')
+            ? (practiceSpecialties.contains(destination)
+                  ? destination
+                  : 'Autre')
             : null;
       } finally {
         _restoring = false;
@@ -2302,9 +2314,9 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
       _changed(); // Draft-only until the physician saves it manually.
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Génération impossible : $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Génération impossible : $error')));
     } finally {
       if (mounted) setState(() => _generatingRandomCase = false);
     }
@@ -2689,13 +2701,16 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
   PracticeCase? _buildCase({required bool isDraft}) {
     final me = _me;
     final standalone = _isStandalone;
-    final guardId = widget.existing?.guardId ??
+    final guardId =
+        widget.existing?.guardId ??
         widget.guard?.id ??
         (standalone ? practiceStandaloneLocalGuardId : null);
-    final guardDate = widget.existing?.guardDate ??
+    final guardDate =
+        widget.existing?.guardDate ??
         widget.guard?.dateStr ??
         (standalone ? DateFormat('yyyy-MM-dd').format(_standaloneDate) : null);
-    final guardShiftId = widget.existing?.guardShiftId ??
+    final guardShiftId =
+        widget.existing?.guardShiftId ??
         widget.guard?.shiftId ??
         (standalone ? practiceStandaloneEncounterContext : null);
     if (me == null ||
@@ -2790,11 +2805,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
           content: Text(
             result.pendingSync
                 ? (_isStandalone
-                    ? 'Cas clinique enregistré localement · À synchroniser'
-                    : 'Observation enregistrée localement · À synchroniser')
+                      ? 'Cas clinique enregistré localement · À synchroniser'
+                      : 'Observation enregistrée localement · À synchroniser')
                 : (_isStandalone
-                    ? 'Cas clinique ajouté à Practice'
-                    : 'Observation enregistrée : +10 XP$completeBonus'),
+                      ? 'Cas clinique ajouté à Practice'
+                      : 'Observation enregistrée : +10 XP$completeBonus'),
           ),
         ),
       );
@@ -2891,9 +2906,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
         title: Text(
           _isStandalone
               ? (widget.existing == null
-                  ? 'Nouveau cas clinique'
-                  : 'Modifier le cas clinique')
-              : (widget.existing == null ? 'Nouveau malade' : 'Patient #$number'),
+                    ? 'Nouveau cas clinique'
+                    : 'Modifier le cas clinique')
+              : (widget.existing == null
+                    ? 'Nouveau malade'
+                    : 'Patient #$number'),
         ),
         actions: [
           if (widget.existing != null)
@@ -2923,8 +2940,7 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                   if (_isStandalone) ...[
                     const _PracticeNotice(
                       icon: Icons.add_circle_outline_rounded,
-                      text:
-                          'Ce cas est indépendant de vos gardes aux urgences. Il apparaîtra dans les cas cliniques Practice sans modifier vos patients, statistiques ou objectifs de garde.',
+                      text: 'Ce cas est indépendant de vos gardes aux urgences. Il apparaîtra dans les cas cliniques Practice sans modifier vos patients, statistiques ou objectifs de garde.',
                     ),
                     const SizedBox(height: 10),
                     InkWell(
@@ -2949,7 +2965,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                   if (_isStandalone && widget.existing == null) ...[
                     OutlinedButton.icon(
                       onPressed: _saving || _generatingRandomCase
-                          ? null : _generateRandomCase,
+                          ? null
+                          : _generateRandomCase,
                       icon: _generatingRandomCase
                           ? const SizedBox(
                               width: 18,
@@ -2957,9 +2974,11 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.auto_awesome_rounded),
-                      label: Text(_generatingRandomCase
-                          ? 'Génération du cas clinique…'
-                          : 'Générer un autre cas clinique au hasard'),
+                      label: Text(
+                        _generatingRandomCase
+                            ? 'Génération du cas clinique…'
+                            : 'Générer un autre cas clinique au hasard',
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: PracticeColors.gameGold,
                         minimumSize: const Size.fromHeight(52),
@@ -2971,7 +2990,8 @@ class _PracticeCaseFormScreenState extends State<PracticeCaseFormScreen> {
                   if (_generatedByAi) ...[
                     const _PracticeNotice(
                       icon: Icons.science_outlined,
-                      text: 'Simulation IA entièrement fictive : relisez '
+                      text:
+                          'Simulation IA entièrement fictive : relisez '
                           'les données et les décisions avant publication. '
                           'Aucun patient réel n’est associé à ce dossier.',
                     ),
@@ -5236,7 +5256,9 @@ class _FormHeader extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                standalone ? 'Cas clinique hors garde' : 'Patient #$patientNumber',
+                standalone
+                    ? 'Cas clinique hors garde'
+                    : 'Patient #$patientNumber',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 19,
@@ -5614,14 +5636,48 @@ String _initials(String name) {
   return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
 }
 
-
 class _QcmCanonicalStatsStrip extends StatelessWidget {
-  final QcmRanks month; final QcmStats total; final bool loading;
-  const _QcmCanonicalStatsStrip({required this.month, required this.total, required this.loading});
+  final QcmRanks month;
+  final QcmStats total;
+  final bool loading;
+  const _QcmCanonicalStatsStrip({
+    required this.month,
+    required this.total,
+    required this.loading,
+  });
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-    decoration: BoxDecoration(color: PracticeColors.surface.withOpacity(.88), borderRadius: BorderRadius.circular(18), border: Border.all(color: PracticeColors.gameBlue.withOpacity(.35))),
-    child: Row(children: [const Icon(Icons.sync_rounded, color: PracticeColors.accent, size: 20), const SizedBox(width: 9), Expanded(child: Text(loading ? 'Synchronisation…' : '${month.answered} ce mois  •  ${total.answered} au total', style: const TextStyle(color: PracticeColors.text, fontWeight: FontWeight.w800, fontSize: 13.5))), const Text('Auto', style: TextStyle(color: PracticeColors.accent, fontSize: 11, fontWeight: FontWeight.w800))]),
+    decoration: BoxDecoration(
+      color: PracticeColors.surface.withOpacity(.88),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: PracticeColors.gameBlue.withOpacity(.35)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.sync_rounded, color: PracticeColors.accent, size: 20),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            loading
+                ? 'Synchronisation…'
+                : '${month.answered} ce mois  •  ${total.answered} au total',
+            style: const TextStyle(
+              color: PracticeColors.text,
+              fontWeight: FontWeight.w800,
+              fontSize: 13.5,
+            ),
+          ),
+        ),
+        const Text(
+          'Auto',
+          style: TextStyle(
+            color: PracticeColors.accent,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
   );
 }
