@@ -21,6 +21,7 @@ class VisceralFicheView extends StatelessWidget {
       ...records(raw).take(3).map((x)=>VisceralMedicalGallery(
         key:ValueKey(text(x['query'])+'|'+text(x['modality'])),
         query:text(x['query']),caption:text(x['purpose']),modality:text(x['modality']),
+        imageRequest:x,
       )),
     ]);
   }
