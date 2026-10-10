@@ -147,6 +147,25 @@ Deno.test('PMC figure probe follows only allowed CDN redirects and checks image 
 });
 
 
+Deno.test('PMC figure probe falls back to bounded GET if publisher blocks HEAD',async()=>{
+  const source='https://pmc.ncbi.nlm.nih.gov/articles/PMC1234567/bin/rectal-t2.jpg';
+  const methods:string[]=[];
+  const mock=((input:RequestInfo|URL, init?:RequestInit)=>{
+    if(String(input)!==source)throw Error('unexpected source');
+    methods.push(init?.method||'');
+    if(init?.method==='HEAD')return Promise.resolve(new Response(null,{status:405}));
+    if(init?.method==='GET'){
+      if((init.headers as Record<string,string>)?.Range!=='bytes=0-63')
+        throw Error('unbounded GET prohibited');
+      return Promise.resolve(new Response(new Uint8Array([0xff,0xd8,0xff]),
+        {status:206,headers:{'content-type':'image/jpeg'}}));
+    }
+    throw Error('unexpected method');
+  }) as typeof fetch;
+  assert(await probeMedicalFigure(source,mock),'real image available via GET should pass');
+  assert(methods.join(',')==='HEAD,GET','GET should only follow rejected HEAD');
+});
+
 Deno.test('Google Images thumbnails are accepted only from narrow known hosts',()=>{
   const google='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjK08_example123';
   if(!allowedAsset(google))throw Error('gstatic thumbnail blocked');
