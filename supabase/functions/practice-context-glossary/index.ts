@@ -282,22 +282,3 @@ Deno.serve(async (req: Request) => {
     return empty('gemini_unavailable');
   }
 });
-, 'i');
-      terms = terms.filter((entry) => entry.term.toUpperCase() !== 'TNM' ||
-        (organRegex.test(entry.title) &&
-          entry.sections.some((part) => /^T(?:\b|\s|\s—|\s-|\s:)/i.test(part.title)) &&
-          entry.sections.some((part) => /^N(?:\b|\s|\s—|\s-|\s:)/i.test(part.title)) &&
-          entry.sections.some((part) => /^M(?:\b|\s|\s—|\s-|\s:)/i.test(part.title))));
-    }
-    await db.from('practice_context_glossary_cache').update({
-      status: 'ready', terms, updated_at: new Date().toISOString(),
-    }).eq('content_hash', hash);
-    return json({ status: 'generated', terms });
-  } catch (error) {
-    console.error('Practice glossary unavailable:', String(error).slice(0, 150));
-    await db.from('practice_context_glossary_cache').update({
-      status: 'error', updated_at: new Date().toISOString(),
-    }).eq('content_hash', hash);
-    return empty('gemini_unavailable');
-  }
-});
