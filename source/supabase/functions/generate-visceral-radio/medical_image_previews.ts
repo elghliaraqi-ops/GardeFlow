@@ -537,9 +537,8 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
           headers:{...REQUEST_HEADERS,Accept:'application/xml, text/xml;q=0.9'},
           signal:AbortSignal.timeout(5500)}),
         fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
-          // PMC's HTML image src values can differ with a synthetic bot UA.
-          // Use plain HTML negotiation, never the JSON API user-agent.
-          headers:{Accept:'text/html'},
+          // Plain browser-like request: explicit API/Accept headers can yield
+          // a stripped-down PMC page with no figure <img> tags.
           signal:AbortSignal.timeout(5500)})
       ]);
       console.info('pmc_article_http',JSON.stringify({pmcid,xml:rr.status,html:pageRes.status}));
