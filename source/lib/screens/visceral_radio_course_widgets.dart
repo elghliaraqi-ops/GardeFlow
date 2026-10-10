@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config/backend_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_backend_service.dart';
+import '../services/practice_google_image_cache.dart';
 import 'practice_daily_visual_theme.dart';
 
 /// Renders historic and new Groq course prose without modifying stored JSON.
@@ -88,7 +89,16 @@ class VisceralMedicalGallery extends StatefulWidget {
 
 class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   static final Map<String,Map<String,dynamic>> _cache = {};
-  List<Map<String,dynamic>> images=[], sources=[], articles=[];
+  List<Map<String,dynamic>> images=[], sources=[], articles=[], googleImages=[];
+  String googleKey='';
+  bool googleCached=false,googleEnabled=false,searchingGoogle=false;
+  String? googleMessage;
+  int localGoogleCount=0;
+  List<Map<String,dynamic>> get visibleImages {
+    final known=<String>{};
+    return [...images,...googleImages].where((x)=>
+      known.add((x['full']??x['thumbnail']??'').toString())).take(12).toList();
+  }
   bool busy=false;
   String? message;
   int generation=0;
@@ -112,9 +122,11 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         articles=rows(cached['article_previews']);
         busy=false;message=null;
       });
+      await _restoreGoogle(cached,n);
       return;
     }
-    setState((){busy=true;message=null;images=[];sources=[];articles=[];});
+    setState((){busy=true;message=null;images=[];sources=[];articles=[];
+      googleImages=[];googleCached=false;googleKey='';googleEnabled=false;googleMessage=null;});
     try {
       final response=await SupabaseBackendService.instance.client.functions.invoke(
         'generate-visceral-radio',
@@ -134,10 +146,76 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         sources=rows(result['medical_searches']);
         articles=rows(result['article_previews']);
       });
+      await _restoreGoogle(result,n);
     }catch(_){
       if(mounted&&generation==n)setState(()=>message='Recherche temporairement indisponible.');
     }finally{
       if(mounted&&generation==n)setState(()=>busy=false);
+    }
+  }
+  String get _userId => SupabaseBackendService.instance.client.auth.currentUser?.id??'';
+  Future<void> _restoreGoogle(Map<String,dynamic> result,int requestNumber)async {
+    final key=(result['google_cache_key']??'').toString();
+    final enabled=result['google_images_available']==true;
+    final user=_userId;
+    List<Map<String,dynamic>>? existing;
+    var count=0;
+    try{
+      if(user.isNotEmpty&&key.isNotEmpty){
+        existing=await PracticeGoogleImageCache.read(userId:user,googleKey:key);
+        count=await PracticeGoogleImageCache.localCount(user);
+      }
+    }catch(_){/* Cache unavailable => explicit button still possible with warning. */}
+    if(!mounted||generation!=requestNumber)return;
+    setState((){
+      googleKey=key;googleEnabled=enabled;
+      localGoogleCount=count;
+      googleCached=existing!=null;
+      googleImages=existing??[];
+      googleMessage=existing!=null&&existing.isEmpty
+        ?'Recherche Google déjà effectuée : aucun résultat en cache (3 jours).'
+        :null;
+    });
+  }
+  Future<void> _searchGoogle()async{
+    if(searchingGoogle||googleCached||!googleEnabled||googleKey.isEmpty)return;
+    final user=_userId;
+    if(user.isEmpty)return;
+    setState((){searchingGoogle=true;googleMessage=null;});
+    try{
+      final count=await PracticeGoogleImageCache.localCount(user);
+      if(count>=PracticeGoogleImageCache.maxPerDeviceMonth){
+        if(mounted)setState(()=>googleMessage='Limite de prudence atteinte (240 recherches déclenchées sur cet appareil ce mois-ci).');
+        return;
+      }
+      // Count BEFORE making the network request to conservatively protect quota.
+      await PracticeGoogleImageCache.countAttempt(user);
+      final response=await SupabaseBackendService.instance.client.functions.invoke(
+        'generate-visceral-radio',
+        body:{'action':'google_images','image_request':widget.imageRequest.isNotEmpty
+          ?widget.imageRequest:{'query':widget.query,'modality':widget.modality,'purpose':widget.caption}},
+      );
+      final result=response.data is Map
+        ?Map<String,dynamic>.from(response.data as Map):<String,dynamic>{};
+      if(result['error']!=null||result['google_enabled']!=true||result['search_executed']!=true){
+        throw StateError('Recherche Google indisponible');
+      }
+      final list=rows(result['images']).where((x)=>
+        (x['thumbnail']??'').toString().startsWith('https://')).take(8).toList();
+      await PracticeGoogleImageCache.write(
+        userId:user,googleKey:googleKey,images:list);
+      if(!mounted)return;
+      setState((){
+        googleImages=list;googleCached=true;
+        localGoogleCount=count+1;
+        googleMessage=list.isEmpty
+          ?'Aucune image Google adaptée trouvée ; résultat mémorisé 3 jours.'
+          :'Résultats Google récupérés et mémorisés 30 jours sur cet appareil.';
+      });
+    }catch(_){
+      if(mounted)setState(()=>googleMessage='Recherche Google indisponible ; vérifiez votre connexion. Aucun nouvel essai automatique.');
+    }finally{
+      if(mounted)setState(()=>searchingGoogle=false);
     }
   }
   Future<void> _external(String value)async{
@@ -179,13 +257,13 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         const Text('Recherche des images externes…',style:TextStyle(
           color:PracticeDailyVisualTheme.muted,fontSize:11)),
       ],
-      if(images.isNotEmpty)...[
+      if(visibleImages.isNotEmpty)...[
         const SizedBox(height:12),
         SizedBox(height:190,child:ListView.separated(
-          scrollDirection:Axis.horizontal,itemCount:images.length,
+          scrollDirection:Axis.horizontal,itemCount:visibleImages.length,
           separatorBuilder:(_,__)=>const SizedBox(width:10),
           itemBuilder:(context,i){
-            final item=images[i];
+            final item=visibleImages[i];
             return Semantics(button:true,label:'Agrandir l’image '+(i+1).toString(),
               child:InkWell(onTap:()=>_zoom(item),borderRadius:BorderRadius.circular(12),
                 child:SizedBox(width:210,child:Column(children:[
@@ -222,6 +300,30 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
               );
           },
         )),
+      ],
+      if(googleKey.isNotEmpty)...[
+        const SizedBox(height:10),
+        if(googleImages.isNotEmpty)
+          const Text('Google Images — résultats en cache local',
+            style:TextStyle(color:PracticeDailyVisualTheme.mint,fontSize:11,
+              fontWeight:FontWeight.w700)),
+        if(!googleCached&&googleEnabled)
+          OutlinedButton.icon(
+            onPressed:searchingGoogle?null:_searchGoogle,
+            icon:searchingGoogle
+              ?const SizedBox(width:15,height:15,child:CircularProgressIndicator(strokeWidth:2))
+              :const Icon(Icons.search_rounded,size:17),
+            label:Text(searchingGoogle
+              ?'Recherche Google en cours…'
+              :'Rechercher avec Google (1 crédit SerpApi maximum)')),
+        if(googleCached&&googleImages.isNotEmpty)
+          const Text('Recherche déjà effectuée : aucune nouvelle requête SerpApi.',
+            style:TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:11)),
+        if(googleMessage!=null)
+          Text(googleMessage!,style:const TextStyle(
+            color:PracticeDailyVisualTheme.muted,fontSize:11)),
+        Text('Quota prudent local : $localGoogleCount/240 recherches déclenchées ce mois-ci (cet appareil uniquement).',
+          style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:10)),
       ],
       if(articles.isNotEmpty)...[
         const SizedBox(height:12),
