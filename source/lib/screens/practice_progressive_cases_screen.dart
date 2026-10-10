@@ -362,7 +362,7 @@ class _PracticeProgressiveCasesScreenState
     return PracticeGlossaryScope(
       scopeId: 'progressive:' + _title,
       objective: _title,
-      content: [_stem, for (final q in _questions) q.topic + ' ' + q.question].join('\n'),
+      content: [_stem, for (final q in _questions) q.topic + ' ' + q.question + ' ' + q.options.join(' ')].join('\n'),
       kind: 'cas',
       child: _panel(
       Column(
@@ -420,8 +420,9 @@ class _PracticeProgressiveCasesScreenState
                       ),
                     ),
                     Expanded(
-                      child: Text(
+                      child: PracticeGlossaryText(
                         q.options[choice],
+                        richEnabled: _submitted,
                         style: const TextStyle(
                           color: PracticeDailyVisualTheme.text,
                           fontSize: 13,
