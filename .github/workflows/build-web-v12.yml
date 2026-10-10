@@ -130,7 +130,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
-      name: github-pages
+      # Separate test deployment policy; the production github-pages environment
+      # remains restricted to main.
+      name: github-pages-gemini-test
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
