@@ -464,10 +464,11 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
   let items:any[]=[];
   try{
     const res=await fetch(url,{headers:REQUEST_HEADERS,signal:AbortSignal.timeout(7500)});
-    if(!res.ok)return {articles,figures};
-    const json=await res.json();
-    items=Array.isArray(json?.resultList?.result)?json.resultList.result:[];
-  }catch(_){return {articles,figures};}
+    if(res.ok){
+      const json=await res.json();
+      items=Array.isArray(json?.resultList?.result)?json.resultList.result:[];
+    }
+  }catch(_){/* Continue with known open-access reviews if catalog is down. */}
   // The first Europe PMC results are sometimes methodology papers without
   // MRI figures. Prioritize established open-access pictorial radiology
   // reviews, whose image URLs are still discovered dynamically from XML.
@@ -486,7 +487,9 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     const id=String(entry.pmcid||'');
     return /^PMC\d{3,11}$/i.test(id)&&!seenIds.has(id)&&Boolean(seenIds.add(id));
   });
+  const figureDeadline=Date.now()+16500;
   for(const entry of prioritized.slice(0,6)){
+    if(Date.now()>figureDeadline)break;
     const pmcid=String(entry.pmcid||'');
     if(!/^PMC\d{3,11}$/i.test(pmcid))continue;
     const title=clean(entry.title,220);
@@ -514,32 +517,31 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
         const candidatesUrls=[href,
           /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.jpg',
           /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.png'].filter(Boolean);
-        let found=false;
-        for(const filename of candidatesUrls){
-          for(const host of ['https://europepmc.org','https://pmc.ncbi.nlm.nih.gov']){
-            const raw=host+'/articles/'+pmcid+'/bin/'+filename;
-            if(!allowedAsset(raw))continue;
-            try{
-              if(!await probeMedicalFigure(raw))continue;
-              const page=fig.id
-                ?'https://europepmc.org/articles/'+pmcid+'#'+encodeURIComponent(fig.id)
-                :source+'#figures';
-              const image:ImagePreview={thumbnail:raw,full:raw,source:page,
-                title:fig.caption||title,description:title+' '+fig.caption,
-                license:'Open access (vérifier la licence de la figure)',creator:summary,
-                provider:'Europe PMC'};
-              figures.push(image);
-              card.thumbnail=raw;card.figure_caption=fig.caption;card.figure_page=page;
-              if(!articles.some(a=>a.source===card.source)){
-                const replace=articles.findIndex(a=>!a.thumbnail);
-                if(replace>=0)articles[replace]=card;
-                else if(articles.length<ARTICLE_LIMIT)articles.push(card);
-              }
-              found=true;break;
-            }catch(_){/* Continue to the alternate trusted origin. */}
-          }
-          if(found)break;
+        // Check public mirrors concurrently. Sequential HEAD+redirect retries
+        // multiplied by figures used to exceed the Edge request time budget.
+        const figureUrls=[...new Set(candidatesUrls.flatMap(filename=>
+          ['https://europepmc.org','https://pmc.ncbi.nlm.nih.gov'].map(host=>
+            host+'/articles/'+pmcid+'/bin/'+filename)))]
+          .filter(allowedAsset);
+        const probes=await Promise.all(figureUrls.map(async raw=>
+          ({raw,valid:await probeMedicalFigure(raw)})));
+        const hit=probes.find(v=>v.valid);
+        if(!hit)continue;
+        const page=fig.id
+          ?'https://europepmc.org/articles/'+pmcid+'#'+encodeURIComponent(fig.id)
+          :source+'#figures';
+        const image:ImagePreview={thumbnail:hit.raw,full:hit.raw,source:page,
+          title:fig.caption||title,description:title+' '+fig.caption,
+          license:'Open access (vérifier la licence de la figure)',creator:summary,
+          provider:'Europe PMC'};
+        figures.push(image);
+        card.thumbnail=hit.raw;card.figure_caption=fig.caption;card.figure_page=page;
+        if(!articles.some(a=>a.source===card.source)){
+          const replace=articles.findIndex(a=>!a.thumbnail);
+          if(replace>=0)articles[replace]=card;
+          else if(articles.length<ARTICLE_LIMIT)articles.push(card);
         }
+        break;
       }
     }catch(_){/* Article metadata card remains available. */}
     if(figures.length>=3)break;
