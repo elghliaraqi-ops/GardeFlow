@@ -86,6 +86,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
         if (result.isEmpty) throw StateError('Réponse vide');
         if (!mounted) return;
         final nextCount = _arr(result['course_qcms']).length;
+        final savedAnswered = int.tryParse(
+          _str(_obj(result['progress'])['course_answered'])) ?? 0;
         if (action == 'course_qcms' && nextCount <= previousCount &&
             nextCount < courseTarget) {
           throw StateError('Aucune nouvelle question reçue. Réessaie.');
@@ -97,7 +99,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
           if (action == 'create') _clearAnswers();
           // After the original ten QCMs, open the first newly generated one.
           if (action == 'course_qcms' && previousCount > 0 &&
-              _courseDone.contains(previousCount - 1)) {
+              (_courseDone.contains(previousCount - 1) ||
+               savedAnswered >= previousCount)) {
             _coursePosition = previousCount;
           }
         });
