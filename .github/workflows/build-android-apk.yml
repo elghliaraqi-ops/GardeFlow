@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - v12-optimisee
+      - test/gemini-context-glossary-20261010
       - alarm-reminders-v12
     paths:
       - '.github/workflows/build-android-apk.yml'
