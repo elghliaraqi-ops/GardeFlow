@@ -1,29 +1,38 @@
-import 'package:flutter/material.dart';
-import '../services/supabase_backend_service.dart';
+import 'dart:convert';
 
-/// One Gemini request per distinct educational document, not per word or tap.
-/// The Edge Function maintains a shared cross-user cache and strict daily cap.
+import 'package:flutter/material.dart';
+
+import '../services/supabase_backend_service.dart';
+import 'practice_qcm_medical_illustration.dart';
+
+/// A single Gemini generation per distinct learning document, with a
+/// cross-user Supabase cache. Hover/tap NEVER triggers another Gemini call.
 class PracticeGlossaryService {
   PracticeGlossaryService._();
   static final instance = PracticeGlossaryService._();
-  final Map<String, Future<List<PracticeGlossaryTerm>>> _pending = {};
+  final Map<String, Future<PracticeGlossaryResult>> _pending = {};
 
-  Future<List<PracticeGlossaryTerm>> load({
+  Future<PracticeGlossaryResult> load({
     required String scopeId,
     required String objective,
     required String content,
     required String kind,
+    bool forceRefresh = false,
   }) {
     final payload = content.trim();
-    if (payload.isEmpty) return Future.value(const []);
-    final key = scopeId + ':' + objective.hashCode.toString() +
+    if (payload.length < 12) {
+      return Future.value(const PracticeGlossaryResult([], 'no_content'));
+    }
+    // v3 forces a refresh of the old short-definition-only in-memory results.
+    final key = 'rich-v3:' + scopeId + ':' + objective.hashCode.toString() +
         ':' + payload.hashCode.toString() + ':' + kind;
+    if (forceRefresh) _pending.remove(key);
     if (_pending.length > 80) _pending.clear();
     return _pending.putIfAbsent(key, () async {
       try {
         final backend = SupabaseBackendService.instance;
         if (!backend.enabled || backend.client.auth.currentSession == null) {
-          return const <PracticeGlossaryTerm>[];
+          return const PracticeGlossaryResult([], 'authentication_required');
         }
         final response = await backend.client.functions.invoke(
           'practice-context-glossary',
@@ -34,38 +43,72 @@ class PracticeGlossaryService {
           },
         );
         final data = response.data;
-        if (data is! Map || data['terms'] is! List) {
-          return const <PracticeGlossaryTerm>[];
+        if (data is! Map) {
+          return const PracticeGlossaryResult([], 'unavailable');
         }
-        return (data['terms'] as List)
+        final terms = (data['terms'] is List ? data['terms'] as List : const [])
             .whereType<Map>()
-            .map((item) => PracticeGlossaryTerm(
-                  term: (item['term'] ?? '').toString().trim(),
-                  definition: (item['definition'] ?? '').toString().trim(),
-                  category: (item['category'] ?? '').toString(),
-                ))
-            .where((item) => item.term.length >= 2 &&
-                item.definition.isNotEmpty)
-            .take(16)
+            .map((item) => PracticeGlossaryTerm.fromMap(item))
+            .where((item) => item.term.length >= 2 && item.definition.isNotEmpty)
+            .take(7)
             .toList(growable: false);
+        return PracticeGlossaryResult(
+          terms, (data['status'] ?? 'unavailable').toString());
       } catch (_) {
-        // Missing key, free quota or unavailable server: keep original text.
+        // Quota, missing provider, expired session: original text is unaffected.
         _pending.remove(key);
-        return const <PracticeGlossaryTerm>[];
+        return const PracticeGlossaryResult([], 'unavailable');
       }
     });
   }
 }
 
+class PracticeGlossaryResult {
+  const PracticeGlossaryResult(this.terms, this.status);
+  final List<PracticeGlossaryTerm> terms;
+  final String status;
+}
+
+class PracticeGlossarySection {
+  const PracticeGlossarySection({required this.title, required this.items});
+  final String title;
+  final List<String> items;
+  factory PracticeGlossarySection.fromMap(Map input) => PracticeGlossarySection(
+        title: (input['title'] ?? '').toString(),
+        items: (input['items'] is List ? input['items'] as List : const [])
+            .whereType<String>().take(10).toList(growable: false),
+      );
+}
+
 class PracticeGlossaryTerm {
   const PracticeGlossaryTerm({
     required this.term,
+    required this.title,
     required this.definition,
     required this.category,
+    this.sections = const [],
+    this.clinicalRelevance = '',
+    this.imageQuery = '',
+    this.versionNote = '',
   });
-  final String term;
-  final String definition;
-  final String category;
+  final String term, title, definition, category;
+  final List<PracticeGlossarySection> sections;
+  final String clinicalRelevance, imageQuery, versionNote;
+
+  factory PracticeGlossaryTerm.fromMap(Map input) => PracticeGlossaryTerm(
+        term: (input['term'] ?? '').toString().trim(),
+        title: (input['title'] ?? input['term'] ?? '').toString().trim(),
+        definition: (input['definition'] ?? '').toString().trim(),
+        category: (input['category'] ?? 'notion').toString().trim(),
+        sections: (input['sections'] is List ? input['sections'] as List : const [])
+            .whereType<Map>()
+            .map(PracticeGlossarySection.fromMap)
+            .where((item) => item.items.isNotEmpty)
+            .take(5).toList(growable: false),
+        clinicalRelevance: (input['clinical_relevance'] ?? '').toString().trim(),
+        imageQuery: (input['image_query'] ?? '').toString().trim(),
+        versionNote: (input['version_note'] ?? '').toString().trim(),
+      );
 }
 
 class PracticeGlossaryScope extends StatefulWidget {
@@ -77,10 +120,7 @@ class PracticeGlossaryScope extends StatefulWidget {
     required this.kind,
     required this.child,
   });
-  final String scopeId;
-  final String objective;
-  final String content;
-  final String kind;
+  final String scopeId, objective, content, kind;
   final Widget child;
 
   @override
@@ -88,7 +128,8 @@ class PracticeGlossaryScope extends StatefulWidget {
 }
 
 class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
-  List<PracticeGlossaryTerm> _terms = const [];
+  PracticeGlossaryResult _result =
+      const PracticeGlossaryResult([], 'loading');
   int _request = 0;
 
   @override
@@ -104,70 +145,123 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
         oldWidget.content != widget.content ||
         oldWidget.objective != widget.objective ||
         oldWidget.kind != widget.kind) {
-      _terms = const [];
+      _result = const PracticeGlossaryResult([], 'loading');
       _load();
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool retry = false}) async {
     final request = ++_request;
-    final terms = await PracticeGlossaryService.instance.load(
+    final result = await PracticeGlossaryService.instance.load(
       scopeId: widget.scopeId,
       objective: widget.objective,
       content: widget.content,
       kind: widget.kind,
+      forceRefresh: retry,
     );
-    if (mounted && request == _request) setState(() => _terms = terms);
+    if (mounted && request == _request) setState(() => _result = result);
   }
 
   @override
   Widget build(BuildContext context) => _GlossaryInherited(
-        terms: _terms,
-        child: widget.child,
+        terms: _result.terms,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_result.terms.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.touch_app_outlined,
+                        color: Color(0xFF5BE7B0), size: 15),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        '${_result.terms.length} notions interactives · survol ou toucher',
+                        style: const TextStyle(color: Color(0xFFB9CBE0),
+                            fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (_result.terms.isEmpty &&
+                !['loading', 'no_content', 'generated', 'cached'].contains(_result.status))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(children: [
+                  const Icon(Icons.info_outline, size: 14,
+                      color: Color(0xFFB9CBE0)),
+                  const SizedBox(width: 6),
+                  const Expanded(child: Text(
+                    'Explications contextuelles temporairement indisponibles',
+                    style: TextStyle(fontSize: 10.5,
+                        color: Color(0xFFB9CBE0)),
+                  )),
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _result =
+                          const PracticeGlossaryResult([], 'loading'));
+                      _load(retry: true);
+                    },
+                    child: const Text('Réessayer', style: TextStyle(fontSize: 11)),
+                  ),
+                ]),
+              ),
+            widget.child,
+          ],
+        ),
       );
 }
 
 class _GlossaryInherited extends InheritedWidget {
   const _GlossaryInherited({required this.terms, required super.child});
   final List<PracticeGlossaryTerm> terms;
-
   static List<PracticeGlossaryTerm> of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_GlossaryInherited>()?.terms ??
-      const [];
+          const [];
 
   @override
   bool updateShouldNotify(_GlossaryInherited oldWidget) =>
       !identical(terms, oldWidget.terms);
 }
 
-/// Underlines only Gemini-selected terms that actually occur in the displayed
-/// text. No lookup is performed when hovering or tapping.
 class PracticeGlossaryText extends StatelessWidget {
-  const PracticeGlossaryText(this.value, {super.key, this.style});
+  const PracticeGlossaryText(this.value, {
+    super.key,
+    this.style,
+    this.richEnabled = true,
+  });
   final String value;
   final TextStyle? style;
+
+  /// Never reveal staged classification details during unanswered QCMs.
+  final bool richEnabled;
 
   @override
   Widget build(BuildContext context) {
     final terms = _GlossaryInherited.of(context);
     if (terms.isEmpty || value.trim().isEmpty) return Text(value, style: style);
-
-    final all = <_Match>[];
+    final all = <_GlossaryMatch>[];
     for (final term in terms) {
-      final pattern = RegExp(RegExp.escape(term.term), caseSensitive: false,
-          unicode: true);
+      final pattern = RegExp(RegExp.escape(term.term),
+          caseSensitive: false, unicode: true);
       for (final match in pattern.allMatches(value)) {
         final left = match.start == 0 ||
             !RegExp(r'[\wÀ-ÿ]').hasMatch(value[match.start - 1]);
         final right = match.end == value.length ||
             !RegExp(r'[\wÀ-ÿ]').hasMatch(value[match.end]);
-        if (left && right) all.add(_Match(match.start, match.end, term));
+        if (left && right) {
+          all.add(_GlossaryMatch(match.start, match.end, term));
+        }
       }
     }
     all.sort((a, b) => a.start != b.start
         ? a.start.compareTo(b.start)
         : (b.end - b.start).compareTo(a.end - a.start));
-    final matches = <_Match>[];
+    final matches = <_GlossaryMatch>[];
     var cursor = 0;
     for (final match in all) {
       if (match.start < cursor) continue;
@@ -189,47 +283,164 @@ class PracticeGlossaryText extends StatelessWidget {
         alignment: PlaceholderAlignment.baseline,
         baseline: TextBaseline.alphabetic,
         child: Tooltip(
-          triggerMode: TooltipTriggerMode.tap,
-          enableTapToDismiss: true,
+          message: richEnabled ? match.term.definition :
+              'Explication détaillée après validation du QCM',
+          waitDuration: const Duration(milliseconds: 300),
           preferBelow: false,
-          showDuration: const Duration(seconds: 7),
-          waitDuration: const Duration(milliseconds: 250),
-          constraints: const BoxConstraints(maxWidth: 310),
-          decoration: BoxDecoration(
-            color: const Color(0xFF17314E),
-            border: Border.all(color: const Color(0xFF5BE7B0)),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          richMessage: TextSpan(
-            children: [
-              TextSpan(text: match.term.term + '\n',
-                style: const TextStyle(fontWeight: FontWeight.w900,
-                    color: Color(0xFFFFD166))),
-              TextSpan(text: match.term.definition),
-            ],
-            style: const TextStyle(color: Color(0xFFF5F8FF),
-                fontSize: 13, height: 1.4),
-          ),
-          child: Text(raw,
-            style: resolved.copyWith(
+          child: InkWell(
+            onTap: () => _openDetail(context, match.term, richEnabled),
+            child: Text(raw, style: resolved.copyWith(
               color: const Color(0xFF5BE7B0),
               decoration: TextDecoration.underline,
               decorationStyle: TextDecorationStyle.dotted,
               decorationColor: const Color(0xFF5BE7B0),
-            ),
+            )),
           ),
         ),
       ));
       cursor = match.end;
     }
-    if (cursor < value.length) spans.add(TextSpan(text: value.substring(cursor)));
+    if (cursor < value.length) {
+      spans.add(TextSpan(text: value.substring(cursor)));
+    }
     return Text.rich(TextSpan(style: resolved, children: spans));
+  }
+
+  void _openDetail(BuildContext parent, PracticeGlossaryTerm term, bool allow) {
+    if (!allow) {
+      ScaffoldMessenger.maybeOf(parent)?.showSnackBar(const SnackBar(
+        content: Text('L’explication complète sera accessible après validation.'),
+        duration: Duration(seconds: 2),
+      ));
+      return;
+    }
+    var showImages = false;
+    showDialog<void>(
+      context: parent,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setModalState) => Dialog(
+          backgroundColor: const Color(0xFF10243A),
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(color: Color(0xFF244B68)),
+            borderRadius: BorderRadius.circular(21),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 640,
+              maxHeight: MediaQuery.sizeOf(dialogContext).height * .84,
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(17, 16, 8, 10),
+                child: Row(children: [
+                  const Icon(Icons.school_outlined,
+                    color: Color(0xFF5BE7B0), size: 22),
+                  const SizedBox(width: 9),
+                  Expanded(child: Text(term.title,
+                    style: const TextStyle(color: Color(0xFFF5F8FF),
+                      fontSize: 17, fontWeight: FontWeight.w900))),
+                  IconButton(
+                    tooltip: 'Fermer',
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(dialogContext),
+                  ),
+                ]),
+              ),
+              Flexible(child: ListView(
+                padding: const EdgeInsets.fromLTRB(17, 3, 17, 18),
+                shrinkWrap: true,
+                children: [
+                  Text(term.definition,
+                    style: const TextStyle(color: Color(0xFFB9CBE0),
+                      fontSize: 13.5, height: 1.5)),
+                  for (final section in term.sections) ...[
+                    const SizedBox(height: 15),
+                    Text(section.title, style: const TextStyle(
+                      color: Color(0xFFFFD166), fontSize: 13,
+                      fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 5),
+                    for (final item in section.items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 6),
+                              child: Icon(Icons.circle,
+                                color: Color(0xFF5BE7B0), size: 6),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(item, style: const TextStyle(
+                              color: Color(0xFFF5F8FF),
+                              fontSize: 12.5, height: 1.45))),
+                          ]),
+                      ),
+                  ],
+                  if (term.clinicalRelevance.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('INTÉRÊT CLINIQUE',
+                        style: TextStyle(color: Color(0xFFFFD166),
+                            fontSize: 12, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 6),
+                    Text(term.clinicalRelevance,
+                        style: const TextStyle(color: Color(0xFFF5F8FF),
+                            fontSize: 12.5, height: 1.45)),
+                  ],
+                  if (term.versionNote.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(term.versionNote,
+                      style: const TextStyle(color: Color(0xFFB9CBE0),
+                        fontSize: 11.5, fontStyle: FontStyle.italic)),
+                  ],
+                  if (term.imageQuery.isNotEmpty &&
+                      ['anatomie', 'classification'].contains(term.category)) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                        setModalState(() => showImages = !showImages),
+                      icon: Icon(showImages ? Icons.visibility_off_outlined :
+                          Icons.image_search_outlined),
+                      label: Text(showImages
+                          ? 'Masquer les illustrations'
+                          : 'Voir des illustrations médicales'),
+                    ),
+                    if (showImages)
+                      PracticeQcmMedicalIllustration(
+                        correction: PracticeQcmImageMetadata.marker +
+                            jsonEncode({
+                              'query': term.imageQuery,
+                              'purpose': term.title,
+                              'modality': 'anatomical illustration',
+                              'image_type': 'anatomical_diagram',
+                              'anatomy': term.title,
+                              'plane': 'not_applicable',
+                              'required_features': <String>[],
+                              'excluded_features': <String>[
+                                'wrong organ', 'book cover', 'non-medical photo'
+                              ],
+                            }),
+                        question: term.title,
+                        caseContext: '',
+                      ),
+                  ],
+                  const SizedBox(height: 15),
+                  const Text('Support pédagogique généré par IA : vérifier les '
+                    'critères et l’édition des classifications dans les '
+                    'recommandations de référence.',
+                    style: TextStyle(fontSize: 10.5,
+                        color: Color(0xFFB9CBE0))),
+                ],
+              )),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class _Match {
-  const _Match(this.start, this.end, this.term);
-  final int start;
-  final int end;
+class _GlossaryMatch {
+  const _GlossaryMatch(this.start, this.end, this.term);
+  final int start, end;
   final PracticeGlossaryTerm term;
 }
