@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, probeMedicalFigure, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -144,4 +144,32 @@ Deno.test('PMC figure probe follows only allowed CDN redirects and checks image 
   const html=((_:RequestInfo|URL)=>Promise.resolve(
     new Response('<html>Whole article</html>',{status:200,headers:{'content-type':'text/html'}}))) as typeof fetch;
   if(await probeMedicalFigure(source,html))throw Error('article page must not be a medical figure');
+});
+
+
+Deno.test('Google Images thumbnails are accepted only from narrow known hosts',()=>{
+  const google='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjK08_example123';
+  if(!allowedAsset(google))throw Error('gstatic thumbnail blocked');
+  if(!allowedAsset('https://serpapi.com/searches/1234567890/images/abcde12345.jpg'))
+    throw Error('SerpApi image thumbnail blocked');
+  if(allowedAsset('https://encrypted-tbn0.gstatic.com/unsafe/path?q=tbn:ANd9GcRjK08_example123'))
+    throw Error('arbitrary gstatic path accepted');
+  if(allowedAsset('https://serpapi.com/search.json?api_key=private'))
+    throw Error('backend API endpoint accepted as asset');
+});
+Deno.test('Google search images preserve source and do not silently grant a copyright license',()=>{
+  const valid='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjK08_example123';
+  const items=parseGoogleImageResults({images_results:[
+    {title:'Rectal cancer T2 MRI',thumbnail:valid,
+      original:'https://example.invalid/unsafe.jpg',link:'https://radiopaedia.org/articles/rectal-cancer',source:'Radiopaedia'},
+    {title:'Fake image',thumbnail:'http://localhost/internal.png',link:'http://localhost/'}
+  ]});
+  if(items.length!==1||items[0].full!==valid)throw Error('invalid Google image mapping');
+  if(items[0].provider!=='Google Images'||!items[0].license.includes('Droits à vérifier'))
+    throw Error('Google Images must not imply a reuse license');
+  const request=legacyImageRequest({query:'Rectal cancer T2 MRI',image_type:'radiology_scan',
+    anatomy:'rectum',modality:'MRI',purpose:'Rectal cancer T2 MRI'});
+  if(!imageIsTopical(items[0],request))throw Error('appropriate medical Google thumbnail rejected');
+  if(imageIsTopical({...items[0],title:'Book cover annual report',description:'Annual report'},request))
+    throw Error('Google results must still reject unrelated reports');
 });
