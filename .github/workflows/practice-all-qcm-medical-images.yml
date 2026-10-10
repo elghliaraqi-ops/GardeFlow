@@ -44,7 +44,7 @@ jobs:
           deno check source/supabase/functions/generate-practice-daily-challenge/index.ts
           deno check source/supabase/functions/generate-practice-progressive-case/index.ts
           deno check source/supabase/functions/preview-clinical-case-qcm/index.ts
-          deno test source/supabase/functions/practice-medical-images/medical_image_previews_test.ts
+          deno test --allow-env=SERPAPI_KEY source/supabase/functions/practice-medical-images/medical_image_previews_test.ts
           deno test source/supabase/functions/generate-practice-daily-challenge/medical_image_contract_test.ts
       - uses: subosito/flutter-action@v2
         with:
