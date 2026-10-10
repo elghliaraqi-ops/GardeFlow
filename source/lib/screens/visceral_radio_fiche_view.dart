@@ -10,6 +10,10 @@ class VisceralFicheView extends StatelessWidget {
   final Map<String,dynamic> fiche;
   final String sessionId;
   static String text(dynamic v)=>v?.toString()??'';
+  static String excerpt(dynamic raw,int max){
+    final value=text(raw);
+    return value.length>max?value.substring(0,max):value;
+  }
   static List<dynamic> items(dynamic raw)=>raw is List?raw:const [];
   static List<Map<String,dynamic>> records(dynamic raw)=>items(raw).whereType<Map>()
       .map((v)=>Map<String,dynamic>.from(v)).toList();
@@ -107,11 +111,16 @@ class VisceralFicheView extends StatelessWidget {
   Widget build(BuildContext context) => PracticeGlossaryScope(
     scopeId: 'fiche:' + sessionId,
     objective: text(fiche['title']) + ' — ' + text(fiche['summary']),
+    // Sample each chapter + important points, rather than spending all
+    // 10,000 characters on the first sections of a long fiche.
     content: [
       text(fiche['title']),
-      text(fiche['summary']),
+      excerpt(fiche['summary'], 750),
+      ...items(fiche['study_core']).take(5).map((x)=>excerpt(x, 220)),
       for (final chapter in records(fiche['sections']))
-        text(chapter['title']) + ' ' + text(chapter['content']),
+        text(chapter['title']) + ' ' +
+        items(chapter['key_points']).take(5).map((x)=>excerpt(x, 140)).join(' ') +
+        ' ' + excerpt(chapter['content'], 650),
     ].join('\n'),
     kind: 'fiche',
     child: _buildFicheContent(context),
