@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/clinical_case_post.dart';
 import '../services/clinical_case_service.dart';
+import '../widgets/practice_context_glossary.dart';
 import '../theme/app_theme.dart';
 
 abstract final class _PracticeGame {
@@ -1535,7 +1536,21 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     final answered = current?.answered == true;
     final correct = current?.myIsCorrect == true;
 
-    return Column(
+    return PracticeGlossaryScope(
+      scopeId: 'cas:' + post.id,
+      objective: post.topicLabel,
+      content: [
+        post.presentation,
+        post.history,
+        post.clinicalExam,
+        post.complementaryExams,
+        post.imagingConclusion,
+        post.assessment,
+        post.plan,
+        for (final q in _qcms) q.question,
+      ].join('\n'),
+      kind: 'cas',
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _CaseIdentity(post: post, number: widget.number),
@@ -1703,7 +1718,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           ],
         ],
       ],
-    );
+    ));
   }
 
   static bool _hasExtraDetails(ClinicalCasePost post) => <String>[
@@ -1901,7 +1916,7 @@ class _CaseSection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                PracticeGlossaryText(
                   value.trim().isEmpty ? 'Non renseigné' : value.trim(),
                   style: const TextStyle(
                     color: _PracticeGame.text,
@@ -2057,7 +2072,7 @@ class _QcmPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: Colors.white.withOpacity(.10)),
             ),
-            child: Text(
+            child: PracticeGlossaryText(
               current.question,
               style: const TextStyle(
                 color: _PracticeGame.text,
