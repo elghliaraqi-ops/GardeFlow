@@ -1,5 +1,5 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
-import {resolveMedicalPreviews,proxyMedicalImage} from './medical_image_previews.ts';
+import {resolveMedicalPreviews,resolveGoogleMedicalImages,proxyMedicalImage} from './medical_image_previews.ts';
 
 // Shared Practice media resolver. External public images only; no image
 // storage, no untrusted URLs to Groq, no second medical AI reviewer.
@@ -28,9 +28,9 @@ Deno.serve(async req=>{
     return proxyMedicalImage(asset);
   }
   const body=await req.json().catch(()=>null);
-  if(!body||body.action!=='images')return send({error:'invalid_action'},400);
+  if(!body||!['images','google_images'].includes(body.action))return send({error:'invalid_action'},400);
   if(!body.image_request||typeof body.image_request!=='object')return send({error:'image_request_required'},400);
-  try{return send(await resolveMedicalPreviews(body.image_request));}
+  try{return send(body.action==='google_images' ? await resolveGoogleMedicalImages(body.image_request) : await resolveMedicalPreviews(body.image_request));}
   catch(e){console.error('practice_medical_images',{error:String(e).slice(0,150)});
     return send({images:[],medical_searches:[],unavailable_reason:'external_source_unavailable'});}
 });
