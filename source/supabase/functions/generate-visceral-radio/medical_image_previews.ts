@@ -406,6 +406,8 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
   // a *clearly labeled* anatomical/modality neighbor, never claim it is DWI.
   if(nodal&&/restrict|diffus|dwi|adc/.test(subject) &&
      !/restrict|diffus|dwi|adc/.test(label) && !allowContext)return false;
+  if(/internal iliac|iliaqu\w* interne/.test(subject) &&
+     !/internal iliac|iliaqu\w* interne/.test(label) && !allowContext)return false;
   if(/rect|mesorect|sphinct|levator/.test(subject) &&
      !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|lymph|node|nodal|iliac|t[1-4]\b|mr\s?stage)/.test(label))return false;
   if(request.image_type==='radiology_scan'){
@@ -564,7 +566,19 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string,al
     request.anatomy+' '+request.query+' '+request.purpose));
   // The generic rectal staging reference library is unsuitable for a
   // specific nodal/DWI request. For such topics, use real search results.
-  const preferred=rectal&&!nodal?[
+  // Curated, legitimate PMC *articles* (never fixed image URLs) improve
+  // specificity when general catalog searches prefer review statistics.
+  const preferred=rectal&&nodal&&request.image_type==='radiology_scan'?[
+    {pmcid:'PMC4840772',
+      title:'Diagnosis of lateral pelvic lymph node metastasis of lower rectal cancer using diffusion-weighted MRI',
+      authorString:'Open-access case report'},
+    {pmcid:'PMC4851242',
+      title:'Initial staging of rectal cancer and regional lymph nodes: diffusion-weighted MRI',
+      authorString:'Open-access radiology study'},
+    {pmcid:'PMC7365137',
+      title:'Rectal MRI and lateral pelvic sidewall lymph nodes',
+      authorString:'Open-access radiology review'},
+  ]:rectal&&!nodal?[
     {pmcid:'PMC7471246',title:'MRI of rectal cancer—relevant anatomy and staging key points',
       authorString:'Insights into Imaging'},
     {pmcid:'PMC4463328',title:'MRI in local staging of rectal cancer: an update',
@@ -628,11 +642,18 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string,al
         const page=fig.id
           ?'https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/figure/'+encodeURIComponent(fig.id)+'/'
           :source+'#figures';
-        const contextOnly=allowContext &&
-          /restrict|diffus|dwi|adc/.test(ascii(request.query+' '+request.purpose)) &&
-          !/restrict|diffus|dwi|adc/.test(ascii(fig.caption));
-        const figureTitle=contextOnly
-          ?'Illustration de contexte : IRM ganglionnaire (restriction en diffusion non démontrée). '+fig.caption
+        const subject=ascii(request.query+' '+request.purpose);
+        const captionText=ascii(fig.caption);
+        const missingDwi=/restrict|diffus|dwi|adc/.test(subject)
+          && !/restrict|diffus|dwi|adc/.test(captionText);
+        const missingInternalIliac=/internal iliac|iliaqu\w* interne/.test(subject)
+          && !/internal iliac|iliaqu\w* interne/.test(captionText);
+        const qualifiers=[
+          missingDwi?'restriction en diffusion non démontrée':'',
+          missingInternalIliac?'topographie iliaque interne non confirmée':'',
+        ].filter(Boolean);
+        const figureTitle=allowContext && qualifiers.length>0
+          ?'Illustration de contexte ('+qualifiers.join(' ; ')+') : '+fig.caption
           :fig.caption;
         const image:ImagePreview={thumbnail:hit.raw,full:hit.raw,source:page,
           title:figureTitle||title,description:title+' '+fig.caption,
