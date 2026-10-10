@@ -3,7 +3,32 @@
  * Only searches open-access third-party images; no user data, images, or
  * provider credentials are stored.
  */
-import {resolveMedicalPreviews,proxyMedicalImage} from '../supabase/functions/generate-visceral-radio/medical_image_previews.ts';
+import {resolveMedicalPreviews,proxyMedicalImage,pmcFigureAssets,pmcAssetForFigure,articleFigureSnippets,articleFigureRelevant,legacyImageRequest,probeMedicalFigure} from '../supabase/functions/generate-visceral-radio/medical_image_previews.ts';
+
+const pmcid='PMC7471246';
+const [xmlResp,htmlResp]=await Promise.all([
+  fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML'),
+  fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/'),
+]);
+const xml=await xmlResp.text(),html=await htmlResp.text();
+const found=articleFigureSnippets(xml);
+const assets=pmcFigureAssets(html);
+const requestForProbe=legacyImageRequest({
+  query:'rectal cancer T2 MRI T3 vs T4',purpose:'T3 vs T4 rectal cancer',
+  anatomy:'rectum',modality:'IRM T2',image_type:'radiology_scan'});
+const matching=found.filter(f=>articleFigureRelevant(f.caption,requestForProbe));
+const selected=matching.flatMap(f=>assets.filter(x=>pmcAssetForFigure(f.href,x))).slice(0,3);
+console.log('DIAGNOSTIC_PMC',JSON.stringify({
+  xml:xmlResp.status,html:htmlResp.status,figureTotal:found.length,
+  relevant:matching.length,assetCount:assets.length,selectedCount:selected.length,
+  sampleAsset:assets[0],sampleFigure:matching[0]?.href,sampleMatched:selected[0]}));
+for(const url of [assets[0],selected[0],
+ 'https://media.springernature.com/lw685/springer-static/image/art%3A10.1186%2Fs13244-020-00890-7/MediaObjects/13244_2020_890_Fig11_HTML.png']){
+ if(!url)continue;
+ const response=await fetch(url,{method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(5500)});
+ console.log('DIAGNOSTIC_HEAD',JSON.stringify({url,status:response.status,mime:response.headers.get('content-type'),
+  valid:await probeMedicalFigure(url)}));
+}
 
 const request={
   query:'rectal cancer T2 MRI T3 vs T4',
