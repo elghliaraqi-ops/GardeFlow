@@ -365,7 +365,7 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
 function figurePriority(caption:string,request:MedicalImageRequest):number{
   const label=ascii(caption), subject=ascii(request.query+' '+request.purpose);
   let score=0;
-  if(/\b(?:t2|mri|mr image|magnetic resonance|axial|sagittal)\b/.test(label)).test(label))score+=2;
+  if(/\b(?:t2|mri|mr image|magnetic resonance|axial|sagittal)\b/.test(label))score+=2;
   if(/\b(?:rectum|rectal|mesorect|sphincter|levator|fascia)\b/.test(label))score+=2;
   if(/t3/.test(subject)&&/\bt3\b/.test(label))score+=4;
   if(/t4/.test(subject)&&/\bt4\b/.test(label))score+=4;
