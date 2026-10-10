@@ -453,6 +453,32 @@ export async function probeMedicalFigure(asset:string,fetcher:typeof fetch=fetch
   return false;
 }
 
+/**
+ * PubMed Central serves figures from content-addressed CDN paths.
+ * JATS <graphic href> is only a FILENAME, not a working /articles/PMC/bin URL.
+ * Derive the actual image endpoint from the public rendered PMC article.
+ */
+export function pmcFigureAssets(html:string):string[]{
+  const assets:string[]=[];
+  const seen=new Set<string>();
+  const images=html.match(/<img\b[^>]*>/gi)||[];
+  for(const tag of images){
+    const url=tag.match(/\bsrc\s*=\s*["'](https:\/\/cdn\.ncbi\.nlm\.nih\.gov\/pmc\/blobs\/[^"'<>]+)["']/i)?.[1]
+      ?.replace(/&amp;/g,'&')||'';
+    if(url&&allowedAsset(url)&&!seen.has(url)){
+      seen.add(url);assets.push(url);
+    }
+  }
+  return assets.slice(0,90);
+}
+export function pmcAssetForFigure(filename:string,asset:string):boolean{
+  if(!allowedAsset(asset))return false;
+  const reference=filename.split('/').pop()?.toLowerCase()||'';
+  const actual=new URL(asset).pathname.split('/').pop()?.toLowerCase()||'';
+  const stem=(v:string)=>v.replace(/\.(?:png|jpe?g|webp)$/,'');
+  return reference.length>4&&(reference===actual||stem(reference)===stem(actual));
+}
+
 async function articleSourcePreviews(request:MedicalImageRequest,query:string):
   Promise<{articles:MedicalArticlePreview[];figures:ImagePreview[]}>{
   const articles:MedicalArticlePreview[]=[];
@@ -503,37 +529,37 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     // caption-matched <fig> with an accessible image becomes an illustration.
     if(request.allow_article_figures===false||figures.length>=3)continue;
     try{
-      const rr=await fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
-        headers:REQUEST_HEADERS,signal:AbortSignal.timeout(4500)});
+      const [rr,pageRes]=await Promise.all([
+        fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
+          headers:REQUEST_HEADERS,signal:AbortSignal.timeout(5500)}),
+        fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
+          headers:REQUEST_HEADERS,signal:AbortSignal.timeout(5500)})
+      ]);
       if(!rr.ok)continue;
       const xml=await rr.text();
       if(xml.length>2200000)continue;
+      const html=pageRes.ok?await pageRes.text():'';
+      const publishedAssets=html.length<=1600000?pmcFigureAssets(html):[];
       const candidates=articleFigureSnippets(xml)
         .filter(f=>articleFigureRelevant(f.caption,request))
         .sort((a,b)=>figurePriority(b.caption,request)-figurePriority(a.caption,request))
         .slice(0,4);
       for(const fig of candidates){
-        const href=fig.href.replace(/^.*\//,'');
-        const candidatesUrls=[href,
-          /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.jpg',
-          /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.png'].filter(Boolean);
-        // Check public mirrors concurrently. Sequential HEAD+redirect retries
-        // multiplied by figures used to exceed the Edge request time budget.
-        const figureUrls=[...new Set(candidatesUrls.flatMap(filename=>
-          ['https://europepmc.org','https://pmc.ncbi.nlm.nih.gov'].map(host=>
-            host+'/articles/'+pmcid+'/bin/'+filename)))]
-          .filter(allowedAsset);
+        // Use the real PMC CDN src, matched to the exact JATS figure
+        // filename. Never synthesize /articles/PMC.../bin links (403/404).
+        const figureUrls=publishedAssets
+          .filter(u=>pmcAssetForFigure(fig.href,u)).slice(0,3);
         const probes=await Promise.all(figureUrls.map(async raw=>
           ({raw,valid:await probeMedicalFigure(raw)})));
         const hit=probes.find(v=>v.valid);
         if(!hit)continue;
         const page=fig.id
-          ?'https://europepmc.org/articles/'+pmcid+'#'+encodeURIComponent(fig.id)
+          ?'https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/figure/'+encodeURIComponent(fig.id)+'/'
           :source+'#figures';
         const image:ImagePreview={thumbnail:hit.raw,full:hit.raw,source:page,
           title:fig.caption||title,description:title+' '+fig.caption,
           license:'Open access (vérifier la licence de la figure)',creator:summary,
-          provider:'Europe PMC'};
+          provider:'PubMed Central'};
         figures.push(image);
         card.thumbnail=hit.raw;card.figure_caption=fig.caption;card.figure_page=page;
         if(!articles.some(a=>a.source===card.source)){
