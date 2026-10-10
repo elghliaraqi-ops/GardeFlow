@@ -12,6 +12,7 @@ import '../services/notification_service.dart';
 import '../services/push_notification_service.dart';
 import 'practice_daily_history_screen.dart';
 import 'practice_daily_visual_theme.dart';
+import '../widgets/practice_context_glossary.dart';
 
 class PracticeDailyScreen extends StatefulWidget {
   const PracticeDailyScreen({super.key, this.replayDay});
@@ -600,7 +601,13 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       progressive: s.isProgressiveCase,
       completed: s.completed,
     );
-    return _box(
+    return PracticeGlossaryScope(
+      scopeId: 'daily:' + s.day.toIso8601String() + ':' + s.mode,
+      objective: s.caseTitle.isNotEmpty ? s.caseTitle : 'Défi médical quotidien',
+      content: [s.caseTitle, s.caseStem,
+        for (final q in s.questions) q.topic + ' ' + q.question].join('\n'),
+      kind: 'defi',
+      child: _box(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -698,7 +705,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                           ),
                         ),
                         children: [
-                          Text(
+                          PracticeGlossaryText(
                             s.caseStages[stage].narrative,
                             style: const TextStyle(color: _muted, height: 1.5),
                           ),
@@ -743,7 +750,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
               ),
             ),
             const SizedBox(height: 7),
-            Text(
+            PracticeGlossaryText(
               s.caseStem,
               style: const TextStyle(color: _muted, height: 1.45),
             ),
@@ -770,7 +777,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ],
           ),
           const SizedBox(height: 13),
-          Text(
+          PracticeGlossaryText(
             q.question,
             style: const TextStyle(
               color: _text,
@@ -831,7 +838,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ),
         ],
       ),
-    );
+    ));
   }
 
   void _leavePractice() {
