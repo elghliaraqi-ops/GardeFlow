@@ -394,7 +394,7 @@ export function articleFigureSnippets(xml:string):Array<{id:string;href:string;c
 /** Figure captions often omit "rectum MRI" because the article already
  * establishes that context. Keep modality/anatomical clues without requiring
  * them to be repeated verbatim in every caption. */
-export function articleFigureRelevant(caption:string,request:MedicalImageRequest):boolean{
+export function articleFigureRelevant(caption:string,request:MedicalImageRequest,allowContext=false):boolean{
   const label=ascii(caption);
   const subject=ascii(request.anatomy+' '+request.query+' '+request.purpose);
   if(label.length<9||banned.test(label))return false;
@@ -402,6 +402,10 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
   // substitute an unrelated rectal T2 tumour for a DWI lymph-node request.
   const nodal=/ganglion|lymph|nodal|adenopath|iliac|node/.test(subject);
   if(nodal&&!/(lymph|nodal|node|ganglion|adenopath|iliac)/.test(label))return false;
+  // Stage 1 must document the requested diffusion sign. Stage 2 may show
+  // a *clearly labeled* anatomical/modality neighbor, never claim it is DWI.
+  if(nodal&&/restrict|diffus|dwi|adc/.test(subject) &&
+     !/restrict|diffus|dwi|adc/.test(label) && !allowContext)return false;
   if(/rect|mesorect|sphinct|levator/.test(subject) &&
      !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|lymph|node|nodal|iliac|t[1-4]\b|mr\s?stage)/.test(label))return false;
   if(request.image_type==='radiology_scan'){
@@ -535,7 +539,7 @@ export function pmcAssetForFigure(filename:string,asset:string):boolean{
   return reference.length>4&&(reference===actual||stem(reference)===stem(actual));
 }
 
-async function articleSourcePreviews(request:MedicalImageRequest,query:string):
+async function articleSourcePreviews(request:MedicalImageRequest,query:string,allowContext=false):
   Promise<{articles:MedicalArticlePreview[];figures:ImagePreview[]}>{
   const articles:MedicalArticlePreview[]=[];
   const figures:ImagePreview[]=[];
@@ -606,7 +610,7 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
       const html=pageRes.ok?await pageRes.text():'';
       const publishedAssets=html.length<=1600000?pmcFigureAssets(html):[];
       const candidates=articleFigureSnippets(xml)
-        .filter(f=>articleFigureRelevant(f.caption,request))
+        .filter(f=>articleFigureRelevant(f.caption,request,allowContext))
         .sort((a,b)=>figurePriority(b.caption,request)-figurePriority(a.caption,request))
         .slice(0,4);
       console.info('pmc_article_assets',JSON.stringify({pmcid,assets:publishedAssets.length,
@@ -624,12 +628,18 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
         const page=fig.id
           ?'https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/figure/'+encodeURIComponent(fig.id)+'/'
           :source+'#figures';
+        const contextOnly=allowContext &&
+          /restrict|diffus|dwi|adc/.test(ascii(request.query+' '+request.purpose)) &&
+          !/restrict|diffus|dwi|adc/.test(ascii(fig.caption));
+        const figureTitle=contextOnly
+          ?'Illustration de contexte : IRM ganglionnaire (restriction en diffusion non démontrée). '+fig.caption
+          :fig.caption;
         const image:ImagePreview={thumbnail:hit.raw,full:hit.raw,source:page,
-          title:fig.caption||title,description:title+' '+fig.caption,
+          title:figureTitle||title,description:title+' '+fig.caption,
           license:'Open access (vérifier la licence de la figure)',creator:summary,
           provider:'PubMed Central'};
         figures.push(image);
-        card.thumbnail=hit.raw;card.figure_caption=fig.caption;card.figure_page=page;
+        card.thumbnail=hit.raw;card.figure_caption=figureTitle;card.figure_page=page;
         if(!articles.some(a=>a.source===card.source)){
           const replace=articles.findIndex(a=>!a.thumbnail);
           if(replace>=0)articles[replace]=card;
@@ -763,7 +773,7 @@ export async function resolveMedicalPreviews(input:any){
     const first=await articleSourcePreviews(request,articleQueries[0]);
     articleResults.push(first);
     if(first.figures.length===0 && articleQueries.length>1){
-      articleResults.push(await articleSourcePreviews(request,articleQueries[1]));
+      articleResults.push(await articleSourcePreviews(request,articleQueries[1],true));
     }
   }
   const articles:MedicalArticlePreview[]=[];
