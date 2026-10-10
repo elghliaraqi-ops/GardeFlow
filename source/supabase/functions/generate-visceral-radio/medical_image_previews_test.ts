@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleFigureSnippets, articleFigureRelevant, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, googleMedicalCacheKey, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleFigureSnippets, articleFigureRelevant, pmcFigureAssets, pmcAssetForFigure, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, googleMedicalCacheKey, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -175,10 +175,22 @@ Deno.test('rectal MRI figure captions do not need to repeat the article title',(
     'caption inherits rectal MRI context from known article');
   assert(!articleFigureRelevant('Survival curve for rectal carcinoma',r),
     'survival plots must not be rendered as medical scan');
+  assert(!articleFigureRelevant('Effect after re-evaluation of study cases using updated staging criteria on classification',r),
+    'non-imaging staging diagrams must not be shown as MRI');
   assert(allowedAsset('https://europepmc.org/articles/PMC7471246/bin/rectal_fig3.jpg'),
     'public PMC article images served by Europe PMC should be allowed');
   assert(!allowedAsset('https://europepmc.org/articles/PMC7471246/../private.jpg'),
     'untrusted image path must remain blocked');
+});
+
+Deno.test('PMC rendered article provides real CDN figure URL, not fabricated /bin URL',()=>{
+  const url='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/9884/7471246/123abc/rectal_fig3.jpg';
+  const html='<figure id="Fig3"><img src="'+url+'" alt="Figure 3"></figure>'+
+    '<img src="https://evil.example/private.jpg">';
+  const found=pmcFigureAssets(html);
+  assert(found.length===1 && found[0]===url,'real figure must be extracted');
+  assert(pmcAssetForFigure('rectal_fig3.jpg',url),'matching JATS filename is linked');
+  assert(!pmcAssetForFigure('rectal_fig4.jpg',url),'wrong figure must not be shown');
 });
 
 Deno.test('free resolver returns inline figure and retains article link when catalog images fail',async()=>{
@@ -191,11 +203,20 @@ Deno.test('free resolver returns inline figure and retains article link when cat
       JSON.stringify({results:[]}),{status:200,headers:{'content-type':'application/json'}}));
     if(url.includes('/rest/search?'))return Promise.resolve(new Response(
       JSON.stringify({resultList:{result:[]}}),{status:200,headers:{'content-type':'application/json'}}));
-    if(url.includes('/PMC7471246/fullTextXML'))return Promise.resolve(new Response(
-      '<article><fig id="Fig3"><caption>Axial T2-weighted MRI of a T3 tumour invading the mesorectal fat.</caption><graphic xlink:href="rectal_fig3"/></fig></article>',
-      {status:200,headers:{'content-type':'application/xml'}}));
+    if(url.includes('/PMC7471246/fullTextXML')){
+      // Reproduce the actual Europe PMC 406 response if JSON is requested.
+      const accept=new Headers(init?.headers).get('Accept')||'';
+      if(!accept.includes('application/xml'))return Promise.resolve(
+        new Response('Not Acceptable',{status:406}));
+      return Promise.resolve(new Response(
+        '<article><fig id="Fig3"><caption>Axial T2-weighted MRI of a T3 tumour invading the mesorectal fat.</caption><graphic xlink:href="rectal_fig3.jpg"/></fig></article>',
+        {status:200,headers:{'content-type':'application/xml'}}));
+    }
     if(url.includes('/fullTextXML'))return Promise.resolve(new Response('<article></article>',{status:200}));
-    if(url==='https://europepmc.org/articles/PMC7471246/bin/rectal_fig3.jpg' &&
+    if(url==='https://pmc.ncbi.nlm.nih.gov/articles/PMC7471246/')return Promise.resolve(new Response(
+      '<figure id="Fig3"><img src="https://cdn.ncbi.nlm.nih.gov/pmc/blobs/9884/7471246/123abc/rectal_fig3.jpg" alt="Fig. 3"></figure>',
+      {status:200,headers:{'content-type':'text/html'}}));
+    if(url==='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/9884/7471246/123abc/rectal_fig3.jpg' &&
        init?.method==='HEAD')return Promise.resolve(new Response(null,{status:200,headers:{'content-type':'image/jpeg'}}));
     return Promise.resolve(new Response(null,{status:404}));
   }) as typeof fetch;
@@ -204,7 +225,7 @@ Deno.test('free resolver returns inline figure and retains article link when cat
       modality:'IRM T2',purpose:'Axial T2 pelvic MRI showing rectal T3 tumour',
       anatomy:'rectum',image_type:'radiology_scan',plane:'axial',
       required_features:['T3','mesorectum'],excluded_features:[]});
-    assert(response.images.some((v)=>v.thumbnail==='https://europepmc.org/articles/PMC7471246/bin/rectal_fig3.jpg'),
+    assert(response.images.some((v)=>v.thumbnail==='https://cdn.ncbi.nlm.nih.gov/pmc/blobs/9884/7471246/123abc/rectal_fig3.jpg'),
       'resolved real article image should be in gallery');
     assert(response.article_previews.some((v)=>v.source.includes('PMC7471246')&&
       v.figure_page?.includes('Fig3')),

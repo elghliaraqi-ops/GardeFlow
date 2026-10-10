@@ -1,0 +1,21 @@
+name: Diagnose public Viscéral Radio image fetch
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/ci/visceral_radio_live_probe.ts'
+      - '.github/workflows/visceral-radio-live-probe.yml'
+      - 'source/supabase/functions/generate-visceral-radio/medical_image_previews.ts'
+permissions:
+  contents: read
+jobs:
+  check-external-figures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Probe public XML and external image URLs (no tokens)
+        run: deno run --allow-net --allow-env=SERPAPI_KEY source/ci/visceral_radio_live_probe.ts

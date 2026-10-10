@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../config/backend_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_backend_service.dart';
@@ -89,6 +91,9 @@ class VisceralMedicalGallery extends StatefulWidget {
 
 class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   static final Map<String,Map<String,dynamic>> _cache = {};
+  // Image bytes stay only in this widget's RAM. Flutter Web's Image.network
+  // cannot reliably send Authorization to the private Supabase GET endpoint.
+  final Map<String,Future<Uint8List?>> _imageFutures={};
   List<Map<String,dynamic>> images=[], sources=[], articles=[], googleImages=[];
   String googleKey='';
   bool googleCached=false,googleEnabled=false,searchingGoogle=false;
@@ -128,6 +133,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   Future<void> _fetch({bool refresh=false})async{
     if(widget.query.trim().isEmpty)return;
     final n=++generation;
+    if(refresh)_imageFutures.clear();
     final cached=refresh?null:_cache[cacheKey];
     if(cached!=null){
       setState((){
@@ -240,16 +246,65 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       if(mounted)setState(()=>searchingGoogle=false);
     }
   }
+  Future<Uint8List?> _fetchImageBytes(String external)async{
+    if(!external.startsWith('https://'))return null;
+    try{
+      final response=await http.get(
+        Uri.parse(visceralImageProxyUrl(external)),
+        headers:visceralImageHeaders(),
+      ).timeout(const Duration(seconds:20));
+      final mime=(response.headers['content-type']??'').toLowerCase();
+      if(response.statusCode!=200||!mime.startsWith('image/')||
+         response.bodyBytes.isEmpty||response.bodyBytes.lengthInBytes>12*1024*1024)
+        return null;
+      return response.bodyBytes;
+    }catch(_){return null;}
+  }
+  Future<Uint8List?> _imageBytes(String external)=>
+    _imageFutures.putIfAbsent(external,()=>_fetchImageBytes(external));
+  Widget _imagePreview(String external,{double? width,double? height,bool compact=false}){
+    return FutureBuilder<Uint8List?>(
+      future:_imageBytes(external),
+      builder:(context,snapshot){
+        if(snapshot.connectionState!=ConnectionState.done){
+          return const Center(child:SizedBox(width:21,height:21,
+            child:CircularProgressIndicator(strokeWidth:2,
+              color:PracticeDailyVisualTheme.mint)));
+        }
+        final bytes=snapshot.data;
+        if(bytes!=null)return Image.memory(bytes,width:width,height:height,fit:BoxFit.contain,
+          errorBuilder:(_,__,___)=>const Icon(Icons.broken_image_outlined,
+            color:PracticeDailyVisualTheme.muted));
+        if(compact)return const Icon(Icons.article_outlined,
+          color:PracticeDailyVisualTheme.mint,size:22);
+        return Container(
+          alignment:Alignment.center,
+          color:PracticeDailyVisualTheme.elevated,
+          child:const Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+            Icon(Icons.image_not_supported_outlined,color:PracticeDailyVisualTheme.muted),
+            SizedBox(height:7),
+            Text('Aperçu inaccessible',style:TextStyle(
+              color:PracticeDailyVisualTheme.muted,fontSize:11))]));
+      },
+    );
+  }
   Future<void> _external(String value)async{
     final url=Uri.tryParse(value);
     if(url?.scheme=='https')await launchUrl(url!,mode:LaunchMode.externalApplication);
   }
-  void _zoom(Map<String,dynamic> item) {
+  Future<void> _zoom(Map<String,dynamic> item)async{
     final url=(item['full']??item['thumbnail']??'').toString();
     if(!url.startsWith('https://'))return;
-    Navigator.of(context).push(MaterialPageRoute<void>(
+    final bytes=await _imageBytes(url) ??
+      await _imageBytes((item['thumbnail']??'').toString());
+    if(!mounted)return;
+    if(bytes==null){
+      await _external((item['source']??'').toString());
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute<void>(
       builder:(_)=>_MedicalZoomViewer(
-        url:visceralImageProxyUrl(url),source:(item['source']??'').toString(),
+        bytes:bytes,source:(item['source']??'').toString(),
         title:(item['title']??widget.caption).toString(),
         credits:(item['creator']??'').toString()+' · '+(item['license']??'').toString(),
       )));
@@ -291,17 +346,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                 child:SizedBox(width:210,child:Column(children:[
                   Expanded(child:Stack(fit:StackFit.expand,children:[
                     ClipRRect(borderRadius:BorderRadius.circular(12),
-                      child:Image.network(visceralImageProxyUrl((item['thumbnail']??'').toString()),
-                        headers:visceralImageHeaders(),fit:BoxFit.contain,
-                        errorBuilder:(_,__,___)=>Container(
-                          alignment:Alignment.center,
-                          color:PracticeDailyVisualTheme.elevated,
-                          child:const Column(mainAxisAlignment:MainAxisAlignment.center,children:[
-                            Icon(Icons.image_not_supported_outlined,color:PracticeDailyVisualTheme.muted),
-                            SizedBox(height:7),
-                            Text('Aperçu inaccessible',style:TextStyle(
-                              color:PracticeDailyVisualTheme.muted,fontSize:11))]))),
-                    ),
+                      child:_imagePreview((item['thumbnail']??'').toString())),
                     Positioned(top:6,right:6,child:Container(
                       padding:const EdgeInsets.all(5),
                       decoration:BoxDecoration(color:Colors.black87,borderRadius:BorderRadius.circular(8)),
@@ -365,11 +410,9 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                   (a['thumbnail']??'').toString().startsWith('https://'))
                   Padding(padding:const EdgeInsets.only(right:9),
                     child:ClipRRect(borderRadius:BorderRadius.circular(8),
-                      child:Image.network(
-                        visceralImageProxyUrl((a['thumbnail']??'').toString()),
-                        headers:visceralImageHeaders(),width:65,height:65,fit:BoxFit.contain,
-                        errorBuilder:(_,__,___)=>const Icon(Icons.article_outlined,
-                          color:PracticeDailyVisualTheme.mint,size:22)))),
+                      child:SizedBox(width:65,height:65,
+                        child:_imagePreview((a['thumbnail']??'').toString(),
+                          width:65,height:65,compact:true)))),
                 if((a['figure_caption']??'').toString().isEmpty ||
                   !(a['thumbnail']??'').toString().startsWith('https://'))
                   const Icon(Icons.article_outlined,color:PracticeDailyVisualTheme.mint,size:20),
@@ -414,9 +457,10 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
 }
 
 class _MedicalZoomViewer extends StatefulWidget {
-  const _MedicalZoomViewer({required this.url,required this.source,
+  const _MedicalZoomViewer({required this.bytes,required this.source,
     required this.title,required this.credits});
-  final String url,source,title,credits;
+  final Uint8List bytes;
+  final String source,title,credits;
   @override State<_MedicalZoomViewer> createState()=>_MedicalZoomViewerState();
 }
 class _MedicalZoomViewerState extends State<_MedicalZoomViewer> {
@@ -445,12 +489,8 @@ class _MedicalZoomViewerState extends State<_MedicalZoomViewer> {
         minScale:.7,maxScale:8,
         boundaryMargin:const EdgeInsets.all(120),
         panEnabled:true,scaleEnabled:true,
-        child:Center(child:Image.network(widget.url,
-          headers:visceralImageHeaders(),
+        child:Center(child:Image.memory(widget.bytes,
           fit:BoxFit.contain,
-          loadingBuilder:(context,child,loading)=>loading==null?child:
-            const Center(child:CircularProgressIndicator(
-              color:PracticeDailyVisualTheme.mint)),
           errorBuilder:(_,__,___)=>Column(
             mainAxisAlignment:MainAxisAlignment.center,
             children:[
