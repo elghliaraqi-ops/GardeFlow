@@ -77,12 +77,17 @@ Deno.serve(async (req: Request) => {
   let raw: Record<string, unknown>;
   try { raw = await req.json(); } catch { return json({ error: 'invalid_body' }, 400); }
   const kind = String(raw.kind || '').slice(0, 30);
+  const mode = kind === 'fiche' && raw.mode === 'chapter' ? 'chapter' : 'overview';
   const objective = deidentify(String(raw.objective || '').trim()).slice(0, 280);
   const content = deidentify(String(raw.content || '').trim()).slice(0, 10000);
   if (!['fiche', 'cas', 'qcm', 'defi'].includes(kind) || content.length < 12) {
     return json({ error: 'invalid_scope' }, 400);
   }
-  const hash = await digest('practice-glossary-site-v4\n' + kind + '\n' + objective + '\n' + content);
+  // Existing overview answers remain cached and free. Newly opened chapter
+  // groups receive their own results, shared across users.
+  const cachePrefix = mode === 'chapter' ?
+    'practice-glossary-chapters-v5\n' : 'practice-glossary-site-v4\n';
+  const hash = await digest(cachePrefix + kind + '\n' + objective + '\n' + content);
   const db = createClient(url, serviceRole);
   const { data: cached } = await db.from('practice_context_glossary_cache')
     .select('status,terms,updated_at').eq('content_hash', hash).maybeSingle();
@@ -110,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
   type RichTerm = {
     term: string;
-    category: 'acronyme' | 'classification' | 'anatomie' | 'notion';
+    category: 'acronyme' | 'classification' | 'anatomie' | 'molecule' | 'notion';
     title: string;
     definition: string;
     sections: { title: string; items: string[] }[];
@@ -119,12 +124,38 @@ Deno.serve(async (req: Request) => {
     version_note: string;
   };
   let terms: RichTerm[] = [];
+  const maximum = mode === 'chapter' ? 12 : 10;
   try {
     // Gemini 2.5 may return 404 for new AI Studio projects: use current
     // Flash-Lite stable, the cost-efficient/free-tier text model.
     const preferred = Deno.env.get('GEMINI_GLOSSARY_MODEL') || 'gemini-3.5-flash-lite';
     const prompt = [
       'Tu es un assistant d\'enseignement médical francophone : explique le CONTENU, pas seulement le vocabulaire.',
+      'MODE : ' + mode + '. Chapitre = fournir de nombreuses fiches sur les mots de CES chapitres.',
+      'Pour un groupe de chapitres riches, viser 10 à 12 termes pertinents ; ne pas se limiter à 7.',
+      'Sélection INCLUSIVE : anatomie, pharmacologie, molécules anticancéreuses,',
+      'noms des médicaments, acronymes, classifications, notions physiopathologiques.',
+      'PRIORITÉ CHIRURGIE : artères, veines, plexus, nerfs, ligaments, fascias,',
+      'uretères, territoires et rapports, même lorsque leur définition n\'est pas explicitement demandée.',
+      'Pour une artère : origine exacte, trajet, branches collatérales, terminaison,',
+      'territoire vascularisé, rapports, variantes et intérêt opératoire si pertinents.',
+      'Pour une veine : affluents, drainage, trajet, rapports et terminaison.',
+      'Pour un nerf : racines/origine, trajet, branches, territoire moteur/sensitif',
+      'ou fonction autonome, rapports et lésions chirurgicales à prévenir.',
+      'Pour une MOLÉCULE (catégorie molecule) : DCI ou développement du nom,',
+      'famille, cible/mécanisme, indication précise dans ce cours,',
+      'principaux effets indésirables et précautions, sans doses inventées.',
+      'Identifier notamment les molécules citées comme nivolumab, ipilimumab,',
+      'capécitabine, oxaliplatine, 5-FU / fluorouracile, si présentes.',
+      'Si un cours comporte une affirmation anatomique dangereuse/inexacte,',
+      'la signaler dans une section Correction/Point de vigilance de l\'explication.',
+      'En chirurgie RECTALE, la ligature de l\'artère mésentérique supérieure (AMS)',
+      'n\'est PAS la ligature habituelle : discuter l\'artère mésentérique',
+      'inférieure (AMI) et/ou rectale supérieure selon la technique.',
+      'Ne jamais valider une telle erreur du texte source.',
+      'Limiter à 2-4 sections par terme, sauf TNM complet T/N/M ;',
+      'chaque section doit apporter du contenu concret et exact.',
+
       'OBJECTIF DU CORRECTIF : notions médicales ET acronymes ET mots-clés, pas seulement anatomie et classification.',
       'IDENTITÉ DE LA MALADIE : ' + (cancerSite || 'site tumoral non identifié avec certitude'),
       'Si TNM est présent dans un cours oncologique, il faut obligatoirement inclure',
@@ -137,7 +168,7 @@ Deno.serve(async (req: Request) => {
       'les critères UICC 9e édition prennent effet en 2026 et les mises à jour sont',
       'spécifiques aux organes. Ne transpose jamais un stade d\'un autre organe.',
       'Si l\'édition ou les critères ne sont pas certains, ne pas inventer de sous-stade.',
-      'Sélectionne une combinaison équilibrée de 8 à 10 termes maximum.',
+      'Répartir équitablement entre catégories, plutôt que choisir seulement les acronymes.',
       'Cible au moins 2 acronymes pertinents, 2 notions médicales importantes',
       'et 1 structure anatomique si le cours en contient, sans inventer de termes.',
       'Pour un acronyme, donner le développement exact et son utilité dans le cours.',
@@ -147,10 +178,10 @@ Deno.serve(async (req: Request) => {
       'Un terme peut figurer dans une fiche déjà ancienne ; traiter le contenu',
       'comme objectif documentaire, ne pas modifier la fiche.',
       'N\'utilise jamais un modèle de TNM rectal pour un autre organe.',
-      'Sélectionne 8 à 10 termes (ou moins si très peu de notions présentes) réellement présents dans le texte.',
+      'Termes réellement présents dans le texte ; le titre du document fixe le contexte.',
       'Priorité : classifications pertinentes (TNM spécifique au CANCER ET AU SITE étudiés),',
       'structures anatomiques et leurs rapports (vaisseaux, nerfs, plexus, trajets), acronymes, notions difficiles.',
-      'Ne choisis pas des termes déjà expliqués de manière satisfaisante.',
+      'Même si un terme est déjà brièvement défini, l\'enrichir si important anatomiquement ou pharmacologiquement.',
       'Toute explication est étroitement liée au sujet/diagnostic de CE document.',
       'Pour une classification : détailler les niveaux/sous-stades pertinents, leurs critères exacts,',
       'les exceptions et l\'utilité clinique. Ne jamais appliquer la TNM d\'un autre organe.',
@@ -179,12 +210,13 @@ Deno.serve(async (req: Request) => {
       '{"title":"M — métastases","items":["M0 : ..."]}],',
       '"clinical_relevance":"Intérêt pour le bilan et la stratégie.",',
       '"image_query":"rectal cancer TNM staging diagram","version_note":"Édition à vérifier si non précisée"}]}.',
-      'Catégories autorisées : acronyme, classification, anatomie, notion.',
-      'Maximum 10 termes, 5 sections par terme, 10 éléments par section,',
+      'Catégories autorisées : acronyme, classification, anatomie, molecule, notion.',
+      'Maximum ' + maximum + ' termes, 5 sections par terme, 10 éléments par section,',
       '140 caractères par élément, 220 caractères par définition/pertinence/version.',
       'TNM présent dans le texte : ' + hasTNM.toString(),
       'Site tumoral à respecter pour TNM : ' + (cancerSite || 'non déterminé'),
       'Type : ' + kind,
+      'MODE : ' + mode,
       'Objectif pédagogique : ' + objective,
       'Texte à étudier :\n' + content,
     ].join('\n');
@@ -199,10 +231,10 @@ Deno.serve(async (req: Request) => {
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.1,
-            maxOutputTokens: 7900,
+            maxOutputTokens: mode === 'chapter' ? 9200 : 7900,
           },
         }),
-        signal: AbortSignal.timeout(36000),
+        signal: AbortSignal.timeout(mode === 'chapter' ? 48000 : 36000),
       },
     );
     let response = await generate(preferred);
@@ -226,7 +258,7 @@ Deno.serve(async (req: Request) => {
       if (term.length < 2 || !definition ||
           !content.toLocaleLowerCase('fr').includes(lower) ||
           seen.has(lower) ||
-          !['acronyme','classification','anatomie','notion'].includes(category)) continue;
+          !['acronyme','classification','anatomie','molecule','notion'].includes(category)) continue;
       seen.add(lower);
       const sections: { title: string; items: string[] }[] = [];
       for (const group of Array.isArray(record.sections) ? record.sections.slice(0, 5) : []) {
@@ -238,7 +270,7 @@ Deno.serve(async (req: Request) => {
         if (title && items.length) sections.push({title, items});
       }
       // A rich term must have factual substance, not just a dictionary gloss.
-      if (['classification','anatomie'].includes(category) && sections.length === 0) continue;
+      if (['classification','anatomie','molecule'].includes(category) && sections.length === 0) continue;
       const title = String(record.title || term).trim().slice(0, 120);
       const clinical_relevance = String(record.clinical_relevance || '').trim().slice(0, 260);
       const version_note = String(record.version_note || '').trim().slice(0, 260);
@@ -255,7 +287,7 @@ Deno.serve(async (req: Request) => {
         image_query,
         version_note,
       });
-      if (terms.length === 10) break;
+      if (terms.length === maximum) break;
     }
 
     // Reject generic TNM or a title about another tumour site.
