@@ -119,13 +119,13 @@ jobs:
           retention-days: 30
 
       - name: Upload GitHub Pages artifact
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' || github.ref_name == 'test/gemini-context-glossary-20261010'
         uses: actions/upload-pages-artifact@v4
         with:
           path: source/build/web
 
   deploy-pages:
-    if: github.ref_name == 'main'
+    if: github.ref_name == 'main' || github.ref_name == 'test/gemini-context-glossary-20261010'
     needs: build-web
     runs-on: ubuntu-latest
     timeout-minutes: 15
