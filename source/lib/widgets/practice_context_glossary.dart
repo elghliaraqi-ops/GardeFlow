@@ -17,6 +17,7 @@ class PracticeGlossaryService {
     required String objective,
     required String content,
     required String kind,
+    String mode = 'overview',
     bool forceRefresh = false,
   }) {
     final payload = content.trim();
@@ -24,7 +25,7 @@ class PracticeGlossaryService {
       return Future.value(const PracticeGlossaryResult([], 'no_content'));
     }
     // v3 forces a refresh of the old short-definition-only in-memory results.
-    final key = 'site-v4:' + scopeId + ':' + objective.hashCode.toString() +
+    final key = 'site-v4:' + mode + ':' + scopeId + ':' + objective.hashCode.toString() +
         ':' + payload.hashCode.toString() + ':' + kind;
     if (forceRefresh) _pending.remove(key);
     if (_pending.length > 80) _pending.clear();
@@ -40,6 +41,7 @@ class PracticeGlossaryService {
             'objective': objective.substring(0, objective.length.clamp(0, 280)),
             'content': payload.substring(0, payload.length.clamp(0, 10000)),
             'kind': kind,
+            'mode': mode,
           },
         );
         final data = response.data;
@@ -50,7 +52,7 @@ class PracticeGlossaryService {
             .whereType<Map>()
             .map((item) => PracticeGlossaryTerm.fromMap(item))
             .where((item) => item.term.length >= 2 && item.definition.isNotEmpty)
-            .take(10)
+            .take(mode == 'chapter' ? 12 : 10)
             .toList(growable: false);
         return PracticeGlossaryResult(
           terms, (data['status'] ?? 'unavailable').toString());
@@ -118,9 +120,11 @@ class PracticeGlossaryScope extends StatefulWidget {
     required this.objective,
     required this.content,
     required this.kind,
+    this.mode = 'overview',
+    this.chapterText = '',
     required this.child,
   });
-  final String scopeId, objective, content, kind;
+  final String scopeId, objective, content, kind, mode, chapterText;
   final Widget child;
 
   @override
@@ -144,7 +148,9 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
     if (oldWidget.scopeId != widget.scopeId ||
         oldWidget.content != widget.content ||
         oldWidget.objective != widget.objective ||
-        oldWidget.kind != widget.kind) {
+        oldWidget.kind != widget.kind ||
+        oldWidget.mode != widget.mode ||
+        oldWidget.chapterText != widget.chapterText) {
       _result = const PracticeGlossaryResult([], 'loading');
       _load();
     }
@@ -157,19 +163,31 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
       objective: widget.objective,
       content: widget.content,
       kind: widget.kind,
+      mode: widget.mode,
       forceRefresh: retry,
     );
     if (mounted && request == _request) setState(() => _result = result);
   }
 
   @override
-  Widget build(BuildContext context) => _GlossaryInherited(
-        terms: _result.terms,
+  Widget build(BuildContext context) {
+    final parentTerms = _GlossaryInherited.of(context);
+    final visibleLocal = widget.chapterText.isEmpty ? _result.terms :
+      _result.terms.where((term) =>
+        widget.chapterText.toLowerCase().contains(term.term.toLowerCase()))
+          .toList(growable:false);
+    final allTerms = <PracticeGlossaryTerm>[..._result.terms];
+    final known = allTerms.map((t) => t.term.toLowerCase()).toSet();
+    for (final term in parentTerms) {
+      if (known.add(term.term.toLowerCase())) allTerms.add(term);
+    }
+    return _GlossaryInherited(
+        terms: allTerms,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_result.terms.isNotEmpty)
+            if (visibleLocal.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -179,7 +197,7 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        '${_result.terms.length} notions interactives · survol ou toucher',
+                        '${visibleLocal.length} notions dans ce passage · toucher pour explorer',
                         style: const TextStyle(color: Color(0xFFB9CBE0),
                             fontSize: 11),
                       ),
@@ -189,13 +207,13 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
               ),
             // Direct access to saved fiche vocabulary even if the term lies in
             // a collapsed chapter or an old lesson with unusual formatting.
-            if (widget.kind == 'fiche' && _result.terms.isNotEmpty)
+            if (widget.kind == 'fiche' && visibleLocal.isNotEmpty)
               SizedBox(
                 height: 40,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-                    for (final term in _result.terms)
+                    for (final term in visibleLocal)
                       Padding(
                         padding: const EdgeInsets.only(right: 7),
                         child: ActionChip(
@@ -240,6 +258,7 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
           ],
         ),
       );
+  }
 }
 
 class _GlossaryInherited extends InheritedWidget {
