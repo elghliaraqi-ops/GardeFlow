@@ -1539,14 +1539,28 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     return PracticeGlossaryScope(
       scopeId: 'cas:' + post.id,
       objective: post.topicLabel,
+      // Real patient narratives are NOT forwarded to Gemini's free API.
+      // Only pedagogical topics, QCM wording and detected abbreviations.
       content: [
-        post.presentation,
-        post.history,
-        post.clinicalExam,
-        post.complementaryExams,
-        post.imagingConclusion,
-        post.assessment,
-        post.plan,
+        if (post.isFictional) ...[
+          post.presentation,
+          post.history,
+          post.clinicalExam,
+          post.complementaryExams,
+          post.imagingConclusion,
+          post.assessment,
+          post.plan,
+        ] else ...[
+          post.topicLabel,
+          ...RegExp(r'\b[A-Z]{2,8}(?:\d{1,3})?\b')
+              .allMatches([
+                post.presentation, post.history, post.clinicalExam,
+                post.complementaryExams, post.imagingConclusion, post.assessment,
+                post.plan,
+              ].join(' '))
+              .map((m) => m.group(0) ?? '')
+              .toSet(),
+        ],
         for (final q in _qcms) q.question,
       ].join('\n'),
       kind: 'cas',
