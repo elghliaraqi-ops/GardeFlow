@@ -531,10 +531,14 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     try{
       const [rr,pageRes]=await Promise.all([
         fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
-          headers:REQUEST_HEADERS,signal:AbortSignal.timeout(5500)}),
+          // XML endpoints return HTTP 406 if requested as application/json.
+          headers:{...REQUEST_HEADERS,Accept:'application/xml, text/xml;q=0.9'},
+          signal:AbortSignal.timeout(5500)}),
         fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
-          headers:REQUEST_HEADERS,signal:AbortSignal.timeout(5500)})
+          headers:{...REQUEST_HEADERS,Accept:'text/html'},
+          signal:AbortSignal.timeout(5500)})
       ]);
+      console.info('pmc_article_http',JSON.stringify({pmcid,xml:rr.status,html:pageRes.status}));
       if(!rr.ok)continue;
       const xml=await rr.text();
       if(xml.length>2200000)continue;
@@ -544,6 +548,9 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
         .filter(f=>articleFigureRelevant(f.caption,request))
         .sort((a,b)=>figurePriority(b.caption,request)-figurePriority(a.caption,request))
         .slice(0,4);
+      console.info('pmc_article_assets',JSON.stringify({pmcid,assets:publishedAssets.length,
+        figures:candidates.length,matched:candidates.filter(f=>
+          publishedAssets.some(u=>pmcAssetForFigure(f.href,u))).length}));
       for(const fig of candidates){
         // Use the real PMC CDN src, matched to the exact JATS figure
         // filename. Never synthesize /articles/PMC.../bin links (403/404).
@@ -569,7 +576,7 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
         }
         break;
       }
-    }catch(_){/* Article metadata card remains available. */}
+    }catch(e){console.info('pmc_article_error',JSON.stringify({pmcid,error:String(e).slice(0,130)}));}
     if(figures.length>=3)break;
   }
   return {articles,figures};
