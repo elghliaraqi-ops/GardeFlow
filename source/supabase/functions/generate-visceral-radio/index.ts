@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { generationContract, type GenerationContract } from './generation_contract.ts';
-import { resolveMedicalPreviews, proxyMedicalImage } from './medical_image_previews.ts';
+import { resolveMedicalPreviews, resolveGoogleMedicalImages, proxyMedicalImage } from './medical_image_previews.ts';
 
 // GardeFlow Practice · Viscéral × Radio. Private, on-demand generation.
 // Only technical JSON parsing/count checks; no secondary medical reviewer.
@@ -172,6 +172,7 @@ Deno.serve(async(req)=>{
   try{
     const input=await req.json().catch(()=>({})),action=str(input.action,40),id=str(input.id,45);
     if(action==='images')return answer(await resolveMedicalPreviews(input.image_request&&typeof input.image_request==='object' ? input.image_request : {query:str(input.query,260),modality:str(input.modality,60),purpose:str(input.purpose,200)}));
+    if(action==='google_images')return answer(await resolveGoogleMedicalImages(input.image_request&&typeof input.image_request==='object' ? input.image_request : {query:str(input.query,260),modality:str(input.modality,60),purpose:str(input.purpose,200)}));
     if(action==='list'){
       const {data,error}=await db.from(TABLE).select('*').eq('owner_id',user.id).order('created_at',{ascending:false}).limit(80);
       if(error)throw error;
