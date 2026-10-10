@@ -175,6 +175,8 @@ Deno.test('rectal MRI figure captions do not need to repeat the article title',(
     'caption inherits rectal MRI context from known article');
   assert(!articleFigureRelevant('Survival curve for rectal carcinoma',r),
     'survival plots must not be rendered as medical scan');
+  assert(!articleFigureRelevant('Effect after re-evaluation of study cases using updated staging criteria on classification',r),
+    'non-imaging staging diagrams must not be shown as MRI');
   assert(allowedAsset('https://europepmc.org/articles/PMC7471246/bin/rectal_fig3.jpg'),
     'public PMC article images served by Europe PMC should be allowed');
   assert(!allowedAsset('https://europepmc.org/articles/PMC7471246/../private.jpg'),
