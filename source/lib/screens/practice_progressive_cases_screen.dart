@@ -378,6 +378,7 @@ class _PracticeProgressiveCasesScreenState
           const SizedBox(height: 11),
           PracticeGlossaryText(
             q.question,
+            richEnabled: _submitted,
             style: const TextStyle(
               color: PracticeDailyVisualTheme.text,
               fontSize: 16,
