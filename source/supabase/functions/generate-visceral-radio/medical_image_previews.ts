@@ -531,9 +531,12 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     try{
       const [rr,pageRes]=await Promise.all([
         fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
-          headers:REQUEST_HEADERS,signal:AbortSignal.timeout(5500)}),
+          // XML endpoints return HTTP 406 if requested as application/json.
+          headers:{...REQUEST_HEADERS,Accept:'application/xml, text/xml;q=0.9'},
+          signal:AbortSignal.timeout(5500)}),
         fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
-          headers:REQUEST_HEADERS,signal:AbortSignal.timeout(5500)})
+          headers:{...REQUEST_HEADERS,Accept:'text/html'},
+          signal:AbortSignal.timeout(5500)})
       ]);
       console.info('pmc_article_http',JSON.stringify({pmcid,xml:rr.status,html:pageRes.status}));
       if(!rr.ok)continue;
