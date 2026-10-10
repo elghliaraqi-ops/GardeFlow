@@ -253,14 +253,26 @@ Deno.serve(async (req: Request) => {
       if (terms.length === 10) break;
     }
 
-    // Guard against mixing organ-specific TNM entries across diseases.
+    // Reject generic TNM or a title about another tumour site.
     if (cancerSite && hasTNM) {
       const organRegex = cancerSite.includes('rectum') ? /rect(?:um|al)/i
         : cancerSite.includes('pancréas') ? /pancr[eé]a/i
         : cancerSite.includes("col de l'utérus") ? /col de l[’']ut[eé]rus|col ut[eé]rin|cervical/i
-        : new RegExp(cancerSite.split(' ').at(-1) || '^
+        : new RegExp(cancerSite.split(' ').at(-1) || '___unmatched___', 'i');
+      terms = terms.filter((entry) => {
+        if (entry.term.toUpperCase() !== 'TNM') return true;
+        const stages = entry.sections.map((part) => part.title.toUpperCase());
+        return organRegex.test(entry.title) &&
+          ['T', 'N', 'M'].every((letter) =>
+            stages.some((title) => title.startsWith(letter + ' ') ||
+              title.startsWith(letter + '—') || title === letter ||
+              title.startsWith(letter + ':')));
+      });
+    }
+    const { error: updateError } = await db.from('practice_context_glossary_cache').update({
       status: 'ready', terms, updated_at: new Date().toISOString(),
     }).eq('content_hash', hash);
+    if (updateError) throw Error('glossary_cache_write_failed');
     return json({ status: 'generated', terms });
   } catch (error) {
     console.error('Practice glossary unavailable:', String(error).slice(0, 150));
