@@ -156,7 +156,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
     return PracticeGlossaryScope(
       scopeId: 'vr-qcm:' + _str(_session?['id']) + ':' + (caseQuiz ? 'cas' : 'cours'),
       objective: _str(_obj(_session?['fiche'])['title']),
-      content: list.map((item) => _str(item['statement'])).join('\n'),
+      content: list.map((item) => _str(item['statement']) + ' ' +
+        _records(item['options']).map((o) => _str(o['text'])).join(' ')).join('\n'),
       kind: 'qcm',
       child: _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       _title(caseQuiz?'QCM clinique progressif':'QCM de la fiche',
@@ -179,7 +180,10 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
               color:PracticeDailyVisualTheme.elevated),
             child:Row(children:[
               Icon(isPicked?Icons.check_box:Icons.check_box_outline_blank,color:accent,size:21),
-              const SizedBox(width:8),Expanded(child:_label(key+'. '+_str(o['text']),size:13)),
+              const SizedBox(width:8),Expanded(child:PracticeGlossaryText(key+'. '+_str(o['text']),
+                richEnabled: checked,
+                style: const TextStyle(color: PracticeDailyVisualTheme.text,
+                  fontSize: 13, height: 1.42))),
             ]),
           ),
         ));
