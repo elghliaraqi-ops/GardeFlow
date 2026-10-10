@@ -527,6 +527,9 @@ const paidGoogleMemo=new Map<string,{until:number;value:Promise<ImagePreview[]>}
 export async function resolveGoogleMedicalImages(input:any){
   const request=legacyImageRequest(input);
   const key=googleMedicalCacheKey(input);
+  if(!Deno.env.get('SERPAPI_KEY'))return {
+    images:[],google_cache_key:key,google_enabled:false,search_executed:false
+  };
   const now=Date.now();
   let cached=paidGoogleMemo.get(key);
   if(!cached||cached.until<=now){
