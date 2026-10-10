@@ -1535,10 +1535,27 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     final current = _qcms.isEmpty ? null : _qcms[_currentQcm];
     final answered = current?.answered == true;
     final correct = current?.myIsCorrect == true;
+    // Share only an allowlisted disease label with Gemini for real cases.
+    // The patient narrative remains local and never enters the glossary API.
+    final topicCorpus = [
+      post.presentation, post.assessment, post.imagingConclusion,
+      post.plan,
+    ].join(' ');
+    final cancerLabel = RegExp(
+      r'cancer du rectum|cancer du pancr[eé]as|cancer du col(?: de l[’\x27]ut[eé]rus)?|'
+      r'cancer du sein|cancer du poumon|cancer de la prostate|'
+      r'cancer du c[oô]lon|cancer du foie|ad[eé]nocarcinome rectal|'
+      r'ad[eé]nocarcinome pancr[eé]atique',
+      caseSensitive: false,
+    ).firstMatch(topicCorpus)?.group(0) ?? '';
+    final educationalTopic = [
+      post.topicLabel,
+      if(cancerLabel.isNotEmpty) cancerLabel,
+    ].join(' — ');
 
     return PracticeGlossaryScope(
       scopeId: 'cas:' + post.id,
-      objective: post.topicLabel,
+      objective: educationalTopic,
       // Real patient narratives are NOT forwarded to Gemini's free API.
       // Only pedagogical topics, QCM wording and detected abbreviations.
       content: [
@@ -1562,8 +1579,19 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               .map((m) => m.group(0) ?? '')
               .toSet(),
           for (final q in _qcms) q.topicLabel,
+          // Keywords are extracted without sending private narratives.
+          ...RegExp(
+            r'\b(?:m[eé]sorectum|EMVI|CRM|FIGO|TNM|TME|'
+            r'isch[eé]mie|cholangite|chimioth[eé]rapie|'
+            r'r[eé]s[eé]cabilit[eé]|dysplasie|'
+            r'pancr[eé]atite|anastomose|occlusion|'
+            r'angiogen[eè]se|m[eé]tastase|ganglion|plexus|nerf|art[eè]re)\b',
+            caseSensitive: false,
+          ).allMatches(topicCorpus).map((match) => match.group(0) ?? '').toSet(),
         ],
-        if (post.isFictional) for (final q in _qcms) q.question,
+        if (post.isFictional)
+          for (final q in _qcms)
+            q.question + ' ' + q.options.join(' '),
       ].join('\n'),
       kind: 'cas',
       child: Column(
