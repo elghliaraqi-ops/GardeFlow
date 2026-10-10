@@ -779,6 +779,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           const SizedBox(height: 13),
           PracticeGlossaryText(
             q.question,
+            richEnabled: s.completed,
             style: const TextStyle(
               color: _text,
               fontSize: 16,
