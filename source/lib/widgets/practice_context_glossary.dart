@@ -24,7 +24,7 @@ class PracticeGlossaryService {
       return Future.value(const PracticeGlossaryResult([], 'no_content'));
     }
     // v3 forces a refresh of the old short-definition-only in-memory results.
-    final key = 'rich-v3:' + scopeId + ':' + objective.hashCode.toString() +
+    final key = 'site-v4:' + scopeId + ':' + objective.hashCode.toString() +
         ':' + payload.hashCode.toString() + ':' + kind;
     if (forceRefresh) _pending.remove(key);
     if (_pending.length > 80) _pending.clear();
@@ -50,7 +50,7 @@ class PracticeGlossaryService {
             .whereType<Map>()
             .map((item) => PracticeGlossaryTerm.fromMap(item))
             .where((item) => item.term.length >= 2 && item.definition.isNotEmpty)
-            .take(7)
+            .take(10)
             .toList(growable: false);
         return PracticeGlossaryResult(
           terms, (data['status'] ?? 'unavailable').toString());
