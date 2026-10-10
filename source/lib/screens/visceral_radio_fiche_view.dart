@@ -58,6 +58,23 @@ class VisceralFicheView extends StatelessWidget {
 
   Widget section(Map<String,dynamic> part,int i){
     final title=text(part['title']),lower=title.toLowerCase();
+    // Two-chapter lazy batch: five cached requests at most for 10 chapters,
+    // not one Gemini request per highlighted word or each tap.
+    final siblings=records(fiche['sections']).skip((i ~/ 2) * 2).take(2);
+    final batchContent=[
+      text(fiche['title']),
+      for(final chapter in siblings)
+        'CHAPITRE : '+text(chapter['title'])+'\n'+
+        text(chapter['content']).substring(0,
+          text(chapter['content']).length.clamp(0, 3800))+
+        '\n'+items(chapter['key_points']).take(5).join(' '),
+    ].join('\n');
+    final chapterText=[
+      title, text(part['content']), ...items(part['key_points']).map(text),
+    ].join(' ');
+    final wrongRectalArtery= text(fiche['title']).toLowerCase().contains('rectum') &&
+      RegExp(r'ligature de l[’\x27]art[eè]re m[eé]sent[eé]rique sup[eé]rieure',
+        caseSensitive:false).hasMatch(text(part['content']));
     final icon=lower.contains('radio')||lower.contains('imagerie')||lower.contains('irm')
       ?Icons.document_scanner_rounded
       :lower.contains('opérat')||lower.contains('chirurg')?Icons.medical_services_rounded
@@ -96,8 +113,34 @@ class VisceralFicheView extends StatelessWidget {
             ])),
           ]),
           children:[
-            Align(alignment:Alignment.centerLeft,child:Column(
+            PracticeGlossaryScope(
+              key:ValueKey('chapter-'+sessionId+'-${i ~/ 2}'),
+              scopeId:'fiche:'+sessionId+':chapters:${i ~/ 2}',
+              objective:text(fiche['title'])+' — '+title,
+              content:batchContent,
+              chapterText:chapterText,
+              kind:'fiche',
+              mode:'chapter',
+              child:Align(alignment:Alignment.centerLeft,child:Column(
               crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                if(wrongRectalArtery) Container(
+                  padding:const EdgeInsets.all(12),
+                  margin:const EdgeInsets.only(bottom:12),
+                  decoration:BoxDecoration(
+                    color:const Color(0xFF48272B),
+                    borderRadius:BorderRadius.circular(12),
+                    border:Border.all(color:const Color(0xFFE09C65))),
+                  child:const Text(
+                    '⚠️ Correction anatomique importante : dans une résection rectale, '
+                    'la ligature vasculaire concerne habituellement l’artère '
+                    'mésentérique INFÉRIEURE (AMI) et/ou l’artère rectale '
+                    'supérieure selon la technique. L’artère mésentérique '
+                    'supérieure (AMS), citée dans ce cours historique, ne '
+                    'doit pas être confondue avec l’AMI. '
+                    'Le texte source original est conservé.',
+                    style:TextStyle(color:Color(0xFFFFE9D2),fontSize:12,
+                      height:1.45,fontWeight:FontWeight.w600)),
+                ),
                 VisceralCourseText(text(part['content']),
                   fontSize:lower.contains('point')?13.5:14.5),
                 if(keyPoints.isNotEmpty)Container(
@@ -126,7 +169,7 @@ class VisceralFicheView extends StatelessWidget {
                   ]),
                 ),
                 galleries(part['image_requests']),
-              ])),
+              ]))),
           ],
         ),
       )),
