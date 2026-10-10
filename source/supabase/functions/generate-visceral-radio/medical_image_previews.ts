@@ -115,7 +115,8 @@ export function legacyImageRequest(input:any):MedicalImageRequest {
     !/(tumor|tumeur|cancer|t2|t3|t4|diffus|dwi|adc)/.test(raw);
   const radiology=/(t[1234]\b|mri|irm|tdm|ct\b|scan|echograph|ultrason|dwi|diffus|adc)/.test(raw);
   const image_type:MedicalImageRequest['image_type']=anatomy?'anatomical_diagram':
-    radiology?'radiology_scan':'operative_diagram';
+    radiology?'radiology_scan':/(photo|skin|dermat|lesion|rash|plaie|wound|clinical)/.test(raw)
+      ?'clinical_photo':'operative_diagram';
   const target=rectal?'rectum':ascii(query).split(/\s+/).find(x=>x.length>5)||'abdomen';
   const findings=rectal?
     (anatomy?['rectum','mesorectum','sphincter']:
@@ -457,10 +458,13 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
     if(/photograph|histolog|gross specimen|resection specimen|survival curve|kaplan|flowchart|flow chart|forest plot/.test(label))return false;
     // Only actual scan/image-caption terminology can qualify as radiological media.
     // A staging histogram mentioning T3/T4 is not an MRI illustration.
-    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|ct scan|computed tomography|scan image/.test(label);
+    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|ct scan|computed tomography|scan image|ultrasound|sonograph|echograph|doppler|radiograph|x.ray|tomograph/.test(label);
   }
   if(request.image_type==='anatomical_diagram')
     return /anatom|rect|mesorect|sphinct|levator|pelvic floor|anal canal|fascia|muscularis|diagram|schemat|sagittal/.test(label);
+  if(request.image_type==='clinical_photo')
+    return /clinical photograph|clinical image|photograph|skin lesion|rash|wound|ulcer|dermat|gross appearance/.test(label)
+      && !/mri|ct scan|graph|statistics|chart|histolog/.test(label);
   return /operat|surger|laparoscop|surgical|anatom|resect|technique|procedure|clinical/.test(label);
 }
 function figurePriority(caption:string,request:MedicalImageRequest):number{
