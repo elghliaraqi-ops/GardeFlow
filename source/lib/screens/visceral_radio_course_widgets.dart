@@ -95,9 +95,23 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   String? googleMessage;
   int localGoogleCount=0;
   List<Map<String,dynamic>> get visibleImages {
+    // A figure resolved from a peer-reviewed article belongs in the zoomable
+    // gallery as well as in its article card. Preserve the source article link.
+    final articleFigures=articles.where((a)=>
+      (a['figure_caption']??'').toString().isNotEmpty &&
+      (a['thumbnail']??'').toString().startsWith('https://'))
+      .map((a)=><String,dynamic>{
+        'thumbnail':a['thumbnail'], 'full':a['thumbnail'],
+        'source':a['figure_page']??a['source'],
+        'title':a['figure_caption'], 'creator':a['summary']??'',
+        'license':a['license']??'Voir la licence de l’article',
+        'provider':a['provider']??'PubMed Central',
+      });
     final known=<String>{};
-    return [...images,...googleImages].where((x)=>
-      known.add((x['full']??x['thumbnail']??'').toString())).take(12).toList();
+    return [...images,...articleFigures,...googleImages].where((x){
+      final url=(x['full']??x['thumbnail']??'').toString();
+      return url.startsWith('https://')&&known.add(url);
+    }).take(12).toList();
   }
   bool busy=false;
   String? message;
@@ -136,9 +150,17 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         : <String,dynamic>{};
       if(!mounted||generation!=n)return;
       if(result['error']!=null)throw StateError('Images indisponibles');
-      // Do not preserve negative searches: adding new sources should refresh
-      // already-generated fiches without re-generating the course.
-      if(rows(result['images']).isNotEmpty||rows(result['article_previews']).isNotEmpty){_cache[cacheKey]=result;}else{_cache.remove(cacheKey);}
+      // An article-only response is NOT a successful image search. Do not
+      // memoize it: new open-access figure sources must remain discoverable
+      // when a historic fiche is reopened.
+      if(rows(result['images']).isNotEmpty ||
+         rows(result['article_previews']).any((a)=>
+           (a['figure_caption']??'').toString().isNotEmpty &&
+           (a['thumbnail']??'').toString().startsWith('https://'))){
+        _cache[cacheKey]=result;
+      }else{
+        _cache.remove(cacheKey);
+      }
       setState((){
         images=rows(result['images']).where((v)=>
           (v['thumbnail']??'').toString().startsWith('https://') &&
@@ -173,7 +195,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       googleCached=existing!=null;
       googleImages=existing??[];
       googleMessage=existing!=null&&existing.isEmpty
-        ?'Recherche Google déjà effectuée : aucun résultat en cache (3 jours).'
+        ?'Aucune image Google trouvée. Nouvel essai possible après 2 heures.'
         :null;
     });
   }
@@ -209,7 +231,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         googleImages=list;googleCached=true;
         localGoogleCount=count+1;
         googleMessage=list.isEmpty
-          ?'Aucune image Google adaptée trouvée ; résultat mémorisé 3 jours.'
+          ?'Aucune image Google adaptée trouvée ; nouvel essai possible après 2 heures.'
           :'Résultats Google récupérés et mémorisés 30 jours sur cet appareil.';
       });
     }catch(_){
@@ -368,13 +390,13 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
           ),
         )),
       ],
-      if(!busy&&images.isEmpty&&articles.isEmpty)...[
+      if(!busy&&visibleImages.isEmpty)...[
         const SizedBox(height:12),
-        Text(message??'Aucun aperçu médical correspondant trouvé. Consultez les sources ci-dessous ou relancez la recherche.',
+        Text(message??'Aucun aperçu médical direct pour ce sujet. Les articles et banques d’imagerie restent accessibles ci-dessous.',
           style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:12)),
         TextButton.icon(onPressed:()=>_fetch(refresh:true),
           icon:const Icon(Icons.refresh_rounded,size:17),
-          label:const Text('Relancer la recherche')),
+          label:const Text('Relancer la recherche gratuite d’images')),
       ],
       if(sources.isNotEmpty)...[
         const SizedBox(height:7),
