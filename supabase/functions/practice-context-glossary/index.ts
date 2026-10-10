@@ -52,13 +52,21 @@ Deno.serve(async (req: Request) => {
   if (!['fiche', 'cas', 'qcm', 'defi'].includes(kind) || content.length < 12) {
     return json({ error: 'invalid_scope' }, 400);
   }
-  const hash = await digest('practice-glossary-v1\n' + kind + '\n' + objective + '\n' + content);
+  const hash = await digest('practice-glossary-v2\n' + kind + '\n' + objective + '\n' + content);
   const db = createClient(url, serviceRole);
   const { data: cached } = await db.from('practice_context_glossary_cache')
-    .select('status,terms').eq('content_hash', hash).maybeSingle();
+    .select('status,terms,updated_at').eq('content_hash', hash).maybeSingle();
   if (cached) {
     if (cached.status === 'ready') return json({ status: 'cached', terms: cached.terms });
-    return empty(cached.status);
+    // Fail closed for the rest of the day, then permit ONE new attempt on
+    // another UTC day. The INSERT trigger still enforces 15 attempts/day.
+    const previousDay = Date.parse(String(cached.updated_at || '')) <
+      Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z');
+    if (!previousDay) return empty(cached.status);
+    const { error: clearError } = await db
+      .from('practice_context_glossary_cache')
+      .delete().eq('content_hash', hash).neq('status', 'ready');
+    if (clearError) return empty('retry_unavailable');
   }
   if (!apiKey) return empty('gemini_key_missing');
 
@@ -70,7 +78,9 @@ Deno.serve(async (req: Request) => {
 
   let terms: { term: string; definition: string; category: string }[] = [];
   try {
-    const model = Deno.env.get('GEMINI_GLOSSARY_MODEL') || 'gemini-2.5-flash-lite';
+    // Gemini 2.5 may return 404 for new AI Studio projects: use current
+    // Flash-Lite stable, the cost-efficient/free-tier text model.
+    const preferred = Deno.env.get('GEMINI_GLOSSARY_MODEL') || 'gemini-3.5-flash-lite';
     const prompt = [
       'Tu es un assistant pédagogique médical francophone.',
       'Objectif : sélectionner UNIQUEMENT des termes présents dans le texte',
@@ -92,7 +102,7 @@ Deno.serve(async (req: Request) => {
       'Objectif: ' + objective,
       'Texte source:\n' + content,
     ].join('\n');
-    const response = await fetch(
+    const generate = (model: string) => fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/' +
           encodeURIComponent(model) + ':generateContent',
       {
@@ -103,12 +113,18 @@ Deno.serve(async (req: Request) => {
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.1,
-            maxOutputTokens: 950,
+            maxOutputTokens: 1700,
           },
         }),
-        signal: AbortSignal.timeout(18000),
+        signal: AbortSignal.timeout(20000),
       },
     );
+    let response = await generate(preferred);
+    // A configured obsolete model may be unavailable; retry only the known
+    // free-tier Flash-Lite model and NEVER fall back to billable Pro/Flash.
+    if (response.status === 404 && preferred !== 'gemini-3.5-flash-lite') {
+      response = await generate('gemini-3.5-flash-lite');
+    }
     if (!response.ok) throw Error('gemini_' + response.status);
     const result = await response.json();
     const output = String(result?.candidates?.[0]?.content?.parts?.[0]?.text || '');
