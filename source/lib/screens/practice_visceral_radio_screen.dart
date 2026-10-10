@@ -19,6 +19,9 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
   Map<String, dynamic>? _session;
   bool _busy = false;
   String? _error;
+  String? _courseError;
+  String? _activeGeneration;
+  int _courseBatchTarget = 0;
   int _coursePosition = 0, _casePosition = 0;
   final Map<int, Set<String>> _courseSelected = {}, _caseSelected = {};
   final Set<int> _courseDone = {}, _caseDone = {};
@@ -51,33 +54,95 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
     finally{if(mounted)setState(()=>_busy=false);}
   }
   Future<void> _generate(String action) async {
-    if(_busy||!_authorized)return;
-    setState((){_busy=true;_error=null;});
-    try{
-      final response=await _backend.client.functions.invoke('generate-visceral-radio',body:{
-        'action':action,
-        if(action!='create')'id':_session?['id'],
+    if (_busy || !_authorized) return;
+    final startingCount = _arr(_session?['course_qcms']).length;
+    final courseTarget = action == 'course_qcms'
+        ? (startingCount + 10).clamp(0, 20).toInt()
+        : 0;
+    setState(() {
+      _busy = true;
+      _activeGeneration = action;
+      _courseBatchTarget = courseTarget;
+      _error = null;
+      if (action == 'course_qcms') _courseError = null;
+    });
+    try {
+      // A tap requests up to 10 new QCMs. Supabase saves each chunk of five
+      // independently, so the first successful chunk is never discarded.
+      while (true) {
+        final previousCount = _arr(_session?['course_qcms']).length;
+        final response = await _backend.client.functions.invoke(
+          'generate-visceral-radio',
+          body: {
+            'action': action,
+            if (action != 'create') 'id': _session?['id'],
+          },
+        );
+        final m = _obj(response.data);
+        if (m['error'] != null) {
+          throw StateError(_str(m['error']) + ' ' + _str(m['detail']));
+        }
+        final result = _obj(m['session']);
+        if (result.isEmpty) throw StateError('Réponse vide');
+        if (!mounted) return;
+        final nextCount = _arr(result['course_qcms']).length;
+        if (action == 'course_qcms' && nextCount <= previousCount &&
+            nextCount < courseTarget) {
+          throw StateError('Aucune nouvelle question reçue. Réessaie.');
+        }
+        setState(() {
+          _session = result;
+          _history.removeWhere((x) => x['id'] == result['id']);
+          _history.insert(0, result);
+          if (action == 'create') _clearAnswers();
+          // After the original ten QCMs, open the first newly generated one.
+          if (action == 'course_qcms' && previousCount > 0 &&
+              _courseDone.contains(previousCount - 1)) {
+            _coursePosition = previousCount;
+          }
+        });
+        if (action != 'course_qcms' || nextCount >= courseTarget ||
+            nextCount >= 20) {
+          break;
+        }
+      }
+      if (mounted && action == 'course_qcms') {
+        final generated = _arr(_session?['course_qcms']).length - startingCount;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$generated nouveaux QCM enregistrés. Les précédents sont conservés.'),
+          duration: const Duration(seconds: 5),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        final msg = 'Génération impossible : ' + e.toString();
+        setState(() {
+          _error = msg;
+          if (action == 'course_qcms') _courseError = msg;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(action == 'course_qcms'
+              ? 'Lot interrompu. Les QCM déjà générés sont conservés. Réessaie pour reprendre.'
+              : msg),
+          duration: const Duration(seconds: 6),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() {
+        _busy = false;
+        _activeGeneration = null;
       });
-      final m=_obj(response.data);
-      if(m['error']!=null)throw StateError(_str(m['error'])+' '+_str(m['detail']));
-      final result=_obj(m['session']);
-      if(result.isEmpty)throw StateError('Réponse vide');
-      if(!mounted)return;
-      setState((){
-        _session=result;
-        _history.removeWhere((x)=>x['id']==result['id']);
-        _history.insert(0,result);
-        if(action=='create')_clearAnswers();
-      });
-    }catch(e){if(mounted)setState(()=>_error='Génération impossible : '+e.toString());}
-    finally{if(mounted)setState(()=>_busy=false);}
+    }
   }
   void _clearAnswers(){
     _coursePosition=0;_casePosition=0;
     _courseSelected.clear();_caseSelected.clear();
     _courseDone.clear();_caseDone.clear();
   }
-  void _open(Map<String,dynamic> entry)=>setState((){_session=entry;_clearAnswers();_error=null;});
+  void _open(Map<String,dynamic> entry){
+    if(_busy)return;
+    setState((){_session=entry;_clearAnswers();_error=null;_courseError=null;});
+  }
   Widget _label(String text,{double size=14,Color color=PracticeDailyVisualTheme.text,bool heavy=false}) =>
     Text(text,style:TextStyle(color:color,fontSize:size,fontWeight:heavy?FontWeight.w800:FontWeight.normal,height:1.42));
   Widget _box(Widget child)=>Container(
@@ -246,8 +311,29 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
               _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                 _title('20 QCM de cours','2 lots Groq de 10 questions, corrections et explications IA'),
                 _label(_arr(_session!['course_qcms']).length.toString()+'/20 générés'),
+                if(_activeGeneration=='course_qcms') ...[
+                  const SizedBox(height:8),
+                  const LinearProgressIndicator(color:PracticeDailyVisualTheme.mint),
+                  const SizedBox(height:6),
+                  _label('Génération Groq en cours · ' +
+                    _arr(_session!['course_qcms']).length.toString() + '/' +
+                    _courseBatchTarget.toString() +
+                    ' questions enregistrées. Ne ferme pas cette page.',
+                    size:12,color:PracticeDailyVisualTheme.muted),
+                ],
+                if(_courseError!=null) ...[
+                  const SizedBox(height:8),
+                  _label(_courseError!,size:12,color:Colors.orangeAccent),
+                  _label('Les questions précédentes sont conservées. Tu peux relancer le lot.',
+                    size:11,color:PracticeDailyVisualTheme.muted),
+                ],
                 if(_arr(_session!['course_qcms']).length<20)
-                  _button('Générer 10 QCM de la fiche',()=>_generate('course_qcms')),
+                  _button(_activeGeneration=='course_qcms'
+                    ? 'Génération en cours…'
+                    : 'Générer ' +
+                        (20-_arr(_session!['course_qcms']).length).clamp(0,10).toString() +
+                        ' QCM de la fiche',
+                    _busy?null:()=>_generate('course_qcms')),
               ])),
               _quiz(false),
               _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
