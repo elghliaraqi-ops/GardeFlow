@@ -2090,6 +2090,7 @@ class _QcmPanel extends StatelessWidget {
             ),
             child: PracticeGlossaryText(
               current.question,
+              richEnabled: answered,
               style: const TextStyle(
                 color: _PracticeGame.text,
                 fontSize: 15.2,
