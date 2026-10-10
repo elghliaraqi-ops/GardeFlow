@@ -58,6 +58,7 @@ const clinicalHosts=new Set([
  'encrypted-tbn0.gstatic.com','encrypted-tbn1.gstatic.com',
  'encrypted-tbn2.gstatic.com','encrypted-tbn3.gstatic.com',
  'encrypted-tbn4.gstatic.com',
+ 'serpapi.com',
 ]);
 const openversePreviewPath=/^\/v1\/images\/[a-f\d-]{36}\/thumb\/?$/i;
 export function allowedAsset(raw: string) {
@@ -67,6 +68,11 @@ export function allowedAsset(raw: string) {
     if(!clinicalHosts.has(uri.hostname.toLowerCase()))return false;
     if(uri.pathname.length>1100 || /%2e|%2f|%5c/i.test(raw))return false;
     if(uri.searchParams.has('download'))return false;
+    // SerpApi results may use its thumbnail CDN instead of gstatic.
+    if(uri.hostname==='serpapi.com'){
+      return /^\/searches\/[A-Za-z0-9_-]{5,120}\/images\/[A-Za-z0-9_.-]{5,250}$/.test(uri.pathname) &&
+        uri.search==='';
+    }
     // Google thumbnails are served from a very narrow image-only endpoint.
     // Never proxy arbitrary Google, search or user-controlled URL hosts.
     if(/^encrypted-tbn[0-4]\.gstatic\.com$/.test(uri.hostname)){
