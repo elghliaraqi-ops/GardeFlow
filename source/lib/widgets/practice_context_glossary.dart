@@ -187,6 +187,32 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
                   ],
                 ),
               ),
+            // Direct access to saved fiche vocabulary even if the term lies in
+            // a collapsed chapter or an old lesson with unusual formatting.
+            if (widget.kind == 'fiche' && _result.terms.isNotEmpty)
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final term in _result.terms)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 7),
+                        child: ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(term.term,
+                            style: const TextStyle(fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                          onPressed: () =>
+                            PracticeGlossaryText.openDetail(context, term),
+                          backgroundColor: const Color(0xFF17314E),
+                          side: const BorderSide(color: Color(0xFF5BE7B0)),
+                          labelStyle: const TextStyle(color: Color(0xFFF5F8FF)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             if (_result.terms.isEmpty &&
                 !['loading', 'no_content', 'generated', 'cached'].contains(_result.status))
               Padding(
@@ -288,7 +314,7 @@ class PracticeGlossaryText extends StatelessWidget {
           waitDuration: const Duration(milliseconds: 300),
           preferBelow: false,
           child: InkWell(
-            onTap: () => _openDetail(context, match.term, richEnabled),
+            onTap: () => openDetail(context, match.term, allow: richEnabled),
             child: Text(raw, style: resolved.copyWith(
               color: const Color(0xFF5BE7B0),
               decoration: TextDecoration.underline,
@@ -306,7 +332,8 @@ class PracticeGlossaryText extends StatelessWidget {
     return Text.rich(TextSpan(style: resolved, children: spans));
   }
 
-  void _openDetail(BuildContext parent, PracticeGlossaryTerm term, bool allow) {
+  static void openDetail(BuildContext parent, PracticeGlossaryTerm term,
+      {bool allow = true}) {
     if (!allow) {
       ScaffoldMessenger.maybeOf(parent)?.showSnackBar(const SnackBar(
         content: Text('L’explication complète sera accessible après validation.'),
