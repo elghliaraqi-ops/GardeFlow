@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/practice_context_glossary.dart';
 
 import '../widgets/practice_qcm_medical_illustration.dart';
 
@@ -358,7 +359,12 @@ class _PracticeProgressiveCasesScreenState
       progressive: true,
       completed: _submitted,
     );
-    return _panel(
+    return PracticeGlossaryScope(
+      scopeId: 'progressive:' + _title,
+      objective: _title,
+      content: [_stem, for (final q in _questions) q.topic + ' ' + q.question].join('\n'),
+      kind: 'cas',
+      child: _panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -370,7 +376,7 @@ class _PracticeProgressiveCasesScreenState
             ),
           ),
           const SizedBox(height: 11),
-          Text(
+          PracticeGlossaryText(
             q.question,
             style: const TextStyle(
               color: PracticeDailyVisualTheme.text,
@@ -475,7 +481,7 @@ class _PracticeProgressiveCasesScreenState
           ),
         ],
       ),
-    );
+    ));
   }
 
   @override
