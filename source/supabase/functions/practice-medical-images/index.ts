@@ -3,6 +3,8 @@ import {resolveMedicalPreviews,resolveGoogleMedicalImages,proxyMedicalImage} fro
 
 // Shared Practice media resolver. External public images only; no image
 // storage, no untrusted URLs to Groq, no second medical AI reviewer.
+// Protect the account owner's 250/month SerpApi quota from other app accounts.
+const PAID_SERPAPI_OWNER='a6ab90cd-aa2c-41f3-a5e8-be00aedd019c';
 const cors={
   'Access-Control-Allow-Origin':'*',
   'Access-Control-Allow-Headers':'authorization,apikey,x-client-info,content-type',
@@ -30,7 +32,14 @@ Deno.serve(async req=>{
   const body=await req.json().catch(()=>null);
   if(!body||!['images','google_images'].includes(body.action))return send({error:'invalid_action'},400);
   if(!body.image_request||typeof body.image_request!=='object')return send({error:'image_request_required'},400);
-  try{return send(body.action==='google_images' ? await resolveGoogleMedicalImages(body.image_request) : await resolveMedicalPreviews(body.image_request));}
+  if(body.action==='google_images'&&user.id!==PAID_SERPAPI_OWNER)
+    return send({error:'paid_google_search_owner_only'},403);
+  try{
+    if(body.action==='google_images')return send(await resolveGoogleMedicalImages(body.image_request));
+    const free=await resolveMedicalPreviews(body.image_request);
+    return send({...free,google_images_available:
+      user.id===PAID_SERPAPI_OWNER&&free.google_images_available});
+  }
   catch(e){console.error('practice_medical_images',{error:String(e).slice(0,150)});
     return send({images:[],medical_searches:[],unavailable_reason:'external_source_unavailable'});}
 });
