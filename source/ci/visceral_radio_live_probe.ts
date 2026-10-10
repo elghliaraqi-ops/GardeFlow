@@ -56,6 +56,26 @@ for(const u of targets){
  }catch(e){console.log('PUBLISHER_ERROR',u,String(e).slice(0,170));}
 }
 
+
+const springerPng='https://media.springernature.com/lw685/springer-static/image/art%3A10.1186%2Fs13244-020-00890-7/MediaObjects/13244_2020_890_Fig1_HTML.png';
+const springerPngT3='https://media.springernature.com/lw685/springer-static/image/art%3A10.1186%2Fs13244-020-00890-7/MediaObjects/13244_2020_890_Fig11_HTML.png';
+for(const u of [springerPng,springerPngT3]){
+ try{
+  for(const method of ['HEAD','GET']){
+   const resp=await fetch(u,{method,signal:AbortSignal.timeout(5500),redirect:'manual',
+     headers:{'Accept':'image/png,image/jpeg',...(method==='GET'?{Range:'bytes=0-256'}:{})}});
+   console.log('REAL_PUBLISHER_IMAGE',JSON.stringify({url:u,method,status:resp.status,
+     mime:resp.headers.get('content-type'),length:resp.headers.get('content-length'),location:resp.headers.get('location')}));
+   if(resp.body)await resp.body.cancel();
+  }
+ }catch(e){console.log('REAL_IMAGE_ERROR',u,String(e).slice(0,140));}
+}
+const pmc=await request('https://pmc.ncbi.nlm.nih.gov/articles/PMC7471246/');
+for(const key of ['13244_2020_890_Fig1_HTML','cdn.ncbi.nlm.nih.gov/pmc/blobs']){
+  const at=pmc.content.indexOf(key);
+  console.log('HTML_FIGURE_TAG',JSON.stringify({key,at,snippet:at>=0?pmc.content.slice(Math.max(0,at-220),at+350):''}));
+}
+
 const input={query:'rectal cancer T2 MRI',purpose:'Signal T2 du mésorectum et délimitation tumorale T3 vs T4',
   anatomy:'rectum',modality:'IRM T2',image_type:'radiology_scan',plane:'axial',
   required_features:['rectal tumor'],excluded_features:[],fallback_queries:[]};
