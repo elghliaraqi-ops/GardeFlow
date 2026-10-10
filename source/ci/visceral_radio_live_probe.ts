@@ -48,9 +48,9 @@ console.log('LIVE_FIGURES',JSON.stringify({
 const figure=result.images.find(x=>x.provider==='PubMed Central'&&
   x.thumbnail.startsWith('https://cdn.ncbi.nlm.nih.gov/pmc/blobs/'));
 if(!figure)throw Error('No renderable external PubMed Central figure discovered');
-if(!result.article_previews.some(x=>x.source.includes('PMC7471246')&&
-  x.figure_page?.includes('/figure/')))
-  throw Error('Figure publication link was dropped');
+if(!result.article_previews.some(x=>x.figure_page?.includes('/figure/')&&
+  result.images.some(image=>image.source===x.figure_page)))
+  throw Error('Matching scientific article/figure link was dropped');
 const proxy=await proxyMedicalImage(figure.thumbnail);
 const type=proxy.headers.get('content-type')||'';
 console.log('LIVE_PROXY',JSON.stringify({status:proxy.status,type,source:figure.source}));
