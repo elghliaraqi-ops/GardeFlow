@@ -58,7 +58,7 @@ const clinicalHosts=new Set([
  'encrypted-tbn0.gstatic.com','encrypted-tbn1.gstatic.com',
  'encrypted-tbn2.gstatic.com','encrypted-tbn3.gstatic.com',
  'encrypted-tbn4.gstatic.com',
- 'serpapi.com',
+ 'serpapi.com','europepmc.org',
 ]);
 const openversePreviewPath=/^\/v1\/images\/[a-f\d-]{36}\/thumb\/?$/i;
 export function allowedAsset(raw: string) {
@@ -87,6 +87,11 @@ export function allowedAsset(raw: string) {
     }
     if(uri.hostname==='upload.wikimedia.org' &&
        !uri.pathname.startsWith('/wikipedia/commons/'))return false;
+    if(uri.hostname==='europepmc.org'){
+      // Limit proxying to image files in public full-text PMC articles.
+      return /^\/articles\/PMC\d{3,11}\/bin\/[a-zA-Z0-9._-]+\.(?:jpg|jpeg|png|webp)$/i.test(uri.pathname)
+        && !uri.search && !uri.hash;
+    }
     return /\.(?:jpg|jpeg|png|webp)(?:$)/i.test(uri.pathname);
   }catch(_){return false;}
 }
@@ -330,7 +335,7 @@ function xmlText(value:string):string {
 export function articleFigureSnippets(xml:string):Array<{id:string;href:string;caption:string}>{
   const figs:Array<{id:string;href:string;caption:string}>=[];
   const blocks=xml.match(/<fig\b[\s\S]*?<\/fig>/gi)||[];
-  for(const block of blocks.slice(0,24)){
+  for(const block of blocks.slice(0,60)){
     const id=block.match(/<fig\b[^>]*\bid=["']([^"']{1,65})["']/i)?.[1]||'';
     const href=block.match(/<(?:graphic|inline-graphic)\b[^>]*\b(?:xlink:)?href=["']([^"']{1,165})["']/i)?.[1]||'';
     const caption=xmlText(block.match(/<caption\b[^>]*>([\s\S]*?)<\/caption>/i)?.[1]||'');
@@ -339,6 +344,35 @@ export function articleFigureSnippets(xml:string):Array<{id:string;href:string;c
   }
   return figs;
 }
+
+/** Figure captions often omit "rectum MRI" because the article already
+ * establishes that context. Keep modality/anatomical clues without requiring
+ * them to be repeated verbatim in every caption. */
+export function articleFigureRelevant(caption:string,request:MedicalImageRequest):boolean{
+  const label=ascii(caption);
+  const subject=ascii(request.anatomy+' '+request.query+' '+request.purpose);
+  if(label.length<9||banned.test(label))return false;
+  if(/rect|mesorect|sphinct|levator/.test(subject) &&
+     !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|t[1-4]\b|mr\s?stage)/.test(label))return false;
+  if(request.image_type==='radiology_scan'){
+    if(/photograph|histolog|gross specimen|resection specimen|survival curve|kaplan|flowchart|flow chart|forest plot/.test(label))return false;
+    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|imaging|t3|t4|staging/.test(label);
+  }
+  if(request.image_type==='anatomical_diagram')
+    return /anatom|rect|mesorect|sphinct|levator|pelvic floor|anal canal|fascia|muscularis|diagram|schemat|sagittal/.test(label);
+  return /operat|surger|laparoscop|surgical|anatom|resect|technique|procedure|clinical/.test(label);
+}
+function figurePriority(caption:string,request:MedicalImageRequest):number{
+  const label=ascii(caption), subject=ascii(request.query+' '+request.purpose);
+  let score=0;
+  if(/\b(?:t2|mri|mr image|magnetic resonance|axial|sagittal)\b/.test(label))score+=2;
+  if(/\b(?:rectum|rectal|mesorect|sphincter|levator|fascia)\b/.test(label))score+=2;
+  if(/t3/.test(subject)&&/\bt3\b/.test(label))score+=4;
+  if(/t4/.test(subject)&&/\bt4\b/.test(label))score+=4;
+  if(request.image_type==='anatomical_diagram'&&/anatom|schemat|diagram/.test(label))score+=4;
+  return score;
+}
+
 function articleTopical(text:string,request:MedicalImageRequest):boolean{
   const hay=ascii(text);
   if(banned.test(hay))return false;
@@ -434,10 +468,25 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     const json=await res.json();
     items=Array.isArray(json?.resultList?.result)?json.resultList.result:[];
   }catch(_){return {articles,figures};}
-  // Search past the first three papers: a relevant article may have no
-  // accessible figure while a later open-access paper has a useful one.
-  // Keep only a few source cards, but inspect up to six publications.
-  for(const entry of items.slice(0,6)){
+  // The first Europe PMC results are sometimes methodology papers without
+  // MRI figures. Prioritize established open-access pictorial radiology
+  // reviews, whose image URLs are still discovered dynamically from XML.
+  const rectal=/rect|mesorect|sphinct|levator/.test(ascii(
+    request.anatomy+' '+request.query+' '+request.purpose));
+  const preferred=rectal?[
+    {pmcid:'PMC7471246',title:'MRI of rectal cancer—relevant anatomy and staging key points',
+      authorString:'Insights into Imaging'},
+    {pmcid:'PMC4463328',title:'MRI in local staging of rectal cancer: an update',
+      authorString:'Radiological review'},
+    {pmcid:'PMC3463019',title:'Imaging paradigms in assessment of rectal carcinoma: staging',
+      authorString:'Radiological review'},
+  ]:[];
+  const seenIds=new Set<string>();
+  const prioritized=[...preferred,...items].filter((entry:any)=>{
+    const id=String(entry.pmcid||'');
+    return /^PMC\d{3,11}$/i.test(id)&&!seenIds.has(id)&&Boolean(seenIds.add(id));
+  });
+  for(const entry of prioritized.slice(0,6)){
     const pmcid=String(entry.pmcid||'');
     if(!/^PMC\d{3,11}$/i.test(pmcid))continue;
     const title=clean(entry.title,220);
@@ -456,36 +505,44 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
       if(!rr.ok)continue;
       const xml=await rr.text();
       if(xml.length>2200000)continue;
-      const candidates=articleFigureSnippets(xml).filter(f=>articleTopical(f.caption,request)).slice(0,3);
+      const candidates=articleFigureSnippets(xml)
+        .filter(f=>articleFigureRelevant(f.caption,request))
+        .sort((a,b)=>figurePriority(b.caption,request)-figurePriority(a.caption,request))
+        .slice(0,4);
       for(const fig of candidates){
         const href=fig.href.replace(/^.*\//,'');
         const candidatesUrls=[href,
           /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.jpg',
           /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.png'].filter(Boolean);
+        let found=false;
         for(const filename of candidatesUrls){
-          const raw='https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/bin/'+filename;
-          if(!allowedAsset(raw))continue;
-          // Never claim a real thumbnail until the upstream responds as an image.
-          try{
-            if(!await probeMedicalFigure(raw))continue;
-            const image:ImagePreview={thumbnail:raw,full:raw,source:source+'#figures',
-              title:fig.caption||title,description:title+' '+fig.caption,
-              license:'Open access (voir licence de l’article)',creator:summary,provider:'PubMed Central'};
-            figures.push(image);
-            card.thumbnail=raw;card.figure_caption=fig.caption;
-            if(fig.id)card.figure_page='https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/#'+encodeURIComponent(fig.id);
-            // Surface a successful fourth/fifth paper in the article links,
-            // rather than keeping three links with no actual illustrations.
-            if(!articles.some(a=>a.source===card.source)){
-              const replace=articles.findIndex(a=>!a.thumbnail);
-              if(replace>=0)articles[replace]=card;
-              else if(articles.length<ARTICLE_LIMIT)articles.push(card);
-            }
-            break;
-          }catch(_){/* Keep a useful article preview without a broken image. */}
+          for(const host of ['https://europepmc.org','https://pmc.ncbi.nlm.nih.gov']){
+            const raw=host+'/articles/'+pmcid+'/bin/'+filename;
+            if(!allowedAsset(raw))continue;
+            try{
+              if(!await probeMedicalFigure(raw))continue;
+              const page=fig.id
+                ?'https://europepmc.org/articles/'+pmcid+'#'+encodeURIComponent(fig.id)
+                :source+'#figures';
+              const image:ImagePreview={thumbnail:raw,full:raw,source:page,
+                title:fig.caption||title,description:title+' '+fig.caption,
+                license:'Open access (vérifier la licence de la figure)',creator:summary,
+                provider:'Europe PMC'};
+              figures.push(image);
+              card.thumbnail=raw;card.figure_caption=fig.caption;card.figure_page=page;
+              if(!articles.some(a=>a.source===card.source)){
+                const replace=articles.findIndex(a=>!a.thumbnail);
+                if(replace>=0)articles[replace]=card;
+                else if(articles.length<ARTICLE_LIMIT)articles.push(card);
+              }
+              found=true;break;
+            }catch(_){/* Continue to the alternate trusted origin. */}
+          }
+          if(found)break;
         }
       }
     }catch(_){/* Article metadata card remains available. */}
+    if(figures.length>=3)break;
   }
   return {articles,figures};
 }
