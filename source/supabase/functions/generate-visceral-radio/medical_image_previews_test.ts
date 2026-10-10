@@ -201,9 +201,15 @@ Deno.test('free resolver returns inline figure and retains article link when cat
       JSON.stringify({results:[]}),{status:200,headers:{'content-type':'application/json'}}));
     if(url.includes('/rest/search?'))return Promise.resolve(new Response(
       JSON.stringify({resultList:{result:[]}}),{status:200,headers:{'content-type':'application/json'}}));
-    if(url.includes('/PMC7471246/fullTextXML'))return Promise.resolve(new Response(
-      '<article><fig id="Fig3"><caption>Axial T2-weighted MRI of a T3 tumour invading the mesorectal fat.</caption><graphic xlink:href="rectal_fig3.jpg"/></fig></article>',
-      {status:200,headers:{'content-type':'application/xml'}}));
+    if(url.includes('/PMC7471246/fullTextXML')){
+      // Reproduce the actual Europe PMC 406 response if JSON is requested.
+      const accept=new Headers(init?.headers).get('Accept')||'';
+      if(!accept.includes('application/xml'))return Promise.resolve(
+        new Response('Not Acceptable',{status:406}));
+      return Promise.resolve(new Response(
+        '<article><fig id="Fig3"><caption>Axial T2-weighted MRI of a T3 tumour invading the mesorectal fat.</caption><graphic xlink:href="rectal_fig3.jpg"/></fig></article>',
+        {status:200,headers:{'content-type':'application/xml'}}));
+    }
     if(url.includes('/fullTextXML'))return Promise.resolve(new Response('<article></article>',{status:200}));
     if(url==='https://pmc.ncbi.nlm.nih.gov/articles/PMC7471246/')return Promise.resolve(new Response(
       '<figure id="Fig3"><img src="https://cdn.ncbi.nlm.nih.gov/pmc/blobs/9884/7471246/123abc/rectal_fig3.jpg" alt="Fig. 3"></figure>',
