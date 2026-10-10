@@ -1,86 +1,33 @@
-import {articleFigureSnippets, allowedAsset, probeMedicalFigure, resolveMedicalPreviews} from '../supabase/functions/generate-visceral-radio/medical_image_previews.ts';
+/**
+ * Public live smoke test for a representative existing Viscéral × Radio fiche.
+ * Only searches open-access third-party images; no user data, images, or
+ * provider credentials are stored.
+ */
+import {resolveMedicalPreviews,proxyMedicalImage} from '../supabase/functions/generate-visceral-radio/medical_image_previews.ts';
 
-const headers={'User-Agent':'GardeFlowPractice-Diagnostics/1.0 (public open-access media probe)','Accept':'application/xml, text/xml, image/jpeg, image/png, */*'};
-async function request(url:string,method='GET'){
-  try{
-    const response=await fetch(url,{method,signal:AbortSignal.timeout(6500),
-      redirect:'manual',headers});
-    return {status:response.status,type:response.headers.get('content-type'),
-      location:response.headers.get('location'),content:method==='GET'?await response.text():''};
-  }catch(e){return {status:-1,type:null,location:null,content:String(e)};}
-}
-for(const pmcid of ['PMC7471246','PMC4463328']){
-  const uri='https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML';
-  const result=await request(uri);
-  console.log('XML',pmcid,JSON.stringify({status:result.status,contentType:result.type,
-    length:result.content.length,first:result.content.slice(0,100)}));
-  const figures=articleFigureSnippets(result.content);
-  console.log('FIGURES',pmcid,figures.length,figures.slice(0,4));
-  const preferred=figures.filter(x=>/mri|t2|rect|anatom|sphinct|mesorect|tumou?r|axial/i.test(x.caption)).slice(0,2);
-  for(const figure of preferred){
-    const filename=figure.href.split('/').pop()||'';
-    for(const ext of [filename,filename+'.jpg']){
-      for(const host of ['https://europepmc.org','https://pmc.ncbi.nlm.nih.gov']){
-        const url=host+'/articles/'+pmcid+'/bin/'+ext;
-        if(!allowedAsset(url))continue;
-        const head=await request(url,'HEAD');
-        const valid=await probeMedicalFigure(url);
-        console.log('MEDIA',JSON.stringify({pmcid,caption:figure.caption.slice(0,90),
-          url,status:head.status,type:head.type,redirect:head.location,valid}));
-      }
-    }
-  }
-}
-
-const doi='10.1186/s13244-020-00890-7';
-const filename='13244_2020_890_Fig1_HTML.jpg';
-const targets=[
- 'https://media.springernature.com/full/springer-static/image/art%3A'+encodeURIComponent(doi)+'/MediaObjects/'+filename,
- 'https://media.springernature.com/original/springer-static/image/art%3A'+encodeURIComponent(doi)+'/MediaObjects/'+filename,
- 'https://static-content.springer.com/image/art%3A'+encodeURIComponent(doi)+'/MediaObjects/'+filename,
- 'https://pmc.ncbi.nlm.nih.gov/articles/PMC7471246/bin/'+filename,
- 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7471246/bin/'+filename,
- 'https://www.ebi.ac.uk/europepmc/webservices/rest/PMC7471246/supplementaryFiles',
- 'https://pmc.ncbi.nlm.nih.gov/articles/PMC7471246/',
- 'https://link.springer.com/article/'+doi,
-];
-for(const u of targets){
- try{
-  const res=await fetch(u,{method:'GET',redirect:'follow',signal:AbortSignal.timeout(8500),
-    headers:{...headers,Range:'bytes=0-2048'}});
-  const mime=res.headers.get('content-type')||'';
-  const body=mime.includes('text/')?await res.text():'';if(res.body&&!mime.includes('text/'))await res.body.cancel();
-  const origins=[...body.matchAll(/(?:src|data-src|href)=["']([^"']+(?:\.jpg|\.png|cdn\.ncbi\.nlm\.nih)[^"']*)["']/ig)].slice(0,7).map(m=>m[1]);
-  console.log('PUBLISHER',JSON.stringify({url:u,status:res.status,mime,redirectedUrl:res.url,
-    length:body.length,images:origins,leading:body.slice(0,70)}));
- }catch(e){console.log('PUBLISHER_ERROR',u,String(e).slice(0,170));}
-}
-
-
-const springerPng='https://media.springernature.com/lw685/springer-static/image/art%3A10.1186%2Fs13244-020-00890-7/MediaObjects/13244_2020_890_Fig1_HTML.png';
-const springerPngT3='https://media.springernature.com/lw685/springer-static/image/art%3A10.1186%2Fs13244-020-00890-7/MediaObjects/13244_2020_890_Fig11_HTML.png';
-for(const u of [springerPng,springerPngT3]){
- try{
-  for(const method of ['HEAD','GET']){
-   const resp=await fetch(u,{method,signal:AbortSignal.timeout(5500),redirect:'manual',
-     headers:{'Accept':'image/png,image/jpeg',...(method==='GET'?{Range:'bytes=0-256'}:{})}});
-   console.log('REAL_PUBLISHER_IMAGE',JSON.stringify({url:u,method,status:resp.status,
-     mime:resp.headers.get('content-type'),length:resp.headers.get('content-length'),location:resp.headers.get('location')}));
-   if(resp.body)await resp.body.cancel();
-  }
- }catch(e){console.log('REAL_IMAGE_ERROR',u,String(e).slice(0,140));}
-}
-const pmc=await request('https://pmc.ncbi.nlm.nih.gov/articles/PMC7471246/');
-for(const key of ['13244_2020_890_Fig1_HTML','cdn.ncbi.nlm.nih.gov/pmc/blobs']){
-  const at=pmc.content.indexOf(key);
-  console.log('HTML_FIGURE_TAG',JSON.stringify({key,at,snippet:at>=0?pmc.content.slice(Math.max(0,at-220),at+350):''}));
-}
-
-const input={query:'rectal cancer T2 MRI',purpose:'Signal T2 du mésorectum et délimitation tumorale T3 vs T4',
-  anatomy:'rectum',modality:'IRM T2',image_type:'radiology_scan',plane:'axial',
-  required_features:['rectal tumor'],excluded_features:[],fallback_queries:[]};
-const result=await resolveMedicalPreviews(input);
-console.log('RESOLVE',JSON.stringify({images:result.images?.length,articles:result.article_previews?.length,
-  articlesWithImage:result.article_previews?.filter((x:any)=>Boolean(x.thumbnail)).length,
-  imageOrigins:result.images?.map((x:any)=>x.thumbnail),articleTitles:result.article_previews?.map((x:any)=>x.title),
-  reason:result.unavailable_reason}));
+const request={
+  query:'rectal cancer T2 MRI T3 vs T4',
+  purpose:'Illustrer le signal T2 du mésorectum et la délimitation tumorale (T3 vs T4)',
+  anatomy:'rectum',modality:'IRM T2',image_type:'radiology_scan',
+  plane:'axial',required_features:['mesorectum','T3'],excluded_features:[],
+};
+const result=await resolveMedicalPreviews(request);
+console.log('LIVE_FIGURES',JSON.stringify({
+  count:result.images.length,articleCount:result.article_previews.length,
+  titles:result.images.map(x=>x.title.slice(0,90)),
+  assetUrls:result.images.map(x=>x.thumbnail),
+  articleSources:result.article_previews.map(x=>x.source),
+  searches:result.image_sources_searched,
+}));
+const figure=result.images.find(x=>x.provider==='PubMed Central'&&
+  x.thumbnail.startsWith('https://cdn.ncbi.nlm.nih.gov/pmc/blobs/'));
+if(!figure)throw Error('No renderable external PubMed Central figure discovered');
+if(!result.article_previews.some(x=>x.source.includes('PMC7471246')&&
+  x.figure_page?.includes('/figure/')))
+  throw Error('Figure publication link was dropped');
+const proxy=await proxyMedicalImage(figure.thumbnail);
+const type=proxy.headers.get('content-type')||'';
+console.log('LIVE_PROXY',JSON.stringify({status:proxy.status,type,source:figure.source}));
+if(proxy.status!==200||!type.startsWith('image/'))
+  throw Error('Medical image was found but was not renderable through the proxy');
+await proxy.body?.cancel();
