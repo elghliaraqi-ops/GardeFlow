@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleFigureSnippets, articleFigureRelevant, pmcFigureAssets, pmcAssetForFigure, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, googleMedicalCacheKey, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleSearchVariants, articleFigureSnippets, articleFigureRelevant, pmcFigureAssets, pmcAssetForFigure, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, googleMedicalCacheKey, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -230,6 +230,82 @@ Deno.test('free resolver returns inline figure and retains article link when cat
     assert(response.article_previews.some((v)=>v.source.includes('PMC7471246')&&
       v.figure_page?.includes('Fig3')),
       'article source link must still be present and point at the figure');
+  }finally{globalThis.fetch=native;}
+});
+
+
+Deno.test('specific pelvic DWI request gets staged organ-preserving article searches',()=>{
+  const r=legacyImageRequest({
+    query:'Montrer la restriction diffusionnelle des ganglions iliaques internes',
+    modality:'IRM diffusion',anatomy:'rectum',image_type:'radiology_scan',
+    purpose:'DWI restriction in internal iliac lymph nodes'
+  });
+  const q=articleSearchVariants(r);
+  assert(q[0].includes('pelvic lymph node diffusion'),'first search must retain DWI lymph nodes');
+  assert(q[1].includes('rectal cancer lymph node'),'second search must retain the target organ and nodes');
+  assert(!articleFigureRelevant('Axial T2 MRI shows extramural rectal tumour spread without any nodes',r),
+    'T2 rectal tumour must not be substituted for pelvic nodal DWI');
+  assert(articleFigureRelevant('Axial diffusion-weighted MRI demonstrates restricted diffusion in an internal iliac lymph node',r),
+    'real node DWI figure is appropriate');
+  assert(imageIsTopical({
+    ...good,title:'Pelvic lymph node DWI MRI with rectal cancer nodal staging',
+    description:'MRI DWI internal iliac lymph node restricted diffusion',
+  },r),'clinical image metadata without rectal written twice is not silently rejected');
+});
+Deno.test('nodal DWI search finds article figure on second free query and preserves article link',async()=>{
+  const native=globalThis.fetch;
+  const searches:string[]=[];
+  globalThis.fetch=((input:RequestInfo|URL,init?:RequestInit)=>{
+    const url=String(input);
+    if(url.includes('/w/api.php?'))return Promise.resolve(new Response(
+      JSON.stringify({query:{pages:[]}}),{status:200}));
+    if(url.includes('/v1/images/?'))return Promise.resolve(new Response(
+      JSON.stringify({results:[]}),{status:200}));
+    if(url.includes('/rest/search?')){
+      const query=new URL(url).searchParams.get('query')||'';
+      searches.push(query);
+      const pmcid=query.includes('pelvic lymph node diffusion')?'PMC9000001':'PMC9000002';
+      const entry={pmcid,title:'Rectal cancer pelvic lymph node MRI imaging',
+        abstractText:'MRI pelvic lymph node rectal cancer',authorString:'Research radiology'};
+      return Promise.resolve(new Response(JSON.stringify({resultList:{result:[entry]}}),{status:200}));
+    }
+    if(url.includes('PMC9000001/fullTextXML')||url.includes('PMC9000002/fullTextXML')){
+      const first=url.includes('PMC9000001');
+      const caption=first?'Axial T2 MRI of rectal tumour without nodal findings':
+        'Axial DWI MRI shows restricted diffusion of an internal iliac lymph node';
+      const filename=first?'tumour.jpg':'iliac-node-dwi.jpg';
+      return Promise.resolve(new Response(
+        '<article><fig id="fig3"><caption>'+caption+'</caption><graphic xlink:href="'+filename+'"/></fig></article>',
+        {status:200,headers:{'content-type':'application/xml'}}));
+    }
+    if(url==='https://pmc.ncbi.nlm.nih.gov/articles/PMC9000001/' ||
+       url==='https://pmc.ncbi.nlm.nih.gov/articles/PMC9000002/'){
+      const good=url.includes('PMC9000002');
+      const file=good?'iliac-node-dwi.jpg':'tumour.jpg';
+      return Promise.resolve(new Response(
+        '<figure><img src="https://cdn.ncbi.nlm.nih.gov/pmc/blobs/a1/9000002/abcd/'+file+'"/></figure>',
+        {status:200,headers:{'content-type':'text/html'}}));
+    }
+    if(url.includes('cdn.ncbi.nlm.nih.gov/pmc/blobs')&&init?.method==='HEAD')
+      return Promise.resolve(new Response(null,{status:200,
+        headers:{'content-type':'image/jpeg'}}));
+    return Promise.resolve(new Response(null,{status:404}));
+  }) as typeof fetch;
+  try{
+    const result=await resolveMedicalPreviews({
+      query:'Montrer la restriction diffusionnelle des ganglions iliaques internes',
+      purpose:'DWI restriction in internal iliac lymph nodes',modality:'IRM diffusion',
+      anatomy:'rectum',image_type:'radiology_scan',plane:'axial',
+      required_features:['iliac lymph node','DWI'],excluded_features:[],
+    });
+    assert(searches.length===2,'fallback article search runs exactly once if no figure found initially');
+    assert(result.images.some(v=>v.full.endsWith('/iliac-node-dwi.jpg')),
+      'second stage returns the actual nodal DWI figure');
+    assert(result.article_previews.some(v=>v.source.includes('PMC9000002')&&
+      v.figure_page?.includes('/figure/fig3/')),
+      'matching publication and figure link must be visible beside the image');
+    assert(!result.images.some(v=>v.full.endsWith('/tumour.jpg')),
+      'generic tumour picture must not be shown for iliac DWI');
   }finally{globalThis.fetch=native;}
 });
 
