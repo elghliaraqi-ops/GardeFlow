@@ -10,6 +10,31 @@ const json = (data: unknown, status = 200) => new Response(JSON.stringify(data),
 });
 const empty = (reason: string) => json({ terms: [], status: reason });
 
+/** Site is anchored in the document's educational objective, not a generic TNM
+ * lookup. If the objective is vague, only unambiguous medical context is used.
+ * This also prevents the rectal staging example from leaking into pancreas.
+ */
+function identifyCancerSite(objective: string, content: string): string {
+  const source = (objective + ' ' + content.slice(0, 2200)).toLocaleLowerCase('fr');
+  const leading = objective.toLocaleLowerCase('fr');
+  const sites: { site: string; re: RegExp }[] = [
+    { site: 'cancer du rectum', re: /(?:cancer|carcinome|adénocarcinome)\s+(?:du\s+)?rect(?:um|al)|(?:tumeur|néoplasie)\s+rectale?/i },
+    { site: 'cancer du pancréas', re: /(?:cancer|carcinome|adénocarcinome)\s+(?:du\s+)?pancr[eé]as|ad[eé]nocarcinome\s+pancr[eé]atique/i },
+    { site: "cancer du col de l'utérus", re: /(?:cancer|carcinome|tumeur)\s+(?:du\s+)?col\s+(?:de\s+l[’']?)?ut[eé]rus|cancer\s+cervical\s+ut[eé]rin/i },
+    { site: 'cancer du sein', re: /(?:cancer|carcinome)\s+(?:du\s+)?sein|carcinome\s+mammaire/i },
+    { site: 'cancer du poumon', re: /(?:cancer|carcinome)\s+(?:du\s+)?poumon|cancer\s+bronchique/i },
+    { site: 'cancer de la prostate', re: /(?:cancer|carcinome)\s+(?:de\s+la\s+)?prostate/i },
+    { site: 'cancer du côlon', re: /(?:cancer|carcinome)\s+(?:du\s+)?c[oô]lon/i },
+    { site: 'cancer du foie', re: /(?:cancer|carcinome)\s+(?:du\s+)?foie|carcinome\s+h[eé]patocellulaire/i },
+  ];
+  const primary = sites.filter(({re}) => re.test(leading));
+  if (primary.length === 1) return primary[0].site;
+  if (primary.length > 1) return ''; // mixed-topic teaching resource
+  const secondary = sites.filter(({re}) => re.test(source));
+  return secondary.length === 1 ? secondary[0].site : '';
+}
+
+
 function deidentify(text: string): string {
   return text
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[courriel masqué]')
@@ -52,7 +77,7 @@ Deno.serve(async (req: Request) => {
   if (!['fiche', 'cas', 'qcm', 'defi'].includes(kind) || content.length < 12) {
     return json({ error: 'invalid_scope' }, 400);
   }
-  const hash = await digest('practice-glossary-rich-v3\n' + kind + '\n' + objective + '\n' + content);
+  const hash = await digest('practice-glossary-site-v4\n' + kind + '\n' + objective + '\n' + content);
   const db = createClient(url, serviceRole);
   const { data: cached } = await db.from('practice_context_glossary_cache')
     .select('status,terms,updated_at').eq('content_hash', hash).maybeSingle();
@@ -69,6 +94,8 @@ Deno.serve(async (req: Request) => {
     if (clearError) return empty('retry_unavailable');
   }
   if (!apiKey) return empty('gemini_key_missing');
+  const cancerSite = identifyCancerSite(objective, content);
+  const hasTNM = /\b(?:[cypra]{0,2})?TNM\b/i.test(content);
 
   // UNIQUE hash + database trigger form a cross-user single-flight and
   // atomic UTC daily cap. No fallback to any paid provider.
@@ -93,15 +120,37 @@ Deno.serve(async (req: Request) => {
     const preferred = Deno.env.get('GEMINI_GLOSSARY_MODEL') || 'gemini-3.5-flash-lite';
     const prompt = [
       'Tu es un assistant d\'enseignement médical francophone : explique le CONTENU, pas seulement le vocabulaire.',
-      'Sélectionne 3 à 7 termes réellement présents dans le texte et utiles à son objectif pédagogique.',
+      'OBJECTIF DU CORRECTIF : notions médicales ET acronymes ET mots-clés, pas seulement anatomie et classification.',
+      'IDENTITÉ DE LA MALADIE : ' + (cancerSite || 'site tumoral non identifié avec certitude'),
+      'Si TNM est présent dans un cours oncologique, il faut obligatoirement inclure',
+      'le terme exact TNM en premier, sauf si sa classification complète est déjà',
+      'détaillée dans le cours. Ne pas oublier TNM au profit des autres mots.',
+      'L\'explication du TNM doit porter EXCLUSIVEMENT sur le site du cancer identifié',
+      'dans l\'objectif de cette fiche. Par exemple rectum ≠ pancréas ≠ col de l\'utérus.',
+      'Le titre TNM doit comporter explicitement ce site. Ne jamais réutiliser un TNM générique.',
+      'Indique l\'édition et l\'année si tu connais les critères de référence ;',
+      'les critères UICC 9e édition prennent effet en 2026 et les mises à jour sont',
+      'spécifiques aux organes. Ne transpose jamais un stade d\'un autre organe.',
+      'Si l\'édition ou les critères ne sont pas certains, ne pas inventer de sous-stade.',
+      'Sélectionne une combinaison équilibrée de 8 à 10 termes maximum.',
+      'Cible au moins 2 acronymes pertinents, 2 notions médicales importantes',
+      'et 1 structure anatomique si le cours en contient, sans inventer de termes.',
+      'Pour un acronyme, donner le développement exact et son utilité dans le cours.',
+      'Pour une notion médicale (mésorectum, marge circonférentielle, EMVI,',
+      'résécabilité, évaluation ganglionnaire), expliquer mécanisme, critères',
+      'ou implications pratiques selon le contexte sans digression.',
+      'Un terme peut figurer dans une fiche déjà ancienne ; traiter le contenu',
+      'comme objectif documentaire, ne pas modifier la fiche.',
+      'N\'utilise jamais un modèle de TNM rectal pour un autre organe.',
+      'Sélectionne 8 à 10 termes (ou moins si très peu de notions présentes) réellement présents dans le texte.',
       'Priorité : classifications pertinentes (TNM spécifique au CANCER ET AU SITE étudiés),',
       'structures anatomiques et leurs rapports (vaisseaux, nerfs, plexus, trajets), acronymes, notions difficiles.',
       'Ne choisis pas des termes déjà expliqués de manière satisfaisante.',
       'Toute explication est étroitement liée au sujet/diagnostic de CE document.',
       'Pour une classification : détailler les niveaux/sous-stades pertinents, leurs critères exacts,',
       'les exceptions et l\'utilité clinique. Ne jamais appliquer la TNM d\'un autre organe.',
-      'Pour TNM rectal : détailler T, N, M, inclure les sous-catégories si pertinentes,',
-      'distinguer cTNM et pTNM si utile ; rester cohérent avec l\'édition officielle connue.',
+      'Pour TNM : détailler T, N et M du SITE IDENTIFIÉ seulement, les sous-catégories',
+      'pertinentes, et distinguer cTNM / pTNM si utile. Ne pas généraliser.',
       'Si la version d\'une classification est incertaine, ne pas inventer : signaler',
       'clairement dans version_note que l\'édition/référence doit être vérifiée.',
       'Pour anatomie : décrire origine, trajet, branches/collatérales, rapports,',
@@ -126,8 +175,10 @@ Deno.serve(async (req: Request) => {
       '"clinical_relevance":"Intérêt pour le bilan et la stratégie.",',
       '"image_query":"rectal cancer TNM staging diagram","version_note":"Édition à vérifier si non précisée"}]}.',
       'Catégories autorisées : acronyme, classification, anatomie, notion.',
-      'Maximum 7 termes, 5 sections par terme, 10 éléments par section,',
+      'Maximum 10 termes, 5 sections par terme, 10 éléments par section,',
       '140 caractères par élément, 220 caractères par définition/pertinence/version.',
+      'TNM présent dans le texte : ' + hasTNM.toString(),
+      'Site tumoral à respecter pour TNM : ' + (cancerSite || 'non déterminé'),
       'Type : ' + kind,
       'Objectif pédagogique : ' + objective,
       'Texte à étudier :\n' + content,
@@ -143,7 +194,7 @@ Deno.serve(async (req: Request) => {
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.1,
-            maxOutputTokens: 6000,
+            maxOutputTokens: 7900,
           },
         }),
         signal: AbortSignal.timeout(36000),
@@ -199,7 +250,32 @@ Deno.serve(async (req: Request) => {
         image_query,
         version_note,
       });
-      if (terms.length === 7) break;
+      if (terms.length === 10) break;
+    }
+
+    // Guard against mixing organ-specific TNM entries across diseases.
+    if (cancerSite && hasTNM) {
+      const organRegex = cancerSite.includes('rectum') ? /rect(?:um|al)/i
+        : cancerSite.includes('pancréas') ? /pancr[eé]a/i
+        : cancerSite.includes("col de l'utérus") ? /col de l[’']ut[eé]rus|col ut[eé]rin|cervical/i
+        : new RegExp(cancerSite.split(' ').at(-1) || '^
+      status: 'ready', terms, updated_at: new Date().toISOString(),
+    }).eq('content_hash', hash);
+    return json({ status: 'generated', terms });
+  } catch (error) {
+    console.error('Practice glossary unavailable:', String(error).slice(0, 150));
+    await db.from('practice_context_glossary_cache').update({
+      status: 'error', updated_at: new Date().toISOString(),
+    }).eq('content_hash', hash);
+    return empty('gemini_unavailable');
+  }
+});
+, 'i');
+      terms = terms.filter((entry) => entry.term.toUpperCase() !== 'TNM' ||
+        (organRegex.test(entry.title) &&
+          entry.sections.some((part) => /^T(?:\b|\s|\s—|\s-|\s:)/i.test(part.title)) &&
+          entry.sections.some((part) => /^N(?:\b|\s|\s—|\s-|\s:)/i.test(part.title)) &&
+          entry.sections.some((part) => /^M(?:\b|\s|\s—|\s-|\s:)/i.test(part.title))));
     }
     await db.from('practice_context_glossary_cache').update({
       status: 'ready', terms, updated_at: new Date().toISOString(),
