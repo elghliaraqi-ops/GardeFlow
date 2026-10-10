@@ -162,7 +162,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
       _title(caseQuiz?'QCM clinique progressif':'QCM de la fiche',
         'Question '+(current+1).toString()+'/'+list.length.toString()+' · cible '+_str(countTarget)),
       if(caseQuiz)..._clinicalPhase((q['phase'] is int ? q['phase'] as int : 1).clamp(1,4).toInt()),
-      PracticeGlossaryText(_str(q['statement']), style: const TextStyle(
+      PracticeGlossaryText(_str(q['statement']), richEnabled: checked, style: const TextStyle(
         color: PracticeDailyVisualTheme.text, fontSize: 15,
         fontWeight: FontWeight.w800, height: 1.42)),
       const SizedBox(height:12),
