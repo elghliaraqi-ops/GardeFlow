@@ -1557,7 +1557,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                 post.presentation, post.history, post.clinicalExam,
                 post.complementaryExams, post.imagingConclusion, post.assessment,
                 post.plan,
-                for (final q in _qcms) q.question,
+                for (final q in _qcms) q.question + ' ' + q.options.join(' '),
               ].join(' '))
               .map((m) => m.group(0) ?? '')
               .toSet(),
@@ -2203,8 +2203,9 @@ class _QcmOption extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 3),
-                  child: Text(
+                  child: PracticeGlossaryText(
                     label,
+                    richEnabled: showCorrection,
                     style: TextStyle(
                       color: foreground,
                       fontSize: 12.3,
