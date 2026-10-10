@@ -3,6 +3,7 @@ import '../services/supabase_backend_service.dart';
 import 'practice_daily_visual_theme.dart';
 import 'visceral_radio_fiche_view.dart';
 import 'visceral_radio_course_widgets.dart';
+import '../widgets/practice_context_glossary.dart';
 
 /// Private, independent Practice training space. Images are fetched at viewing time.
 class PracticeVisceralRadioScreen extends StatefulWidget {
@@ -152,11 +153,18 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
     final checked=done.contains(current);
     final picked=selections.putIfAbsent(current,()=> <String>{});
     final countTarget=caseQuiz?(_session?['case_target']??10):20;
-    return _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    return PracticeGlossaryScope(
+      scopeId: 'vr-qcm:' + _str(_session?['id']) + ':' + (caseQuiz ? 'cas' : 'cours'),
+      objective: _str(_obj(_session?['fiche'])['title']),
+      content: list.map((item) => _str(item['statement'])).join('\n'),
+      kind: 'qcm',
+      child: _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       _title(caseQuiz?'QCM clinique progressif':'QCM de la fiche',
         'Question '+(current+1).toString()+'/'+list.length.toString()+' · cible '+_str(countTarget)),
       if(caseQuiz)..._clinicalPhase((q['phase'] is int ? q['phase'] as int : 1).clamp(1,4).toInt()),
-      _label(_str(q['statement']),heavy:true,size:15),
+      PracticeGlossaryText(_str(q['statement']), style: const TextStyle(
+        color: PracticeDailyVisualTheme.text, fontSize: 15,
+        fontWeight: FontWeight.w800, height: 1.42)),
       const SizedBox(height:12),
       ..._records(q['options']).map((o){
         final key=_str(o['key']);
@@ -197,7 +205,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
       if(current>0)_button('Question précédente',()=>setState((){
         if(caseQuiz){_casePosition--;}else{_coursePosition--;}
       }),outlined:true,icon:Icons.arrow_back),
-    ]));
+    ])));
+
   }
   @override Widget build(BuildContext context){
     return Theme(data:PracticeDailyVisualTheme.from(context),child:Scaffold(
