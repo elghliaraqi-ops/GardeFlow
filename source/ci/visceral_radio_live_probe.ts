@@ -57,3 +57,23 @@ console.log('LIVE_PROXY',JSON.stringify({status:proxy.status,type,source:figure.
 if(proxy.status!==200||!type.startsWith('image/'))
   throw Error('Medical image was found but was not renderable through the proxy');
 await proxy.body?.cancel();
+
+
+const nodal=await resolveMedicalPreviews({
+  query:'Montrer la restriction diffusionnelle des ganglions iliaques internes',
+  purpose:'Restricted diffusion of internal iliac lymph nodes on pelvic MRI',
+  anatomy:'rectum',modality:'IRM diffusion DWI ADC',
+  image_type:'radiology_scan',plane:'axial',
+  required_features:['pelvic lymph node','DWI'],excluded_features:[]
+});
+console.log('LIVE_NODAL_FALLBACK',JSON.stringify({
+  count:nodal.images.length,
+  articleCount:nodal.article_previews.length,
+  titles:nodal.images.map(x=>x.title.slice(0,160)),
+  articleSources:nodal.article_previews.map(x=>x.source),
+  searches:nodal.image_sources_searched,
+}));
+// No fixed medical figure is guaranteed for any specific topic. The source
+// links stay available if no suitably illustrated open-access paper exists.
+if(nodal.images.some(x=>!x.source.startsWith('https://')))
+  throw Error('Nodal fallback lost medical source attribution');
