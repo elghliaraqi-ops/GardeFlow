@@ -353,3 +353,74 @@ Deno.test('free medical image endpoint must not trigger SerpApi calls',()=>{
  if(/googleImagesProvider\s*\(/.test(source))
    throw Error('SerpApi invoked by automatic/free image endpoint');
 });
+
+
+Deno.test('PubMed Central is first for all specialties, without running image catalogues if enough figures found',async()=>{
+  const old=globalThis.fetch, seen:string[]=[];
+  globalThis.fetch=((input:RequestInfo|URL,init?:RequestInit)=>{
+    const uri=String(input);
+    seen.push(uri);
+    if(uri.includes('/rest/search?')){
+      const records=[1,2].map(n=>({pmcid:'PMC900000'+n,
+        title:'Ultrasound of kidney hydronephrosis imaging review',
+        authorString:'Open access radiology',
+        abstractText:'Kidney renal ultrasound imaging review'}));
+      return Promise.resolve(new Response(JSON.stringify({resultList:{result:records}}),{status:200}));
+    }
+    const xml=uri.match(/\/PMC900000([12])\/fullTextXML/);
+    if(xml)return Promise.resolve(new Response(
+      '<article><fig id="f'+xml[1]+'"><caption>Ultrasound of kidney shows renal hydronephrosis on sonographic image.</caption>'+
+      '<graphic xlink:href="renal-ultrasound-'+xml[1]+'.jpg"/></fig></article>',
+      {status:200,headers:{'content-type':'application/xml'}}));
+    const page=uri.match(/articles\/PMC900000([12])\/$/);
+    if(page)return Promise.resolve(new Response(
+      '<figure><img src="https://cdn.ncbi.nlm.nih.gov/pmc/blobs/9/900000'+page[1]+'/ab/renal-ultrasound-'+page[1]+'.jpg"></figure>',
+      {status:200,headers:{'content-type':'text/html'}}));
+    if(uri.includes('cdn.ncbi.nlm.nih.gov/pmc/blobs/')&&init?.method==='HEAD')
+      return Promise.resolve(new Response(null,{status:200,headers:{'content-type':'image/jpeg'}}));
+    if(uri.includes('commons.wikimedia.org/w/api.php')||
+       uri.includes('api.openverse.org/v1/images/'))
+      throw Error('Image catalogues must not be contacted when PMC already supplied two figures');
+    throw Error('Unexpected request: '+uri);
+  }) as typeof fetch;
+  try{
+    const result=await resolveMedicalPreviews({
+      query:'renal hydronephrosis ultrasound imaging',modality:'ultrasound',
+      anatomy:'kidney',purpose:'sonographic hydronephrosis',
+      image_type:'radiology_scan',plane:'not_applicable',
+      required_features:['hydronephrosis'],excluded_features:[]});
+    assert(result.images.length===2,'two real kidney ultrasound source figures expected');
+    assert(result.images.every(x=>x.provider==='PubMed Central'),'all found images should be PMC');
+    assert(result.article_previews.some(x=>x.figure_page?.includes('/figure/f1/')),
+      'links to individual figures must be preserved');
+    assert(!seen.some(x=>x.includes('serpapi.com')||x.includes('api.openverse.org')||
+      x.includes('commons.wikimedia.org')),'PMC priority must prevent catalogue calls');
+  }finally{globalThis.fetch=old;}
+});
+
+Deno.test('all-specialty fallback uses free catalogues only after PubMed yields no image',async()=>{
+  const old=globalThis.fetch, calls:string[]=[];
+  globalThis.fetch=((input:RequestInfo|URL)=>{
+    const uri=String(input);calls.push(uri);
+    if(uri.includes('/rest/search?')){
+      return Promise.resolve(new Response(JSON.stringify({resultList:{result:[]}}),{status:200}));
+    }
+    if(uri.includes('commons.wikimedia.org/w/api.php'))
+      return Promise.resolve(new Response(JSON.stringify({query:{pages:[]}}),{status:200}));
+    if(uri.includes('api.openverse.org/v1/images/'))
+      return Promise.resolve(new Response(JSON.stringify({results:[]}),{status:200}));
+    return Promise.resolve(new Response(null,{status:404}));
+  }) as typeof fetch;
+  try{
+    const r=await resolveMedicalPreviews({
+      query:'liver MRI focal lesion',modality:'MRI',anatomy:'liver',
+      image_type:'radiology_scan',purpose:'liver MRI lesion',
+      plane:'axial',required_features:[],excluded_features:[]});
+    assert(r.images.length===0,'no fabricated liver figures');
+    const firstCatalog=calls.findIndex(x=>x.includes('commons.wikimedia.org')||x.includes('api.openverse.org'));
+    assert(firstCatalog>0,'catalogue search happens only after PubMed lookup');
+    assert(calls.slice(0,firstCatalog).some(x=>x.includes('/rest/search?')),
+      'PubMed search must run first');
+    assert(!calls.some(x=>x.includes('serpapi.com')),'paid search must remain manual');
+  }finally{globalThis.fetch=old;}
+});
