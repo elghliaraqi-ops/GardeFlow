@@ -1557,11 +1557,13 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                 post.presentation, post.history, post.clinicalExam,
                 post.complementaryExams, post.imagingConclusion, post.assessment,
                 post.plan,
+                for (final q in _qcms) q.question,
               ].join(' '))
               .map((m) => m.group(0) ?? '')
               .toSet(),
+          for (final q in _qcms) q.topicLabel,
         ],
-        for (final q in _qcms) q.question,
+        if (post.isFictional) for (final q in _qcms) q.question,
       ].join('\n'),
       kind: 'cas',
       child: Column(
