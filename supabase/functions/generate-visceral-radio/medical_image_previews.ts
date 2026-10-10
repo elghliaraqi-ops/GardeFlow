@@ -390,10 +390,20 @@ export async function probeMedicalFigure(asset:string,fetcher:typeof fetch=fetch
   let target=asset;
   try{
     for(let hop=0;hop<3;hop++){
-      const response=await fetcher(target,{
+      let response=await fetcher(target,{
         method:'HEAD',redirect:'manual',signal:AbortSignal.timeout(3500),
         headers:{Accept:'image/jpeg,image/png,image/webp'}
       });
+      // Some PMC/publisher image CDNs reject HEAD despite serving the image.
+      // A bounded range GET checks the MIME type without storing the image.
+      if([403,405,501].includes(response.status)){
+        response=await fetcher(target,{
+          method:'GET',redirect:'manual',signal:AbortSignal.timeout(3500),
+          headers:{Accept:'image/jpeg,image/png,image/webp',Range:'bytes=0-63'}
+        });
+        // No downloaded image body is retained during source discovery.
+        if(response.body)await response.body.cancel().catch(()=>{});
+      }
       if(response.status>=300&&response.status<400){
         const location=response.headers.get('location');
         if(!location||hop===2)return false;
@@ -415,7 +425,7 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
   const figures:ImagePreview[]=[];
   const url='https://www.ebi.ac.uk/europepmc/webservices/rest/search?'+new URLSearchParams({
     query:query+' AND OPEN_ACCESS:y',
-    pageSize:String(ARTICLE_LIMIT),format:'json',resultType:'core'
+    pageSize:'12',format:'json',resultType:'core'
   });
   let items:any[]=[];
   try{
@@ -424,7 +434,10 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     const json=await res.json();
     items=Array.isArray(json?.resultList?.result)?json.resultList.result:[];
   }catch(_){return {articles,figures};}
-  for(const entry of items.slice(0,ARTICLE_LIMIT)){
+  // Search past the first three papers: a relevant article may have no
+  // accessible figure while a later open-access paper has a useful one.
+  // Keep only a few source cards, but inspect up to six publications.
+  for(const entry of items.slice(0,6)){
     const pmcid=String(entry.pmcid||'');
     if(!/^PMC\d{3,11}$/i.test(pmcid))continue;
     const title=clean(entry.title,220);
@@ -433,21 +446,22 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
     if(!articleTopical(title+' '+clean(entry.abstractText,500),request))continue;
     const card:MedicalArticlePreview={title,source,provider:'Europe PMC',summary,
       figure_page:source+'#figures'};
-    articles.push(card);
-    // An OpenGraph image identifies the page, not necessarily its medical figure.
-    // NEVER show a generic article preview as an illustration in a course/QCM.
-    // A thumbnail is set below only after a relevant <fig> has an image asset.
-    if(request.allow_article_figures===false||figures.length>=2||articles.length>2)continue;
+    if(articles.length<ARTICLE_LIMIT)articles.push(card);
+    // A journal/article OG image could be a cover or a logo. Only a
+    // caption-matched <fig> with an accessible image becomes an illustration.
+    if(request.allow_article_figures===false||figures.length>=3)continue;
     try{
       const rr=await fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML',{
-        headers:REQUEST_HEADERS,signal:AbortSignal.timeout(6000)});
+        headers:REQUEST_HEADERS,signal:AbortSignal.timeout(4500)});
       if(!rr.ok)continue;
       const xml=await rr.text();
       if(xml.length>2200000)continue;
       const candidates=articleFigureSnippets(xml).filter(f=>articleTopical(f.caption,request)).slice(0,3);
       for(const fig of candidates){
         const href=fig.href.replace(/^.*\//,'');
-        const candidatesUrls=[href,/\.jpg$|\.png$|\.jpeg$|\.webp$/i.test(href)?'':href+'.jpg'].filter(Boolean);
+        const candidatesUrls=[href,
+          /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.jpg',
+          /\.(?:jpg|png|jpeg|webp)$/i.test(href)?'':href+'.png'].filter(Boolean);
         for(const filename of candidatesUrls){
           const raw='https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/bin/'+filename;
           if(!allowedAsset(raw))continue;
@@ -459,6 +473,14 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
               license:'Open access (voir licence de l’article)',creator:summary,provider:'PubMed Central'};
             figures.push(image);
             card.thumbnail=raw;card.figure_caption=fig.caption;
+            if(fig.id)card.figure_page='https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/#'+encodeURIComponent(fig.id);
+            // Surface a successful fourth/fifth paper in the article links,
+            // rather than keeping three links with no actual illustrations.
+            if(!articles.some(a=>a.source===card.source)){
+              const replace=articles.findIndex(a=>!a.thumbnail);
+              if(replace>=0)articles[replace]=card;
+              else if(articles.length<ARTICLE_LIMIT)articles.push(card);
+            }
             break;
           }catch(_){/* Keep a useful article preview without a broken image. */}
         }

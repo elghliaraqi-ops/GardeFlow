@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class PracticeGoogleImageCache {
   static const int maxPerDeviceMonth = 240;
   static const Duration positiveTtl = Duration(days: 30);
-  static const Duration negativeTtl = Duration(days: 3);
+  static const Duration negativeTtl = Duration(hours: 2);
 
   static String scope(String userId, String key) =>
       sha256.convert(utf8.encode(userId+'|'+key)).toString();

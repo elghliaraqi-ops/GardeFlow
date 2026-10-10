@@ -23,13 +23,13 @@ void main(){
     expect(negative,isNotNull);
     expect(negative,isEmpty);
   });
-  test('thirty-day positive and three-day negative expiry',(){
+  test('thirty-day positive and two-hour negative expiry',(){
     final now=DateTime(2026,10,10);
     final monthAgo=now.subtract(const Duration(days:31));
     expect(PracticeGoogleImageCache.fresh(now,monthAgo.millisecondsSinceEpoch,true),isFalse);
     expect(PracticeGoogleImageCache.fresh(now,now.subtract(const Duration(days:29)).millisecondsSinceEpoch,true),isTrue);
-    expect(PracticeGoogleImageCache.fresh(now,now.subtract(const Duration(days:4)).millisecondsSinceEpoch,false),isFalse);
-    expect(PracticeGoogleImageCache.fresh(now,now.subtract(const Duration(days:2)).millisecondsSinceEpoch,false),isTrue);
+    expect(PracticeGoogleImageCache.fresh(now,now.subtract(const Duration(hours:3)).millisecondsSinceEpoch,false),isFalse);
+    expect(PracticeGoogleImageCache.fresh(now,now.subtract(const Duration(minutes:90)).millisecondsSinceEpoch,false),isTrue);
   });
   test('monthly local counter rolls over and stops before 250',()async{
     const user='owner';
