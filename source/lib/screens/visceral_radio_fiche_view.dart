@@ -116,7 +116,9 @@ class VisceralFicheView extends StatelessWidget {
             PracticeGlossaryScope(
               key:ValueKey('chapter-'+sessionId+'-${i ~/ 2}'),
               scopeId:'fiche:'+sessionId+':chapters:${i ~/ 2}',
-              objective:text(fiche['title'])+' — '+title,
+              objective:text(fiche['title'])+' — '+
+                records(fiche['sections']).skip((i ~/ 2) * 2).take(2)
+                  .map((c)=>text(c['title'])).join(' / '),
               content:batchContent,
               chapterText:chapterText,
               kind:'fiche',
