@@ -512,6 +512,51 @@ async function googleImagesProvider(query:string):Promise<ImagePreview[]>{
   }catch(_){return[];}
 }
 
+/**
+ * SerpApi has a paid quota. Google is NEVER called in resolveMedicalPreviews;
+ * explicit google_images user action is mandatory. The Flutter client keeps
+ * a persistent per-device metadata cache, and this warm-instance memo also
+ * deduplicates near-simultaneous requests without storing image bytes.
+ */
+export function googleMedicalCacheKey(input:any):string{
+  const request=legacyImageRequest(input);
+  return (request.image_type+'|'+imageSearchTerms(request)).toLowerCase()
+    .replace(/\s+/g,' ').trim().slice(0,240);
+}
+const paidGoogleMemo=new Map<string,{until:number;value:Promise<ImagePreview[]>}>();
+export async function resolveGoogleMedicalImages(input:any){
+  const request=legacyImageRequest(input);
+  const key=googleMedicalCacheKey(input);
+  if(!Deno.env.get('SERPAPI_KEY'))return {
+    images:[],google_cache_key:key,google_enabled:false,search_executed:false
+  };
+  const now=Date.now();
+  let cached=paidGoogleMemo.get(key);
+  if(!cached||cached.until<=now){
+    const promise=googleImagesProvider(imageSearchTerms(request))
+      .then(data=>data.filter(image=>imageIsTopical(image,request)).slice(0,8));
+    // Empty responses are cached for 2 hours; successful responses for 7 days.
+    cached={until:now+2*60*60*1000,value:promise};
+    paidGoogleMemo.set(key,cached);
+    void promise.then(images=>{
+      const current=paidGoogleMemo.get(key);
+      if(current?.value===promise)
+        current.until=Date.now()+(images.length?7*24*60*60*1000:2*60*60*1000);
+    }).catch(()=>{if(paidGoogleMemo.get(key)?.value===promise)paidGoogleMemo.delete(key);});
+    if(paidGoogleMemo.size>150){
+      const first=paidGoogleMemo.keys().next().value;
+      if(first)paidGoogleMemo.delete(first);
+    }
+  }
+  const images=await cached.value;
+  return {
+    images,
+    google_cache_key:key,
+    google_enabled:Boolean(Deno.env.get('SERPAPI_KEY')),
+    search_executed:true,
+  };
+}
+
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
@@ -529,12 +574,7 @@ export async function resolveMedicalPreviews(input:any){
   // if no sufficiently relevant image is returned by the first query.
   let candidates=[...curated,...await run(queries[0])];
   let images=candidates.filter(x=>imageIsTopical(x,request));
-  // Google Images extends the existing medical catalog when a provider key
-  // has been configured. Never downgrade existing licensed image matches.
-  if(images.length<2){
-    const google=await googleImagesProvider(queries[0]);
-    images.push(...google.filter(x=>imageIsTopical(x,request)));
-  }
+  // Free article/Openverse/Wikimedia search only; SerpApi is never automatic.
   if(images.length===0){
     const secondary=await Promise.all(queries.slice(1).map(run));
     candidates.push(...secondary.flat());
@@ -558,6 +598,7 @@ export async function resolveMedicalPreviews(input:any){
   return {
     images,article_previews:articleResult.articles,medical_searches:pages(queries[0]),image_request:request,
     google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
+    google_cache_key:googleMedicalCacheKey(input),
     image_sources_searched:queries,
     unavailable_reason:images.length===0&&articleResult.articles.length===0?'no_matching_accessible_images':null,
   };

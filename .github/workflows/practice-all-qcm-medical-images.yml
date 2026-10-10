@@ -10,6 +10,8 @@ on:
       - 'source/supabase/functions/generate-clinical-case-qcm/**'
       - 'source/supabase/functions/preview-clinical-case-qcm/**'
       - 'source/lib/widgets/practice_qcm_medical_illustration.dart'
+      - 'source/lib/services/practice_google_image_cache.dart'
+      - 'source/test/practice_google_image_cache_test.dart'
       - 'source/lib/screens/clinical_cases_section.dart'
       - 'source/lib/screens/practice_daily_screen.dart'
       - 'source/lib/screens/practice_progressive_cases_screen.dart'
@@ -54,11 +56,12 @@ jobs:
       - name: Dart format + targeted analysis
         working-directory: source
         run: |
-          dart format lib/widgets/practice_qcm_medical_illustration.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart test/practice_qcm_medical_illustration_test.dart
-          flutter analyze lib/widgets/practice_qcm_medical_illustration.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart --no-fatal-infos --no-fatal-warnings
+          dart format lib/services/practice_google_image_cache.dart test/practice_google_image_cache_test.dart lib/widgets/practice_qcm_medical_illustration.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart test/practice_qcm_medical_illustration_test.dart
+          flutter analyze lib/services/practice_google_image_cache.dart lib/widgets/practice_qcm_medical_illustration.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart --no-fatal-infos --no-fatal-warnings
       - name: QCM UI and existing flows
         working-directory: source
         run: |
+          flutter test test/practice_google_image_cache_test.dart
           flutter test test/practice_qcm_medical_illustration_test.dart
           flutter test test/practice_external_medical_media_policy_test.dart
           flutter test test/practice_progressive_cases_screen_test.dart

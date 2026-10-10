@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleFigureSnippets, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, googleMedicalCacheKey, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -172,4 +172,18 @@ Deno.test('Google search images preserve source and do not silently grant a copy
   if(!imageIsTopical(items[0],request))throw Error('appropriate medical Google thumbnail rejected');
   if(imageIsTopical({...items[0],title:'Book cover annual report',description:'Annual report'},request))
     throw Error('Google results must still reject unrelated reports');
+});
+
+Deno.test('SerpApi paid search key is canonical across equivalent medical prompts',()=>{
+ const first=googleMedicalCacheKey({query:'Rectal cancer T2 MRI',modality:'IRM T2',
+   image_type:'radiology_scan',anatomy:'rectum',purpose:'Illustrate the tumor'});
+ const second=googleMedicalCacheKey({query:'Rectal cancer T2 MRI',modality:'IRM T2',
+   image_type:'radiology_scan',anatomy:'rectum',purpose:'Describe the tumor'});
+ if(!first || first!==second)throw Error('Identical medical search must share cached Google results');
+});
+Deno.test('free medical image endpoint must not trigger SerpApi calls',()=>{
+ const source=resolveMedicalPreviews.toString();
+ // The only paid call belongs to the explicit resolveGoogleMedicalImages handler.
+ if(/googleImagesProvider\s*\(/.test(source))
+   throw Error('SerpApi invoked by automatic/free image endpoint');
 });
