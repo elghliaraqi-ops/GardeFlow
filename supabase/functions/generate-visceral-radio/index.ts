@@ -51,7 +51,7 @@ function extract(payload:any): string {
   for(const item of payload?.output??[])for(const c of item?.content??[])if(typeof c?.text==='string')return c.text;
   return '';
 }
-async function groq(contract: GenerationContract, prompt: string) {
+async function groq(contract: GenerationContract, prompt: string, recoverSchemaError = false) {
   const key = Deno.env.get('GROQ_API_KEY');
   if (!key) throw new Error('groq_key_missing');
   // Strict JSON Schema is available for these models; never silently fall
@@ -86,16 +86,34 @@ async function groq(contract: GenerationContract, prompt: string) {
       max_completion_tokens: 20000,
       stream: false,
     };
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: 'Bearer ' + key,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json().catch(() => null);
+    const callGroq = async (body: Record<string, unknown>) => {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: 'Bearer ' + key,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => null);
+      return { response, data };
+    };
+    let { response, data } = await callGroq(payload);
+    // Groq may return json_validate_failed (HTTP 400) for a large strict
+    // schema. Only course QCMs can recover using JSON Object Mode, while
+    // retaining the SAME contract prompt and the existing count/shape checks.
+    // This is not a second medical reviewer or a paid provider fallback.
+    if (!response.ok && recoverSchemaError && response.status === 400 &&
+        String(data?.error?.code || data?.error?.type || '').includes('json_validate_failed')) {
+      console.warn('visceral_course_qcm_schema_retry_json_object');
+      const retryBody: Record<string, unknown> = {
+        ...payload,
+        response_format: { type: 'json_object' },
+        reasoning_format: 'hidden',
+      };
+      ({ response, data } = await callGroq(retryBody));
+    }
     if (!response.ok) {
       const code = str(data?.error?.code || data?.error?.type || 'unknown_error', 100);
       throw new Error('groq_http_' + response.status + ':' + code);
@@ -200,11 +218,14 @@ Deno.serve(async(req)=>{
     if(action==='course_qcms'){
       const existing=Array.isArray(session.course_qcms)?session.course_qcms:[];
       if(existing.length>=20)return answer({session});
-      const count=Math.min(10,20-existing.length);
+      // Generate only FIVE per request, persist after each request, and let
+      // Flutter chain two calls when ten questions are requested. A transient
+      // Groq error cannot erase previously generated questions.
+      const count=Math.min(5,20-existing.length);
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
-        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite.\nFICHE:\n'+compact(session.fiche,34000)+
-        '\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>q.statement),4000);
-      const produced=await groq(generationContract('course_qcms',{count}),prompt);
+        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' NOUVEAUX QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite des questions précédentes.\nFICHE:\n'+compact(session.fiche,26000)+
+        '\nQUESTIONS DÉJÀ CRÉÉES (NE PAS REPRODUIRE):\n'+compact(existing.map((q:any)=>q.statement),3600);
+      const produced=await groq(generationContract('course_qcms',{count}),prompt,true);
       validQuestions(produced,count);
       patch.course_qcms=[...existing,...sanitized(produced.questions)];
     }else if(action==='case'){
