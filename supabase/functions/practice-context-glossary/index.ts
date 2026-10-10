@@ -20,7 +20,7 @@ function identifyCancerSite(objective: string, content: string): string {
   const sites: { site: string; re: RegExp }[] = [
     { site: 'cancer du rectum', re: /(?:cancer|carcinome|adénocarcinome)\s+(?:du\s+)?rect(?:um|al)|(?:tumeur|néoplasie)\s+rectale?/i },
     { site: 'cancer du pancréas', re: /(?:cancer|carcinome|adénocarcinome)\s+(?:du\s+)?pancr[eé]as|ad[eé]nocarcinome\s+pancr[eé]atique/i },
-    { site: "cancer du col de l'utérus", re: /(?:cancer|carcinome|tumeur)\s+(?:du\s+)?col\s+(?:de\s+l[’']?)?ut[eé]rus|cancer\s+cervical\s+ut[eé]rin/i },
+    { site: "cancer du col de l'utérus", re: /(?:cancer|carcinome|tumeur)\s+(?:du\s+)?col(?:\s+de\s+l[’']ut[eé]rus)?\b|cancer\s+cervical\s+ut[eé]rin/i },
     { site: 'cancer du sein', re: /(?:cancer|carcinome)\s+(?:du\s+)?sein|carcinome\s+mammaire/i },
     { site: 'cancer du poumon', re: /(?:cancer|carcinome)\s+(?:du\s+)?poumon|cancer\s+bronchique/i },
     { site: 'cancer de la prostate', re: /(?:cancer|carcinome)\s+(?:de\s+la\s+)?prostate/i },
@@ -30,6 +30,11 @@ function identifyCancerSite(objective: string, content: string): string {
   const primary = sites.filter(({re}) => re.test(leading));
   if (primary.length === 1) return primary[0].site;
   if (primary.length > 1) return ''; // mixed-topic teaching resource
+  // Keep future cancer sites distinct without maintaining a global list.
+  const heading = objective.split(/[—–:;,\\n]/)[0].trim();
+  if (/^(?:cancer|carcinome|ad[eé]nocarcinome)\\s+(?:du|de la|de l[’']|des)\\s+[a-zà-ÿ]/i.test(heading)) {
+    return heading.slice(0, 75);
+  }
   const secondary = sites.filter(({re}) => re.test(source));
   return secondary.length === 1 ? secondary[0].site : '';
 }
@@ -123,8 +128,8 @@ Deno.serve(async (req: Request) => {
       'OBJECTIF DU CORRECTIF : notions médicales ET acronymes ET mots-clés, pas seulement anatomie et classification.',
       'IDENTITÉ DE LA MALADIE : ' + (cancerSite || 'site tumoral non identifié avec certitude'),
       'Si TNM est présent dans un cours oncologique, il faut obligatoirement inclure',
-      'le terme exact TNM en premier, sauf si sa classification complète est déjà',
-      'détaillée dans le cours. Ne pas oublier TNM au profit des autres mots.',
+      'le terme exact TNM en premier, même s\'il est brièvement évoqué dans',
+      'le cours : fournir la classification propre au cancer étudié.',
       'L\'explication du TNM doit porter EXCLUSIVEMENT sur le site du cancer identifié',
       'dans l\'objectif de cette fiche. Par exemple rectum ≠ pancréas ≠ col de l\'utérus.',
       'Le titre TNM doit comporter explicitement ce site. Ne jamais réutiliser un TNM générique.',
