@@ -55,6 +55,9 @@ const clinicalHosts=new Set([
  'i0.wp.com','i1.wp.com','i2.wp.com','i3.wp.com',
  'images.pexels.com','images.unsplash.com',
  'pmc.ncbi.nlm.nih.gov',
+ 'encrypted-tbn0.gstatic.com','encrypted-tbn1.gstatic.com',
+ 'encrypted-tbn2.gstatic.com','encrypted-tbn3.gstatic.com',
+ 'encrypted-tbn4.gstatic.com',
 ]);
 const openversePreviewPath=/^\/v1\/images\/[a-f\d-]{36}\/thumb\/?$/i;
 export function allowedAsset(raw: string) {
@@ -64,6 +67,13 @@ export function allowedAsset(raw: string) {
     if(!clinicalHosts.has(uri.hostname.toLowerCase()))return false;
     if(uri.pathname.length>1100 || /%2e|%2f|%5c/i.test(raw))return false;
     if(uri.searchParams.has('download'))return false;
+    // Google thumbnails are served from a very narrow image-only endpoint.
+    // Never proxy arbitrary Google, search or user-controlled URL hosts.
+    if(/^encrypted-tbn[0-4]\.gstatic\.com$/.test(uri.hostname)){
+      return uri.pathname==='/images' &&
+        [...uri.searchParams.keys()].every(k=>k==='q') &&
+        /^tbn:[A-Za-z0-9_-]{8,300}$/.test(uri.searchParams.get('q')||'');
+    }
     if(uri.hostname==='api.openverse.org'){
       // Only the documented image-thumbnail endpoint, never arbitrary API paths.
       return openversePreviewPath.test(uri.pathname) &&
@@ -147,7 +157,8 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!/^https:\/\//i.test(image.source))return false;
   // Openverse only indexes openly licensed media, including attribution,
   // share-alike and non-commercial licenses. Keep creator/source attribution.
-  if(!/(Open access|CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
+  if(image.provider!=='Google Images' &&
+     !/(Open access|CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
      && !['by','by-sa','by-nc','by-nc-sa','by-nd','by-nc-nd','cc0','pdm']
        .includes(image.license.toLowerCase()))return false;
   const hay=ascii(image.title+' '+image.description);
@@ -185,6 +196,7 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
 }
 function pages(query:string){
   return [
+    {title:'Google Images',source:'https://www.google.com/search?'+new URLSearchParams({tbm:'isch',q:query})},
     {title:'Radiopaedia',source:'https://radiopaedia.org/search?'+new URLSearchParams({q:query})},
     {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query})},
     {title:'Eurorad',source:'https://www.eurorad.org/search?'+new URLSearchParams({keys:query})},
@@ -450,6 +462,50 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
   return {articles,figures};
 }
 
+/**
+ * Google Images is accessed via an authorized SERP API when configured, never
+ * by scraping Google HTML. SERPAPI_KEY remains a backend-only Supabase secret.
+ * Without a key, the Google Images search link still works in the UI.
+ *
+ * A Google result is a link to a third-party work, NOT permission to reuse it.
+ * The app does not persist the image, and displays source and rights notice.
+ */
+export function parseGoogleImageResults(data:any):ImagePreview[]{
+  const out:ImagePreview[]=[];
+  for(const value of (Array.isArray(data?.images_results)?data.images_results:[]).slice(0,12)){
+    const thumb=String(value?.thumbnail||'');
+    const original=String(value?.original||'');
+    const page=String(value?.link||'');
+    const title=clean(value?.title,180);
+    if(!allowedAsset(thumb)||!title)continue;
+    try{
+      const u=new URL(page);
+      if(u.protocol!=='https:'||u.username||u.password||u.port||!u.hostname.includes('.'))continue;
+      if(/^localhost$|\.local$|^127\.|^10\.|^192\.168\./.test(u.hostname))continue;
+    }catch(_){continue;}
+    out.push({
+      thumbnail:thumb,full:allowedAsset(original)?original:thumb,
+      source:page,title,description:clean(value?.title+' '+(value?.source||''),300),
+      license:'Droits à vérifier sur le site source',creator:'',provider:'Google Images',
+    });
+  }
+  return out;
+}
+async function googleImagesProvider(query:string):Promise<ImagePreview[]>{
+  const key=Deno.env.get('SERPAPI_KEY');
+  if(!key)return[];
+  try{
+    const url='https://serpapi.com/search.json?'+new URLSearchParams({
+      engine:'google_images',q:query,api_key:key,
+    });
+    const response=await fetch(url,{
+      headers:{Accept:'application/json'},signal:AbortSignal.timeout(9000)
+    });
+    if(!response.ok)return[];
+    return parseGoogleImageResults(await response.json());
+  }catch(_){return[];}
+}
+
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
@@ -467,6 +523,12 @@ export async function resolveMedicalPreviews(input:any){
   // if no sufficiently relevant image is returned by the first query.
   let candidates=[...curated,...await run(queries[0])];
   let images=candidates.filter(x=>imageIsTopical(x,request));
+  // Google Images extends the existing medical catalog when a provider key
+  // has been configured. Never downgrade existing licensed image matches.
+  if(images.length<2){
+    const google=await googleImagesProvider(queries[0]);
+    images.push(...google.filter(x=>imageIsTopical(x,request)));
+  }
   if(images.length===0){
     const secondary=await Promise.all(queries.slice(1).map(run));
     candidates.push(...secondary.flat());
@@ -489,6 +551,7 @@ export async function resolveMedicalPreviews(input:any){
   console.info('medical_image_result',JSON.stringify({type:request.image_type,queries:queries.length,candidates:candidates.length,accepted:images.length}));
   return {
     images,article_previews:articleResult.articles,medical_searches:pages(queries[0]),image_request:request,
+    google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
     image_sources_searched:queries,
     unavailable_reason:images.length===0&&articleResult.articles.length===0?'no_matching_accessible_images':null,
   };
