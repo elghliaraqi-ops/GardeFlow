@@ -14,6 +14,31 @@ class VisceralFicheView extends StatelessWidget {
     final value=text(raw);
     return value.length>max?value.substring(0,max):value;
   }
+  /// Existing fiches may mention TNM and important acronyms near the end of
+  /// chapters. Keep useful windows from the *whole* chapter at zero extra
+  /// Gemini requests. No content in the original fiche is rewritten.
+  static String teachingExcerpt(dynamic raw,{int limit=850}) {
+    final value=text(raw).trim();
+    if(value.length<=limit) return value;
+    final parts=<String>[value.substring(0, (limit * .43).round())];
+    final matches=RegExp(
+      r'\b(?:TNM|cTNM|pTNM|ypTNM|CRM|EMVI|TME|IRM|ADC|DWI|ASA|FIGO|'
+      r'Bosniak|Bismuth|mésorectum|fascia mésorectal|ganglions|'
+      r'artère|nerf|plexus|résécabilité|classification)\b',
+      caseSensitive:false,
+    ).allMatches(value).toList();
+    final seen=<String>{};
+    for(final match in matches){
+      final keyword=value.substring(match.start,match.end).toLowerCase();
+      if(!seen.add(keyword)) continue;
+      final from=(match.start-80).clamp(0,value.length).toInt();
+      final to=(match.end+140).clamp(0,value.length).toInt();
+      final excerpt=value.substring(from,to);
+      if(parts.join(' ').length+excerpt.length>limit) break;
+      parts.add(excerpt);
+    }
+    return parts.join(' ... ');
+  }
   static List<dynamic> items(dynamic raw)=>raw is List?raw:const [];
   static List<Map<String,dynamic>> records(dynamic raw)=>items(raw).whereType<Map>()
       .map((v)=>Map<String,dynamic>.from(v)).toList();
@@ -66,7 +91,7 @@ class VisceralFicheView extends StatelessWidget {
                 style:const TextStyle(color:mint,fontWeight:FontWeight.w900,
                   fontSize:10,letterSpacing:.8)),
               const SizedBox(height:4),
-              Text(title,style:const TextStyle(color:ink,fontWeight:FontWeight.w800,
+              PracticeGlossaryText(title,style:const TextStyle(color:ink,fontWeight:FontWeight.w800,
                 fontSize:15.5,height:1.24)),
             ])),
           ]),
@@ -115,12 +140,12 @@ class VisceralFicheView extends StatelessWidget {
     // 10,000 characters on the first sections of a long fiche.
     content: [
       text(fiche['title']),
-      excerpt(fiche['summary'], 750),
+      teachingExcerpt(fiche['summary'], limit: 650),
       ...items(fiche['study_core']).take(5).map((x)=>excerpt(x, 220)),
       for (final chapter in records(fiche['sections']))
         text(chapter['title']) + ' ' +
         items(chapter['key_points']).take(5).map((x)=>excerpt(x, 140)).join(' ') +
-        ' ' + excerpt(chapter['content'], 650),
+        ' ' + teachingExcerpt(chapter['content'], limit: 740),
     ].join('\n'),
     kind: 'fiche',
     child: _buildFicheContent(context),
