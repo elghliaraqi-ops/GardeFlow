@@ -356,7 +356,9 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
      !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|t[1-4]\b|mr\s?stage)/.test(label))return false;
   if(request.image_type==='radiology_scan'){
     if(/photograph|histolog|gross specimen|resection specimen|survival curve|kaplan|flowchart|flow chart|forest plot/.test(label))return false;
-    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|imaging|t3|t4|staging/.test(label);
+    // Only actual scan/image-caption terminology can qualify as radiological media.
+    // A staging histogram mentioning T3/T4 is not an MRI illustration.
+    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|ct scan|computed tomography|scan image/.test(label);
   }
   if(request.image_type==='anatomical_diagram')
     return /anatom|rect|mesorect|sphinct|levator|pelvic floor|anal canal|fascia|muscularis|diagram|schemat|sagittal/.test(label);
@@ -535,7 +537,9 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string):
           headers:{...REQUEST_HEADERS,Accept:'application/xml, text/xml;q=0.9'},
           signal:AbortSignal.timeout(5500)}),
         fetch('https://pmc.ncbi.nlm.nih.gov/articles/'+pmcid+'/',{
-          headers:{...REQUEST_HEADERS,Accept:'text/html'},
+          // PMC's HTML image src values can differ with a synthetic bot UA.
+          // Use plain HTML negotiation, never the JSON API user-agent.
+          headers:{Accept:'text/html'},
           signal:AbortSignal.timeout(5500)})
       ]);
       console.info('pmc_article_http',JSON.stringify({pmcid,xml:rr.status,html:pageRes.status}));
