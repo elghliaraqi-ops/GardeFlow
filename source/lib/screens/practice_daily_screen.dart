@@ -442,8 +442,9 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                       ),
                     ),
                     Expanded(
-                      child: Text(
+                      child: PracticeGlossaryText(
                         q.options[i],
+                        richEnabled: completed,
                         style: const TextStyle(color: _text),
                       ),
                     ),
@@ -605,7 +606,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       scopeId: 'daily:' + s.day.toIso8601String() + ':' + s.mode,
       objective: s.caseTitle.isNotEmpty ? s.caseTitle : 'Défi médical quotidien',
       content: [s.caseTitle, s.caseStem,
-        for (final q in s.questions) q.topic + ' ' + q.question].join('\n'),
+        for (final q in s.questions) q.topic + ' ' + q.question + ' ' + q.options.join(' ')].join('\n'),
       kind: 'defi',
       child: _box(
       Column(
