@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_backend_service.dart';
 import '../services/practice_google_image_cache.dart';
 import 'practice_daily_visual_theme.dart';
+import '../widgets/practice_context_glossary.dart';
 
 /// Renders historic and new Groq course prose without modifying stored JSON.
 class VisceralCourseText extends StatelessWidget {
@@ -51,7 +52,7 @@ class VisceralCourseText extends StatelessWidget {
                   color: PracticeDailyVisualTheme.mint,fontWeight:FontWeight.w900)),
               ),
               const SizedBox(width: 11),
-              Expanded(child: Text(points[i], style: TextStyle(
+              Expanded(child: PracticeGlossaryText(points[i], style: TextStyle(
                 color: PracticeDailyVisualTheme.text, fontSize: fontSize,
                 height: 1.5))),
             ]),
@@ -61,7 +62,7 @@ class VisceralCourseText extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
       for (final paragraph in value.trim().split(RegExp(r'\n\s*\n')))
         if (paragraph.trim().isNotEmpty)
-          Padding(padding: const EdgeInsets.only(bottom: 12),child: Text(
+          Padding(padding: const EdgeInsets.only(bottom: 12),child: PracticeGlossaryText(
             paragraph.trim(),style:TextStyle(
               color:PracticeDailyVisualTheme.text,fontSize:fontSize,height:1.58))),
     ]);
