@@ -243,10 +243,14 @@ Deno.test('specific pelvic DWI request gets staged organ-preserving article sear
   const q=articleSearchVariants(r);
   assert(q[0].includes('pelvic lymph node diffusion'),'first search must retain DWI lymph nodes');
   assert(q[1].includes('rectal cancer lymph node'),'second search must retain the target organ and nodes');
-  assert(!articleFigureRelevant('Axial T2 MRI shows extramural rectal tumour spread without any nodes',r),
+  assert(!articleFigureRelevant('Axial T2 MRI shows extramural rectal tumour spread',r),
     'T2 rectal tumour must not be substituted for pelvic nodal DWI');
   assert(articleFigureRelevant('Axial diffusion-weighted MRI demonstrates restricted diffusion in an internal iliac lymph node',r),
     'real node DWI figure is appropriate');
+  assert(!articleFigureRelevant('Axial T2 MRI shows enlarged internal iliac lymph nodes',r),
+    'a T2 node image must not pretend to demonstrate diffusion restriction');
+  assert(articleFigureRelevant('Axial T2 MRI shows enlarged internal iliac lymph nodes',r,true),
+    'a contextual second-stage node MRI can be shown if explicitly labeled');
   assert(imageIsTopical({
     ...good,title:'Pelvic lymph node DWI MRI with rectal cancer nodal staging',
     description:'MRI DWI internal iliac lymph node restricted diffusion',
@@ -271,7 +275,7 @@ Deno.test('nodal DWI search finds article figure on second free query and preser
     }
     if(url.includes('PMC9000001/fullTextXML')||url.includes('PMC9000002/fullTextXML')){
       const first=url.includes('PMC9000001');
-      const caption=first?'Axial T2 MRI of rectal tumour without nodal findings':
+      const caption=first?'Axial T2 MRI shows extramural rectal tumour invasion':
         'Axial DWI MRI shows restricted diffusion of an internal iliac lymph node';
       const filename=first?'tumour.jpg':'iliac-node-dwi.jpg';
       return Promise.resolve(new Response(
