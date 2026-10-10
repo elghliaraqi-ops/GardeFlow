@@ -115,7 +115,8 @@ export function legacyImageRequest(input:any):MedicalImageRequest {
     !/(tumor|tumeur|cancer|t2|t3|t4|diffus|dwi|adc)/.test(raw);
   const radiology=/(t[1234]\b|mri|irm|tdm|ct\b|scan|echograph|ultrason|dwi|diffus|adc)/.test(raw);
   const image_type:MedicalImageRequest['image_type']=anatomy?'anatomical_diagram':
-    radiology?'radiology_scan':'operative_diagram';
+    radiology?'radiology_scan':/(photo|skin|dermat|lesion|rash|plaie|wound|clinical)/.test(raw)
+      ?'clinical_photo':'operative_diagram';
   const target=rectal?'rectum':ascii(query).split(/\s+/).find(x=>x.length>5)||'abdomen';
   const findings=rectal?
     (anatomy?['rectum','mesorectum','sphincter']:
@@ -343,32 +344,75 @@ export function imageSearchVariants(request:MedicalImageRequest):string[]{
  * and imaging modality with less specific wording, finally closely related
  * contextual images. These are search terms, not hard-coded image URLs.
  */
+/**
+ * Reusable specialty-agnostic PubMed search vocabulary. It relies on the
+ * generated English image query when supplied (Practice QCM schemas require
+ * that), and falls back to the organ + requested medical modality.
+ */
+function medicalOrganTerm(value:string):string{
+  const name=ascii(value);
+  const pairs:[RegExp,string][]=[
+    [/rect|mesorect|sphinct|levator/,'rectal'],
+    [/ganglion|lymph|adenopath/,'lymph node'],
+    [/foie|hepat|liver/,'liver'],
+    [/pancrea/,'pancreas'],[/rein|renal|kidney/,'kidney'],
+    [/vesic|bladder/,'bladder'],[/uter|endometr/,'uterus'],
+    [/ovar/,'ovary'],[/prostat/,'prostate'],
+    [/poumon|pulmon|lung/,'lung'],[/thorax|chest/,'chest'],
+    [/coeur|cardi|heart/,'heart'],[/cerveau|brain|cerebr/,'brain'],
+    [/rachis|spine|vertebr/,'spine'],[/genou|knee/,'knee'],
+    [/colon|colic/,'colon'],[/oesoph|esoph/,'esophagus'],
+    [/estomac|gastr|stomach/,'stomach'],[/appendic/,'appendix'],
+    [/biliar|cholang|gallblad/,'biliary'],
+  ];
+  for(const [pattern,organ] of pairs)if(pattern.test(name))return organ;
+  return name.split(/\s+/).filter(x=>x.length>3).slice(0,2).join(' ');
+}
+function medicalModalityTerm(request:MedicalImageRequest):string{
+  if(request.image_type==='anatomical_diagram')return 'anatomy diagram';
+  if(request.image_type==='operative_diagram')return 'surgical technique illustration';
+  if(request.image_type==='clinical_photo')return 'clinical photograph';
+  const text=ascii(request.modality+' '+request.query);
+  if(/echograph|ultrasound|sonograph/.test(text))return 'ultrasound';
+  if(/radiograph|x.ray/.test(text))return 'radiograph';
+  if(/tomograph|\bct\b|\btdm\b|scanner/.test(text))return 'CT imaging';
+  if(/diffus|dwi|adc/.test(text))return 'diffusion MRI';
+  if(/mri|\birm\b|magnetic resonance/.test(text))return 'MRI';
+  return 'medical imaging';
+}
 export function articleSearchVariants(request:MedicalImageRequest):string[]{
   const topic=ascii(request.anatomy+' '+request.query+' '+request.purpose);
   const nodal=/ganglion|lymph|node|nodal|adenopath|iliac/.test(topic);
   const diffusion=/diffus|dwi|adc|restrict/.test(topic);
   const rectal=/rect|mesorect|sphinct|levator/.test(topic);
+  // Exact finding first, shorter medically equivalent search second.
   if(request.image_type==='radiology_scan'&&nodal){
+    const organ=rectal?'rectal cancer':medicalOrganTerm(request.anatomy)||'pelvic';
     return [...new Set([
       diffusion?'pelvic lymph node diffusion weighted MRI':'pelvic lymph node MRI',
-      'rectal cancer lymph node MRI',
+      organ+' lymph node MRI',
+      ...(request.fallback_queries||[]),
       'pelvic nodal staging magnetic resonance imaging',
-      ...(request.fallback_queries||[]).filter(q=>
-        /mri|irm|lymph|ganglion|node|nodal|iliac|pelvic/i.test(q)),
-    ])].slice(0,4);
+    ])].filter(q=>q.length>6).slice(0,4);
   }
-  if(rectal && request.image_type==='anatomical_diagram')
+  if(rectal&&request.image_type==='anatomical_diagram')
     return ['rectum mesorectum sphincter anatomy','pelvic floor anatomy MRI'];
-  if(rectal && request.image_type==='radiology_scan')
+  if(rectal&&request.image_type==='radiology_scan')
     return ['rectal cancer MRI','rectum MRI staging'];
-  if(request.image_type==='radiology_scan'){
-    const organ=ascii(request.anatomy).slice(0,90);
-    const base=imageSearchTerms(request);
-    return [...new Set([base,organ+' MRI imaging',...(request.fallback_queries||[])]
-      .filter(q=>q.length>6))].slice(0,3);
-  }
-  return imageSearchVariants(request).slice(0,3);
+  const organ=medicalOrganTerm(request.anatomy);
+  const modality=medicalModalityTerm(request);
+  const userQuery=clean(request.query,160);
+  const fallbacks=request.fallback_queries||[];
+  const candidateQueries=[
+    userQuery,
+    ...fallbacks,
+    [organ,modality].filter(Boolean).join(' '),
+    [organ,request.image_type==='operative_diagram'?'surgical anatomy':modality].filter(Boolean).join(' '),
+  ];
+  return [...new Set(candidateQueries
+    .map(q=>q.trim()).filter(q=>q.length>5))].slice(0,4);
 }
+
 /**
  * Article and figure discovery is intentionally restricted to publicly accessible
  * Europe PMC open-access articles. Other medical sites are linked as external
@@ -414,10 +458,13 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
     if(/photograph|histolog|gross specimen|resection specimen|survival curve|kaplan|flowchart|flow chart|forest plot/.test(label))return false;
     // Only actual scan/image-caption terminology can qualify as radiological media.
     // A staging histogram mentioning T3/T4 is not an MRI illustration.
-    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|ct scan|computed tomography|scan image/.test(label);
+    return /mri|magnetic resonance|mr image|mr imaging|t2|t1|dwi|adc|diffus|weighted|axial|sagittal|coronal|ct scan|computed tomography|scan image|ultrasound|sonograph|echograph|doppler|radiograph|x.ray|tomograph/.test(label);
   }
   if(request.image_type==='anatomical_diagram')
     return /anatom|rect|mesorect|sphinct|levator|pelvic floor|anal canal|fascia|muscularis|diagram|schemat|sagittal/.test(label);
+  if(request.image_type==='clinical_photo')
+    return /clinical photograph|clinical image|photograph|skin lesion|rash|wound|ulcer|dermat|gross appearance/.test(label)
+      && !/mri|ct scan|graph|statistics|chart|histolog/.test(label);
   return /operat|surger|laparoscop|surgical|anatom|resect|technique|procedure|clinical/.test(label);
 }
 function figurePriority(caption:string,request:MedicalImageRequest):number{
@@ -441,6 +488,9 @@ function articleTopical(text:string,request:MedicalImageRequest):boolean{
     return false;
   if(/ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
     && !/lymph|nodal|node|ganglion|adenopath|iliac/.test(hay))return false;
+  const organ=medicalOrganTerm(request.anatomy);
+  if(!/rect|mesorect|sphinct|levator|ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
+    && organ.length>=4 && organ!=='abdomen' && !hay.includes(organ))return false;
   if(request.image_type==='radiology_scan')
     return /mri|magnetic resonance|diffusion|dwi|ct scan|computed tomography|ultrasound|radiolog|imaging|t2/.test(hay);
   if(request.image_type==='anatomical_diagram')
@@ -766,64 +816,73 @@ export async function resolveGoogleMedicalImages(input:any){
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
-  const curated=request.image_type==='anatomical_diagram' &&
-    /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query))
-    ? await rectalAnatomyFiles() : [];
-  const run=async(q:string)=>{
-    const matches=await Promise.allSettled([commons(q),openverse(q)]);
-    return [
-      ...(matches[0].status==='fulfilled'?matches[0].value:[]),
-      ...(matches[1].status==='fulfilled'?matches[1].value:[]),
-    ];
-  };
-  // Start with medically specific results. Broader terms are used ONLY
-  // if no sufficiently relevant image is returned by the first query.
-  let candidates=[...curated,...await run(queries[0])];
-  let images=candidates.filter(x=>imageIsTopical(x,request));
-  // Free article/Openverse/Wikimedia search only; SerpApi is never automatic.
-  if(images.length===0){
-    const secondary=await Promise.all(queries.slice(1).map(run));
-    candidates.push(...secondary.flat());
-    images=candidates.filter(x=>imageIsTopical(x,request));
-  }
   const articleQueries=articleSearchVariants(request);
   const articleResults:Awaited<ReturnType<typeof articleSourcePreviews>>[]=[];
-  if(request.allow_page_preview!==false){
-    // On-demand and bounded to two searches. Second search is only needed
-    // when a first query gives no matching medical image.
+  // FIRST: open-access PubMed Central articles and their real, caption-
+  // matched CDN figures. Do not spend Google/SerpApi credits automatically.
+  if(request.allow_page_preview!==false&&articleQueries.length){
     const first=await articleSourcePreviews(request,articleQueries[0]);
     articleResults.push(first);
-    if(first.figures.length===0 && articleQueries.length>1){
+    if(first.figures.length===0&&articleQueries.length>1)
       articleResults.push(await articleSourcePreviews(request,articleQueries[1],true));
-    }
   }
   const articles:MedicalArticlePreview[]=[];
   const articleFigures:ImagePreview[]=[];
   const seenArticles=new Set<string>();
   for(const result of articleResults){
     articleFigures.push(...result.figures);
-    for(const item of result.articles){
-      if(!seenArticles.has(item.source)){
-        articles.push(item);seenArticles.add(item.source);
-      }
+    for(const article of result.articles){
+      if(seenArticles.has(article.source))continue;
+      seenArticles.add(article.source);
+      articles.push(article);
     }
   }
-  // Keep visible scientific source cards while prioritizing the papers
-  // that supplied actual medical images.
   articles.sort((a,b)=>Number(Boolean(b.thumbnail))-Number(Boolean(a.thumbnail)));
-  images.push(...articleFigures);
+  let images=[...articleFigures];
+  let catalogCandidates=0;
+  // SECOND: try other freely usable catalogues only when PMC didn't supply
+  // enough useful figures. The original medical image request is unchanged.
+  if(images.length<2&&request.allow_source_illustrations!==false){
+    const curated=request.image_type==='anatomical_diagram' &&
+      /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query))
+      ?await rectalAnatomyFiles():[];
+    const run=async(q:string)=>{
+      const matches=await Promise.allSettled([commons(q),openverse(q)]);
+      return [
+        ...(matches[0].status==='fulfilled'?matches[0].value:[]),
+        ...(matches[1].status==='fulfilled'?matches[1].value:[]),
+      ];
+    };
+    const primary=queries.length?await run(queries[0]):[];
+    let candidates=[...curated,...primary];
+    catalogCandidates=candidates.length;
+    let found=candidates.filter(x=>imageIsTopical(x,request));
+    if(images.length+found.length<2&&queries.length>1){
+      const secondary=await Promise.all(queries.slice(1).map(run));
+      candidates.push(...secondary.flat());
+      catalogCandidates=candidates.length;
+      found=candidates.filter(x=>imageIsTopical(x,request));
+    }
+    images.push(...found);
+  }
   const seen=new Set<string>();
   images=images.filter(x=>{
-    const key=x.full||x.thumbnail;
-    if(seen.has(key))return false;
-    seen.add(key);return true;
+    const url=x.full||x.thumbnail;
+    if(!url||seen.has(url))return false;
+    seen.add(url);
+    return true;
   }).slice(0,8);
-  console.info('medical_image_result',JSON.stringify({type:request.image_type,queries:queries.length,candidates:candidates.length,accepted:images.length}));
+  console.info('medical_image_result',JSON.stringify({
+    type:request.image_type,primary:'pubmed_central',
+    articleQueries:articleResults.length,queries:queries.length,
+    candidates:catalogCandidates,accepted:images.length
+  }));
   return {
-    images,article_previews:articles.slice(0,ARTICLE_LIMIT),medical_searches:pages(queries[0]),image_request:request,
-    google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
+    images,article_previews:articles.slice(0,ARTICLE_LIMIT),
+    medical_searches:pages(articleQueries[0]||queries[0]||request.query),
+    image_request:request,google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
     google_cache_key:googleMedicalCacheKey(input),
-    image_sources_searched:queries,
+    image_sources_searched:[...articleQueries.slice(0,articleResults.length),...queries],
     unavailable_reason:images.length===0&&articles.length===0?'no_matching_accessible_images':null,
   };
 }
