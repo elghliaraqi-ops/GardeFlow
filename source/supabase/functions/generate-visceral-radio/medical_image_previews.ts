@@ -766,64 +766,73 @@ export async function resolveGoogleMedicalImages(input:any){
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
-  const curated=request.image_type==='anatomical_diagram' &&
-    /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query))
-    ? await rectalAnatomyFiles() : [];
-  const run=async(q:string)=>{
-    const matches=await Promise.allSettled([commons(q),openverse(q)]);
-    return [
-      ...(matches[0].status==='fulfilled'?matches[0].value:[]),
-      ...(matches[1].status==='fulfilled'?matches[1].value:[]),
-    ];
-  };
-  // Start with medically specific results. Broader terms are used ONLY
-  // if no sufficiently relevant image is returned by the first query.
-  let candidates=[...curated,...await run(queries[0])];
-  let images=candidates.filter(x=>imageIsTopical(x,request));
-  // Free article/Openverse/Wikimedia search only; SerpApi is never automatic.
-  if(images.length===0){
-    const secondary=await Promise.all(queries.slice(1).map(run));
-    candidates.push(...secondary.flat());
-    images=candidates.filter(x=>imageIsTopical(x,request));
-  }
   const articleQueries=articleSearchVariants(request);
   const articleResults:Awaited<ReturnType<typeof articleSourcePreviews>>[]=[];
-  if(request.allow_page_preview!==false){
-    // On-demand and bounded to two searches. Second search is only needed
-    // when a first query gives no matching medical image.
+  // FIRST: open-access PubMed Central articles and their real, caption-
+  // matched CDN figures. Do not spend Google/SerpApi credits automatically.
+  if(request.allow_page_preview!==false&&articleQueries.length){
     const first=await articleSourcePreviews(request,articleQueries[0]);
     articleResults.push(first);
-    if(first.figures.length===0 && articleQueries.length>1){
+    if(first.figures.length===0&&articleQueries.length>1)
       articleResults.push(await articleSourcePreviews(request,articleQueries[1],true));
-    }
   }
   const articles:MedicalArticlePreview[]=[];
   const articleFigures:ImagePreview[]=[];
   const seenArticles=new Set<string>();
   for(const result of articleResults){
     articleFigures.push(...result.figures);
-    for(const item of result.articles){
-      if(!seenArticles.has(item.source)){
-        articles.push(item);seenArticles.add(item.source);
-      }
+    for(const article of result.articles){
+      if(seenArticles.has(article.source))continue;
+      seenArticles.add(article.source);
+      articles.push(article);
     }
   }
-  // Keep visible scientific source cards while prioritizing the papers
-  // that supplied actual medical images.
   articles.sort((a,b)=>Number(Boolean(b.thumbnail))-Number(Boolean(a.thumbnail)));
-  images.push(...articleFigures);
+  let images=[...articleFigures];
+  let catalogCandidates=0;
+  // SECOND: try other freely usable catalogues only when PMC didn't supply
+  // enough useful figures. The original medical image request is unchanged.
+  if(images.length<2&&request.allow_source_illustrations!==false){
+    const curated=request.image_type==='anatomical_diagram' &&
+      /rect|mesorect|sphinct/.test(ascii(request.anatomy+' '+request.query))
+      ?await rectalAnatomyFiles():[];
+    const run=async(q:string)=>{
+      const matches=await Promise.allSettled([commons(q),openverse(q)]);
+      return [
+        ...(matches[0].status==='fulfilled'?matches[0].value:[]),
+        ...(matches[1].status==='fulfilled'?matches[1].value:[]),
+      ];
+    };
+    const primary=queries.length?await run(queries[0]):[];
+    let candidates=[...curated,...primary];
+    catalogCandidates=candidates.length;
+    let found=candidates.filter(x=>imageIsTopical(x,request));
+    if(images.length+found.length<2&&queries.length>1){
+      const secondary=await Promise.all(queries.slice(1).map(run));
+      candidates.push(...secondary.flat());
+      catalogCandidates=candidates.length;
+      found=candidates.filter(x=>imageIsTopical(x,request));
+    }
+    images.push(...found);
+  }
   const seen=new Set<string>();
   images=images.filter(x=>{
-    const key=x.full||x.thumbnail;
-    if(seen.has(key))return false;
-    seen.add(key);return true;
+    const url=x.full||x.thumbnail;
+    if(!url||seen.has(url))return false;
+    seen.add(url);
+    return true;
   }).slice(0,8);
-  console.info('medical_image_result',JSON.stringify({type:request.image_type,queries:queries.length,candidates:candidates.length,accepted:images.length}));
+  console.info('medical_image_result',JSON.stringify({
+    type:request.image_type,primary:'pubmed_central',
+    articleQueries:articleResults.length,queries:queries.length,
+    candidates:catalogCandidates,accepted:images.length
+  }));
   return {
-    images,article_previews:articles.slice(0,ARTICLE_LIMIT),medical_searches:pages(queries[0]),image_request:request,
-    google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
+    images,article_previews:articles.slice(0,ARTICLE_LIMIT),
+    medical_searches:pages(articleQueries[0]||queries[0]||request.query),
+    image_request:request,google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
     google_cache_key:googleMedicalCacheKey(input),
-    image_sources_searched:queries,
+    image_sources_searched:[...articleQueries.slice(0,articleResults.length),...queries],
     unavailable_reason:images.length===0&&articles.length===0?'no_matching_accessible_images':null,
   };
 }
