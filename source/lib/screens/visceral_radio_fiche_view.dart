@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'practice_daily_visual_theme.dart';
+import '../widgets/practice_context_glossary.dart';
 import 'visceral_radio_course_widgets.dart';
 
 /// Read-only universal renderer for historic and future Viscéral × Radio fiches.
@@ -90,7 +91,7 @@ class VisceralFicheView extends StatelessWidget {
                         const Padding(padding:EdgeInsets.only(top:6),
                           child:Icon(Icons.circle,color:mint,size:6)),
                         const SizedBox(width:9),
-                        Expanded(child:Text(text(point),style:const TextStyle(
+                        Expanded(child:PracticeGlossaryText(text(point),style:const TextStyle(
                           color:ink,fontSize:12.5,height:1.45))),
                       ]))),
                   ]),
@@ -102,7 +103,21 @@ class VisceralFicheView extends StatelessWidget {
       )),
     );
   }
-  @override Widget build(BuildContext context){
+  @override
+  Widget build(BuildContext context) => PracticeGlossaryScope(
+    scopeId: 'fiche:' + sessionId,
+    objective: text(fiche['title']) + ' — ' + text(fiche['summary']),
+    content: [
+      text(fiche['title']),
+      text(fiche['summary']),
+      for (final chapter in records(fiche['sections']))
+        text(chapter['title']) + ' ' + text(chapter['content']),
+    ].join('\n'),
+    kind: 'fiche',
+    child: _buildFicheContent(context),
+  );
+
+  Widget _buildFicheContent(BuildContext context){
     final chapters=records(fiche['sections']);
     final refs=items(fiche['references']);
     final highlights=items(fiche['study_core']);
@@ -127,7 +142,7 @@ class VisceralFicheView extends StatelessWidget {
           Text(text(fiche['title']),style:const TextStyle(color:ink,
             fontSize:23,fontWeight:FontWeight.w900,height:1.22)),
           const SizedBox(height:12),
-          Text(text(fiche['summary']),style:const TextStyle(
+          PracticeGlossaryText(text(fiche['summary']),style:const TextStyle(
             color:Color(0xFFE2EEF8),fontSize:14,height:1.54)),
           const SizedBox(height:12),
           Text(chapters.length.toString()+' chapitres · Anatomie · Imagerie · Chirurgie',
@@ -152,7 +167,7 @@ class VisceralFicheView extends StatelessWidget {
             child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
               const Icon(Icons.check_circle_outline,color:mint,size:17),
               const SizedBox(width:10),
-              Expanded(child:Text(text(v),style:const TextStyle(
+              Expanded(child:PracticeGlossaryText(text(v),style:const TextStyle(
                 color:ink,fontSize:13,height:1.45))),
             ]),
           )),
