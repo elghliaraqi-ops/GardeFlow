@@ -347,7 +347,6 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
                   Expanded(child:Stack(fit:StackFit.expand,children:[
                     ClipRRect(borderRadius:BorderRadius.circular(12),
                       child:_imagePreview((item['thumbnail']??'').toString())),
-                    ),
                     Positioned(top:6,right:6,child:Container(
                       padding:const EdgeInsets.all(5),
                       decoration:BoxDecoration(color:Colors.black87,borderRadius:BorderRadius.circular(8)),
