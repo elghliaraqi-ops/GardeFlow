@@ -364,7 +364,8 @@ export function articleSearchVariants(request:MedicalImageRequest):string[]{
   if(request.image_type==='radiology_scan'){
     const organ=ascii(request.anatomy).slice(0,90);
     const base=imageSearchTerms(request);
-    return [...new Set([base,organ+' MRI imaging',...request.fallback_queries||[]].filter(q=>q.length>6))].slice(0,3);
+    return [...new Set([base,organ+' MRI imaging',...(request.fallback_queries||[])]
+      .filter(q=>q.length>6))].slice(0,3);
   }
   return imageSearchVariants(request).slice(0,3);
 }
@@ -402,7 +403,7 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
   const nodal=/ganglion|lymph|nodal|adenopath|iliac|node/.test(subject);
   if(nodal&&!/(lymph|nodal|node|ganglion|adenopath|iliac)/.test(label))return false;
   if(/rect|mesorect|sphinct|levator/.test(subject) &&
-     !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|t[1-4]\b|mr\s?stage)/.test(label))return false;
+     !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|lymph|node|nodal|iliac|t[1-4]\b|mr\s?stage)/.test(label))return false;
   if(request.image_type==='radiology_scan'){
     if(/photograph|histolog|gross specimen|resection specimen|survival curve|kaplan|flowchart|flow chart|forest plot/.test(label))return false;
     // Only actual scan/image-caption terminology can qualify as radiological media.
@@ -428,7 +429,9 @@ function articleTopical(text:string,request:MedicalImageRequest):boolean{
   const hay=ascii(text);
   if(banned.test(hay))return false;
   const subject=ascii(request.anatomy+' '+request.query+' '+request.purpose);
-  if(/rect|mesorect|sphinct|levator/.test(subject) && !/rect|mesorect|sphinct|pelvic floor/.test(hay))
+  if(/rect|mesorect|sphinct|levator/.test(subject) && !/rect|mesorect|sphinct|pelvic floor/.test(hay)
+    && !(/ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
+      && /pelvic|iliac|lymph|nodal|adenopath|node/.test(hay)))
     return false;
   if(/ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
     && !/lymph|nodal|node|ganglion|adenopath|iliac/.test(hay))return false;
