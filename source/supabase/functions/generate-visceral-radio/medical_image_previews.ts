@@ -343,32 +343,75 @@ export function imageSearchVariants(request:MedicalImageRequest):string[]{
  * and imaging modality with less specific wording, finally closely related
  * contextual images. These are search terms, not hard-coded image URLs.
  */
+/**
+ * Reusable specialty-agnostic PubMed search vocabulary. It relies on the
+ * generated English image query when supplied (Practice QCM schemas require
+ * that), and falls back to the organ + requested medical modality.
+ */
+function medicalOrganTerm(value:string):string{
+  const name=ascii(value);
+  const pairs:[RegExp,string][]=[
+    [/rect|mesorect|sphinct|levator/,'rectal'],
+    [/ganglion|lymph|adenopath/,'lymph node'],
+    [/foie|hepat|liver/,'liver'],
+    [/pancrea/,'pancreas'],[/rein|renal|kidney/,'kidney'],
+    [/vesic|bladder/,'bladder'],[/uter|endometr/,'uterus'],
+    [/ovar/,'ovary'],[/prostat/,'prostate'],
+    [/poumon|pulmon|lung/,'lung'],[/thorax|chest/,'chest'],
+    [/coeur|cardi|heart/,'heart'],[/cerveau|brain|cerebr/,'brain'],
+    [/rachis|spine|vertebr/,'spine'],[/genou|knee/,'knee'],
+    [/colon|colic/,'colon'],[/oesoph|esoph/,'esophagus'],
+    [/estomac|gastr|stomach/,'stomach'],[/appendic/,'appendix'],
+    [/biliar|cholang|gallblad/,'biliary'],
+  ];
+  for(const [pattern,organ] of pairs)if(pattern.test(name))return organ;
+  return name.split(/\s+/).filter(x=>x.length>3).slice(0,2).join(' ');
+}
+function medicalModalityTerm(request:MedicalImageRequest):string{
+  if(request.image_type==='anatomical_diagram')return 'anatomy diagram';
+  if(request.image_type==='operative_diagram')return 'surgical technique illustration';
+  if(request.image_type==='clinical_photo')return 'clinical photograph';
+  const text=ascii(request.modality+' '+request.query);
+  if(/echograph|ultrasound|sonograph/.test(text))return 'ultrasound';
+  if(/radiograph|x.ray/.test(text))return 'radiograph';
+  if(/tomograph|\bct\b|\btdm\b|scanner/.test(text))return 'CT imaging';
+  if(/diffus|dwi|adc/.test(text))return 'diffusion MRI';
+  if(/mri|\birm\b|magnetic resonance/.test(text))return 'MRI';
+  return 'medical imaging';
+}
 export function articleSearchVariants(request:MedicalImageRequest):string[]{
   const topic=ascii(request.anatomy+' '+request.query+' '+request.purpose);
   const nodal=/ganglion|lymph|node|nodal|adenopath|iliac/.test(topic);
   const diffusion=/diffus|dwi|adc|restrict/.test(topic);
   const rectal=/rect|mesorect|sphinct|levator/.test(topic);
+  // Exact finding first, shorter medically equivalent search second.
   if(request.image_type==='radiology_scan'&&nodal){
+    const organ=rectal?'rectal cancer':medicalOrganTerm(request.anatomy)||'pelvic';
     return [...new Set([
       diffusion?'pelvic lymph node diffusion weighted MRI':'pelvic lymph node MRI',
-      'rectal cancer lymph node MRI',
+      organ+' lymph node MRI',
+      ...(request.fallback_queries||[]),
       'pelvic nodal staging magnetic resonance imaging',
-      ...(request.fallback_queries||[]).filter(q=>
-        /mri|irm|lymph|ganglion|node|nodal|iliac|pelvic/i.test(q)),
-    ])].slice(0,4);
+    ])].filter(q=>q.length>6).slice(0,4);
   }
-  if(rectal && request.image_type==='anatomical_diagram')
+  if(rectal&&request.image_type==='anatomical_diagram')
     return ['rectum mesorectum sphincter anatomy','pelvic floor anatomy MRI'];
-  if(rectal && request.image_type==='radiology_scan')
+  if(rectal&&request.image_type==='radiology_scan')
     return ['rectal cancer MRI','rectum MRI staging'];
-  if(request.image_type==='radiology_scan'){
-    const organ=ascii(request.anatomy).slice(0,90);
-    const base=imageSearchTerms(request);
-    return [...new Set([base,organ+' MRI imaging',...(request.fallback_queries||[])]
-      .filter(q=>q.length>6))].slice(0,3);
-  }
-  return imageSearchVariants(request).slice(0,3);
+  const organ=medicalOrganTerm(request.anatomy);
+  const modality=medicalModalityTerm(request);
+  const userQuery=clean(request.query,160);
+  const fallbacks=request.fallback_queries||[];
+  const candidateQueries=[
+    userQuery,
+    ...fallbacks,
+    [organ,modality].filter(Boolean).join(' '),
+    [organ,request.image_type==='operative_diagram'?'surgical anatomy':modality].filter(Boolean).join(' '),
+  ];
+  return [...new Set(candidateQueries
+    .map(q=>q.trim()).filter(q=>q.length>5))].slice(0,4);
 }
+
 /**
  * Article and figure discovery is intentionally restricted to publicly accessible
  * Europe PMC open-access articles. Other medical sites are linked as external
@@ -441,6 +484,9 @@ function articleTopical(text:string,request:MedicalImageRequest):boolean{
     return false;
   if(/ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
     && !/lymph|nodal|node|ganglion|adenopath|iliac/.test(hay))return false;
+  const organ=medicalOrganTerm(request.anatomy);
+  if(!/rect|mesorect|sphinct|levator|ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
+    && organ.length>=4 && organ!=='abdomen' && !hay.includes(organ))return false;
   if(request.image_type==='radiology_scan')
     return /mri|magnetic resonance|diffusion|dwi|ct scan|computed tomography|ultrasound|radiolog|imaging|t2/.test(hay);
   if(request.image_type==='anatomical_diagram')
