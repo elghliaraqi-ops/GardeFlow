@@ -5,6 +5,7 @@
  */
 import {resolveMedicalPreviews,proxyMedicalImage,pmcFigureAssets,pmcAssetForFigure,articleFigureSnippets,articleFigureRelevant,legacyImageRequest,probeMedicalFigure} from '../supabase/functions/generate-visceral-radio/medical_image_previews.ts';
 
+// End-to-end live check with resolver HTTP-stage diagnostics enabled.
 const pmcid='PMC7471246';
 const [xmlResp,htmlResp]=await Promise.all([
   fetch('https://www.ebi.ac.uk/europepmc/webservices/rest/'+pmcid+'/fullTextXML'),
