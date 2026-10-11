@@ -47,6 +47,9 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   final Map<String,Map<String,dynamic>> _qcmWorkerStates = {};
   Timer? _qcmStatusTimer;
   bool _refreshingFeed = false;
+  String? _checkingCaseQcmId;
+  String? _checkedCaseQcmId;
+  String? _caseQcmCheckFeedback;
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
@@ -143,6 +146,79 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
     } finally {
       _refreshingFeed=false;
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Manual status verification does not launch an AI generation.
+  /// It reloads the published QCM feed and the existing background queue.
+  /// The reader always gets a visible result, even when nothing has changed.
+  Future<void> _verifyCaseQcms(String postId) async {
+    if (_checkingCaseQcmId != null) return;
+    if (_refreshingFeed) {
+      if (!mounted) return;
+      setState(() {
+        _checkedCaseQcmId = postId;
+        _caseQcmCheckFeedback =
+          'Une actualisation est déjà en cours. Réessaie dans un instant.';
+      });
+      return;
+    }
+    setState(() {
+      _checkingCaseQcmId = postId;
+      _checkedCaseQcmId = postId;
+      _caseQcmCheckFeedback = 'Vérification du serveur en cours…';
+    });
+    try {
+      await _loadAll(showLoader: false);
+      if (!mounted) return;
+      final posts = _items.where((post) => post.id == postId);
+      final post = posts.isEmpty ? null : posts.first;
+      final state = _qcmWorkerStates[postId];
+      final status = '${state?['status'] ?? ''}';
+      final retryAt =
+          DateTime.tryParse('${state?['retry_after'] ?? ''}')?.toLocal();
+      final now = DateTime.now();
+      final timeLabel = DateFormat('HH:mm').format(now);
+      String feedback;
+      if (_error != null) {
+        feedback = 'Vérification impossible : connexion ou chargement '
+            'indisponible. Réessaie dans un instant.';
+      } else if (post == null) {
+        feedback = 'Ce cas n’est plus accessible dans la liste.';
+      } else if (post.qcms.isNotEmpty) {
+        feedback = 'Vérifié à $timeLabel : ${post.qcms.length} QCM '
+            'disponibles. Tu peux commencer le cas.';
+      } else if (state == null) {
+        feedback = 'Vérifié à $timeLabel : le statut du serveur n’a '
+            'pas pu être récupéré. Réessaie plus tard.';
+      } else if (status == 'failed' && retryAt != null &&
+          retryAt.isAfter(now)) {
+        feedback = 'Vérifié à $timeLabel : aucun nouveau QCM. '
+            'Prochaine tentative serveur prévue vers '
+            '${DateFormat('HH:mm').format(retryAt)}. '
+            'Cette vérification ne consomme aucun appel Groq.';
+      } else if (status == 'failed') {
+        feedback = 'Vérifié à $timeLabel : aucun nouveau QCM. '
+            'Le dernier essai a échoué ; le serveur gère les reprises '
+            'selon son calendrier et les quotas Groq.';
+      } else if (status == 'running') {
+        feedback = 'Vérifié à $timeLabel : le serveur est encore '
+            'en train de générer les QCM.';
+      } else {
+        feedback = 'Vérifié à $timeLabel : aucun QCM disponible '
+            'pour le moment. Le cas reste dans la file de traitement.';
+      }
+      setState(() {
+        _checkedCaseQcmId = postId;
+        _caseQcmCheckFeedback = feedback;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _caseQcmCheckFeedback =
+            'Vérification impossible. Vérifie la connexion puis réessaie.');
+      }
+    } finally {
+      if (mounted) setState(() => _checkingCaseQcmId = null);
     }
   }
 
@@ -285,7 +361,11 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   }
 
   void _openCase(String id) {
-    setState(() => _selectedCaseId = id);
+    setState(() {
+      _selectedCaseId = id;
+      _checkedCaseQcmId = null;
+      _caseQcmCheckFeedback = null;
+    });
     unawaited(_loadAll(showLoader:false));
   }
 
@@ -625,7 +705,10 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
           post: post,
           number: number,
           generationStatus: _qcmWorkerStates[post.id],
-          onRefresh: () => _loadAll(showLoader:false),
+          onRefresh: () => _verifyCaseQcms(post.id),
+          isChecking: _checkingCaseQcmId == post.id,
+          verificationMessage: _checkedCaseQcmId == post.id
+              ? _caseQcmCheckFeedback : null,
         ),
       ],
     );
@@ -1211,12 +1294,16 @@ class _ClinicalCaseCard extends StatefulWidget {
   final int number;
   final Map<String,dynamic>? generationStatus;
   final VoidCallback onRefresh;
+  final bool isChecking;
+  final String? verificationMessage;
 
   const _ClinicalCaseCard({
     required this.post,
     required this.number,
     required this.generationStatus,
     required this.onRefresh,
+    required this.isChecking,
+    required this.verificationMessage,
   });
 
   @override
@@ -1732,6 +1819,8 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           _QcmPreparing(
             state:widget.generationStatus,
             onRefresh:widget.onRefresh,
+            isChecking:widget.isChecking,
+            verificationMessage:widget.verificationMessage,
           )
         else ...[
           _QcmPanel(
@@ -2021,9 +2110,16 @@ class _CaseSection extends StatelessWidget {
 }
 
 class _QcmPreparing extends StatelessWidget {
-  const _QcmPreparing({required this.state,required this.onRefresh});
+  const _QcmPreparing({
+    required this.state,
+    required this.onRefresh,
+    required this.isChecking,
+    required this.verificationMessage,
+  });
   final Map<String,dynamic>? state;
   final VoidCallback onRefresh;
+  final bool isChecking;
+  final String? verificationMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -2077,11 +2173,23 @@ class _QcmPreparing extends StatelessWidget {
         ],
         const SizedBox(height:10),
         OutlinedButton.icon(
-          onPressed:onRefresh,
-          icon:const Icon(Icons.refresh_rounded,size:18),
-          label:Text(failed ? 'Vérifier la nouvelle tentative'
+          onPressed:isChecking ? null : onRefresh,
+          icon:isChecking
+            ? const SizedBox(width:18,height:18,
+                child:CircularProgressIndicator(
+                  strokeWidth:2,color:_PracticeGame.gold))
+            : const Icon(Icons.refresh_rounded,size:18),
+          label:Text(isChecking
+            ? 'Vérification en cours…'
+            : failed ? 'Vérifier la nouvelle tentative'
             : waiting ? 'Actualiser le suivi' : 'Actualiser les QCM'),
         ),
+        if(verificationMessage!=null)...[
+          const SizedBox(height:10),
+          Text(verificationMessage!,
+            style:const TextStyle(color:_PracticeGame.secondary,
+              fontSize:12,height:1.4)),
+        ],
       ]),
     );
   }
