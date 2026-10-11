@@ -1592,6 +1592,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
     ].join(' — ');
 
     return PracticeGlossaryScope(
+      enabled: false, // Gemini notions reserved exclusively for Viscéral × Radio.
       scopeId: 'cas:' + post.id,
       objective: educationalTopic,
       // Real patient narratives are NOT forwarded to Gemini's free API.
