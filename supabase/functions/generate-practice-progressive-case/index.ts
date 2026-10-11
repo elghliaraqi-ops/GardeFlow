@@ -371,7 +371,7 @@ async function newGroqBatch(
     code='groq_invalid_json';
    }catch(err){
     const e=err instanceof Error?err:Error('groq_network_error');
-    if(e.message==='groq_auth_failed')throw e;
+    if(e.message==='groq_auth_failed'||e.message==='groq_rate_limited')throw e;
     code=e.name==='AbortError'?'groq_timeout':e.message;
     console.warn('progressive_groq_exception',{code,model});
     break;
