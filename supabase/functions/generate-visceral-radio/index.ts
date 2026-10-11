@@ -84,8 +84,8 @@ async function groq(contract: GenerationContract, prompt: string, recoverSchemaE
       },
       // Smaller bounded batches reduce output tokens and quota pressure.
       reasoning_effort: contract.mode === 'case_qcms' ? 'low' : 'medium',
-      max_completion_tokens: contract.mode === 'case_qcms' ? 7500
-        : contract.mode === 'course_qcms' ? 7500
+      max_completion_tokens: contract.mode === 'case_qcms' ? 4800
+        : contract.mode === 'course_qcms' ? 4800
         : contract.mode === 'case' ? 11000 : 20000,
       stream: false,
     };
