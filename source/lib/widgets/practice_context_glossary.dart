@@ -174,7 +174,11 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
       case 'retry_tomorrow':
         return 'Gemini a échoué sur ce contenu. Nouvelle tentative possible demain (UTC).';
       case 'gemini_bad_request':
-        return 'Requête Gemini refusée (HTTP 400). La configuration du modèle est en cours de correction.';
+        return 'Gemini refuse encore les paramètres de cette requête (HTTP 400).';
+      case 'gemini_location_or_billing':
+        return 'Gemini est indisponible depuis la région du serveur ou nécessite une configuration du projet Google. Aucun abonnement payant lancé.';
+      case 'gemini_credential_rejected':
+        return 'La clé Gemini configurée est refusée par Google. Vérifier ses autorisations dans AI Studio.';
       case 'gemini_model_not_available':
         return 'Modèle Gemini temporairement indisponible pour ce projet.';
       case 'gemini_quota_exceeded':
