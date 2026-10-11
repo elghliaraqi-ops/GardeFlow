@@ -210,6 +210,8 @@ const batchSchema={type:'object',additionalProperties:false,required:['qcms'],
 // Call the exact Groq Responses API pathway used by the existing fictitious case generator.
 // Unlike the previous combined request, this call contains NO QCMs.
 function extractCaseOutput(payload:Record<string,unknown>):string {
+ const choices=payload.choices as {message?:{content?:string}}[]|undefined;
+ if(typeof choices?.[0]?.message?.content==='string')return choices[0].message.content.trim();
  if(typeof payload.output_text==='string')return payload.output_text.trim();
  const parts:string[]=[];
  for(const raw of (Array.isArray(payload.output)?payload.output:[])){
@@ -241,21 +243,39 @@ async function generateCaseDossier(specialty:string):Promise<Record<string,unkno
   'Aucune fausse bibliographie, pas de conseils pour un vrai patient. '+clinicalCaseJsonContract;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);
  try{
-  const response=await fetch('https://api.groq.com/openai/v1/responses',{
+  let response=await fetch('https://api.groq.com/openai/v1/responses',{
    method:'POST',signal:ctrl.signal,
    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
    body:JSON.stringify({model,instructions:'Réponds seulement selon le schéma JSON fourni.',
     input:prompt,reasoning:{effort:'low'},text:{format:{
      type:'json_schema',name:'random_clinical_case',schema:clinicalCaseSchema
-    }},store:false,max_output_tokens:5500})
+    }},store:false,max_output_tokens:4800})
   });
+  let payload=await response.json().catch(()=>null) as Record<string,unknown>|null;
+  // One structured-JSON failure may be retried as JSON Object using the same
+  // schema-derived prompt; never retry 429 or run a competing Gemini call.
+  const problem=(payload?.error as Record<string,unknown>|undefined)?.code;
+  if(response.status===400&&problem==='json_validate_failed'){
+   console.warn('progressive_case_dossier_json_recovery');
+   response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+    method:'POST',
+    signal:AbortSignal.timeout(35000),
+    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model,messages:[{role:'user',content:prompt+
+        '\\nRenvoie JSON racine case avec TOUS les champs exigés.'}],
+      response_format:{type:'json_object'},reasoning_effort:'low',
+      max_completion_tokens:4800,stream:false,
+    }),
+   });
+   payload=await response.json().catch(()=>null) as Record<string,unknown>|null;
+  }
   if(!response.ok){
    console.warn('progressive_case_dossier_http',{status:response.status,model});
    if(response.status===429)throw Error('groq_rate_limited');
    if(response.status===401||response.status===403)throw Error('groq_auth_failed');
    throw Error(response.status===400?'groq_request_rejected':'groq_provider_unavailable');
   }
-  const payload=await response.json().catch(()=>null) as Record<string,unknown>|null;
   let decoded:Record<string,unknown>;
   try{decoded=JSON.parse(extractCaseOutput(payload??{})) as Record<string,unknown>;}
   catch{throw Error('invalid_case_json');}
