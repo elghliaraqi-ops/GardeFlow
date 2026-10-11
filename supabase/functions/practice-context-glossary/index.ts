@@ -97,7 +97,7 @@ Deno.serve(async (req: Request) => {
     // another UTC day. The INSERT trigger still enforces 15 attempts/day.
     const previousDay = Date.parse(String(cached.updated_at || '')) <
       Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z');
-    if (!previousDay) return empty(cached.status);
+    if (!previousDay) return empty(cached.status === 'error' ? 'retry_tomorrow' : cached.status);
     const { error: clearError } = await db
       .from('practice_context_glossary_cache')
       .delete().eq('content_hash', hash).neq('status', 'ready');
