@@ -603,6 +603,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       completed: s.completed,
     );
     return PracticeGlossaryScope(
+      enabled: false, // Gemini notions reserved exclusively for Viscéral × Radio.
       scopeId: 'daily:' + s.day.toIso8601String() + ':' + s.mode,
       objective: s.caseTitle.isNotEmpty ? s.caseTitle : 'Défi médical quotidien',
       content: [s.caseTitle, s.caseStem,
