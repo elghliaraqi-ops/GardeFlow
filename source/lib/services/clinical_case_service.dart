@@ -71,6 +71,30 @@ class ClinicalCaseService {
     return posts;
   }
 
+  /// A read-only, authenticated status endpoint. Unlike the job table,
+  /// this exposes no worker credentials or unpublished clinical content.
+  /// The feed keeps functioning even if this optional endpoint is unavailable.
+  Future<Map<String, Map<String, dynamic>>> fetchQcmWorkerStatuses() async {
+    if (!_backend.enabled || _backend.client.auth.currentUser == null) {
+      return const {};
+    }
+    try {
+      final rows = await _backend.client.rpc('clinical_case_qcm_worker_statuses');
+      final result = <String, Map<String, dynamic>>{};
+      if (rows is List) {
+        for (final row in rows) {
+          if (row is! Map) continue;
+          final id = '${row['post_id'] ?? ''}';
+          if (id.isEmpty) continue;
+          result[id] = Map<String, dynamic>.from(row);
+        }
+      }
+      return result;
+    } catch (_) {
+      return const {};
+    }
+  }
+
   Future<QcmAttemptResult> submitQcmAnswer({
     required String qcmId,
     required int selectedIndex,
