@@ -53,10 +53,14 @@ class ClinicalCaseService {
         .map((row) => ClinicalCasePost.fromMap(Map<String, dynamic>.from(row)))
         .toList(growable: false);
 
-    // A UI rebuild/refresh is not a retry policy. Automatic enrichment is
-    // deduplicated in memory and backed by a persisted, bounded cooldown.
+    // Cases already in the server-side background queue must NOT launch a
+    // competing Groq request from the UI. The queue runs even if the app
+    // is closed; concurrent direct retries were exhausting free-tier quotas.
+    final workerJobs = await fetchQcmWorkerStatuses();
+    // Legacy cases with no queue entry retain the previous bounded fallback.
     final now = DateTime.now().toUtc();
     for (final post in posts) {
+      if (workerJobs.containsKey(post.id)) continue;
       final needsAi =
           post.qcms.length < 5 ||
           post.qcms.any((qcm) => qcm.generationSource != 'openai');
