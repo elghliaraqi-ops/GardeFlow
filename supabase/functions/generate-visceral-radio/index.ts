@@ -82,8 +82,11 @@ async function groq(contract: GenerationContract, prompt: string, recoverSchemaE
           schema: contract.schema,
         },
       },
-      reasoning_effort: 'medium',
-      max_completion_tokens: 20000,
+      // Smaller bounded batches reduce output tokens and quota pressure.
+      reasoning_effort: contract.mode === 'case_qcms' ? 'low' : 'medium',
+      max_completion_tokens: contract.mode === 'case_qcms' ? 7500
+        : contract.mode === 'course_qcms' ? 7500
+        : contract.mode === 'case' ? 11000 : 20000,
       stream: false,
     };
     const callGroq = async (body: Record<string, unknown>) => {
@@ -100,10 +103,9 @@ async function groq(contract: GenerationContract, prompt: string, recoverSchemaE
       return { response, data };
     };
     let { response, data } = await callGroq(payload);
-    // Groq may return json_validate_failed (HTTP 400) for a large strict
-    // schema. Only course QCMs can recover using JSON Object Mode, while
-    // retaining the SAME contract prompt and the existing count/shape checks.
-    // This is not a second medical reviewer or a paid provider fallback.
+    // On a specific HTTP 400 schema failure, recover once using JSON Object
+    // Mode and the SAME educational contract. Count/options/phase checks
+    // remain mandatory; no second medical reviewer or paid provider fallback.
     if (!response.ok && recoverSchemaError && response.status === 400 &&
         String(data?.error?.code || data?.error?.type || '').includes('json_validate_failed')) {
       console.warn('visceral_course_qcm_schema_retry_json_object');
@@ -113,6 +115,13 @@ async function groq(contract: GenerationContract, prompt: string, recoverSchemaE
         reasoning_format: 'hidden',
       };
       ({ response, data } = await callGroq(retryBody));
+    }
+    if (response.status === 429) {
+      // Respect Groq Retry-After: never auto-retry during rate limiting.
+      const seconds = Number(response.headers.get('retry-after'));
+      const delay = Number.isFinite(seconds) && seconds > 0
+        ? Math.min(86400, Math.ceil(seconds)) : 90;
+      throw new Error('groq_rate_limited:' + delay);
     }
     if (!response.ok) {
       const code = str(data?.error?.code || data?.error?.type || 'unknown_error', 100);
@@ -232,7 +241,7 @@ Deno.serve(async(req)=>{
       if(session.case_data)return answer({session});
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
         '\nMODE CAS CLINIQUE: construis un patient FICTIF, même sujet médical exact que la fiche. Quatre étapes chronologiques: (1) admission/examen, (2) biologie et imagerie, (3) diagnostic/prise en charge/intervention, (4) suites/complications/suivi. Les décisions respectent les recommandations. Radiologie réellement centrale, prévoir images de sémiologie qui correspondent à ton scénario; les images sont externes, illustratives, jamais du patient fictif. Ne révèle pas le diagnostic dans la phase 1. Le dossier complet contient le diagnostic pour les générations ultérieures. Propose recommended_qcms 10 (simple), 15 (intermédiaire) ou 20 (complexe).\nSYNTHÈSE FICHE:\n'+compact(session.fiche?.study_core,9000);
-      const scenario=sanitized(await groq(generationContract('case'),prompt));
+      const scenario=sanitized(await groq(generationContract('case'),prompt,true));
       if(!Array.isArray(scenario.stages)||scenario.stages.length!==4)throw new Error('invalid_case_stages');
       patch.case_data=scenario;patch.case_target=scenario.recommended_qcms;
     }else if(action==='case_qcms'){
@@ -240,13 +249,15 @@ Deno.serve(async(req)=>{
       const existing=Array.isArray(session.case_qcms)?session.case_qcms:[];
       const target=[10,15,20].includes(session.case_target)?session.case_target:10;
       if(existing.length>=target)return answer({session});
-      const count=Math.min(10,target-existing.length);
+      // Save at most five progressively ordered questions per click; never
+      // regenerate or overwrite the already completed questions.
+      const count=Math.min(5,target-existing.length);
       const offset=existing.length;
       const phaseSequence=Array.from({length:count},(_,i)=>Math.min(4,1+Math.floor((offset+i)/target*4)));
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
-        '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER COMPLET (NE PAS divulguer précocement):\n'+compact(session.case_data,31000)+
-        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>q.statement),4000);
-      const produced=await groq(generationContract('case_qcms',{count,phases:phaseSequence}),prompt);
+        '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER COMPLET (NE PAS divulguer précocement):\n'+compact(session.case_data,14500)+
+        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>q.statement),2200);
+      const produced=await groq(generationContract('case_qcms',{count,phases:phaseSequence}),prompt,true);
       validQuestions(produced,count);
       produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];});
       patch.case_qcms=[...existing,...sanitized(produced.questions)];
@@ -258,6 +269,15 @@ Deno.serve(async(req)=>{
     return answer({session:data});
   }catch(e){
     const msg=str((e as Error).message,260);
+    if (msg.startsWith('groq_rate_limited:')) {
+      const seconds = Math.max(1,Number(msg.split(':')[1]) || 90);
+      console.warn('visceral_radio_rate_limited',{retry_after_seconds:seconds});
+      return answer({
+        error:'groq_rate_limited',
+        detail:'Quota temporaire Groq atteint. Les QCM existants sont conservés.',
+        retry_after_seconds:seconds,
+      });
+    }
     console.error('visceral_radio_error',{error:msg});
     return answer({error:'generation_failed',detail:msg},502);
   }
