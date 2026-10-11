@@ -122,9 +122,11 @@ class PracticeGlossaryScope extends StatefulWidget {
     required this.kind,
     this.mode = 'overview',
     this.chapterText = '',
+    this.enabled = true,
     required this.child,
   });
   final String scopeId, objective, content, kind, mode, chapterText;
+  final bool enabled;
   final Widget child;
 
   @override
@@ -139,7 +141,7 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.enabled) _load();
   }
 
   @override
@@ -150,9 +152,10 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
         oldWidget.objective != widget.objective ||
         oldWidget.kind != widget.kind ||
         oldWidget.mode != widget.mode ||
-        oldWidget.chapterText != widget.chapterText) {
+        oldWidget.chapterText != widget.chapterText ||
+        oldWidget.enabled != widget.enabled) {
       _result = const PracticeGlossaryResult([], 'loading');
-      _load();
+      if (widget.enabled) _load();
     }
   }
 
@@ -198,6 +201,7 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
     final parentTerms = _GlossaryInherited.of(context);
     final visibleLocal = widget.chapterText.isEmpty ? _result.terms :
       _result.terms.where((term) =>
