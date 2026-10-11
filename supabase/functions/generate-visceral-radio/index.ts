@@ -74,19 +74,24 @@ async function groq(contract: GenerationContract, prompt: string, recoverSchemaE
         },
         { role: 'user', content: prompt + '\n\n' + contract.outputInstructions },
       ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: contract.name,
-          strict: true,
-          schema: contract.schema,
-        },
-      },
+      // QCMs are short batches (5) and use Groq JSON Object Mode to avoid
+      // json_validate_failed. The EXACT SAME schema/field instructions remain
+      // in contract.outputInstructions; existing parsing/count checks remain.
+      response_format: ['course_qcms', 'case_qcms'].includes(contract.mode)
+        ? { type: 'json_object' }
+        : {
+            type: 'json_schema',
+            json_schema: {
+              name: contract.name,
+              strict: true,
+              schema: contract.schema,
+            },
+          },
       // Smaller bounded batches reduce output tokens and quota pressure.
-      reasoning_effort: contract.mode === 'case_qcms' ? 'low' : 'medium',
+      reasoning_effort: ['course_qcms', 'case_qcms'].includes(contract.mode) ? 'low' : 'medium',
       max_completion_tokens: contract.mode === 'case_qcms' ? 4800
         : contract.mode === 'course_qcms' ? 4800
-        : contract.mode === 'case' ? 11000 : 20000,
+        : contract.mode === 'case' ? 8500 : 11500,
       stream: false,
     };
     const callGroq = async (body: Record<string, unknown>) => {
@@ -214,7 +219,7 @@ Deno.serve(async(req)=>{
       const evidence=await guidelines(topic);
       const prompt=sourcePrompt(topic,evidence)+
         '\nMODE FICHE: rédige un cours synthétique mais complet en 10 sections : définition, anatomie, physiopathologie, clinique, biologie, radiologie (protocoles, sémiologie, complications), prise en charge actualisée, techniques opératoires étape par étape, suites/complications, dix points-clés. Chaque section donne du contenu substantiel, précis et utile au bloc. Le contenu image_requests décrit les signes à illustrer. study_core condense les notions à utiliser pour les QCM.';
-      const fiche=sanitized(await groq(generationContract('fiche'),prompt));
+      const fiche=sanitized(await groq(generationContract('fiche'),prompt,true));
       if(!fiche?.title||!Array.isArray(fiche?.sections))throw new Error('incomplete_fiche');
       const {data,error}=await db.from(TABLE).insert({owner_id:user.id,topic,title:str(fiche.title,220),fiche,medical_sources:evidence}).select().single();
       if(error)throw error;
