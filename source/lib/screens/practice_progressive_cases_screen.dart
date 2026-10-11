@@ -360,6 +360,7 @@ class _PracticeProgressiveCasesScreenState
       completed: _submitted,
     );
     return PracticeGlossaryScope(
+      enabled: false, // Gemini notions reserved exclusively for Viscéral × Radio.
       scopeId: 'progressive:' + _title,
       objective: _title,
       content: [_stem, for (final q in _questions) q.topic + ' ' + q.question + ' ' + q.options.join(' ')].join('\n'),
