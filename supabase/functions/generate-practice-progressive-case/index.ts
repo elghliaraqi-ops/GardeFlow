@@ -335,7 +335,7 @@ async function newGroqBatch(
      body:JSON.stringify({
       model,messages:[{role:'user',content:prompt}],
       temperature:0.15,reasoning_effort:'low',reasoning_format:'hidden',
-      max_completion_tokens:5200,stream:false,
+      max_completion_tokens:4600,stream:false,
       response_format:strict
        ?{type:'json_schema',json_schema:{name:'practice_progressive_case_batch',strict:true,schema:format}}
        :{type:'json_object'}
@@ -347,7 +347,9 @@ async function newGroqBatch(
      console.warn('progressive_groq_rate_limit',{model,
       retry_after_seconds:Number.isFinite(retryAfter)?Math.max(0,Math.min(3600,retryAfter)):null});
      code='groq_rate_limited';
-     break; // A different model may have separate available quota; no hot-loop retries.
+     // Groq quotas can be shared across models at organization level.
+     // Return immediately and let the normal scheduled retry occur.
+     throw Error('groq_rate_limited');
     }
     if(!response.ok){
      const raw=await response.json().catch(()=>null);
