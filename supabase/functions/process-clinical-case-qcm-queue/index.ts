@@ -7,7 +7,11 @@ const GROQ_TIMEOUT_MS = 70000;
 const LIT_TIMEOUT_MS = 12000;
 const CURRENT_YEAR = 2026;
 const RECENT_FROM_YEAR = CURRENT_YEAR - 4;
-const MAX_SOURCES = 18;
+const MAX_SOURCES = 7;
+const GROQ_MAX_OUTPUT = 3150;
+const GROQ_REDUCED_OUTPUT = 2450;
+const MAX_CONTEXT_CHARS = 3600;
+const MAX_CATALOG_CHARS = 2100;
 
 type Source = {
   title:string; url:string; organization:string; year:string|number; year_num:number;
@@ -30,7 +34,24 @@ function scrub(value: unknown, max = 2200) {
     .replace(/\b\d{7,}\b/g,'[identifiant masqué]');
   return x.slice(0,max).trim();
 }
-function safeCase(post:any){return {age_band:scrub(post.age_band,80),sex:scrub(post.sex,40),presentation:scrub(post.presentation),history:scrub(post.history),clinical_exam:scrub(post.clinical_exam),complementary_exams:scrub(post.complementary_exams),imaging_conclusion:scrub(post.imaging_conclusion),assessment:scrub(post.assessment),plan:scrub(post.plan),disposition:scrub(post.disposition,800),specialist_service:scrub(post.specialist_service,300)}}
+function safeCase(post:any){
+  const fields:Record<string,string>={
+    age_band:scrub(post.age_band,80),sex:scrub(post.sex,40),
+    presentation:scrub(post.presentation,550),history:scrub(post.history,350),
+    clinical_exam:scrub(post.clinical_exam,500),
+    complementary_exams:scrub(post.complementary_exams,500),
+    imaging_conclusion:scrub(post.imaging_conclusion,400),
+    assessment:scrub(post.assessment,580),plan:scrub(post.plan,470),
+    disposition:scrub(post.disposition,280),
+    specialist_service:scrub(post.specialist_service,140),
+  };
+  const clean:Record<string,string>={};let left=MAX_CONTEXT_CHARS;
+  for(const [key,value] of Object.entries(fields)){
+    if(!value||left<30)continue;
+    clean[key]=value.slice(0,left);left-=clean[key].length;
+  }
+  return clean;
+}
 function stripHtml(v:unknown){return String(v??'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim()}
 function canonicalUrl(v:unknown){try{const u=new URL(String(v??'').trim());if(!['http:','https:'].includes(u.protocol))return'';u.hash='';return `${u.protocol}//${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/,'')||'/'}`}catch{return''}}
 function yearOf(v:unknown){const y=Number(String(v??'').match(/\b(19|20)\d{2}\b/)?.[0]??0);return Number.isInteger(y)&&y>1900&&y<=CURRENT_YEAR+1?y:0}
@@ -87,7 +108,27 @@ function correction(text:string,refs:Source[]){if(!refs.length)return (text+'\n\
 function parseJsonText(text:string){return JSON.parse(String(text??'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim())}
 const outputSchema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','source_indexes'],properties:{axis:{type:'string',enum:AXES},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:TOPICS},source_indexes:{type:'array',minItems:0,maxItems:3,items:{type:'integer',minimum:1,maximum:MAX_SOURCES}}}}}}};
 async function finish(admin:any,postId:string,ok:boolean,errorCode?:string){await admin.rpc('clinical_case_finish_qcm_generation',{p_post_id:postId,p_success:ok,p_error_code:errorCode??null})}
-async function groqRequest(key:string,prompt:string,strict:boolean){const c=new AbortController();const t=setTimeout(()=>c.abort(),GROQ_TIMEOUT_MS);try{const body:any={model:GROQ_MODEL,messages:[{role:'user',content:prompt}],temperature:0.2,max_completion_tokens:4800,stream:false,response_format:strict?{type:'json_schema',json_schema:{name:'gardeflow_qcms',strict:true,schema:outputSchema}}:{type:'json_object'}};const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:c.signal,headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body)});return{res,payload:await res.json().catch(()=>null)}}finally{clearTimeout(t)}}
+async function groqRequest(key:string,prompt:string,strict:boolean,
+    maxOutput=GROQ_MAX_OUTPUT){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),GROQ_TIMEOUT_MS);
+  try{
+    const body:any={
+      model:GROQ_MODEL,messages:[{role:'user',content:prompt}],
+      temperature:0.2,reasoning_effort:'low',
+      max_completion_tokens:maxOutput,stream:false,
+      response_format:strict
+        ?{type:'json_schema',json_schema:{name:'gardeflow_qcms',strict:true,schema:outputSchema}}
+        :{type:'json_object'},
+    };
+    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',signal:c.signal,
+      headers:{Authorization:'Bearer '+key,
+        'Content-Type':'application/json',Accept:'application/json'},
+      body:JSON.stringify(body),
+    });
+    return {res,payload:await res.json().catch(()=>null)};
+  }finally{clearTimeout(t)}
+}
 
 Deno.serve(async(req:Request)=>{
   if(req.method!=='POST')return json({ok:false,error:'method_not_allowed'},405);
@@ -96,19 +137,64 @@ Deno.serve(async(req:Request)=>{
   const{data:claims,error:claimErr}=await admin.rpc('clinical_case_worker_claim_next');if(claimErr)return json({ok:false,error:'claim_failed'},503);const claim=Array.isArray(claims)?claims[0]:null;if(!claim?.post_id)return json({ok:true,processed:false,status:'idle'});const postId=String(claim.post_id);
   try{
     const sel='id,age_band,sex,presentation,history,clinical_exam,complementary_exams,imaging_conclusion,assessment,plan,disposition,specialist_service';const{data:post,error:postErr}=await admin.from('clinical_case_posts').select(sel).eq('id',postId).maybeSingle();if(postErr||!post)throw new Error('case_not_found');const clean=safeCase(post);const sources=await literature(clean);if(!sources.length)console.warn(JSON.stringify({event:'literature_unavailable_graceful_fallback',post_id:postId}));
-    const sourceCatalog=sources.map((s,i)=>`[${i+1}] TYPE=${s.kind}\nORIGINE=${s.origin}\nTitre=${s.title}\nOrganisation/Revue=${s.organization}\nAnnée=${s.year}\nURL=${s.url}${s.abstract?`\nRésumé=${s.abstract}`:''}`).join('\n\n');
+    const sourceCatalog=sources.map((s,i)=>'['+(i+1)+'] '+s.kind+
+      ' '+s.year+' '+scrub(s.title,145)+' '+s.url).join('\n')
+      .slice(0,MAX_CATALOG_CHARS);
     const shape='{"qcms":[{"axis":"cours_fondamental","question":"...","options":["...","...","...","..."],"correct_index":0,"correction":"...","topic":"examen","source_indexes":[1]}]}';
-    const prompt=`Tu es enseignant en médecine et tu crées des QCM de niveau externat/internat.\nDATE DE RÉFÉRENCE : 2 octobre 2026.\nLe cas est déjà anonymisé.\n\nProduis EXACTEMENT 5 QCM dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations. Chaque QCM a 4 propositions distinctes, une seule meilleure réponse et une correction pédagogique de 3 à 6 phrases. Les questions doivent être liées aux signes, diagnostics, examens et décisions de CE patient, sans introduire une pathologie différente.\n\nSOURCES : utilise 1 à 3 indices réels par QCM. Hiérarchie : (1) recommandations/guidelines et consensus les plus récents et pertinents ; (2) revues systématiques/méta-analyses récentes ; (3) essais récents avec résultats comme complément. ClinicalTrials.gov ne doit JAMAIS être l'unique fondement d'une recommandation thérapeutique. Pour l'axe recommandations, utilise au moins une source TYPE=recommandation ou TYPE=consensus si le catalogue en contient. N'invente aucune recommandation absente des sources. Si le catalogue est vide, travaille à partir du dossier et des connaissances générales solides : pas de citation fictive, pas de prétention à une recommandation récente vérifiée, source_indexes=[] pour chaque question et explicite l'incertitude dans l'explication. Si une donnée très récente d'essai contredit ou précède une guideline, présente-la comme donnée émergente et ne la transforme pas en recommandation établie.\n\nJSON attendu : ${shape}\nRéponds en français, sans texte hors JSON.\n\nCAS ANONYMISÉ :\n${JSON.stringify(clean)}\n\nCATALOGUE MULTI-SOURCES — RÉCENT ET HIÉRARCHISÉ :\n${sourceCatalog || '[aucune référence récupérée — explications non vérifiées, pas de citation ni recommandation inventée]'}`;
-    let{res:provider,payload}=await groqRequest(groqKey,prompt,true);if(!provider.ok&&provider.status===400&&String(payload?.error?.code??'')==='json_validate_failed')({res:provider,payload}=await groqRequest(groqKey,prompt,false));if(!provider.ok){
+    const conciseRules='Tu es enseignant médical francophone. Date 11 octobre 2026. '+
+      'Génère EXACTEMENT CINQ QCM, un pour chaque axe dans cet ordre : '+
+      AXES.join(', ')+'. Chaque QCM possède 4 options distinctes, UNE seule juste, '+
+      'correction médicale contextualisée en 2 à 3 phrases, maximum 65 mots. '+
+      'Les questions portent exclusivement sur CE patient : bases, diagnostic, '+
+      'examens, prise en charge, puis recommandations. '+
+      'N\'invente aucune source ni recommandation récente. '+
+      'source_indexes : indices présents dans le catalogue seulement, '+
+      'ou [] si absence de références vérifiées. '+
+      'Réponds UNIQUEMENT en JSON avec les champs axis, question, options, '+
+      'correct_index, correction, topic, source_indexes et la racine qcms.';
+    const prompt=conciseRules+
+      '\nAXES : '+AXES.join(', ')+
+      '\nTOPICS : '+TOPICS.join(', ')+
+      '\nCAS ANONYMISÉ : '+JSON.stringify(clean)+
+      '\nCATALOGUE DE SOURCES RÉELLES : '+(sourceCatalog||'Indisponible');
+    const shorterPrompt=conciseRules+
+      '\nAXES : '+AXES.join(', ')+
+      '\nTOPICS : '+TOPICS.join(', ')+
+      '\nCAS ANONYMISÉ : '+JSON.stringify({
+        age_band:clean.age_band,sex:clean.sex,
+        presentation:scrub(clean.presentation,280),
+        clinical_exam:scrub(clean.clinical_exam,290),
+        complementary_exams:scrub(clean.complementary_exams,330),
+        assessment:scrub(clean.assessment,340),plan:scrub(clean.plan,260),
+      })+
+      '\nCATALOGUE DE SOURCES RÉELLES : '+(sourceCatalog.slice(0,700)||'Indisponible');
+    if(prompt.length>9200||shorterPrompt.length>5500)
+      throw new Error('groq_prompt_budget_exceeded');
+    let{res:provider,payload}=await groqRequest(groqKey,prompt,true);
+    if(!provider.ok&&provider.status===413){
+      console.warn(JSON.stringify({event:'clinical_qcm_413_compact_retry',
+        prompt_chars:prompt.length,compact_chars:shorterPrompt.length}));
+      ({res:provider,payload}=await groqRequest(
+        groqKey,shorterPrompt,true,GROQ_REDUCED_OUTPUT));
+    }
+    if(!provider.ok&&provider.status===400&&
+        String(payload?.error?.code??'')==='json_validate_failed'){
+      ({res:provider,payload}=await groqRequest(
+        groqKey,shorterPrompt,false,GROQ_REDUCED_OUTPUT));
+    }
+    if(!provider.ok){
       console.warn(JSON.stringify({
         event:'clinical_qcm_groq_http_error',
         http_status:provider.status,
         retry_after_seconds:Math.max(0,Math.min(86400,Number(provider.headers.get('retry-after'))||0)),
         remaining_requests:provider.headers.get('x-ratelimit-remaining-requests'),
         remaining_tokens:provider.headers.get('x-ratelimit-remaining-tokens'),
+        limit_tokens:provider.headers.get('x-ratelimit-limit-tokens'),
+        error_code:String(payload?.error?.code||'').slice(0,60),
       }));
       if(provider.status===401||provider.status===403)throw new Error('authorization_failed');
       if(provider.status===429)throw new Error('groq_rate_limited');
+      if(provider.status===413)throw new Error('groq_request_too_large');
       if(provider.status===400||provider.status===404)throw new Error('groq_request_invalid');
       throw new Error('groq_provider_unavailable');
     }
