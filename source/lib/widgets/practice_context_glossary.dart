@@ -169,6 +169,29 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
     if (mounted && request == _request) setState(() => _result = result);
   }
 
+  String get _failureMessage {
+    switch (_result.status) {
+      case 'retry_tomorrow':
+        return 'Gemini a échoué sur ce contenu. Nouvelle tentative possible demain (UTC).';
+      case 'gemini_bad_request':
+        return 'Requête Gemini refusée (HTTP 400). La configuration du modèle est en cours de correction.';
+      case 'gemini_model_not_available':
+        return 'Modèle Gemini temporairement indisponible pour ce projet.';
+      case 'gemini_quota_exceeded':
+        return 'Limite Gemini atteinte. Les explications déjà générées restent accessibles.';
+      case 'pending':
+        return 'Gemini prépare ce contenu sur le serveur. Réactualise dans un instant.';
+      case 'pending_or_daily_budget':
+        return 'Génération déjà en cours ou limite quotidienne gratuite atteinte.';
+      case 'gemini_key_missing':
+        return 'Clé Gemini non accessible à cette fonction Supabase.';
+      case 'authentication_required':
+        return 'Connecte-toi à GardeFlow pour afficher les explications.';
+      default:
+        return 'Explications contextuelles actuellement indisponibles.';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final parentTerms = _GlossaryInherited.of(context);
@@ -239,19 +262,22 @@ class _PracticeGlossaryScopeState extends State<PracticeGlossaryScope> {
                   const Icon(Icons.info_outline, size: 14,
                       color: Color(0xFFB9CBE0)),
                   const SizedBox(width: 6),
-                  const Expanded(child: Text(
-                    'Explications contextuelles temporairement indisponibles',
-                    style: TextStyle(fontSize: 10.5,
+                  Expanded(child: Text(
+                    _failureMessage,
+                    style: const TextStyle(fontSize: 10.5,
                         color: Color(0xFFB9CBE0)),
                   )),
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _result =
-                          const PracticeGlossaryResult([], 'loading'));
-                      _load(retry: true);
-                    },
-                    child: const Text('Réessayer', style: TextStyle(fontSize: 11)),
-                  ),
+                  if (!['retry_tomorrow', 'pending_or_daily_budget',
+                    'gemini_key_missing', 'gemini_quota_exceeded']
+                      .contains(_result.status))
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _result =
+                            const PracticeGlossaryResult([], 'loading'));
+                        _load(retry: true);
+                      },
+                      child: const Text('Actualiser', style: TextStyle(fontSize: 11)),
+                    ),
                 ]),
               ),
             widget.child,
