@@ -141,7 +141,7 @@ Deno.serve(async(req:Request)=>{
  const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
  try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
- body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:9500,
+ body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:4600,
  response_format:{type:'json_object'}})});}
  finally{clearTimeout(timer);}
  const raw=await remote.json().catch(()=>null);
