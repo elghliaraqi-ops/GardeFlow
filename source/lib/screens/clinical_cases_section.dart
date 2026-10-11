@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../widgets/practice_qcm_medical_illustration.dart';
@@ -42,6 +44,9 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   static const _pageSize = 100;
   final _service = ClinicalCaseService.instance;
   final List<ClinicalCasePost> _items = <ClinicalCasePost>[];
+  final Map<String,Map<String,dynamic>> _qcmWorkerStates = {};
+  Timer? _qcmStatusTimer;
+  bool _refreshingFeed = false;
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
@@ -58,12 +63,20 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
     super.initState();
     _service.revision.addListener(_onRevision);
     _loadAll();
+    // Backend queue runs independently of the app. A selected case refreshes
+    // automatically while waiting, even if no user presses a button.
+    _qcmStatusTimer=Timer.periodic(const Duration(seconds:30),(_){
+      if(!mounted || _refreshingFeed || _selectedCaseId==null) return;
+      final pending=_items.any((p)=>p.id==_selectedCaseId && p.qcms.isEmpty);
+      if(pending) _loadAll(showLoader:false);
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _service.revision.removeListener(_onRevision);
+    _qcmStatusTimer?.cancel();
     super.dispose();
   }
 
@@ -73,6 +86,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
   }
 
   Future<void> _loadAll({bool showLoader = true}) async {
+    if (_refreshingFeed) return;
+    _refreshingFeed=true;
     if (showLoader && mounted) {
       setState(() {
         _loading = true;
@@ -93,6 +108,8 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
       }
 
       if (!mounted) return;
+      final serverStates=await _service.fetchQcmWorkerStatuses();
+      if (!mounted) return;
       final byId = <String, ClinicalCasePost>{};
       for (final post in loaded) {
         byId[post.id] = post;
@@ -101,6 +118,11 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
         _items
           ..clear()
           ..addAll(byId.values);
+        if(serverStates.isNotEmpty){
+          _qcmWorkerStates
+            ..clear()
+            ..addAll(serverStates);
+        }
         _error = null;
 
         if (_selectedCaseId != null &&
@@ -119,6 +141,7 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
         _error = 'Le fil des cas cliniques est momentanément indisponible.';
       });
     } finally {
+      _refreshingFeed=false;
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -261,7 +284,10 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
     });
   }
 
-  void _openCase(String id) => setState(() => _selectedCaseId = id);
+  void _openCase(String id) {
+    setState(() => _selectedCaseId = id);
+    unawaited(_loadAll(showLoader:false));
+  }
 
   Future<void> _editCase(ClinicalCasePost post) async {
     final edit = widget.onEditCase;
@@ -595,7 +621,12 @@ class _ClinicalCasesSectionState extends State<ClinicalCasesSection> {
           ),
           const SizedBox(height: 8),
         ],
-        _ClinicalCaseCard(post: post, number: number),
+        _ClinicalCaseCard(
+          post: post,
+          number: number,
+          generationStatus: _qcmWorkerStates[post.id],
+          onRefresh: () => _loadAll(showLoader:false),
+        ),
       ],
     );
   }
@@ -1178,8 +1209,15 @@ class _BackBar extends StatelessWidget {
 class _ClinicalCaseCard extends StatefulWidget {
   final ClinicalCasePost post;
   final int number;
+  final Map<String,dynamic>? generationStatus;
+  final VoidCallback onRefresh;
 
-  const _ClinicalCaseCard({required this.post, required this.number});
+  const _ClinicalCaseCard({
+    required this.post,
+    required this.number,
+    required this.generationStatus,
+    required this.onRefresh,
+  });
 
   @override
   State<_ClinicalCaseCard> createState() => _ClinicalCaseCardState();
@@ -1690,7 +1728,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           ),
         const SizedBox(height: 8),
         if (current == null)
-          const _QcmPreparing()
+          _QcmPreparing(
+            state:widget.generationStatus,
+            onRefresh:widget.onRefresh,
+          )
         else ...[
           _QcmPanel(
             current: current,
@@ -1979,40 +2020,68 @@ class _CaseSection extends StatelessWidget {
 }
 
 class _QcmPreparing extends StatelessWidget {
-  const _QcmPreparing();
+  const _QcmPreparing({required this.state,required this.onRefresh});
+  final Map<String,dynamic>? state;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
+    final status='${state?['status'] ?? 'pending'}';
+    final code='${state?['last_error_code'] ?? ''}';
+    final retry=DateTime.tryParse('${state?['retry_after'] ?? ''}')?.toLocal();
+    final hasDelay=retry!=null && retry.isAfter(DateTime.now());
+    final failed=status=='failed';
+    final waiting=status=='pending'||status=='idle';
+    final message = failed
+      ? (hasDelay
+        ? 'Génération temporairement indisponible. Nouvelle tentative '
+          'automatique prévue vers ${DateFormat('HH:mm').format(retry)}.'
+        : 'Génération interrompue. Le cas est conservé et un '
+          'nouvel essai pourra être nécessaire.')
+      : status=='running'
+        ? 'Le serveur prépare les QCM. Le cas est déjà sauvegardé.'
+        : status=='ready'
+          ? 'Les QCM sont disponibles. Actualise le dossier.'
+          : 'Le cas est sauvegardé : les QCM attendent leur traitement automatique.';
+    final detail=code.contains('groq')
+        ? 'Groq est temporairement indisponible ou limité.'
+        : code=='literature_sources_unavailable'
+          ? 'Recherche de références médicales indisponible.'
+          : '';
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _PracticeGame.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _PracticeGame.line),
+      width:double.infinity,
+      padding:const EdgeInsets.all(16),
+      decoration:BoxDecoration(
+        color:_PracticeGame.surface,
+        borderRadius:BorderRadius.circular(18),
+        border:Border.all(
+          color:failed ? _PracticeGame.gold : _PracticeGame.line),
       ),
-      child: const Row(
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: _PracticeGame.gold,
-            ),
-          ),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Les QCM de ce cas sont en cours de préparation…',
-              style: TextStyle(
-                color: _PracticeGame.secondary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          if(!failed) ...[
+            const SizedBox(width:18,height:18,
+              child:CircularProgressIndicator(strokeWidth:2,
+                color:_PracticeGame.gold)),
+          ] else const Icon(Icons.info_outline_rounded,
+            size:21,color:_PracticeGame.gold),
+          const SizedBox(width:10),
+          Expanded(child:Text(message,style:const TextStyle(
+            color:_PracticeGame.secondary,fontWeight:FontWeight.w700))),
+        ]),
+        if(detail.isNotEmpty)...[
+          const SizedBox(height:8),
+          Text(detail,style:const TextStyle(
+            color:_PracticeGame.gold,fontSize:12)),
         ],
-      ),
+        const SizedBox(height:10),
+        OutlinedButton.icon(
+          onPressed:onRefresh,
+          icon:const Icon(Icons.refresh_rounded,size:18),
+          label:Text(failed ? 'Vérifier la nouvelle tentative'
+            : waiting ? 'Actualiser le suivi' : 'Actualiser les QCM'),
+        ),
+      ]),
     );
   }
 }
