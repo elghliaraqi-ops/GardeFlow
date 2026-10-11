@@ -20,6 +20,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
   bool _busy = false;
   String? _error;
   String? _courseError;
+  String? _caseError;
+  DateTime? _groqCooldownUntil;
   String? _activeGeneration;
   int _courseBatchTarget = 0;
   int _coursePosition = 0, _casePosition = 0;
@@ -55,6 +57,15 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
   }
   Future<void> _generate(String action) async {
     if (_busy || !_authorized) return;
+    final waitUntil = _groqCooldownUntil;
+    if (waitUntil != null && DateTime.now().isBefore(waitUntil)) {
+      final seconds = waitUntil.difference(DateTime.now()).inSeconds + 1;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Groq est temporairement limité. Réessaie dans environ $seconds secondes.'),
+        duration: const Duration(seconds: 4),
+      ));
+      return;
+    }
     final startingCount = _arr(_session?['course_qcms']).length;
     final courseTarget = action == 'course_qcms'
         ? (startingCount + 10).clamp(0, 20).toInt()
@@ -65,6 +76,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
       _courseBatchTarget = courseTarget;
       _error = null;
       if (action == 'course_qcms') _courseError = null;
+      if (action == 'case_qcms' || action == 'case') _caseError = null;
     });
     try {
       // A tap requests up to 10 new QCMs. Supabase saves each chunk of five
@@ -79,11 +91,19 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
           },
         );
         final m = _obj(response.data);
+        if (m['error'] == 'groq_rate_limited') {
+          final rawSeconds = int.tryParse(_str(m['retry_after_seconds'])) ?? 90;
+          final seconds = rawSeconds.clamp(1, 86400);
+          _groqCooldownUntil = DateTime.now().add(Duration(seconds: seconds));
+          throw StateError('Quota Groq atteint. Réessayer après environ '
+              '$seconds secondes. Aucun QCM précédent perdu.');
+        }
         if (m['error'] != null) {
           throw StateError(_str(m['error']) + ' ' + _str(m['detail']));
         }
         final result = _obj(m['session']);
         if (result.isEmpty) throw StateError('Réponse vide');
+        _groqCooldownUntil = null;
         if (!mounted) return;
         final nextCount = _arr(result['course_qcms']).length;
         final savedAnswered = int.tryParse(
@@ -122,11 +142,15 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
         setState(() {
           _error = msg;
           if (action == 'course_qcms') _courseError = msg;
+          if (action == 'case_qcms' || action == 'case') _caseError = msg;
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(action == 'course_qcms'
-              ? 'Lot interrompu. Les QCM déjà générés sont conservés. Réessaie pour reprendre.'
-              : msg),
+              ? 'Lot interrompu. Les QCM déjà générés sont conservés.'
+              : (action == 'case_qcms'
+                  ? 'Génération des QCM progressifs interrompue. '
+                      'Le cas clinique est conservé.'
+                  : msg)),
           duration: const Duration(seconds: 6),
         ));
       }
@@ -144,7 +168,13 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
   }
   void _open(Map<String,dynamic> entry){
     if(_busy)return;
-    setState((){_session=entry;_clearAnswers();_error=null;_courseError=null;});
+    setState((){
+      _session=entry;
+      _clearAnswers();
+      _error=null;
+      _courseError=null;
+      _caseError=null;
+    });
   }
   Widget _label(String text,{double size=14,Color color=PracticeDailyVisualTheme.text,bool heavy=false}) =>
     Text(text,style:TextStyle(color:color,fontSize:size,fontWeight:heavy?FontWeight.w800:FontWeight.normal,height:1.42));
@@ -341,7 +371,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
               _quiz(false),
               _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                 _title('Cas clinique lié à la fiche','Même sujet médical, patient fictif et imagerie'),
-                if(_session!['case_data']==null)_button('Générer mon cas clinique',()=>_generate('case')),
+                if(_session!['case_data']==null)
+                  _button('Générer mon cas clinique',()=>_generate('case')),
                 if(_session!['case_data']!=null)...[
                   _label(_str(_obj(_session!['case_data'])['title']),heavy:true),
                   _label(_str(_obj(_session!['case_data'])['patient']),size:12),
@@ -350,8 +381,35 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
                     color:PracticeDailyVisualTheme.muted),
                   _label('Questions : '+_arr(_session!['case_qcms']).length.toString()+'/'+_str(_session!['case_target']),
                     heavy:true),
-                  if(_arr(_session!['case_qcms']).length<(_session!['case_target']??10))
-                    _button('Générer les prochains QCM progressifs',()=>_generate('case_qcms')),
+                  if(_activeGeneration=='case_qcms') ...[
+                    const SizedBox(height:9),
+                    const LinearProgressIndicator(
+                      color:PracticeDailyVisualTheme.mint),
+                    const SizedBox(height:7),
+                    _label('Génération Groq en cours : un lot de cinq '
+                      'questions cliniques, avec leurs corrections et images. '
+                      'Le cas reste sauvegardé.',size:12,
+                      color:PracticeDailyVisualTheme.muted),
+                  ],
+                  if(_caseError!=null) ...[
+                    const SizedBox(height:8),
+                    _label(_caseError!,size:12,color:Colors.orangeAccent),
+                    _label('Le dossier clinique et les questions précédemment '
+                      'enregistrées sont conservés.',size:11,
+                      color:PracticeDailyVisualTheme.muted),
+                  ],
+                  if(_arr(_session!['case_qcms']).length<
+                    (int.tryParse(_str(_session!['case_target']))??10))
+                    _button(
+                      _activeGeneration=='case_qcms'
+                        ? 'Génération des QCM en cours…'
+                        : 'Générer les ' +
+                          ((int.tryParse(_str(_session!['case_target']))??10) -
+                            _arr(_session!['case_qcms']).length)
+                            .clamp(0,5).toString() +
+                          ' prochains QCM progressifs',
+                      _busy?null:()=>_generate('case_qcms'),
+                    ),
                 ],
               ])),
               _quiz(true),
