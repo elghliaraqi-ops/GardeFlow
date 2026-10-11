@@ -259,14 +259,14 @@ const referenceSchema={type:'object',additionalProperties:false,required:['url']
 const qcmSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','image_request'],properties:{
   axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
   correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
-  references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},image_request:medicalImageSchema
+  references:{type:'array',minItems:0,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},image_request:medicalImageSchema
 }};
 const outputSchema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:qcmSchema}}};
 const generic=[/dans ce cas(?: clinique)?/i,/document(?:é|ée|és|ées)/i,/quelle synthèse clinique a été retenue/i,/quelle prise en charge a été/i,/quelle orientation a été/i,/quel avis spécialisé a été/i];
 
 function correction(text,refs,images=[],imageSpec=null,imageQuery='') {
   const media=images.length ? `\n\n§IMAGES§\n${images.map(i=>`${i.title}|||${i.preview_url}|||${i.source_url}`).join('\n')}` : '';
-  return `${text}${medicalImageCorrectionSuffix(imageSpec,imageQuery)}\n\n§SOURCES§\n${refs.map(r=>`${r.kind}|||${r.title}|||${r.organization}|||${r.year}|||${r.url}`).join('\n')}`.slice(0,11000);
+  return `${text}${medicalImageCorrectionSuffix(imageSpec,imageQuery)}\n\n§SOURCES§\n${refs.length ? refs.map(r=>`${r.kind}|||${r.title}|||${r.organization}|||${r.year}|||${r.url}`).join('\n') : 'Documentation non vérifiée : sources bibliographiques indisponibles lors de la génération. Contenu pédagogique IA à vérifier avant toute décision clinique.'}`.slice(0,11000);
 }
 
 function retrySeconds(v){
@@ -449,9 +449,8 @@ Deno.serve(async(req)=>{
     }
 
     if(sources.length===0){
-      await finish(false,'literature_sources_unavailable');
-      claimed='';
-      return fail(503,'literature_sources_unavailable',true,{retry_after_seconds:60});
+      log('literature_unavailable_degraded_qcm_mode',{...meta(),
+        warning:'no verified citations; never attribute a recent guideline'});
     }
 
     const sourceByUrl=new Map(sources.map(s=>[canonicalUrl(s.url),s]));
@@ -475,7 +474,7 @@ Deno.serve(async(req)=>{
      }))};
      const jsonContract='JSON RACINE {qcms: cinq objets}. Champs exacts de chaque QCM : '+
        Object.keys(qcmSchema.properties).join(', ')+
-       '. Références au format {url} seulement, enrichies côté serveur. '+
+       '. Références au format {url} seulement, enrichies côté serveur, [] lorsque le catalogue documentaire est vide. '+
        'Axes dans l’ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
        '. Exemple de JSON valide, à remplacer intégralement : '+JSON.stringify(exampleQcms)+
        '. Remplace tous les placeholders, sans JSON supplémentaire ni Markdown.';
@@ -488,7 +487,7 @@ Pour chaque QCM, renseigne image_search_query avec une requête courte EN ANGLAI
 Les questions doivent appliquer les connaissances médicales aux signes, examens et décisions du patient décrit, sans inventer d'événements, et garder une progression clinique logique.
 Évite les formulations vagues comme « dans ce cas », « toutes les réponses » ou « aucune des réponses ».
 
-SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous pour les références. Chaque QCM doit citer 1 à 3 références du catalogue et recopier exactement leur URL. N'invente aucune référence ni URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
+SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous. Chaque QCM cite 1 à 3 références réelles si disponibles, sinon references=[] et les explications précisent qu'aucune recommandation récente n'a été vérifiée. N'invente jamais de référence ni d'URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
 Réponds uniquement en JSON, sans Markdown. ${jsonContract}
 
 CAS ANONYMISÉ :
@@ -653,7 +652,7 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
           ci>3||
           !allowedTopics.has(topic)||
           !allowedAxes.has(axis)||
-          refs.length<1||
+          (sources.length>0&&refs.length<1)||
           generic.some(p=>p.test(question))
         ) throw new Error(`invalid_qcm_${i+1}`);
 
