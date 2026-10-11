@@ -115,7 +115,8 @@ Deno.serve(async(req:Request)=>{
  if(!gate.claimed)return response(req,{ok:false,error:gate.error_code??'generation_in_progress',retry_after:gate.retry_after},gate.error_code==='extension_cooldown'?429:409);
  let done=false;
  try{
- const refs=await literature(post);if(!refs.length)throw Error('literature_sources_unavailable');
+ const refs=await literature(post);
+ if (!refs.length) console.warn('practice_preview_unverified_literature_fallback');
  const byUrl=new Map(refs.map(r=>[urlKey(r.url),r]));
  const catalog=refs.map(r=>[r.kind,r.title,r.organization,r.year,r.url].join(' | ')).join('\n');
  const past=(existing??[]).map(x=>clean(x.question,300));
@@ -134,11 +135,11 @@ Deno.serve(async(req:Request)=>{
  }))};
  const jsonContract='Objet JSON racine {qcms:[5 objets]} avec les champs EXACTS : '+
   Object.keys(((schema.properties.qcms as {items:{properties:Record<string,unknown>}}).items).properties).join(', ')+
-  '. references doit être une liste de 1 à 3 objets {url}, jamais des sources inventées. '+
+  '. references doit contenir 1 à 3 objets {url} du catalogue si celui-ci existe, sinon [] : ne jamais inventer de source. '+
   'Axes strictement dans cet ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
   '. Exemple JSON valide dont tous les contenus sont À REMPLACER : '+JSON.stringify(exampleQcms)+
   '. Ne pas recopier les placeholders. Aucun Markdown.';
- const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
+ const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise de 2 à 4 phrases et références exclusivement parmi les sources Europe PMC réellement fournies. Si le catalogue est vide, références [] et aucune recommandation récente affirmée comme vérifiée. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
  try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
  body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:4600,
@@ -155,14 +156,14 @@ Deno.serve(async(req:Request)=>{
  const sources=Array.isArray(q.references)?q.references.flatMap((r):Ref[]=>{const found=byUrl.get(urlKey(r.url));return found?[found]:[];}):[];
  const uniqueRefs=[...new Map(sources.map(x=>[x.url,x])).values()].slice(0,3);
  if(q.axis!==axes[i]||question.length<12||cor.length<20||opts.length!==4||new Set(opts).size!==4||
- !Number.isInteger(q.correct_index)||q.correct_index<0||q.correct_index>3||!topics.includes(q.topic as typeof topics[number])||!uniqueRefs.length)
+ !Number.isInteger(q.correct_index)||q.correct_index<0||q.correct_index>3||!topics.includes(q.topic as typeof topics[number])||(refs.length>0&&!uniqueRefs.length))
  throw Error('invalid_generated_qcm');
  const normalize=(s:string)=>s.toLowerCase().replace(/\s+/g,' ').trim();
  if(past.some(x=>normalize(x)===normalize(question))||proposed.some(x=>normalize(x.question)===normalize(question)))throw Error('duplicate_questions');
  // Preview and confirmed QCM use the same JSON image requirements.
  // No randomly matched thumbnails or external URLs enter QCM corrections.
  const correction=(cor+medicalImageCorrectionSuffix(q.image_request,q.image_search_query)+
-   '\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
+   '\n\n§SOURCES§\n'+(uniqueRefs.length ? uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n') : 'Références externes indisponibles lors de la génération : contenu pédagogique IA non vérifié, ne pas utiliser pour une décision clinique.')).slice(0,11000);
  proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:q.topic});
  }
  }
