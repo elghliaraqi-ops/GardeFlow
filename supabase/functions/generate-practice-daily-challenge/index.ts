@@ -107,7 +107,7 @@ async function newGroqBatch(
    body:JSON.stringify({
     model,messages:[{role:'user',content:prompt}],
     temperature:0.12,reasoning_effort:'low',reasoning_format:'hidden',
-    max_completion_tokens:5400,stream:false,
+    max_completion_tokens:4500,stream:false,
     // Strict json_schema caused Groq json_validate_failed 400 in production.
     response_format:{type:'json_object'}
    })
@@ -270,7 +270,9 @@ Deno.serve(async(req:Request)=>{
         accepted:accepted.length,code:batchError});
        if(['groq_auth_failed','groq_configuration_missing',
         'checkpoint_unavailable'].includes(batchError))throw err;
-       if(batchError==='groq_rate_limited'&&attempt>=1)break;
+       // A 429 is an enforced organizational quota. Never hot-retry with a
+       // different model or waste a second call before the reset.
+       if(batchError==='groq_rate_limited')throw err;
       }
      }
      if(accepted.length!==5)throw Error(batchError||'invalid_generated_questions');
