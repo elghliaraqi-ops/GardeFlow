@@ -77,6 +77,24 @@ void main() {
     expect(term.imageQuery, contains('mesenteric'));
   });
 
+  testWidgets('general clinical cases do not activate Gemini interactive glossary',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: PracticeGlossaryScope(
+        enabled: false,
+        scopeId: 'general-case',
+        objective: 'Cancer du rectum',
+        kind: 'cas_clinique',
+        content: 'TNM staging - test clinical case',
+        child: PracticeGlossaryText('TNM staging - test clinical case'),
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('TNM staging - test clinical case'), findsOneWidget);
+    expect(find.textContaining('Explications contextuelles'), findsNothing);
+    expect(find.textContaining('notions dans ce passage'), findsNothing);
+  });
+
   testWidgets('historic prose remains readable without a generated glossary', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: Scaffold(body: PracticeGlossaryText('Classification TNM du rectum')),
