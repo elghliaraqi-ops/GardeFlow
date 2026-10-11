@@ -238,12 +238,44 @@ Deno.serve(async (req: Request) => {
       },
     );
     let response = await generate(preferred);
-    // A configured obsolete model may be unavailable; retry only the known
-    // free-tier Flash-Lite model and NEVER fall back to billable Pro/Flash.
-    if (response.status === 404 && preferred !== 'gemini-3.5-flash-lite') {
-      response = await generate('gemini-3.5-flash-lite');
+    let usedModel = preferred;
+    // Read Google's error code (never the API key or whole payload). An HTTP
+    // 400 is not synonymous with exhausted quota and should be diagnosable.
+    async function providerFailure(r: Response) {
+      const body = await r.clone().json().catch(() => null);
+      const msg = String(body?.error?.message || '').slice(0, 320);
+      const status = String(body?.error?.status || '');
+      const credentialError = /API_KEY_INVALID|api key not valid|permission denied|billing|location not supported/i.test(msg + status);
+      const modelError = /model|unsupported|unknown name|invalid argument|not found/i.test(msg + status);
+      console.warn('practice_glossary_gemini_response', JSON.stringify({
+        http_status: r.status, provider_status: status,
+        // Specific error class only: do not log the complete request/body.
+        error_category: credentialError ? 'credential_or_region'
+          : modelError ? 'model_or_parameters' : 'request_rejected',
+        model: usedModel,
+        // Whitelisted format only, no freeform Google message or secrets.
+      }));
+      return {credentialError, modelError, status};
     }
-    if (!response.ok) throw Error('gemini_' + response.status);
+    if (!response.ok && [400, 404].includes(response.status)) {
+      const issue = await providerFailure(response);
+      // These two models are documented Flash-Lite variants. Never silently
+      // fall back to Gemini Pro, a chargeable provider or Groq.
+      const fallback = usedModel === 'gemini-2.5-flash-lite'
+        ? 'gemini-3.5-flash-lite' : 'gemini-2.5-flash-lite';
+      if (!issue.credentialError && fallback !== usedModel) {
+        usedModel = fallback;
+        response = await generate(usedModel);
+      }
+    }
+    if (!response.ok) {
+      if ([400, 404].includes(response.status)) await providerFailure(response);
+      const statusCode = response.status;
+      throw Error(statusCode === 429 ? 'gemini_quota_exceeded'
+        : statusCode === 400 ? 'gemini_bad_request'
+        : statusCode === 404 ? 'gemini_model_not_available'
+        : 'gemini_http_' + statusCode);
+    }
     const result = await response.json();
     const output = String(result?.candidates?.[0]?.content?.parts?.[0]?.text || '');
     const parsed = JSON.parse(output);
@@ -312,10 +344,17 @@ Deno.serve(async (req: Request) => {
     if (updateError) throw Error('glossary_cache_write_failed');
     return json({ status: 'generated', terms });
   } catch (error) {
-    console.error('Practice glossary unavailable:', String(error).slice(0, 150));
+    const code = String(error).slice(0, 110);
+    console.error('practice_glossary_failure', JSON.stringify({
+      error_code: code.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 100),
+      mode,
+    }));
     await db.from('practice_context_glossary_cache').update({
       status: 'error', updated_at: new Date().toISOString(),
     }).eq('content_hash', hash);
-    return empty('gemini_unavailable');
+    return empty(code.includes('quota_exceeded') ? 'gemini_quota_exceeded'
+      : code.includes('bad_request') ? 'gemini_bad_request'
+      : code.includes('model_not_available') ? 'gemini_model_not_available'
+      : 'gemini_unavailable');
   }
 });
