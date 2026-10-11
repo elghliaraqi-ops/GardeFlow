@@ -2035,7 +2035,7 @@ class _QcmPreparing extends StatelessWidget {
     final message = failed
       ? (hasDelay
         ? 'Génération temporairement indisponible. Nouvelle tentative '
-          'automatique prévue vers ${DateFormat('HH:mm').format(retry)}.'
+          'automatique prévue vers ${DateFormat('HH:mm').format(retry!)}.'
         : 'Génération interrompue. Le cas est conservé et un '
           'nouvel essai pourra être nécessaire.')
       : status=='running'
