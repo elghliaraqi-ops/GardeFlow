@@ -483,9 +483,9 @@ Deno.serve(async(req)=>{
 Le cas ci-dessous est ANONYMISÉ et sert d'ancrage pédagogique. N'essaie jamais d'identifier le patient et ne restitue jamais de données d'identification.
 
 Crée EXACTEMENT 5 QCM autonomes, exigeants et utiles, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.
-Chaque QCM comporte exactement 4 propositions distinctes, une seule meilleure réponse, et une correction factuelle de 3 à 6 phrases.
+Chaque QCM comporte exactement 4 propositions distinctes, une seule meilleure réponse, et une correction factuelle ciblée de 2 à 4 phrases (60 à 100 mots maximum) ancrée dans CE cas. Utilise des formulations précises, pas de texte superflu : le contrat JSON et les cinq questions priment.
 Pour chaque QCM, renseigne image_search_query avec une requête courte EN ANGLAIS uniquement si une image pédagogique externe améliorerait réellement l'explication (radiographie, scanner, ECG, schéma anatomique, dermatologie, etc.) ; sinon renvoie exactement une chaîne vide. Cette requête ne doit contenir aucune donnée identifiable.
-Les questions doivent tester des connaissances médicales réelles et généralisables, pas simplement faire répéter le texte du dossier.
+Les questions doivent appliquer les connaissances médicales aux signes, examens et décisions du patient décrit, sans inventer d'événements, et garder une progression clinique logique.
 Évite les formulations vagues comme « dans ce cas », « toutes les réponses » ou « aucune des réponses ».
 
 SOURCES : utilise uniquement le catalogue Europe PMC fourni ci-dessous pour les références. Chaque QCM doit citer 1 à 3 références du catalogue et recopier exactement leur URL. N'invente aucune référence ni URL. Pour les seuils, scores, posologies ou recommandations, ne formule une affirmation précise que si elle est cohérente avec les éléments documentaires fournis. Pour le QCM 5, privilégie une recommandation/consensus lorsqu'il y en a dans le catalogue ; sinon utilise la meilleure revue disponible et reste prudent.
@@ -524,7 +524,8 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
           temperature:0.2,
           reasoning_effort:reasoningEffort,
           reasoning_format:'hidden',
-          max_completion_tokens:12000,
+          // One five-QCM batch within the typical free-tier Groq TPM cap.
+          max_completion_tokens:4800,
           stream:false,
           response_format:{type:'json_object'}
         }),
