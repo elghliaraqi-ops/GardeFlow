@@ -229,8 +229,9 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
+            // Gemini 3.5 Flash-Lite rejects deprecated temperature/top_p/top_k
+            // parameters: see Google's 3.5 Flash-Lite API migration notes.
             responseMimeType: 'application/json',
-            temperature: 0.1,
             maxOutputTokens: mode === 'chapter' ? 9200 : 7900,
           },
         }),
@@ -243,29 +244,37 @@ Deno.serve(async (req: Request) => {
     // 400 is not synonymous with exhausted quota and should be diagnosable.
     async function providerFailure(r: Response) {
       const body = await r.clone().json().catch(() => null);
-      const msg = String(body?.error?.message || '').slice(0, 320);
+      const msg = String(body?.error?.message || '').slice(0, 450);
       const status = String(body?.error?.status || '');
-      const credentialError = /API_KEY_INVALID|api key not valid|permission denied|billing|location not supported/i.test(msg + status);
-      const modelError = /model|unsupported|unknown name|invalid argument|not found/i.test(msg + status);
+      const authError = /API_KEY_INVALID|api key not valid|permission denied|API key was reported|API key expired/i.test(msg);
+      const geoError = /location is not supported|region not supported|free tier is not available|billing required|please enable billing/i.test(msg);
+      const samplingError = /temperature|top[_ ]?p|top[_ ]?k|sampling|deprecated/i.test(msg);
+      const modelError = /model.*(not found|unsupported|unavailable)|not found.*model/i.test(msg);
+      const parameterError = /invalid argument|invalid request|generationConfig|responseMimeType|JSON/i.test(msg+status);
+      const category = authError ? 'credential'
+        : geoError ? 'geographic_or_billing'
+        : samplingError ? 'deprecated_sampling_parameter'
+        : modelError ? 'model_unavailable'
+        : parameterError ? 'parameter_or_format'
+        : 'unclassified_request_error';
       console.warn('practice_glossary_gemini_response', JSON.stringify({
-        http_status: r.status, provider_status: status,
-        // Specific error class only: do not log the complete request/body.
-        error_category: credentialError ? 'credential_or_region'
-          : modelError ? 'model_or_parameters' : 'request_rejected',
-        model: usedModel,
-        // Whitelisted format only, no freeform Google message or secrets.
+        http_status:r.status,provider_status:status,category,model:usedModel,
       }));
-      return {credentialError, modelError, status};
+      return { authError, geoError, samplingError, modelError, category, status };
     }
-    if (!response.ok && [400, 404].includes(response.status)) {
+    if (!response.ok && [400,404].includes(response.status)) {
       const issue = await providerFailure(response);
-      // These two models are documented Flash-Lite variants. Never silently
-      // fall back to Gemini Pro, a chargeable provider or Groq.
-      const fallback = usedModel === 'gemini-2.5-flash-lite'
-        ? 'gemini-3.5-flash-lite' : 'gemini-2.5-flash-lite';
-      if (!issue.credentialError && fallback !== usedModel) {
-        usedModel = fallback;
+      // Retrying another model on a region/key refusal wastes free quota.
+      // Retry only when Google's error actually identifies an absent model.
+      if (issue.modelError && usedModel !== 'gemini-3.5-flash-lite') {
+        usedModel = 'gemini-3.5-flash-lite';
         response = await generate(usedModel);
+      }
+      if (issue.geoError) {
+        throw Error('gemini_location_or_billing');
+      }
+      if (issue.authError) {
+        throw Error('gemini_credential_rejected');
       }
     }
     if (!response.ok) {
@@ -353,6 +362,8 @@ Deno.serve(async (req: Request) => {
       status: 'error', updated_at: new Date().toISOString(),
     }).eq('content_hash', hash);
     return empty(code.includes('quota_exceeded') ? 'gemini_quota_exceeded'
+      : code.includes('location_or_billing') ? 'gemini_location_or_billing'
+      : code.includes('credential_rejected') ? 'gemini_credential_rejected'
       : code.includes('bad_request') ? 'gemini_bad_request'
       : code.includes('model_not_available') ? 'gemini_model_not_available'
       : 'gemini_unavailable');
