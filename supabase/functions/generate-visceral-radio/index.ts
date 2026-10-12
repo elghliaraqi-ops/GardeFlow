@@ -83,7 +83,8 @@ async function groq(contract: GenerationContract, prompt: string) {
         },
       },
       reasoning_effort: 'medium',
-      max_completion_tokens: 20000,
+      // Avoid reserving 20k output tokens for every request (including five QCMs).
+      max_completion_tokens: contract.requestedCount === 5 ? 8000 : contract.requestedCount === 10 ? 13500 : contract.mode === 'fiche' ? 9500 : 7500,
       stream: false,
     };
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -98,6 +99,12 @@ async function groq(contract: GenerationContract, prompt: string) {
     const data = await response.json().catch(() => null);
     if (!response.ok) {
       const code = str(data?.error?.code || data?.error?.type || 'unknown_error', 100);
+      if (response.status === 429) {
+        const after = Number(response.headers.get('retry-after') || '');
+        throw Object.assign(new Error('groq_rate_limited'), {
+          retryAfterSeconds: Number.isFinite(after) && after > 0 ? Math.min(3600, Math.ceil(after)) : 60,
+        });
+      }
       throw new Error('groq_http_' + response.status + ':' + code);
     }
     if (data?.choices?.[0]?.finish_reason === 'length') {
@@ -202,8 +209,8 @@ Deno.serve(async(req)=>{
       if(existing.length>=20)return answer({session});
       const count=Math.min(10,20-existing.length);
       const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
-        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite.\nFICHE:\n'+compact(session.fiche,34000)+
-        '\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>q.statement),4000);
+        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite.\nFICHE:\n'+compact(session.fiche,17000)+
+        '\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>q.statement),2400);
       const produced=await groq(generationContract('course_qcms',{count}),prompt);
       validQuestions(produced,count);
       patch.course_qcms=[...existing,...sanitized(produced.questions)];
@@ -238,6 +245,10 @@ Deno.serve(async(req)=>{
   }catch(e){
     const msg=str((e as Error).message,260);
     console.error('visceral_radio_error',{error:msg});
+    if(msg==='groq_rate_limited'){
+      const seconds=(e as Error & {retryAfterSeconds?:number}).retryAfterSeconds ?? 60;
+      return answer({error:'groq_rate_limited',detail:'Quota Groq temporairement atteint : les QCM existants restent conservés.',retry_after_seconds:seconds},429);
+    }
     return answer({error:'generation_failed',detail:msg},502);
   }
 });
