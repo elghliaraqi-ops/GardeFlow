@@ -58,7 +58,7 @@ async function check(label, fn) {
   });
 
   await check('Headless Chromium renders published Flutter app', async () => {
-    const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+    const browser=await chromium.launch({headless:true,channel:'chrome',args:['--no-sandbox']});
     const errors=[],consoleErrors=[],failedRequests=[],badResponses=[];
     try {
       const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,locale:'fr-FR'});
