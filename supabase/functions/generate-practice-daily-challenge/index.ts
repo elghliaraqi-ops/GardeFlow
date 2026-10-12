@@ -241,10 +241,16 @@ Deno.serve(async(req:Request)=>{
       if(questions.length===10)break;
      }
      if(questions.length!==10)throw Error('invalid_generated_questions');
+     // The checkpoint table intentionally allows a maximum of five QCMs per row.
+     // Persist ten generated QCMs as two rows in ONE DB request; Groq is called only once.
+     // Keep both indexes so an interrupted challenge can reuse completed questions.
+     const updatedAt=new Date().toISOString();
+     const checkpointRows=[
+      {challenge_date:date,mode,batch_index:0,questions:questions.slice(0,5),updated_at:updatedAt},
+      {challenge_date:date,mode,batch_index:1,questions:questions.slice(5,10),updated_at:updatedAt},
+     ];
      const {error:saveError}=await admin.from('practice_daily_generation_batches')
-      .upsert({challenge_date:date,mode,batch_index:0,questions,
-       updated_at:new Date().toISOString()},
-       {onConflict:'challenge_date,mode,batch_index'});
+      .upsert(checkpointRows,{onConflict:'challenge_date,mode,batch_index'});
      if(saveError)throw Error('checkpoint_unavailable');
     }
    }
