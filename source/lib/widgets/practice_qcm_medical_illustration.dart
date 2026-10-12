@@ -18,23 +18,40 @@ class PracticeQcmImageMetadata {
   static String imagingCorrection(String findings, String context) {
     if (findings.trim().isEmpty) return '';
     final text = findings.trim();
-    final shortContext = context.length > 100 ? context.substring(0, 100) : context;
-    final modality = RegExp(r'(?<![A-Za-zÀ-ÿ])(?:IRM|MRI|TDM|scanner|CT|échographie|echographie|ultrasound|radiographie)(?![A-Za-zÀ-ÿ])', caseSensitive: false).firstMatch(text)?.group(0) ?? '';
-    final planeText = RegExp(r'axial|sagittal|coronal', caseSensitive: false).firstMatch(text)?.group(0)?.toLowerCase() ?? 'not_applicable';
+    final shortContext = context.length > 100
+        ? context.substring(0, 100)
+        : context;
+    final modality =
+        RegExp(
+          r'(?<![A-Za-zÀ-ÿ])(?:IRM|MRI|TDM|scanner|CT|échographie|echographie|ultrasound|radiographie)(?![A-Za-zÀ-ÿ])',
+          caseSensitive: false,
+        ).firstMatch(text)?.group(0) ??
+        '';
+    final planeText =
+        RegExp(
+          r'axial|sagittal|coronal',
+          caseSensitive: false,
+        ).firstMatch(text)?.group(0)?.toLowerCase() ??
+        'not_applicable';
     final query = '$shortContext $text';
     return '$marker\n${jsonEncode(<String, dynamic>{
       'query': query.length > 280 ? query.substring(0, 280) : query,
       'modality': modality,
       'purpose': text.length > 230 ? text.substring(0, 230) : text,
-      'image_type': 'radiology_scan', 'anatomy': shortContext,
-      'plane': planeText, 'required_features': <String>[],
+      'image_type': 'radiology_scan',
+      'anatomy': shortContext,
+      'plane': planeText,
+      'required_features': <String>[],
       'excluded_features': <String>['book cover', 'wrong organ'],
       'fallback_queries': <String>[],
       'preferred_sources': <String>['Radiology Assistant', 'PubMed Central', 'Europe PMC'],
-      'allow_article_figures': true, 'allow_source_illustrations': true,
-      'allow_open_graph_preview': true, 'allow_page_preview': true,
+      'allow_article_figures': true,
+      'allow_source_illustrations': true,
+      'allow_open_graph_preview': true,
+      'allow_page_preview': true,
     })}';
   }
+
   static const marker = '§IMAGE_SPEC§';
   static Map<String, dynamic>? fromCorrection(String correction) {
     final i = correction.indexOf(marker);
@@ -157,10 +174,10 @@ class _PracticeQcmMedicalIllustrationState
     extends State<PracticeQcmMedicalIllustration> {
   List<Map<String, dynamic>> _found = [];
   List<Map<String, dynamic>> _googleImages = [];
-  String _googleKey='';
-  bool _googleCached=false, _googleEnabled=false, _searchingGoogle=false;
+  String _googleKey = '';
+  bool _googleCached = false, _googleEnabled = false, _searchingGoogle = false;
   String? _googleMessage;
-  int _googleCount=0;
+  int _googleCount = 0;
   List<Map<String, dynamic>> _links = [];
   List<Map<String, dynamic>> _articles = [];
   final Map<String, Uint8List> _bytes = {};
@@ -224,11 +241,11 @@ class _PracticeQcmMedicalIllustrationState
       _busy = true;
       _message = null;
       _found = [];
-      _googleImages=[];
-      _googleCached=false;
-      _googleKey='';
-      _googleEnabled=false;
-      _googleMessage=null;
+      _googleImages = [];
+      _googleCached = false;
+      _googleKey = '';
+      _googleEnabled = false;
+      _googleMessage = null;
       _links = [];
       _articles = [];
       _bytes.clear();
@@ -257,12 +274,13 @@ class _PracticeQcmMedicalIllustrationState
         final raw = (image['thumbnail'] ?? '').toString();
         await _getBytes(raw, id);
       }
-      await _restoreGoogle(data,id);
+      await _restoreGoogle(data, id);
       for (final article in _articles.take(2)) {
         if (!mounted || id != _version) break;
         final thumb = (article['thumbnail'] ?? '').toString();
         if (thumb.startsWith('https://') &&
-            (article['figure_caption']??'').toString().isNotEmpty) await _getBytes(thumb,id);
+            (article['figure_caption'] ?? '').toString().isNotEmpty)
+          await _getBytes(thumb, id);
       }
     } catch (_) {
       if (mounted && id == _version)
@@ -275,77 +293,105 @@ class _PracticeQcmMedicalIllustrationState
   }
 
   String get _userId =>
-      SupabaseBackendService.instance.client.auth.currentUser?.id??'';
-  Future<void> _restoreGoogle(Map<String,dynamic> result,int requestVersion)async{
-    final key=(result['google_cache_key']??'').toString();
-    final enabled=result['google_images_available']==true;
-    final user=_userId;
-    List<Map<String,dynamic>>? fromCache;
-    int count=0;
-    try{
-      if(key.isNotEmpty&&user.isNotEmpty){
-        fromCache=await PracticeGoogleImageCache.read(userId:user,googleKey:key);
-        count=await PracticeGoogleImageCache.localCount(user);
+      SupabaseBackendService.instance.client.auth.currentUser?.id ?? '';
+  Future<void> _restoreGoogle(
+    Map<String, dynamic> result,
+    int requestVersion,
+  ) async {
+    final key = (result['google_cache_key'] ?? '').toString();
+    final enabled = result['google_images_available'] == true;
+    final user = _userId;
+    List<Map<String, dynamic>>? fromCache;
+    int count = 0;
+    try {
+      if (key.isNotEmpty && user.isNotEmpty) {
+        fromCache = await PracticeGoogleImageCache.read(
+          userId: user,
+          googleKey: key,
+        );
+        count = await PracticeGoogleImageCache.localCount(user);
       }
-    }catch(_){/* Preserve free image gallery. */}
-    if(!mounted||requestVersion!=_version)return;
-    setState((){
-      _googleKey=key;
-      _googleEnabled=enabled;
-      _googleCached=fromCache!=null;
-      _googleImages=fromCache??[];
-      _googleCount=count;
-      _googleMessage=fromCache!=null&&fromCache.isEmpty
-        ?'Aucun résultat Google en cache (recherche conservée 3 jours).':null;
+    } catch (_) {
+      /* Preserve free image gallery. */
+    }
+    if (!mounted || requestVersion != _version) return;
+    setState(() {
+      _googleKey = key;
+      _googleEnabled = enabled;
+      _googleCached = fromCache != null;
+      _googleImages = fromCache ?? [];
+      _googleCount = count;
+      _googleMessage = fromCache != null && fromCache.isEmpty
+          ? 'Aucun résultat Google en cache (recherche conservée 3 jours).'
+          : null;
     });
-    for(final image in _googleImages){
-      if(!mounted||requestVersion!=_version)break;
-      await _getBytes((image['thumbnail']??'').toString(),requestVersion);
+    for (final image in _googleImages) {
+      if (!mounted || requestVersion != _version) break;
+      await _getBytes((image['thumbnail'] ?? '').toString(), requestVersion);
     }
   }
-  Future<void> _searchGoogle()async{
-    if(_searchingGoogle||_googleCached||!_googleEnabled||_googleKey.isEmpty)return;
-    final user=_userId;
-    final request=_request;
-    if(user.isEmpty||request==null)return;
-    final reqVersion=_version;
-    setState(()=>_searchingGoogle=true);
-    try{
-      final count=await PracticeGoogleImageCache.localCount(user);
-      if(count>=PracticeGoogleImageCache.maxPerDeviceMonth){
-        if(mounted)setState(()=>_googleMessage='Limite de prudence locale atteinte (240 ce mois-ci).');
+
+  Future<void> _searchGoogle() async {
+    if (_searchingGoogle ||
+        _googleCached ||
+        !_googleEnabled ||
+        _googleKey.isEmpty)
+      return;
+    final user = _userId;
+    final request = _request;
+    if (user.isEmpty || request == null) return;
+    final reqVersion = _version;
+    setState(() => _searchingGoogle = true);
+    try {
+      final count = await PracticeGoogleImageCache.localCount(user);
+      if (count >= PracticeGoogleImageCache.maxPerDeviceMonth) {
+        if (mounted)
+          setState(
+            () => _googleMessage =
+                'Limite de prudence locale atteinte (240 ce mois-ci).',
+          );
         return;
       }
       await PracticeGoogleImageCache.countAttempt(user);
-      final response=await SupabaseBackendService.instance.client.functions.invoke(
-        'practice-medical-images',
-        body:{'action':'google_images','image_request':request},
-      );
-      final data=response.data is Map
-        ?Map<String,dynamic>.from(response.data as Map):<String,dynamic>{};
-      if(data['error']!=null||data['google_enabled']!=true||data['search_executed']!=true)
+      final response = await SupabaseBackendService.instance.client.functions
+          .invoke(
+            'practice-medical-images',
+            body: {'action': 'google_images', 'image_request': request},
+          );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      if (data['error'] != null ||
+          data['google_enabled'] != true ||
+          data['search_executed'] != true)
         throw StateError('SerpApi unavailable');
-      final results=_records(data['images']).take(8).toList();
-      await PracticeGoogleImageCache.write(userId:user,
-        googleKey:_googleKey,images:results);
-      if(!mounted||reqVersion!=_version)return;
-      setState((){
-        _googleImages=results;
-        _googleCached=true;
-        _googleCount=count+1;
-        _googleMessage=results.isEmpty
-          ?'Recherche Google sans résultat médical : conservée 3 jours.'
-          :'Résultats Google réutilisables 30 jours sans nouvelle requête.';
+      final results = _records(data['images']).take(8).toList();
+      await PracticeGoogleImageCache.write(
+        userId: user,
+        googleKey: _googleKey,
+        images: results,
+      );
+      if (!mounted || reqVersion != _version) return;
+      setState(() {
+        _googleImages = results;
+        _googleCached = true;
+        _googleCount = count + 1;
+        _googleMessage = results.isEmpty
+            ? 'Recherche Google sans résultat médical : conservée 3 jours.'
+            : 'Résultats Google réutilisables 30 jours sans nouvelle requête.';
       });
-      for(final image in results){
-        if(!mounted||reqVersion!=_version)break;
-        await _getBytes((image['thumbnail']??'').toString(),reqVersion);
+      for (final image in results) {
+        if (!mounted || reqVersion != _version) break;
+        await _getBytes((image['thumbnail'] ?? '').toString(), reqVersion);
       }
-    }catch(_){
-      if(mounted&&reqVersion==_version)setState(()=>
-        _googleMessage='Recherche Google indisponible. Aucun nouvel appel automatique.');
-    }finally{
-      if(mounted)setState(()=>_searchingGoogle=false);
+    } catch (_) {
+      if (mounted && reqVersion == _version)
+        setState(
+          () => _googleMessage =
+              'Recherche Google indisponible. Aucun nouvel appel automatique.',
+        );
+    } finally {
+      if (mounted) setState(() => _searchingGoogle = false);
     }
   }
 
@@ -407,7 +453,7 @@ class _PracticeQcmMedicalIllustrationState
   @override
   Widget build(BuildContext context) {
     if (_request == null) return const SizedBox.shrink();
-    final live = [..._found,..._googleImages]
+    final live = [..._found, ..._googleImages]
         .where((x) => _bytes.containsKey((x['thumbnail'] ?? '').toString()))
         .toList();
     return Container(
@@ -509,72 +555,145 @@ class _PracticeQcmMedicalIllustrationState
               ),
             ),
           ],
-          if(_googleKey.isNotEmpty)...[
-            const SizedBox(height:11),
-            if(_googleImages.isNotEmpty)
-              const Text('Google Images — résultats mémorisés sur cet appareil',
-                style:TextStyle(color:Color(0xFF4FDBA8),fontSize:11,
-                  fontWeight:FontWeight.w700)),
-            if(!_googleCached&&_googleEnabled)
-              OutlinedButton.icon(
-                onPressed:_searchingGoogle?null:_searchGoogle,
-                icon:_searchingGoogle
-                  ?const SizedBox(width:15,height:15,
-                      child:CircularProgressIndicator(strokeWidth:2))
-                  :const Icon(Icons.search,size:16),
-                label:Text(_searchingGoogle
-                  ?'Recherche Google en cours…'
-                  :'Rechercher avec Google (1 crédit SerpApi maximum)'),
+          if (_googleKey.isNotEmpty) ...[
+            const SizedBox(height: 11),
+            if (_googleImages.isNotEmpty)
+              const Text(
+                'Google Images — résultats mémorisés sur cet appareil',
+                style: TextStyle(
+                  color: Color(0xFF4FDBA8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            if(_googleCached&&_googleImages.isNotEmpty)
-              const Text('Cache disponible : aucun appel SerpApi supplémentaire.',
-                style:TextStyle(color:Color(0xFFB6CDDD),fontSize:11)),
-            if(_googleMessage!=null)
-              Text(_googleMessage!,style:const TextStyle(
-                color:Color(0xFFB6CDDD),fontSize:11)),
-            Text('Quota prudent local : $_googleCount/240 recherches déclenchées ce mois-ci (cet appareil).',
-              style:const TextStyle(color:Color(0xFF90ADBC),fontSize:10)),
+            if (!_googleCached && _googleEnabled)
+              OutlinedButton.icon(
+                onPressed: _searchingGoogle ? null : _searchGoogle,
+                icon: _searchingGoogle
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.search, size: 16),
+                label: Text(
+                  _searchingGoogle
+                      ? 'Recherche Google en cours…'
+                      : 'Rechercher avec Google (1 crédit SerpApi maximum)',
+                ),
+              ),
+            if (_googleCached && _googleImages.isNotEmpty)
+              const Text(
+                'Cache disponible : aucun appel SerpApi supplémentaire.',
+                style: TextStyle(color: Color(0xFFB6CDDD), fontSize: 11),
+              ),
+            if (_googleMessage != null)
+              Text(
+                _googleMessage!,
+                style: const TextStyle(color: Color(0xFFB6CDDD), fontSize: 11),
+              ),
+            Text(
+              'Quota prudent local : $_googleCount/240 recherches déclenchées ce mois-ci (cet appareil).',
+              style: const TextStyle(color: Color(0xFF90ADBC), fontSize: 10),
+            ),
           ],
-          if(_articles.isNotEmpty)...[
-            const SizedBox(height:12),
-            const Text('Articles sources — figures à consulter',
-              style:TextStyle(color:Color(0xFF4FDBA8),fontWeight:FontWeight.w800,fontSize:12)),
-            const SizedBox(height:8),
-            for(final article in _articles.take(3))
+          if (_articles.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Articles sources — figures à consulter',
+              style: TextStyle(
+                color: Color(0xFF4FDBA8),
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final article in _articles.take(3))
               Container(
-                margin:const EdgeInsets.only(bottom:8),
-                decoration:BoxDecoration(
-                  color:const Color(0xFF173049),
-                  borderRadius:BorderRadius.circular(12)),
-                child:InkWell(
-                  key:ValueKey('qcm-article-'+(article['source']??'').toString()),
-                  borderRadius:BorderRadius.circular(12),
-                  onTap:()=>_open((article['figure_page']??article['source']??'').toString()),
-                  child:Padding(
-                    padding:const EdgeInsets.all(11),
-                    child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                      if((article['figure_caption']??'').toString().isNotEmpty &&
-                        _bytes.containsKey((article['thumbnail']??'').toString()))
-                        ClipRRect(borderRadius:BorderRadius.circular(8),
-                          child:Image.memory(_bytes[(article['thumbnail']??'').toString()]!,
-                            width:60,height:65,fit:BoxFit.contain)),
-                      if((article['figure_caption']??'').toString().isEmpty ||
-                        !_bytes.containsKey((article['thumbnail']??'').toString()))
-                        const Icon(Icons.article_outlined,color:Color(0xFF4FDBA8)),
-                      const SizedBox(width:9),
-                      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                        Text((article['title']??'Article médical').toString(),
-                          maxLines:3,overflow:TextOverflow.ellipsis,
-                          style:const TextStyle(color:Colors.white,fontSize:12,fontWeight:FontWeight.w700)),
-                        const SizedBox(height:5),
-                        Text((article['summary']??'Figures sur le site source').toString(),
-                          maxLines:2,style:const TextStyle(
-                            color:Color(0xFFB6CDDD),fontSize:11)),
-                        const SizedBox(height:4),
-                        const Text('Ouvrir l’article source et les figures ↗',style:TextStyle(
-                          color:Color(0xFF4FDBA8),fontSize:11)),
-                      ])),
-                    ]),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF173049),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: InkWell(
+                  key: ValueKey(
+                    'qcm-article-' + (article['source'] ?? '').toString(),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _open(
+                    (article['figure_page'] ?? article['source'] ?? '')
+                        .toString(),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(11),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if ((article['figure_caption'] ?? '')
+                                .toString()
+                                .isNotEmpty &&
+                            _bytes.containsKey(
+                              (article['thumbnail'] ?? '').toString(),
+                            ))
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              _bytes[(article['thumbnail'] ?? '').toString()]!,
+                              width: 60,
+                              height: 65,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        if ((article['figure_caption'] ?? '')
+                                .toString()
+                                .isEmpty ||
+                            !_bytes.containsKey(
+                              (article['thumbnail'] ?? '').toString(),
+                            ))
+                          const Icon(
+                            Icons.article_outlined,
+                            color: Color(0xFF4FDBA8),
+                          ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (article['title'] ?? 'Article médical')
+                                    .toString(),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                (article['summary'] ??
+                                        'Figures sur le site source')
+                                    .toString(),
+                                maxLines: 2,
+                                style: const TextStyle(
+                                  color: Color(0xFFB6CDDD),
+                                  fontSize: 11,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Ouvrir l’article source et les figures ↗',
+                                style: TextStyle(
+                                  color: Color(0xFF4FDBA8),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

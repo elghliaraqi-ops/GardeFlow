@@ -42,11 +42,40 @@ void main() {
       false,
     );
   });
-  test('Radiology Assistant external previews have narrow HTTPS image paths', () {
-    final source = Uri.parse('https://radiologyassistant.nl/abdomen/rectum/staging');
-    expect(isSupportedExternalMedicalPreview(Uri.parse('https://radiologyassistant.nl/assets/rectal-mri.jpg'), source), isTrue);
-    expect(isSupportedExternalMedicalPreview(Uri.parse('https://radiologyassistant.nl/search?q=mri.jpg'), source), isFalse);
-    expect(isSupportedExternalMedicalPreview(Uri.parse('https://radiologyassistant.nl.evil.test/assets/a.jpg'), source), isFalse);
-    expect(isSupportedExternalMedicalPreview(Uri.parse('https://radiologyassistant.nl/assets/a.jpg?download=1'), source), isFalse);
-  });
+  test(
+    'Radiology Assistant external previews have narrow HTTPS image paths',
+    () {
+      final source = Uri.parse(
+        'https://radiologyassistant.nl/abdomen/rectum/staging',
+      );
+      expect(
+        isSupportedExternalMedicalPreview(
+          Uri.parse('https://radiologyassistant.nl/assets/rectal-mri.jpg'),
+          source,
+        ),
+        isTrue,
+      );
+      expect(
+        isSupportedExternalMedicalPreview(
+          Uri.parse('https://radiologyassistant.nl/search?q=mri.jpg'),
+          source,
+        ),
+        isFalse,
+      );
+      expect(
+        isSupportedExternalMedicalPreview(
+          Uri.parse('https://radiologyassistant.nl.evil.test/assets/a.jpg'),
+          source,
+        ),
+        isFalse,
+      );
+      expect(
+        isSupportedExternalMedicalPreview(
+          Uri.parse('https://radiologyassistant.nl/assets/a.jpg?download=1'),
+          source,
+        ),
+        isFalse,
+      );
+    },
+  );
 }

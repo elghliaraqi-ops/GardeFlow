@@ -1604,7 +1604,10 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
           ),
           if (post.imagingConclusion.trim().isNotEmpty)
             PracticeQcmMedicalIllustration(
-              correction: PracticeQcmImageMetadata.imagingCorrection(post.imagingConclusion, post.presentation),
+              correction: PracticeQcmImageMetadata.imagingCorrection(
+                post.imagingConclusion,
+                post.presentation,
+              ),
               caseContext: post.presentation,
             ),
           _CaseSection(

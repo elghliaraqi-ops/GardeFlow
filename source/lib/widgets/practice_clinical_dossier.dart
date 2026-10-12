@@ -251,7 +251,10 @@ class PracticeClinicalDossier extends StatelessWidget {
           ),
           if (field('imaging_conclusion').isNotEmpty)
             PracticeQcmMedicalIllustration(
-              correction: PracticeQcmImageMetadata.imagingCorrection(field('imaging_conclusion'), field('presentation')),
+              correction: PracticeQcmImageMetadata.imagingCorrection(
+                field('imaging_conclusion'),
+                field('presentation'),
+              ),
               caseContext: field('presentation'),
             ),
         ];
