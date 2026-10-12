@@ -72,8 +72,9 @@ async function groq(contract: GenerationContract, prompt: string) {
        'JSON conforme au schéma, données du cas uniquement, explications et réponses cohérentes.',
       input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+
        (contract.mode==='surgical_techniques'?'\nNoms précis, indications conditionnelles et étapes opératoires ordonnées. Aucun QCM.':contract.mode==='fiche'?'\nLa priorité est un cours développé de résidanat : paragraphes explicatifs, critères et pièges, pas une liste de titres. 900 à 1200 caractères par chapitre, sauf le chapitre 08 dont content contient 650 à 800 caractères en complément de operative_techniques ; 4 key_points factuels de 100 à 160 caractères par chapitre, utilisables pour les QCM.':'\nUne phrase de justification par option, deux phrases de raisonnement pour global_explanation, teaching_point explicatif de niveau résidanat. ')+
-       'Au maximum DEUX questions illustrées par lot, une demande image au plus par question ; image_requests=[] pour les autres. '+
-       'Ne répète pas les métadonnées des images dans les explications. Complète tous les éléments demandés avant toute digression.',
+       (contract.mode==='surgical_techniques'
+         ?'Aucun champ de question, image ou URL ; renseigne uniquement name, indications et steps dans operative_techniques.'
+         :'Au maximum DEUX questions illustrées par lot, une demande image au plus par question ; image_requests=[] pour les autres. Ne répète pas les métadonnées des images dans les explications. Complète tous les éléments demandés avant toute digression.'),
       text:{format:{type:'json_schema',name:contract.name,schema:contract.schema}},
       reasoning:{effort:contract.mode==='fiche'||contract.mode==='surgical_techniques'?'low':'medium'},
       store:false,
