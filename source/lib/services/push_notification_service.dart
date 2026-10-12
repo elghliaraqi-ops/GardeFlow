@@ -194,6 +194,11 @@ class PushNotificationService {
     }
     return FirebaseMessaging.instance.getToken(
       vapidKey: kIsWeb ? HuimFirebaseConfig.webVapidKey : null,
+      // Flutter is hosted at /GardeFlow/ on GitHub Pages, not at domain root.
+      // firebase_messaging >=16.3 allows an explicit base-aware worker URL.
+      serviceWorkerScriptPath: kIsWeb
+          ? Uri.base.resolve('firebase-messaging-sw.js').path
+          : null,
     );
   }
 
