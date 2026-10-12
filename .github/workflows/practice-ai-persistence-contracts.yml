@@ -1,0 +1,29 @@
+name: Practice AI and SQL Contract Audit
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'source/supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'source/lib/services/practice_daily_service.dart'
+      - 'source/lib/screens/practice_daily_screen.dart'
+      - 'ci/verify_practice_ai_contracts.py'
+      - '.github/workflows/practice-ai-persistence-contracts.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ai-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify nine AI function pairs and QCM/SQL counts
+        run: python3 ci/verify_practice_ai_contracts.py
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck production-only Gemini glossary and QCM queue
+        run: |
+          deno check supabase/functions/practice-context-glossary/index.ts
+          deno check supabase/functions/process-clinical-case-qcm-queue/index.ts

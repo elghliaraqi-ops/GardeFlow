@@ -161,6 +161,15 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ? 'Le service IA a atteint sa limite temporaire. Réessayez plus tard.'
             : raw.contains('generation_in_progress')
             ? 'Le défi est en préparation. Réessayez dans quelques instants.'
+            : raw.contains('checkpoint_unavailable') ||
+                  raw.contains('database_write_failed') ||
+                  raw.contains('database_unavailable')
+            ? 'Les QCM ont rencontré un problème de sauvegarde. Aucun nouvel appel IA ne sera lancé automatiquement.'
+            : raw.contains('invalid_generated_questions') ||
+                  raw.contains('invalid_question_count')
+            ? 'La réponse IA ne contient pas les 10 QCM attendus. Aucun QCM incomplet ne sera publié.'
+            : raw.contains('literature_unavailable')
+            ? 'Les références médicales sont temporairement indisponibles. Réessayez ultérieurement.'
             : 'La génération IA n’a pas abouti. Réessayez dans quelques instants.';
         setState(() => _error = message);
       }
