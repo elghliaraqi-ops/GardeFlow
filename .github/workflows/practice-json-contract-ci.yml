@@ -74,6 +74,8 @@ jobs:
           assert.match(progressive, /Object\.keys\(itemSchema\.properties\)/);
           assert.match(progressive, /checkAndFormat\(\{qcms:\(batch\.qcms as unknown\[\]\)\.slice\(0,5\)\}/);
           assert.match(progressive, /checkAndFormat\(\{qcms:\(batch\.qcms as unknown\[\]\)\.slice\(5,10\)\}/);
-          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm','preview-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }
+          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }
+          assert.match(preview, /image_search_query/);
+          assert.match(preview, /medicalImageCorrectionSuffix/);
           console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
           NODE
