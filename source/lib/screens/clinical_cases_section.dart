@@ -1,3 +1,5 @@
+import '../widgets/practice_keyword_text.dart';
+
 import 'package:flutter/material.dart';
 
 import '../widgets/practice_qcm_medical_illustration.dart';
@@ -1457,7 +1459,7 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    PracticeKeywordText(
                       '${index + 1}. ${q.question}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
@@ -2057,7 +2059,7 @@ class _QcmPanel extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: Colors.white.withOpacity(.10)),
             ),
-            child: Text(
+            child: PracticeKeywordText(
               current.question,
               style: const TextStyle(
                 color: _PracticeGame.text,

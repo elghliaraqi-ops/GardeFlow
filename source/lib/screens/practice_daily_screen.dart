@@ -1,3 +1,5 @@
+import '../widgets/practice_keyword_text.dart';
+
 import 'package:flutter/material.dart';
 
 import '../widgets/practice_qcm_medical_illustration.dart';
@@ -816,7 +818,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
             ],
           ),
           const SizedBox(height: 13),
-          Text(
+          PracticeKeywordText(
             q.question,
             style: const TextStyle(
               color: _text,
