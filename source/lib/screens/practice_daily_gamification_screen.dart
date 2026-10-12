@@ -483,7 +483,7 @@ class PracticeDailyLeaderboardScreen extends StatefulWidget {
 
 class _PracticeDailyLeaderboardScreenState
     extends State<PracticeDailyLeaderboardScreen> {
-  String _period = 'month';
+  String _period = 'day';
   List<PracticeDailyGameRank> _rows = [];
   bool _loading = true;
   String? _error;
