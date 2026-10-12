@@ -80,6 +80,7 @@ function takeText(value: unknown, max = 2400): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 function extractGroqText(payload: any): string {
+  if (typeof payload?.choices?.[0]?.message?.content === 'string') return payload.choices[0].message.content.trim();
   if (typeof payload?.output_text === 'string') return payload.output_text.trim();
   const parts: string[] = [];
   for (const item of payload?.output ?? []) {
@@ -204,18 +205,42 @@ Réponds exclusivement avec l'objet JSON structuré demandé.`+'\n'+caseJsonCont
           input: prompt, reasoning: { effort: 'low' },
           text: { format: {
             type: 'json_schema', name: 'random_clinical_case', schema: outputSchema,
-          } }, store: false, max_output_tokens: 5500,
+          } }, store: false, max_output_tokens: 4800,
         }),
       });
     } finally { clearTimeout(timer); }
+    let payload = await provider.json().catch(() => null);
+    // Strict structured output sometimes fails on Groq (json_validate_failed).
+    // Retry ONCE with the same JSON prompt in object mode, never on 429/quota.
+    if (provider.status === 400 && String(payload?.error?.code || '') === 'json_validate_failed') {
+      console.warn('random_case_json_schema_recovery');
+      provider = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${groqKey}`,
+          'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(35000),
+        body: JSON.stringify({
+          model,
+          messages:[{role:'user',content:prompt +
+            '\\nObligatoire : JSON racine avec case et exactement les champs du contrat.'}],
+          response_format:{type:'json_object'}, reasoning_effort:'low',
+          max_completion_tokens:4800,stream:false,
+        }),
+      });
+      payload=await provider.json().catch(()=>null);
+    }
     if (!provider.ok) {
       const status = provider.status;
-      console.log(JSON.stringify({ event: 'random_case_provider_error', status }));
+      const seconds = Number(provider.headers.get('retry-after')) || 60;
+      console.warn('random_case_provider_error',
+        JSON.stringify({status,code:String(payload?.error?.code||'').slice(0,70),
+          retry_after_seconds:status===429?seconds:undefined}));
       return reply(req, { ok: false, error:
-        status === 429 ? 'rate_limited' : 'generation_unavailable' },
+        status === 429 ? 'rate_limited' : status===401||status===403
+          ? 'provider_auth_failed' : 'generation_unavailable',
+        retry_after_seconds: status===429 ? Math.max(1,Math.min(86400,seconds)):undefined },
         status === 429 ? 429 : 503);
     }
-    const payload = await provider.json().catch(() => null);
     let generated: unknown;
     try {
       const text = extractGroqText(payload);
