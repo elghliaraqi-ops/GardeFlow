@@ -124,7 +124,7 @@ Deno.serve(async(req:Request)=>{
  const context=JSON.stringify({service:clean(post.specialist_service,140),age:clean(post.age_band,50),sex:clean(post.sex,30),
  presentation:clean(post.presentation),history:clean(post.history),exam:clean(post.clinical_exam),
  complementary:clean(post.complementary_exams),imaging:clean(post.imaging_conclusion),assessment:clean(post.assessment),plan:clean(post.plan)});
- for(let part=0;part<qty/5;part++){
+ // Exactly one Groq request for the requested preview; no loop over lots.
  const forbidden=past.concat(proposed.map(q=>q.question)).slice(-100).join('\n');
  const exampleQcms={qcms:axes.map(axis=>({
   axis,question:'REMPLACER par une question médicale pour '+axis,
@@ -132,29 +132,29 @@ Deno.serve(async(req:Request)=>{
   correct_index:0,correction:'REMPLACER par une explication médicale fondée sur les sources fournies.',
   topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],image_search_query:'',image_request:emptyMedicalImageRequest
  }))};
- const jsonContract='Objet JSON racine {qcms:[5 objets]} avec les champs EXACTS : '+
+ const jsonContract='Objet JSON racine {qcms:['+qty+' objets]} avec les champs EXACTS : '+
   Object.keys(((schema.properties.qcms as {items:{properties:Record<string,unknown>}}).items).properties).join(', ')+
   '. references doit être une liste de 1 à 3 objets {url}, jamais des sources inventées. '+
   'Axes strictement dans cet ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
-  '. Exemple JSON valide dont tous les contenus sont À REMPLACER : '+JSON.stringify(exampleQcms)+
+  '. Exemple de 5 objets valides à étendre jusqu’à '+qty+' sans recopier les placeholders : '+JSON.stringify(exampleQcms)+
   '. Ne pas recopier les placeholders. Aucun Markdown.';
- const prompt=medicalEvidencePolicy+'\nGénère exactement 5 QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
+ const prompt=medicalEvidencePolicy+'\nGénère exactement '+qty+' QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes par groupe de 5 dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
  try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
- body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:9500,
+ body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:qty===5?7500:qty===10?14000:22000,
  response_format:{type:'json_object'}})});}
  finally{clearTimeout(timer);}
  const raw=await remote.json().catch(()=>null);
  if(!remote.ok)throw Error(remote.status===429?'groq_rate_limited':'groq_unavailable');
  const content=raw?.choices?.[0]?.message?.content;
  const decoded=JSON.parse(typeof content==='string'?content:Array.isArray(content)?content.map((v:{text?:string})=>v.text??'').join(''):'') as {qcms?:Choice[]};
- if(!Array.isArray(decoded.qcms)||decoded.qcms.length!==5)throw Error('invalid_qcm_count');
- for(let i=0;i<5;i++){
+ if(!Array.isArray(decoded.qcms)||decoded.qcms.length!==qty)throw Error('invalid_qcm_count');
+ for(let i=0;i<qty;i++){
  const q=decoded.qcms[i],question=clean(q.question,1200),cor=clean(q.correction,5500);
  const opts=Array.isArray(q.options)?q.options.map(x=>clean(x,420)):[];
  const sources=Array.isArray(q.references)?q.references.flatMap((r):Ref[]=>{const found=byUrl.get(urlKey(r.url));return found?[found]:[];}):[];
  const uniqueRefs=[...new Map(sources.map(x=>[x.url,x])).values()].slice(0,3);
- if(q.axis!==axes[i]||question.length<12||cor.length<20||opts.length!==4||new Set(opts).size!==4||
+ if(q.axis!==axes[i%5]||question.length<12||cor.length<20||opts.length!==4||new Set(opts).size!==4||
  !Number.isInteger(q.correct_index)||q.correct_index<0||q.correct_index>3||!topics.includes(q.topic as typeof topics[number])||!uniqueRefs.length)
  throw Error('invalid_generated_qcm');
  const normalize=(s:string)=>s.toLowerCase().replace(/\s+/g,' ').trim();
@@ -165,7 +165,6 @@ Deno.serve(async(req:Request)=>{
    '\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
  proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:q.topic});
  }
- }
  const staged=await admin.rpc('clinical_case_stage_qcm_preview',{p_post_id:postId,p_user_id:uid,p_qcms:proposed,p_difficulty:level});
  if(staged.error||!staged.data)throw Error('preview_staging_failed');
  done=true;
@@ -173,7 +172,7 @@ Deno.serve(async(req:Request)=>{
  questions:proposed.map(({question,options,topic})=>({question,options,topic}))});
  }catch(e){
  const code=e instanceof Error?e.message:'generation_failed';
- return response(req,{ok:false,error:['literature_sources_unavailable','groq_rate_limited','groq_unavailable','duplicate_questions','invalid_generated_qcm','invalid_qcm_count','preview_staging_failed'].includes(code)?code:'generation_failed'},503);
+ return response(req,{ok:false,error:['literature_sources_unavailable','groq_rate_limited','groq_unavailable','duplicate_questions','invalid_generated_qcm','invalid_qcm_count','preview_staging_failed'].includes(code)?code:'generation_failed',retry_after_seconds:code==='groq_rate_limited'?60:undefined},code==='groq_rate_limited'?429:503);
  }finally{
  if(!done){try{await admin.rpc('clinical_case_finish_qcm_extension',{p_post_id:postId,p_success:false,p_error_code:'preview_failed'});}catch(_){/* Best-effort unlock. */}}
  }
