@@ -26,7 +26,7 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
   return {accepted:[],rejected:[{position:0,reason:'qcms_not_array'}]};
  const accepted:DailyCandidate[]=[],rejected:Rejection[]=[];
  const refMap=new Map(refs.map(r=>[canon(r.url),r]));
- for(const [index,entry] of input.qcms.slice(0,8).entries()){
+ for(const [index,entry] of input.qcms.slice(0,10).entries()){
   const position=index+1;
   if(!entry||typeof entry!=='object'||Array.isArray(entry)){
    rejected.push({position,reason:'invalid_object'});continue;
@@ -69,7 +69,7 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
      ?q.image_request as Record<string,unknown>:{}
   });
  }
- if(input.qcms.length>8)rejected.push({position:9,reason:'too_many_questions'});
+ if(input.qcms.length>10)rejected.push({position:11,reason:'too_many_questions'});
  return {accepted,rejected};
 }
 export function validCachedDailyQuestion(raw:unknown):raw is Record<string,unknown>{
