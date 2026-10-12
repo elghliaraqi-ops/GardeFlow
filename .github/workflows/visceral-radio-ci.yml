@@ -5,6 +5,8 @@ on:
     paths:
       - 'source/lib/screens/practice_visceral_radio_screen.dart'
       - 'source/lib/widgets/practice_keyword_text.dart'
+      - 'source/lib/widgets/practice_surgical_techniques.dart'
+      - 'source/test/practice_surgical_techniques_test.dart'
       - 'source/lib/screens/practice_daily_screen.dart'
       - 'source/lib/screens/practice_progressive_cases_screen.dart'
       - 'source/lib/screens/clinical_cases_section.dart'
@@ -34,9 +36,9 @@ jobs:
       - working-directory: source
         run: dart format lib/screens/practice_visceral_radio_screen.dart lib/screens/visceral_radio_course_widgets.dart lib/screens/visceral_radio_fiche_view.dart
       - working-directory: source
-        run: flutter analyze lib/screens/practice_visceral_radio_screen.dart lib/screens/visceral_radio_course_widgets.dart lib/screens/visceral_radio_fiche_view.dart lib/screens/practice_screen.dart lib/widgets/practice_keyword_text.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/clinical_cases_section.dart --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze lib/screens/practice_visceral_radio_screen.dart lib/screens/visceral_radio_course_widgets.dart lib/screens/visceral_radio_fiche_view.dart lib/screens/practice_screen.dart lib/widgets/practice_keyword_text.dart lib/widgets/practice_surgical_techniques.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/clinical_cases_section.dart --no-fatal-infos --no-fatal-warnings
       - working-directory: source
-        run: flutter test test/practice_keyword_text_test.dart test/practice_visceral_radio_test.dart test/visceral_radio_course_widgets_test.dart
+        run: flutter test test/practice_surgical_techniques_test.dart test/practice_keyword_text_test.dart test/practice_visceral_radio_test.dart test/visceral_radio_course_widgets_test.dart
 
   deno:
     runs-on: ubuntu-latest
@@ -53,4 +55,4 @@ jobs:
       - name: Test external medical image search terms
         run: deno test --allow-env=SERPAPI_KEY source/supabase/functions/generate-visceral-radio/medical_image_previews_test.ts
       - name: Test four Groq prompt/JSON contracts (no API calls)
-        run: deno test source/supabase/functions/generate-visceral-radio/emc_context_test.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts source/supabase/functions/generate-visceral-radio/residency_course_context_test.ts
+        run: deno test source/supabase/functions/generate-visceral-radio/surgical_techniques_test.ts source/supabase/functions/generate-visceral-radio/emc_context_test.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts source/supabase/functions/generate-visceral-radio/residency_course_context_test.ts

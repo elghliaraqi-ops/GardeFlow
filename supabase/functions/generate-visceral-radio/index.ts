@@ -1,3 +1,4 @@
+import {hasSurgicalTechniques,addSurgicalTechniques,surgicalTeachingPolicy} from './surgical_techniques.ts';
 import { retrieveEmc, emcExcerpt } from './emc_context.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { generationContract, type GenerationContract } from './generation_contract.ts';
@@ -70,18 +71,18 @@ async function groq(contract: GenerationContract, prompt: string) {
       instructions:'Tu es enseignant universitaire en chirurgie viscérale et radiologie. '+
        'JSON conforme au schéma, données du cas uniquement, explications et réponses cohérentes.',
       input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+
-       (contract.mode==='fiche'?'\nLa priorité est un cours développé de résidanat : paragraphes explicatifs, critères et pièges, pas une liste de titres. 900 à 1200 caractères par chapitre ; 4 key_points factuels de 100 à 160 caractères par chapitre, utilisables pour les QCM.':'\nUne phrase de justification par option, deux phrases de raisonnement pour global_explanation, teaching_point explicatif de niveau résidanat. ')+
+       (contract.mode==='surgical_techniques'?'\nNoms précis, indications conditionnelles et étapes opératoires ordonnées. Aucun QCM.':contract.mode==='fiche'?'\nLa priorité est un cours développé de résidanat : paragraphes explicatifs, critères et pièges, pas une liste de titres. 900 à 1200 caractères par chapitre, sauf le chapitre 08 dont content contient 650 à 800 caractères en complément de operative_techniques ; 4 key_points factuels de 100 à 160 caractères par chapitre, utilisables pour les QCM.':'\nUne phrase de justification par option, deux phrases de raisonnement pour global_explanation, teaching_point explicatif de niveau résidanat. ')+
        'Au maximum DEUX questions illustrées par lot, une demande image au plus par question ; image_requests=[] pour les autres. '+
        'Ne répète pas les métadonnées des images dans les explications. Complète tous les éléments demandés avant toute digression.',
       text:{format:{type:'json_schema',name:contract.name,schema:contract.schema}},
-      reasoning:{effort:contract.mode==='fiche'?'low':'medium'},
+      reasoning:{effort:contract.mode==='fiche'||contract.mode==='surgical_techniques'?'low':'medium'},
       store:false,
-      max_output_tokens:contract.requestedCount===5?3500:contract.requestedCount===10?4800:
+      max_output_tokens:contract.mode==='surgical_techniques'?2000:contract.requestedCount===5?3500:contract.requestedCount===10?4800:
        contract.mode==='fiche'?5800:4500,
     };
     const inputEstimate=Math.ceil((payload.input.length+payload.instructions.length+JSON.stringify(contract.schema).length)/3);
     payload.max_output_tokens=Math.min(payload.max_output_tokens,7800-inputEstimate);
-    if(payload.max_output_tokens<2200)throw new Error('groq_request_too_large');
+    if(payload.max_output_tokens<(contract.mode==='surgical_techniques'?1000:2200))throw new Error('groq_request_too_large');
     const response = await fetch('https://api.groq.com/openai/v1/responses', {
       method: 'POST',
       signal: controller.signal,
@@ -230,7 +231,8 @@ Deno.serve(async(req)=>{
       const evidence=await guidelines(topic);
       const prompt=sourcePrompt(topic,evidence.slice(0,1000))+courseTeachingPolicy()+
         '\nMODE FICHE: cours détaillé de RÉSIDANAT en 10 chapitres, avec rapports anatomiques, protocoles d imagerie, critères de classification, stratégie selon gravité, gestes et pièges opératoires. Le cours explique toutes les notions des 20 QCM de résidanat à venir. Ne produis pas un simple résumé. key_points et study_core sont des faits expliqués et non une liste d objectifs.';
-      const fiche=sanitized(await groq(generationContract('fiche'),prompt));
+      const generated=sanitized(await groq(generationContract('fiche'),prompt));
+      const fiche=addSurgicalTechniques(generated,generated.operative_techniques);
       if(!fiche?.title||!Array.isArray(fiche?.sections))throw new Error('incomplete_fiche');
       try { fiche.emc=await emcSupplement(db,user.id,topic); }
       catch (_) { fiche.emc={status:'pending',message:'Complément EMC temporairement indisponible. Le cours reste conservé.',sections:[],sources:[]}; }
@@ -242,7 +244,19 @@ Deno.serve(async(req)=>{
     const {data:session,error:readError}=await db.from(TABLE).select('*').eq('id',id).eq('owner_id',user.id).single();
     if(readError||!session)return answer({error:'session_not_found'},404);
     let patch:any={updated_at:new Date().toISOString()};
-    if(action==='emc'){
+    if(action==='surgical_techniques'){
+      if(hasSurgicalTechniques(session.fiche))return answer({session});
+      const docs=await retrieveEmc(db,user.id,session.topic).catch(()=>[]);
+      const evidence=await guidelines(session.topic);
+      const prompt=sourcePrompt(session.topic,evidence.slice(0,1000))+surgicalTeachingPolicy+
+        '\nCHAPITRE 08 INITIAL À CONSERVER :\n'+compact(session.fiche?.sections?.[7],2300)+
+        '\nPASSAGES EMC DOCUMENTAIRES (leurs dates ne sont pas des recommandations actuelles) :\n'+docs.map((d:any)=>d.title+'\n'+emcExcerpt(session.topic,d.content||'',1100)).join('\n');
+      const result=await groq(generationContract('surgical_techniques'),prompt);
+      patch.fiche=addSurgicalTechniques(session.fiche,sanitized(result.operative_techniques));
+      if(patch.fiche.emc?.status!=='ready'&&patch.fiche.emc?.status!=='no_match'){
+        try { patch.fiche.emc=await emcSupplement(db,user.id,session.topic); } catch (_) { /* Retain existing EMC and course. */ }
+      }
+    }else if(action==='emc'){
       if(session.fiche?.emc?.status==='ready'||session.fiche?.emc?.status==='no_match')return answer({session});
       patch.fiche={...session.fiche,emc:await emcSupplement(db,user.id,session.topic)};
     }else if(action==='course_qcms'){
