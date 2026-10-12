@@ -589,6 +589,7 @@ class _PracticeDailyLeaderboardScreenState
                 ),
                 showSelectedIcon: false,
                 segments: const [
+                  ButtonSegment(value: 'day', label: Text('Aujourd’hui')),
                   ButtonSegment(value: 'month', label: Text('Ce mois')),
                   ButtonSegment(value: 'all', label: Text('Tout le temps')),
                 ],
