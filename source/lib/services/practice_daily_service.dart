@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/practice_daily_models.dart';
 import 'supabase_backend_service.dart';
 
@@ -30,17 +32,25 @@ class PracticeDailyService {
       throw ArgumentError('Mode invalide.');
     final existing = await current(mode: mode);
     if (existing.ready) return existing;
-    final result = await _backend.client.functions.invoke(
-      'generate-practice-daily-challenge',
-      body: <String, dynamic>{'mode': mode},
-    );
-    final body = result.data;
-    if (body is! Map || body['ok'] != true)
-      throw StateError(
-        body is Map && body['error'] == 'generation_in_progress'
-            ? 'Le défi est en préparation. Réessayez dans quelques instants.'
-            : 'Création du défi momentanément indisponible.',
+    // Surface the provider/database error code instead of hiding every 429/503
+    // behind the same generic UI failure. No automatic retry or extra Groq call.
+    try {
+      final result = await _backend.client.functions.invoke(
+        'generate-practice-daily-challenge',
+        body: <String, dynamic>{'mode': mode},
       );
+      final body = result.data;
+      if (body is! Map || body['ok'] != true) {
+        final code = body is Map ? body['error']?.toString() ?? 'unknown' : 'empty_response';
+        throw StateError('daily_ai_error:$code');
+      }
+    } on FunctionException catch (error) {
+      final details = error.details;
+      final code = details is Map
+          ? (details['error']?.toString() ?? 'http_failure')
+          : 'http_failure';
+      throw StateError('daily_ai_error:$code');
+    }
     final after = await current(mode: mode);
     if (!after.ready) throw StateError('Défi en cours de préparation.');
     return after;
