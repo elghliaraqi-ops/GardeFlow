@@ -1,3 +1,4 @@
+import 'practice_qcm_medical_illustration.dart';
 import 'practice_keyword_text.dart';
 
 import 'package:flutter/material.dart';
@@ -248,6 +249,11 @@ class PracticeClinicalDossier extends StatelessWidget {
             Icons.image_search_outlined,
             fields(['imaging_conclusion']),
           ),
+          if (field('imaging_conclusion').isNotEmpty)
+            PracticeQcmMedicalIllustration(
+              correction: PracticeQcmImageMetadata.imagingCorrection(field('imaging_conclusion'), field('presentation')),
+              caseContext: field('presentation'),
+            ),
         ];
       case 2:
         return [

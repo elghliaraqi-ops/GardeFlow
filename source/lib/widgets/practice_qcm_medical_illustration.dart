@@ -13,6 +13,28 @@ import '../services/practice_google_image_cache.dart';
 /// progressive fictitious cases, published cases and previewed QCM sets.
 /// No image bytes or image URLs are written into the application's database.
 class PracticeQcmImageMetadata {
+  /// Enrich a saved imaging conclusion when it becomes visible. This uses only
+  /// that conclusion and the presenting context, never future case phases.
+  static String imagingCorrection(String findings, String context) {
+    if (findings.trim().isEmpty) return '';
+    final text = findings.trim();
+    final shortContext = context.length > 100 ? context.substring(0, 100) : context;
+    final modality = RegExp(r'IRM|MRI|TDM|scanner|CT|échographie|echographie|ultrasound|radiographie', caseSensitive: false).firstMatch(text)?.group(0) ?? '';
+    final planeText = RegExp(r'axial|sagittal|coronal', caseSensitive: false).firstMatch(text)?.group(0)?.toLowerCase() ?? 'not_applicable';
+    final query = '$shortContext $text';
+    return '$marker\n${jsonEncode(<String, dynamic>{
+      'query': query.length > 280 ? query.substring(0, 280) : query,
+      'modality': modality,
+      'purpose': text.length > 230 ? text.substring(0, 230) : text,
+      'image_type': 'radiology_scan', 'anatomy': shortContext,
+      'plane': planeText, 'required_features': <String>[],
+      'excluded_features': <String>['book cover', 'wrong organ'],
+      'fallback_queries': <String>[],
+      'preferred_sources': <String>['Radiology Assistant', 'PubMed Central', 'Europe PMC'],
+      'allow_article_figures': true, 'allow_source_illustrations': true,
+      'allow_open_graph_preview': true, 'allow_page_preview': true,
+    })}';
+  }
   static const marker = '§IMAGE_SPEC§';
   static Map<String, dynamic>? fromCorrection(String correction) {
     final i = correction.indexOf(marker);

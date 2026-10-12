@@ -1602,6 +1602,11 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
             label: 'Imagerie',
             value: post.imagingConclusion,
           ),
+          if (post.imagingConclusion.trim().isNotEmpty)
+            PracticeQcmMedicalIllustration(
+              correction: PracticeQcmImageMetadata.imagingCorrection(post.imagingConclusion, post.presentation),
+              caseContext: post.presentation,
+            ),
           _CaseSection(
             icon: Icons.psychology_alt_outlined,
             label: 'Synthèse',
