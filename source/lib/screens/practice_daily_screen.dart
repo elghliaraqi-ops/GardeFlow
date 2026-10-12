@@ -207,14 +207,20 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           }
         } catch (refreshError) {
           if (mounted) {
-            setState(() => _error =
-                'Score enregistré. Actualisez le calendrier si nécessaire.');
+            setState(
+              () => _error =
+                  'Score enregistré. Actualisez le calendrier si nécessaire.',
+            );
           }
         }
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Défi validé · ${updated.score}/10 · Score officiel enregistré'),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Défi validé · ${updated.score}/10 · Score officiel enregistré',
+              ),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -259,12 +265,14 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       setState(() => _enabled = enabled);
       await _scheduleReminders(_days.values.toList());
       if (enabled && !PushNotificationService.instance.hasActiveRemotePush) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-            'Push distant indisponible : vérifiez les permissions. '
-            'Le rappel local est utilisé sur mobile.',
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Push distant indisponible : vérifiez les permissions. '
+              'Le rappel local est utilisé sur mobile.',
+            ),
           ),
-        ));
+        );
       }
     } catch (e) {
       if (mounted) setState(() => _error = 'Rappels non modifiés : $e');
