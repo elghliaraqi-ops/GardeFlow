@@ -1751,7 +1751,7 @@ class _GamingTextButton extends StatelessWidget {
               children: [
                 Icon(icon, size: 18, color: _PracticeGame.gold),
                 const SizedBox(width: 7),
-                Text(
+                PracticeKeywordText(
                   label,
                   style: const TextStyle(
                     color: _PracticeGame.text,
@@ -1903,7 +1903,7 @@ class _CaseSection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                PracticeKeywordText(
                   value.trim().isEmpty ? 'Non renseigné' : value.trim(),
                   style: const TextStyle(
                     color: _PracticeGame.text,
@@ -2173,7 +2173,7 @@ class _QcmOption extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 3),
-                  child: Text(
+                  child: PracticeKeywordText(
                     label,
                     style: TextStyle(
                       color: foreground,
@@ -2612,7 +2612,7 @@ class _GuidelineCorrection extends StatelessWidget {
       for (var i = 0; i < lines.length; i++) ...[
         if (RegExp(r'^(#{1,3}\s+|[A-ZÀ-Ü][A-ZÀ-Ü0-9 /-]{4,}:?$)')
             .hasMatch(lines[i]))
-          Text(
+          PracticeKeywordText(
             lines[i].replaceFirst(RegExp(r'^#{1,3}\s+'), ''),
             style: const TextStyle(
               color: _PracticeGame.gold,
@@ -2631,7 +2631,7 @@ class _GuidelineCorrection extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
+                child: PracticeKeywordText(
                   lines[i].replaceFirst(RegExp(r'^[-•]\s+'), ''),
                   style: const TextStyle(
                     color: _PracticeGame.text,
@@ -2644,7 +2644,7 @@ class _GuidelineCorrection extends StatelessWidget {
             ],
           )
         else
-          Text(
+          PracticeKeywordText(
             lines[i],
             style: const TextStyle(
               color: _PracticeGame.text,

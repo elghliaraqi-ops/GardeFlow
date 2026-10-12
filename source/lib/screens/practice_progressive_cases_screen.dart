@@ -302,7 +302,7 @@ class _PracticeProgressiveCasesScreenState
           ),
         ),
         const SizedBox(height: 7),
-        Text(
+        PracticeKeywordText(
           PracticeQcmImageMetadata.visibleText(correction),
           style: const TextStyle(
             color: PracticeDailyVisualTheme.text,
@@ -415,7 +415,7 @@ class _PracticeProgressiveCasesScreenState
                       ),
                     ),
                     Expanded(
-                      child: Text(
+                      child: PracticeKeywordText(
                         q.options[choice],
                         style: const TextStyle(
                           color: PracticeDailyVisualTheme.text,

@@ -489,7 +489,7 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
                       ),
                     ),
                     Expanded(
-                      child: Text(
+                      child: PracticeKeywordText(
                         q.options[i],
                         style: const TextStyle(color: _text),
                       ),
@@ -528,7 +528,10 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
           style: TextStyle(color: _green, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
-        Text(explanation, style: const TextStyle(color: _text, height: 1.5)),
+        PracticeKeywordText(
+          explanation,
+          style: const TextStyle(color: _text, height: 1.5),
+        ),
         PracticeQcmMedicalIllustration(
           correction: correction,
           question: question,
