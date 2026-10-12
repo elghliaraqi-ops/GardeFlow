@@ -251,7 +251,10 @@ Deno.serve(async(req:Request)=>{
      ];
      const {error:saveError}=await admin.from('practice_daily_generation_batches')
       .upsert(checkpointRows,{onConflict:'challenge_date,mode,batch_index'});
-     if(saveError)throw Error('checkpoint_unavailable');
+     // Staging is best-effort only: a valid complete batch must always reach
+     // the authoritative daily challenge table, even if checkpoint writing fails.
+     if(saveError)console.warn('daily_checkpoint_write_failed_nonblocking',
+       {code:saveError.code});
     }
    }
    if(questions.length!==10)throw Error('invalid_question_count');
