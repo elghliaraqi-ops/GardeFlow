@@ -457,7 +457,6 @@ export function articleFigureRelevant(caption:string,request:MedicalImageRequest
   if(/rect|mesorect|sphinct|levator/.test(subject) &&
      !/(rect|mesorect|sphinct|levator|pelvic|anal|fascia|muscularis|tumor|tumour|carcinoma|lymph|node|nodal|iliac|t[1-4]\b|mr\s?stage)/.test(label))return false;
   if(request.image_type==='radiology_scan'){
-  if(!radiologyCaptionFitsQuery(caption,request.modality+' '+request.query))return false;
     if(/photograph|histolog|gross specimen|resection specimen|survival curve|kaplan|flowchart|flow chart|forest plot/.test(label))return false;
     // Only actual scan/image-caption terminology can qualify as radiological media.
     // A staging histogram mentioning T3/T4 is not an MRI illustration.
