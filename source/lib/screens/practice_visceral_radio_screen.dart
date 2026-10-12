@@ -68,7 +68,13 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
         _history.insert(0,result);
         if(action=='create')_clearAnswers();
       });
-    }catch(e){if(mounted)setState(()=>_error='Génération impossible : '+e.toString());}
+    }catch(e){if(mounted){
+      final message=e.toString();
+      final rateLimited=message.contains('429')||message.contains('groq_rate_limited')||message.contains('rate_limit_exceeded');
+      setState(()=>_error=rateLimited
+        ?'Quota Groq temporairement atteint. Les QCM déjà générés sont conservés. Réessayez après la période indiquée par Groq.'
+        :'Génération impossible : '+message);
+    }}
     finally{if(mounted)setState(()=>_busy=false);}
   }
   void _clearAnswers(){
