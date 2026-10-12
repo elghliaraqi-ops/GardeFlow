@@ -1,0 +1,32 @@
+name: Live GardeFlow public web and API smoke test
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ci/live-smoke.cjs'
+      - '.github/workflows/live-gardeflow-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright against preinstalled Chrome
+        run: |
+          npm install --no-save playwright@1.56.1
+          which google-chrome
+      - name: Smoke test the actual published website and auth boundary
+        run: node ci/live-smoke.cjs
+      - name: Preserve screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gardeflow-live-smoke-results
+          path: smoke-evidence
+          retention-days: 7
