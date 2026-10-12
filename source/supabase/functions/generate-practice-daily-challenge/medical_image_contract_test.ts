@@ -39,3 +39,10 @@ Deno.test('source figure and page preview options are optional for stored legacy
  if(!payload.allow_article_figures||!payload.allow_page_preview||payload.fallback_queries.length!==2)
   throw Error('article preview contract data lost');
 });
+
+Deno.test('Radiology Assistant priority is synchronized in schema, prompt and serialized legacy request',()=>{
+ if(!medicalImageSchema.properties.preferred_sources.description.startsWith('Radiology Assistant first'))throw Error('schema_priority');
+ if(!medicalImagePrompt.includes('preferred_sources commence par Radiology Assistant'))throw Error('prompt_priority');
+ const payload=JSON.parse(medicalImageCorrectionSuffix({query:'rectal MRI',preferred_sources:['Europe PMC']}).split('§IMAGE_SPEC§')[1]);
+ if(payload.preferred_sources[0]!=='Radiology Assistant'||payload.preferred_sources[1]!=='Europe PMC')throw Error('runtime_priority');
+});

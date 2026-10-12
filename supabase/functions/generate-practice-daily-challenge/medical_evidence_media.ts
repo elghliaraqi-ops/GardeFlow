@@ -1,3 +1,4 @@
+import {radiologyPriorityPolicy,findRadiologyArticles,radiologyFigures,radiologyAsset,radiologySearchWords,radiologyCaptionFitsQuery} from './radiology_assistant.ts';
 /**
  * Evidence and licensed external educational media for Practice generators.
  * No image bytes, local files or Base64 ever enter Supabase.
@@ -9,7 +10,7 @@ function clean(value:unknown,max=250):string{
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ')
   .replace(/\s+/g,' ').trim().slice(0,max);
 }
-export const medicalEvidencePolicy='Dans le champ question, entoure 2 à 5 termes cliniques clés avec **double astérisque** : affichage souligné et recherche Google au clic. Pas d URL, pas d indice de la réponse correcte.\n'+[
+export const medicalEvidencePolicy=radiologyPriorityPolicy+'\n'+'Dans le champ question, entoure 2 à 5 termes cliniques clés avec **double astérisque** : affichage souligné et recherche Google au clic. Pas d URL, pas d indice de la réponse correcte.\n'+[
  'SUPPORT ET NIVEAU : lorsque le niveau résidanat est demandé, enseigner les critères discriminants, leurs raisons, les rapports anatomiques utiles, classifications applicables, alternatives selon stabilité et terrain, étapes opératoires et surveillance. Expliquer les notions nécessaires aux réponses dans le cours ou la correction pédagogique ; pas de simple lettre ni de titres vagues. Respecter le même patient et la chronologie, sans inventer ses résultats.',
  'PRIORITÉ CLINIQUE OBLIGATOIRE — date actuelle : '+new Date().toISOString().slice(0,10)+'.',
  'Le cas fictif, chaque question, TOUTES les corrections, les examens complémentaires, indications,',
@@ -91,6 +92,7 @@ export function supportedMedicalImageLink(preview:unknown,source:unknown):boolea
  try{
   const a=new URL(String(preview)),b=new URL(String(source));
   if(a.protocol!=='https:'||b.protocol!=='https:')return false;
+  if(a.hostname==='radiologyassistant.nl'&&b.hostname==='radiologyassistant.nl'&&radiologyAsset(a.toString())&&!b.username&&!b.password&&!b.port)return true;
   if(a.hostname==='upload.wikimedia.org'&&b.hostname==='commons.wikimedia.org')
    return true;
   if(a.hostname==='api.openverse.org'&&b.hostname==='openverse.org'){
@@ -127,6 +129,14 @@ export async function findOpenverseMedicalPreview(query:string,guard?:RegExp):
  Promise<PreviewLink|null>{
  const cleaned=clean(query,125);
  if(!cleaned)return null;
+ const articles=await findRadiologyArticles(cleaned);
+ for(const a of articles)for(const f of radiologyFigures(a.html,a.source)){
+  const caption=f.caption.toLowerCase();
+  if(!radiologyCaptionFitsQuery(caption,cleaned))continue;
+  if(guard&&!guard.test(caption))continue;
+  if(!radiologySearchWords(cleaned).some(w=>caption.includes(w)))continue;
+  return {title:f.caption.slice(0,220),preview_url:f.thumbnail,source_url:a.source,license:'Droits réservés — aperçu externe',creator:'The Radiology Assistant',provider:'The Radiology Assistant'};
+ }
  const abort=new AbortController();
  const timeout=setTimeout(()=>abort.abort(),5500);
  try{

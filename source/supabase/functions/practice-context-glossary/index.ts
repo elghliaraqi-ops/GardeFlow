@@ -1,3 +1,4 @@
+import {radiologyAssistantContext,radiologyPriorityPolicy} from './radiology_assistant.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
 const cors = {
@@ -129,7 +130,8 @@ Deno.serve(async (req: Request) => {
     // Gemini 2.5 may return 404 for new AI Studio projects: use current
     // Flash-Lite stable, the cost-efficient/free-tier text model.
     const preferred = Deno.env.get('GEMINI_GLOSSARY_MODEL') || 'gemini-3.5-flash-lite';
-    const prompt = [
+    const imagingContext=await radiologyAssistantContext(objective+' '+content.slice(0,1600));
+    const prompt = [radiologyPriorityPolicy,imagingContext,
       'Tu es un assistant d\'enseignement médical francophone : explique le CONTENU, pas seulement le vocabulaire.',
       'MODE : ' + mode + '. Chapitre = fournir de nombreuses fiches sur les mots de CES chapitres.',
       'Pour un groupe de chapitres riches, viser 10 à 12 termes pertinents ; ne pas se limiter à 7.',

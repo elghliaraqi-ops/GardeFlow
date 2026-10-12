@@ -1,3 +1,4 @@
+import {radiologyAssistantContext} from './radiology_assistant.ts';
 import {fourOptionQcu} from './qcm_options.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
@@ -239,7 +240,7 @@ async function generateCaseDossier(specialty:string):Promise<Record<string,unkno
  if(!key)throw Error('groq_configuration_missing');
  const model=Deno.env.get('GROQ_CASE_MODEL')?.trim()||'openai/gpt-oss-20b';
  const evidence=await recentGuidelineCatalog(specialty);
- const prompt=medicalEvidencePolicy+'\nRECOMMANDATIONS INDEXÉES :\n'+
+ const prompt=await radiologyAssistantContext(specialty+' '+evidence.slice(0,1500))+medicalEvidencePolicy+'\nRECOMMANDATIONS INDEXÉES :\n'+
   (evidence||'Aucune recommandation actuelle confirmée par la recherche, ne fais pas d’affirmation datée.')+
   '\nCrée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine. '+
   'Spécialité imposée : '+specialty+'. Niveau : intermédiaire ou complexe. '+
@@ -465,7 +466,7 @@ Deno.serve(async(req:Request)=>{
     refs=await literature(specialty);
     const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url,'Résumé : '+(r.abstract??'')].join(' | ')).join('\n');
     const coursePath=progressiveAxes.map((axis,i)=>(i+1)+': '+axis).join(' → ');
-    const prompt=medicalEvidencePolicy+'\nCrée un patient ENTIÈREMENT FICTIF, spécialité '+specialty+
+    const prompt=await radiologyAssistantContext(specialty+' '+refs.slice(0,4).map(r=>r.title).join(' '))+medicalEvidencePolicy+'\nCrée un patient ENTIÈREMENT FICTIF, spécialité '+specialty+
      ', en français médical. Choisis un sujet clinique documenté dans les sources fournies ; privilégie une recommandation et son contenu plutôt qu un article sans rapport. Constantes, examen, biologie, imagerie et traitement cohérents. '+
      'Aucune identité réelle. Retourne UN objet JSON contenant case ET qcms. '+
      clinicalCaseJsonContract.replace('contenant uniquement case','contenant case et qcms')+
@@ -527,7 +528,7 @@ Deno.serve(async(req:Request)=>{
    // One Groq call covers all ten questions. Preserve the two five-question
    // clinical phases for deterministic chronological verification only.
    const coursePath=progressiveAxes.map((axis,i)=>(i+1)+': '+axis).join(' → ');
-   const prompt=medicalEvidencePolicy+
+   const prompt=await radiologyAssistantContext(context)+medicalEvidencePolicy+
     '\\nGénère EXACTEMENT DIX QCM progressifs d’un SEUL patient fictif, dans un objet JSON {qcms:[...]}.'+
     ' Chaque QCM est relié aux données de CE patient et suit strictement cet ordre clinique : '+
     coursePath+'. Aucun QCM théorique hors dossier. Quatre propositions différentes, correct_index entier 0 à 3,'+

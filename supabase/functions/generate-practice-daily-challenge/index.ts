@@ -1,3 +1,4 @@
+import {radiologyAssistantContext} from './radiology_assistant.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {dailyQcmFingerprint,validateDailyBatch,validCachedDailyQuestion} from './daily_qcm_validation.ts';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
@@ -190,7 +191,8 @@ Deno.serve(async(req:Request)=>{
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
    const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url} | Résumé : ${r.abstract??''}`).join('\n');
-   const common=medicalEvidencePolicy+'\nSOURCES NUMÉROTÉES VÉRIFIÉES :\n'+refList+
+   const imagingContext=await radiologyAssistantContext(specialty+' '+refList.slice(0,1500));
+   const common=imagingContext+medicalEvidencePolicy+'\nSOURCES NUMÉROTÉES VÉRIFIÉES :\n'+refList+
     '\nChaque question est inédite, niveau internat, avec correction détaillée (3-5 phrases) '+ 
     'fondée sur ces sources et sans données personnelles. '+ 
     'image_search_query en anglais si une image externe aide, sinon vide.\n'+medicalImagePrompt+'\n';

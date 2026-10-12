@@ -1,7 +1,8 @@
+import {radiologyAssistantContext,radiologyPriorityPolicy} from './radiology_assistant.ts';
 import {hasSurgicalTechniques,addSurgicalTechniques,surgicalTeachingPolicy} from './surgical_techniques.ts';
 import { retrieveEmc, emcExcerpt } from './emc_context.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { generationContract, type GenerationContract } from './generation_contract.ts';
+import { imageContractInstructions, generationContract, type GenerationContract } from './generation_contract.ts';
 import { courseBatchPlan, assertNewStatements } from './qcm_batch_plan.ts';
 import { courseContext, courseTeachingPolicy } from './residency_course_context.ts';
 import { resolveMedicalPreviews, resolveGoogleMedicalImages, proxyMedicalImage } from './medical_image_previews.ts';
@@ -58,6 +59,7 @@ function extract(payload:any): string {
 async function groq(contract: GenerationContract, prompt: string) {
   const key = Deno.env.get('GROQ_API_KEY');
   if (!key) throw new Error('groq_key_missing');
+  if(contract.mode!=='surgical_techniques')prompt=radiologyPriorityPolicy+'\n'+prompt+await radiologyAssistantContext(prompt.match(/SUJET CENTRAL \(IMMUTABLE\): ([^\n]+)/)?.[1]||prompt.slice(0,1500));
   // One native Responses schema request aligned with the shared contract.
   const model = Deno.env.get('GROQ_TEXT_MODEL') || 'openai/gpt-oss-120b';
   if (!['openai/gpt-oss-120b', 'openai/gpt-oss-20b'].includes(model)) {
@@ -70,7 +72,7 @@ async function groq(contract: GenerationContract, prompt: string) {
       model,
       instructions:'Tu es enseignant universitaire en chirurgie viscérale et radiologie. '+
        'JSON conforme au schéma, données du cas uniquement, explications et réponses cohérentes.',
-      input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+
+      input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+(contract.mode==='surgical_techniques'?'':'\n'+imageContractInstructions)+
        (contract.mode==='surgical_techniques'?'\nNoms précis, indications conditionnelles et étapes opératoires ordonnées. Aucun QCM.':contract.mode==='fiche'?'\nLa priorité est un cours développé de résidanat : paragraphes explicatifs, critères et pièges, pas une liste de titres. 900 à 1200 caractères par chapitre, sauf le chapitre 08 dont content contient 650 à 800 caractères en complément de operative_techniques ; 4 key_points factuels de 100 à 160 caractères par chapitre, utilisables pour les QCM.':'\nUne phrase de justification par option, deux phrases de raisonnement pour global_explanation, teaching_point explicatif de niveau résidanat. ')+
        (contract.mode==='surgical_techniques'
          ?'Aucun champ de question, image ou URL ; renseigne uniquement name, indications et steps dans operative_techniques.'
