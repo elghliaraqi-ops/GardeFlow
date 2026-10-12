@@ -58,8 +58,9 @@ jobs:
           assert.match(published, /JSON\.stringify\(exampleQcms\)/);
           const preview = get('preview-clinical-case-qcm');
           assert.match(preview, /const refSchema=.*required:\['url'\]/);
-          assert.match(preview, /const jsonContract=/);
-          assert.match(preview, /JSON\.stringify\(exampleQcms\)/);
+          assert.match(preview, /const exactSchema=/);
+          assert.match(preview, /text:\{format:\{type:'json_schema'/);
+          assert.match(preview, /fourOptionQcu\(/);
           const random = get('generate-random-clinical-case');
           assert.match(random, /Object\.keys\(caseProperties\)/);
           assert.match(random, /JSON\.stringify\(caseJsonExample\)/);
@@ -67,10 +68,14 @@ jobs:
           const progressive = get('generate-practice-progressive-case');
           assert.match(progressive, /clinicalCaseJsonContract;/);
           assert.match(progressive, /JSON\.stringify\(clinicalCaseJsonExample\)/);
-          assert.match(progressive, /const batch=await newGroqBatch\(prompt/);
+          assert.match(progressive, /const batch=generatedBatch\?\?await newGroqBatch\(prompt/);
+          assert.match(progressive, /generatedBatch=await newGroqBatch\(prompt/);
           assert.match(progressive, /minItems:10,maxItems:10/);
           assert.match(progressive, /Object\.keys\(itemSchema\.properties\)/);
-          assert.match(progressive, /validateProgressiveAxisSequence\(batch\.qcms,batchIndex\)/);
-          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm','preview-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }
+          assert.match(progressive, /checkAndFormat\(\{qcms:\(batch\.qcms as unknown\[\]\)\.slice\(0,5\)\}/);
+          assert.match(progressive, /checkAndFormat\(\{qcms:\(batch\.qcms as unknown\[\]\)\.slice\(5,10\)\}/);
+          for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }
+          assert.match(preview, /image_search_query/);
+          assert.match(preview, /medicalImageCorrectionSuffix/);
           console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
           NODE

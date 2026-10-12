@@ -170,12 +170,13 @@ Deno.serve(async (req: Request) => {
     const specialty = pick(specialties);
     const level = pick(levels);
     const model = Deno.env.get('GROQ_CASE_MODEL')?.trim() ||
-      'openai/gpt-oss-20b';
+      'openai/gpt-oss-120b';
     const evidence=await recentGuidelineCatalog(specialty);
     const prompt = medicalEvidencePolicy+'\nRECOMMANDATIONS RÉCENTES RETROUVÉES :\n'+
       (evidence||'Aucune recommandation récente vérifiée, éviter les affirmations non sourcées.')+
       '\n'+`Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine.
 Spécialité imposée : ${specialty}. Niveau : ${level}.
+Choisis une pathologie de cette spécialité soutenue par le contenu des sources fournies, si elles sont pertinentes.
 Aucune donnée réelle : pas de nom, initiales, date de naissance, adresse, téléphone ni identifiant.
 Rédige en français médical précis, avec signes positifs ET négatifs utiles.
 Remplis toutes les rubriques du formulaire et décris un scénario clinique cohérent avec l'âge et le sexe.

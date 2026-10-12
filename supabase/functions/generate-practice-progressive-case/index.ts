@@ -1,3 +1,4 @@
+import {fourOptionQcu} from './qcm_options.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 import {progressiveAxes,progressiveJsonContract,validateProgressiveAxisSequence} from './progressive_question_sequence.ts';
@@ -38,8 +39,8 @@ const clinicalCaseJsonContract='Répondre par un seul objet JSON contenant uniqu
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const itemSchema={type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','image_request'],
  properties:{axis:{type:'string',enum:progressiveAxes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},correct_index:{type:'integer',minimum:0,maximum:3},
- correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:1,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},image_request:medicalImageSchema}};
-type Ref={title:string;url:string;year:string;organization:string;kind:string};
+ correction:{type:'string'},topic:{type:'string',enum:topics},references:{type:'array',minItems:0,maxItems:3,items:referenceSchema},image_search_query:{type:'string'},image_request:medicalImageSchema}};
+type Ref={title:string;url:string;year:string;organization:string;kind:string;abstract?:string};
 function plain(value:unknown,max=2500):string {
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
 }
@@ -71,7 +72,7 @@ async function literatureEuropePmc(specialty:string):Promise<Ref[]> {
  const key=canon(url);if(!key||!title||found.has(key))continue;
  const titleLower=title.toLowerCase();
  found.set(key,{title,url,year:plain(item.pubYear,12),organization:plain(item.journalTitle||'Europe PMC',160),
- kind:/guideline|recommendation/.test(titleLower)?'recommandation':/consensus/.test(titleLower)?'consensus':'revue'});
+ abstract:plain(item.abstractText,1600),kind:/guideline|recommendation/.test(titleLower)?'recommandation':/consensus/.test(titleLower)?'consensus':'revue'});
  }return [...found.values()].slice(0,14);
  }catch{return [];}finally{clearTimeout(timer);}
 }
@@ -101,6 +102,16 @@ async function literaturePubMed(specialty:string):Promise<Ref[]> {
  }catch{return [];}finally{clearTimeout(timer);}
 }
 async function literature(specialty:string):Promise<Ref[]> {
+ const queryMap:Record<string,string>={
+  'Chirurgie viscérale':'abdominal surgery','Orthopédie':'orthopedics','Cardiologie':'cardiology',
+  'Neurologie':'neurology','Urologie':'urology','ORL':'otolaryngology','Gynécologie':'gynecology',
+  'Réanimation':'critical care','Pneumologie':'respiratory medicine','Gastro-entérologie':'gastroenterology',
+  'Néphrologie':'nephrology','Endocrinologie':'endocrinology','Dermatologie':'dermatology',
+  'Psychiatrie':'psychiatry','Pédiatrie':'pediatrics','Ophtalmologie':'ophthalmology',
+  'Neurochirurgie':'neurosurgery','Chirurgie thoracique':'thoracic surgery',
+  'Chirurgie vasculaire':'vascular surgery','Maladies infectieuses':'infectious diseases',
+  'Médecine interne':'internal medicine'};
+ specialty=queryMap[specialty]??specialty;
  const primary=await literatureEuropePmc(specialty);
  if(primary.length)return primary;
  console.warn('independent_case_literature_primary_unavailable',{provider:'europe_pmc'});
@@ -311,9 +322,7 @@ function narrativeFromCase(c:Record<string,unknown>):
 async function newGroqBatch(prompt:string,_format:Record<string,unknown>):Promise<Record<string,unknown>> {
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
- const configured=(Deno.env.get('GROQ_PROGRESSIVE_CASE_MODEL')??'').trim();
- const model=['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
-  ?configured:'openai/gpt-oss-20b';
+ const model=Deno.env.get('GROQ_TEXT_MODEL')?.trim()||'openai/gpt-oss-120b';
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),85000);
  try{
   // Exactly one request for all 10 progressive questions, no model fallback.
@@ -321,8 +330,8 @@ async function newGroqBatch(prompt:string,_format:Record<string,unknown>):Promis
    method:'POST',signal:ctrl.signal,
    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
    body:JSON.stringify({model,messages:[{role:'user',content:prompt}],
-    temperature:0.15,reasoning_effort:'low',reasoning_format:'hidden',
-    max_completion_tokens:12500,stream:false,response_format:{type:'json_object'}})
+    temperature:0.15,reasoning_effort:'medium',reasoning_format:'hidden',
+    max_completion_tokens:10000,stream:false,response_format:{type:'json_object'}})
   });
   if(!response.ok){
    const raw=await response.json().catch(()=>null);
@@ -351,15 +360,17 @@ async function newGroqBatch(prompt:string,_format:Record<string,unknown>):Promis
 async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>,batchIndex:0|1)
  :Promise<Record<string,unknown>[]>{
  if(!Array.isArray(batch.qcms)||batch.qcms.length!==5)throw Error('invalid_generated_question_count');
- if(!validateProgressiveAxisSequence(batch.qcms,batchIndex))throw Error('invalid_clinical_axis_order');
+ // Chronology is specified by the prompt; assign stable positional axis identifiers.
  const map=new Map(refs.map(x=>[canon(x.url),x]));
  const output:Record<string,unknown>[]=[];
  for(const [index,raw] of batch.qcms.entries()){
   const q=raw as Record<string,unknown>;
-  const question=plain(q.question,1400),options=Array.isArray(q.options)
+  const question=plain(q.question,1400),rawOptions=Array.isArray(q.options)
    ?q.options.map(x=>plain(x,450)):[];
-  const correct=Number(q.correct_index),correction=plain(q.correction,6500);
-  const topic=String(q.topic??'synthese'),fingerprint=cleanKey(question);
+  const choices=fourOptionQcu(rawOptions,Number(q.correct_index));
+  const options=choices.options,correct=choices.correct,correction=plain(q.correction,6500);
+  const rawTopic=String(q.topic??'synthese');
+  const topic=topics.includes(rawTopic)?rawTopic:'synthese',fingerprint=cleanKey(question);
   const refObjects=Array.isArray(q.references)?q.references:[];
   const references=[...new Map(refObjects.flatMap((r:unknown)=>{
    const source=map.get(canon((r as {url?:string})?.url));
@@ -371,8 +382,6 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
    new Set(options.map(cleanKey)).size!==4?'duplicate_options':
    correction.length<25?'correction_short':
    !Number.isInteger(correct)||correct<0||correct>3?'invalid_correct_index':
-   !references.length?'unverified_reference':
-   !topics.includes(topic)?'invalid_topic':
    seen.has(fingerprint)?'duplicate_question':'';
   if(failure){
    console.warn('progressive_qcm_rejected',{position:index+1,reason:failure});
@@ -422,6 +431,8 @@ Deno.serve(async(req:Request)=>{
    let specialty:string;
    let simulated:Record<string,unknown>;
    let caseTitle:string,caseStem:string,stages:{title:string;narrative:string}[];
+   let generatedBatch:Record<string,unknown>|null=null;
+   let refs:Ref[]=[];
    if(requestedId){
     if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedId))
      return send(req,{ok:false,error:'invalid_case_id'},400);
@@ -438,6 +449,10 @@ Deno.serve(async(req:Request)=>{
     draftId=stored.id;
     specialty=String(stored.specialty);
     simulated=stored.case_payload as Record<string,unknown>;
+    if(Array.isArray(simulated?.pending_qcms)&&simulated.pending_qcms.length===10){
+     generatedBatch={qcms:simulated.pending_qcms};
+     refs=Array.isArray(simulated.pending_references)?simulated.pending_references as Ref[]:[];
+    }
     caseTitle=String(stored.case_title);caseStem=String(stored.case_stem);
     stages=stored.case_stages as {title:string;narrative:string}[];
     if(!simulated||typeof simulated!=='object'||!Array.isArray(stages)||stages.length!==4)
@@ -445,8 +460,41 @@ Deno.serve(async(req:Request)=>{
     console.info('progressive_case_draft_resumed',{draft:true});
    }else{
     specialty=specialties[numericSeed(casablancaDay()+crypto.randomUUID())%specialties.length];
-    // PHASE 1: first generate a full fictional dossier as in random clinical cases.
-    simulated=await generateCaseDossier(specialty);
+    // One provider call generates the complete dossier AND its ten linked QCMs.
+    // A saved incomplete dossier can still resume without regenerating the patient.
+    refs=await literature(specialty);
+    const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url,'Résumé : '+(r.abstract??'')].join(' | ')).join('\n');
+    const coursePath=progressiveAxes.map((axis,i)=>(i+1)+': '+axis).join(' → ');
+    const prompt=medicalEvidencePolicy+'\nCrée un patient ENTIÈREMENT FICTIF, spécialité '+specialty+
+     ', en français médical. Choisis un sujet clinique documenté dans les sources fournies ; privilégie une recommandation et son contenu plutôt qu un article sans rapport. Constantes, examen, biologie, imagerie et traitement cohérents. '+
+     'Aucune identité réelle. Retourne UN objet JSON contenant case ET qcms. '+
+     clinicalCaseJsonContract.replace('contenant uniquement case','contenant case et qcms')+
+     '\nqcms contient EXACTEMENT 10 questions liées à CE patient, dans cet ordre : '+coursePath+
+     '. Chaque QCM : axis, question, options (4 chaînes distinctes), correct_index (0 à 3), '+
+     'correction détaillée, topic parmi '+topics.join('/')+
+     ', references (objets {url} du catalogue, ou [] si aucune source pertinente), '+
+     'image_search_query et image_request. '+medicalImagePrompt+
+     '\nQuestions précoces : seulement les données de l’admission ; aucun résultat futur révélé. '+
+     'Questions suivantes : examens, diagnostic, traitement, surveillance et suivi du même patient. '+
+     '\nSOURCES DISPONIBLES :\n'+refList+'. Aucun Markdown ni placeholder.';
+    generatedBatch=await newGroqBatch(prompt,{});
+    const raw=generatedBatch.case;
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('invalid_case_format');
+    const dossier=raw as Record<string,unknown>;
+    const age=Number(dossier.age),sex=plain(dossier.sex,20);
+    if(!Number.isInteger(age)||age<1||age>105||!['F','M','Autre','Non précisé'].includes(sex))
+     throw Error('invalid_case_demographics');
+    simulated={age,sex};
+    for(const field of caseTextFields)simulated[field]=plain(dossier[field],2600);
+    for(const field of caseBoolFields)simulated[field]=dossier[field]===true;
+    simulated.location='Simulation pédagogique · '+specialty;
+    if(simulated.hospitalized===true)simulated.discharged=false;
+    if(simulated.hospitalized!==true)simulated.hospitalization_service='';
+    if(simulated.specialist_opinion_requested!==true){
+     simulated.specialist_service='';simulated.specialist_opinion_done=false;
+    }
+    simulated.pending_qcms=generatedBatch.qcms;
+    simulated.pending_references=refs;
     const display=narrativeFromCase(simulated);
     caseTitle=display.title;caseStem=display.stem;stages=display.stages;
     // Persist this valid dossier BEFORE its QCMs so failures can be resumed later.
@@ -463,12 +511,12 @@ Deno.serve(async(req:Request)=>{
    }
    // Find actual medical references for this scenario, with specialty-level fallback.
    const targetedQuery=plain(simulated.assessment,90);
-   let refs=targetedQuery.length>8?await literature(targetedQuery):[];
-   if(!refs.length)refs=await literature(specialty);
-   if(!refs.length)throw Error('literature_unavailable');
+   if(!generatedBatch)refs=targetedQuery.length>8?await literature(targetedQuery):[];
+   if(!generatedBatch&&!refs.length)refs=await literature(specialty);
    // PHASE 2: QCMs are about this preexisting simulated clinical dossier, never a course bank.
-   const context=JSON.stringify(simulated);
-   const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url].join(' | ')).join('\n');
+   const {pending_qcms:_pending,pending_references:_references,...dossierContext}=simulated;
+   const context=JSON.stringify(dossierContext);
+   const refList=refs.slice(0,6).map(r=>[r.title,r.year,r.url,'Résumé : '+(r.abstract??'')].join(' | ')).join('\n');
    const common=medicalEvidencePolicy+'\nGénère EXACTEMENT cinq QCM originaux et CONTEXTUALISÉS à ce patient fictif. '+
     'Chaque question porte sur une décision motivée par les symptômes, constantes, examens ou évolution de CE dossier, '+
     'pas sur un chapitre de cours théorique. '+
@@ -483,7 +531,7 @@ Deno.serve(async(req:Request)=>{
     '\\nGénère EXACTEMENT DIX QCM progressifs d’un SEUL patient fictif, dans un objet JSON {qcms:[...]}.'+
     ' Chaque QCM est relié aux données de CE patient et suit strictement cet ordre clinique : '+
     coursePath+'. Aucun QCM théorique hors dossier. Quatre propositions différentes, correct_index entier 0 à 3,'+
-    ' correction détaillée, topic autorisé, references (1 à 3 liens exacts du catalogue),'+
+    ' correction détaillée, topic parmi '+topics.join('/')+', references (liens du catalogue ou []),'+
     ' image_search_query et image_request conformes au contrat. '+
     ' Ne révèle jamais une information future dans une question précoce.'+
     ' Questions 1–5 : symptômes, examen clinique, hypothèses, classification, examens complémentaires.'+
@@ -492,7 +540,7 @@ Deno.serve(async(req:Request)=>{
     '\\nSOURCES AUTORISÉES :\\n'+refList+
     '\\nEXACTEMENT 10 QCM dans cet ordre. Structure des champs : '+
     Object.keys(itemSchema.properties).join(', ')+'. Aucun Markdown.';
-   const batch=await newGroqBatch(prompt,{...batchSchema,
+   const batch=generatedBatch??await newGroqBatch(prompt,{...batchSchema,
     properties:{qcms:{...batchSchema.properties.qcms,minItems:10,maxItems:10}}});
    const seen=new Set<string>();
    const first=await checkAndFormat({qcms:(batch.qcms as unknown[]).slice(0,5)},refs,seen,0);
@@ -501,7 +549,7 @@ Deno.serve(async(req:Request)=>{
    if(questions.length!==10)throw Error('invalid_question_count');
    // Optional Wikimedia Commons link metadata only; no remote media file storage.
    const illustrations=await externalMedicalIllustrations(simulated);
-   const persistedPayload={...simulated,external_media:illustrations};
+   const persistedPayload={...dossierContext,external_media:illustrations};
    // Finalize the already persisted dossier only when all 10 QCMs pass validation.
    const {data:saved,error:saveErr}=await admin.from('practice_generated_cases')
     .update({questions,case_payload:persistedPayload,generation_status:'ready'})

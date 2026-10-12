@@ -1,17 +1,18 @@
+import {fourOptionQcu} from './qcm_options.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
-import {medicalImageSchema,medicalImagePrompt,emptyMedicalImageRequest,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
-type Ref={title:string;url:string;kind:string;organization:string;year:string};
+import {medicalImageCorrectionSuffix} from './medical_image_contract.ts';
+type Ref={title:string;url:string;kind:string;organization:string;year:string;abstract?:string};
 type Choice={axis:string;question:string;options:string[];correct_index:number;correction:string;topic:string;references:Ref[];image_search_query:string;image_request:Record<string,unknown>};
 type Item={position:number;question:string;options:string[];correct_index:number;correction:string;topic:string};
 const axes=['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'] as const;
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'] as const;
 const kinds=['recommandation','consensus','revue','cours'] as const;
 const refSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
-const schema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query','image_request'],properties:{
+const schema={type:'object',additionalProperties:false,required:['qcms'],properties:{qcms:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['axis','question','options','correct_index','correction','topic','references','image_search_query'],properties:{
  axis:{type:'string',enum:axes},question:{type:'string'},options:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},
  correct_index:{type:'integer',minimum:0,maximum:3},correction:{type:'string'},topic:{type:'string',enum:topics},
- references:{type:'array',minItems:1,maxItems:3,items:refSchema},image_search_query:{type:'string'},image_request:medicalImageSchema
+ references:{type:'array',minItems:0,maxItems:3,items:refSchema},image_search_query:{type:'string'}
 }}}}};
 function clean(x:unknown,n=1600):string {
  let s=String(x??'').replace(/<[^>]*>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim();
@@ -45,7 +46,7 @@ async function literature(post:Record<string,unknown>):Promise<Ref[]> {
  const k=urlKey(url);if(!k||urls.has(k)||!title)return [];urls.add(k);
  const label=(title+' '+String(r.pubTypeList??'')).toLowerCase();
  return [{title,url,kind:/consensus/.test(label)?'consensus':/guideline|recommendation/.test(label)?'recommandation':'revue',
- organization:clean(r.journalTitle||'Europe PMC',120),year:clean(r.pubYear,12)}];
+ abstract:clean(r.abstractText,1600),organization:clean(r.journalTitle||'Europe PMC',120),year:clean(r.pubYear,12)}];
  });
  }catch{return [];}finally{clearTimeout(timer);}
 }
@@ -115,55 +116,62 @@ Deno.serve(async(req:Request)=>{
  if(!gate.claimed)return response(req,{ok:false,error:gate.error_code??'generation_in_progress',retry_after:gate.retry_after},gate.error_code==='extension_cooldown'?429:409);
  let done=false;
  try{
- const refs=await literature(post);if(!refs.length)throw Error('literature_sources_unavailable');
+ const refs=await literature(post);
+ if(!refs.length)console.info('preview_literature_optional_unavailable');
  const byUrl=new Map(refs.map(r=>[urlKey(r.url),r]));
- const catalog=refs.map(r=>[r.kind,r.title,r.organization,r.year,r.url].join(' | ')).join('\n');
- const past=(existing??[]).map(x=>clean(x.question,300));
+ const catalog=refs.slice(0,3).map(r=>[r.kind,r.title,r.organization,r.year,r.url,'Résumé : '+(r.abstract??'').slice(0,450)].join(' | ')).join('\n').slice(0,2400);
+ const past:string[]=(existing??[]).map((x:{question:unknown})=>clean(x.question,300));
  const proposed:Item[]=[];
  const model=String(Deno.env.get('GROQ_TEXT_MODEL')??'').trim()||'openai/gpt-oss-120b';
  const context=JSON.stringify({service:clean(post.specialist_service,140),age:clean(post.age_band,50),sex:clean(post.sex,30),
  presentation:clean(post.presentation),history:clean(post.history),exam:clean(post.clinical_exam),
  complementary:clean(post.complementary_exams),imaging:clean(post.imaging_conclusion),assessment:clean(post.assessment),plan:clean(post.plan)});
  // Exactly one Groq request for the requested preview; no loop over lots.
- const forbidden=past.concat(proposed.map(q=>q.question)).slice(-100).join('\n');
- const exampleQcms={qcms:axes.map(axis=>({
-  axis,question:'REMPLACER par une question médicale pour '+axis,
-  options:['Option clinique A','Option clinique B','Option clinique C','Option clinique D'],
-  correct_index:0,correction:'REMPLACER par une explication médicale fondée sur les sources fournies.',
-  topic:'synthese',references:[{url:'REMPLACER_PAR_URL_DU_CATALOGUE'}],image_search_query:'',image_request:emptyMedicalImageRequest
- }))};
- const jsonContract='Objet JSON racine {qcms:['+qty+' objets]} avec les champs EXACTS : '+
-  Object.keys(((schema.properties.qcms as {items:{properties:Record<string,unknown>}}).items).properties).join(', ')+
-  '. references doit être une liste de 1 à 3 objets {url}, jamais des sources inventées. '+
-  'Axes strictement dans cet ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
-  '. Exemple de 5 objets valides à étendre jusqu’à '+qty+' sans recopier les placeholders : '+JSON.stringify(exampleQcms)+
-  '. Ne pas recopier les placeholders. Aucun Markdown.';
- const prompt=medicalEvidencePolicy+'\nGénère exactement '+qty+' QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes par groupe de 5 dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON structuré sans Markdown. '+jsonContract+'\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
+ const forbidden=past.concat(proposed.map(q=>q.question)).slice(-100).map(q=>q.slice(0,150)).join('\n');
+ const objectives=[
+  'anatomie et localisation', 'diagnostic différentiel selon un signe discriminant',
+  'choix raisonné d’un examen', 'réanimation et signes de gravité', 'limites d’une recommandation',
+  'mécanisme d’une complication', 'diagnostic d’une complication',
+  'interprétation et limites d’un résultat', 'contre-indication ou adaptation du traitement', 'surveillance recommandée',
+  'terrain et risque physiopathologique', 'diagnostic selon une évolution clinique explicitée',
+  'limites ou contre-indications d’un examen', 'contrôle de la source ou alternative thérapeutique', 'prévention secondaire',
+  'conséquence fonctionnelle', 'critère discriminant d’aggravation',
+  'examen devant une complication explicitement hypothétique', 'suivi après stabilisation', 'incertitude et décision individualisée',
+ ];
+ const plan=objectives.slice(0,qty).map((goal,i)=>`${i+1}. axe=${axes[i%5]} ; objectif=${goal}`).join('\n');
+ const prompt=medicalEvidencePolicy+'\nGénère exactement '+qty+' QCM médicaux de niveau '+level+' (facile=externat, intermediaire=internat, avance=expert), en français. 4 propositions, une seule réponse, correction précise 3-6 phrases et références exclusivement parmi Europe PMC. Axes par groupe de 5 dans cet ordre: '+axes.join(', ')+'. Recherche image_search_query en anglais si pertinente, sinon chaîne vide. Aucune donnée personnelle. Ne reproduis pas les questions déjà écrites. JSON conforme au schéma fourni. references contient seulement des objets {url} du catalogue pertinent ou [].\nPLAN OBLIGATOIRE, UN OBJECTIF DISTINCT PAR QUESTION:\n'+plan+'\nUn fait ou une décision déjà interrogé est interdit, même avec une autre formulation. Adapte chaque objectif aux faits disponibles. Une situation nouvelle doit être explicitement hypothétique, jamais présentée comme un fait du dossier.\nCAS ANONYMISÉ:\n'+context+'\nSOURCES:\n'+catalog+'\nNE PAS RÉPÉTER:\n'+forbidden;
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),55000);let remote:Response;
- try{remote=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
- body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,reasoning_effort:'medium',reasoning_format:'hidden',stream:false,max_completion_tokens:qty===5?7500:qty===10?14000:22000,
- response_format:{type:'json_object'}})});}
+ const exactSchema={...schema,properties:{qcms:{...schema.properties.qcms,minItems:qty,maxItems:qty}}};
+ try{remote=await fetch('https://api.groq.com/openai/v1/responses',{method:'POST',signal:ctrl.signal,headers:{Authorization:'Bearer '+groq,'Content-Type':'application/json'},
+ body:JSON.stringify({model,instructions:'Tu es un enseignant médical rigoureux. Un QCU ne peut contenir deux mesures indiquées comme alternatives concurrentes. Interdiction des questions « première mesure » lorsque réanimation, antibiotique et chirurgie doivent être concomitantes. Ne crée pas de calendrier de surveillance arbitraire. En absence de contexte discriminant, change la question avant de produire le JSON.',input:prompt+'\nPriorité au contenu médical : options de moins de 100 caractères, correction de deux phrases par QCM. Au plus UNE illustration dans ce lot ; laisse image_search_query vide pour les autres.',reasoning:{effort:qty===20?'low':'medium'},store:false,max_output_tokens:qty===5?3000:qty===10?4500:5000,
+ text:{format:{type:'json_schema',name:'clinical_case_qcm_preview',schema:exactSchema}}})});}
  finally{clearTimeout(timer);}
  const raw=await remote.json().catch(()=>null);
- if(!remote.ok)throw Error(remote.status===429?'groq_rate_limited':'groq_unavailable');
- const content=raw?.choices?.[0]?.message?.content;
- const decoded=JSON.parse(typeof content==='string'?content:Array.isArray(content)?content.map((v:{text?:string})=>v.text??'').join(''):'') as {qcms?:Choice[]};
+ if(!remote.ok){
+  console.warn('preview_groq_failure',{status:remote.status,code:raw?.error?.code,prompt_chars:prompt.length,reason:clean(raw?.error?.message,350)});
+  throw Error(remote.status===429?'groq_rate_limited':'groq_unavailable');
+ }
+ if(raw?.status==='incomplete')throw Error('incomplete_generated_qcm');
+ const content=typeof raw?.output_text==='string'?raw.output_text:(raw?.output??[])
+  .filter((v:any)=>v.type==='message').flatMap((v:any)=>v.content??[]).map((v:any)=>v.text??'').join('');
+ const decoded=JSON.parse(content) as {qcms?:Choice[]};
  if(!Array.isArray(decoded.qcms)||decoded.qcms.length!==qty)throw Error('invalid_qcm_count');
  for(let i=0;i<qty;i++){
  const q=decoded.qcms[i],question=clean(q.question,1200),cor=clean(q.correction,5500);
- const opts=Array.isArray(q.options)?q.options.map(x=>clean(x,420)):[];
+ const choices=fourOptionQcu(Array.isArray(q.options)?q.options.map(x=>clean(x,420)):[],Number(q.correct_index));
+ const opts=choices.options;q.correct_index=choices.correct;
  const sources=Array.isArray(q.references)?q.references.flatMap((r):Ref[]=>{const found=byUrl.get(urlKey(r.url));return found?[found]:[];}):[];
  const uniqueRefs=[...new Map(sources.map(x=>[x.url,x])).values()].slice(0,3);
  if(q.axis!==axes[i%5]||question.length<12||cor.length<20||opts.length!==4||new Set(opts).size!==4||
- !Number.isInteger(q.correct_index)||q.correct_index<0||q.correct_index>3||!topics.includes(q.topic as typeof topics[number])||!uniqueRefs.length)
+ !Number.isInteger(q.correct_index)||q.correct_index<0||q.correct_index>3)
  throw Error('invalid_generated_qcm');
- const normalize=(s:string)=>s.toLowerCase().replace(/\s+/g,' ').trim();
+ const normalize=(s:string)=>s.normalize('NFKD').toLowerCase().replace(/\p{M}/gu,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  if(past.some(x=>normalize(x)===normalize(question))||proposed.some(x=>normalize(x.question)===normalize(question)))throw Error('duplicate_questions');
  // Preview and confirmed QCM use the same JSON image requirements.
  // No randomly matched thumbnails or external URLs enter QCM corrections.
  const correction=(cor+medicalImageCorrectionSuffix(q.image_request,q.image_search_query)+
    '\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
- proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:q.topic});
+ proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:topics.includes(q.topic as typeof topics[number])?q.topic:'synthese'});
  }
  const staged=await admin.rpc('clinical_case_stage_qcm_preview',{p_post_id:postId,p_user_id:uid,p_qcms:proposed,p_difficulty:level});
  if(staged.error||!staged.data)throw Error('preview_staging_failed');
@@ -172,6 +180,7 @@ Deno.serve(async(req:Request)=>{
  questions:proposed.map(({question,options,topic})=>({question,options,topic}))});
  }catch(e){
  const code=e instanceof Error?e.message:'generation_failed';
+ console.warn('preview_qcm_failure',{code,quantity:qty});
  return response(req,{ok:false,error:['literature_sources_unavailable','groq_rate_limited','groq_unavailable','duplicate_questions','invalid_generated_qcm','invalid_qcm_count','preview_staging_failed'].includes(code)?code:'generation_failed',retry_after_seconds:code==='groq_rate_limited'?60:undefined},code==='groq_rate_limited'?429:503);
  }finally{
  if(!done){try{await admin.rpc('clinical_case_finish_qcm_extension',{p_post_id:postId,p_success:false,p_error_code:'preview_failed'});}catch(_){/* Best-effort unlock. */}}

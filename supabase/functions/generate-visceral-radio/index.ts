@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { generationContract, type GenerationContract } from './generation_contract.ts';
+import { courseBatchPlan, assertNewStatements } from './qcm_batch_plan.ts';
 import { resolveMedicalPreviews, resolveGoogleMedicalImages, proxyMedicalImage } from './medical_image_previews.ts';
 
 // GardeFlow Practice · Viscéral × Radio. Private, on-demand generation.
@@ -54,8 +55,7 @@ function extract(payload:any): string {
 async function groq(contract: GenerationContract, prompt: string) {
   const key = Deno.env.get('GROQ_API_KEY');
   if (!key) throw new Error('groq_key_missing');
-  // Strict JSON Schema is available for these models; never silently fall
-  // back to best-effort JSON (the source of json_validate_failed in Practice).
+  // One native Responses schema request aligned with the shared contract.
   const model = Deno.env.get('GROQ_TEXT_MODEL') || 'openai/gpt-oss-120b';
   if (!['openai/gpt-oss-120b', 'openai/gpt-oss-20b'].includes(model)) {
     throw new Error('groq_model_without_strict_json_schema_support');
@@ -65,29 +65,19 @@ async function groq(contract: GenerationContract, prompt: string) {
   try {
     const payload = {
       model,
-      messages: [
-        {
-          role: 'system',
-          content: 'Tu es enseignant universitaire en chirurgie viscérale et radiologie. ' +
-            'Tu produis uniquement du JSON conforme au contrat partagé. ' +
-            'Les détails médicaux suivent le cas fourni, sans invention de source.',
-        },
-        { role: 'user', content: prompt + '\n\n' + contract.outputInstructions },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: contract.name,
-          strict: true,
-          schema: contract.schema,
-        },
-      },
-      reasoning_effort: 'medium',
-      // Avoid reserving 20k output tokens for every request (including five QCMs).
-      max_completion_tokens: contract.requestedCount === 5 ? 8000 : contract.requestedCount === 10 ? 13500 : contract.mode === 'fiche' ? 9500 : 7500,
-      stream: false,
+      instructions:'Tu es enseignant universitaire en chirurgie viscérale et radiologie. '+
+       'JSON conforme au schéma, données du cas uniquement, explications et réponses cohérentes.',
+      input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+
+       '\nRédige des explications précises mais concises : une phrase par option, deux phrases pour global_explanation. '+
+       'Au maximum DEUX questions illustrées par lot, une demande image au plus par question ; image_requests=[] pour les autres. '+
+       'Ne répète pas les métadonnées des images dans les explications. Complète les dix questions avant toute digression.',
+      text:{format:{type:'json_schema',name:contract.name,schema:contract.schema}},
+      reasoning:{effort:contract.mode==='fiche'?'low':'medium'},
+      store:false,
+      max_output_tokens:contract.requestedCount===5?6500:contract.requestedCount===10?12000:
+       contract.mode==='fiche'?7000:6500,
     };
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/responses', {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -105,12 +95,18 @@ async function groq(contract: GenerationContract, prompt: string) {
           retryAfterSeconds: Number.isFinite(after) && after > 0 ? Math.min(3600, Math.ceil(after)) : 60,
         });
       }
+      console.warn('visceral_groq_failure',{status:response.status,code,prompt_chars:prompt.length,reason:str(data?.error?.message,300)});
+      if(response.status===413)throw new Error('groq_request_too_large');
       throw new Error('groq_http_' + response.status + ':' + code);
     }
-    if (data?.choices?.[0]?.finish_reason === 'length') {
+    if (data?.status === 'incomplete') {
       throw new Error('groq_output_token_limit');
     }
-    const raw = data?.choices?.[0]?.message?.content;
+    const raw = typeof data?.output_text==='string'?data.output_text:
+      (Array.isArray(data?.output)?data.output:[]).filter((x:any)=>x.type==='message')
+      .flatMap((x:any)=>Array.isArray(x.content)?x.content:[])
+      .filter((x:any)=>x.type==='output_text'||x.type==='text')
+      .map((x:any)=>String(x.text??'')).join('');
     if (typeof raw !== 'string' || !raw.trim()) throw new Error('groq_empty_response');
     try {
       return JSON.parse(raw);
@@ -125,13 +121,35 @@ async function groq(contract: GenerationContract, prompt: string) {
 
 async function guidelines(topic:string):Promise<string> {
   // Retrieval is input context, not a separate verification/reviewer pipeline.
-  const query='('+topic+') AND (GUIDELINE OR CONSENSUS OR RECOMMENDATION)';
+  const englishTopics = [
+    'acute appendicitis', 'adhesive small bowel obstruction', 'inguinal hernia TAPP',
+    'strangulated hernia', 'acute cholecystitis', 'choledocholithiasis',
+    'acute cholangitis', 'acute pancreatitis', 'infected pancreatic necrosis',
+    'pancreatic head cancer', 'rectal cancer MRI staging', 'right colon cancer',
+    'complicated diverticulitis', 'secondary peritonitis gastrointestinal perforation',
+    'perforated peptic ulcer', 'gastric cancer', 'upper gastrointestinal bleeding',
+    'achalasia myotomy', 'gastroesophageal reflux fundoplication',
+    'paraesophageal hernia', 'acute mesenteric ischemia', 'splenic trauma',
+    'liver abscess', 'hepatocellular carcinoma resection', 'colorectal liver metastases',
+    'hepatic hydatid cyst', 'hilar cholangiocarcinoma', 'postoperative enteric fistula',
+    'colorectal anastomotic leak', 'malignant large bowel obstruction',
+    'Crohn disease ileocecal resection', 'ulcerative colitis colectomy',
+    'hemorrhoids', 'anal fistula fissure', 'multinodular goiter thyroidectomy',
+    'adrenal tumor adrenalectomy', 'incisional hernia abdominal wall reconstruction',
+    'postoperative intra abdominal abscess', 'abdominal compartment syndrome',
+    'blunt abdominal trauma CT',
+  ];
+  const query='('+ (englishTopics[topics.indexOf(topic)] || topic) +') AND (guideline OR consensus OR recommendation)';
   try{
-    const u='https://www.ebi.ac.uk/europepmc/webservices/rest/search?'+new URLSearchParams({query,format:'json',pageSize:'5',sort:'FIRST_PDATE_D desc'}).toString();
+    const u='https://www.ebi.ac.uk/europepmc/webservices/rest/search?'+new URLSearchParams({query,format:'json',resultType:'core',pageSize:'4',sort:'FIRST_PDATE_D desc'}).toString();
     const r=await fetch(u,{signal:AbortSignal.timeout(6500)});
     if(!r.ok)return 'Aucune référence en ligne fournie. Ne prétends pas avoir vérifié une mise à jour.';
     const d=await r.json();
-    return (d?.resultList?.result??[]).map((x:any)=>[str(x.title,230),str(x.authorString,130),str(x.firstPublicationDate,25),x.doi?'https://doi.org/'+x.doi:'https://europepmc.org/article/MED/'+x.id].join(' | ')).join('\n').slice(0,2800) || 'Aucune recommandation vérifiée fournie.';
+    return (d?.resultList?.result??[]).map((x:any)=>[
+      str(x.title,230),str(x.authorString,100),str(x.firstPublicationDate,25),
+      x.doi?'https://doi.org/'+x.doi:x.pmid?'https://europepmc.org/article/MED/'+x.pmid:x.pmcid?'https://europepmc.org/articles/'+x.pmcid:'',
+      str(x.abstractText,650).replace(/<[^>]*>/g,' '),
+    ].join(' | ')).join('\n').slice(0,3900) || 'Aucune recommandation vérifiée fournie.';
   }catch(_){return 'Aucune recommandation récupérée. Ne prétends pas avoir vérifié les dernières mises à jour.';}
 }
 const medicalRules=[
@@ -141,6 +159,16 @@ const medicalRules=[
  'Ne crée ni citation ni année ni lien fictif. Distingue consensus, controverse et incertitude.',
  'Pour les images: fournis seulement des requêtes de recherche et des descriptions précises, jamais des URL.',
  'Les images doivent correspondre aux signes radiologiques/techniques discutés et servir d’illustration externe, pas d’image du patient fictif.',
+ 'Une proposition peut être vraie sans être exhaustive : ne lui ajoute pas le mot uniquement ni une restriction absente de son texte.',
+ 'Toute indication thérapeutique précise stabilité, gravité et contexte discriminant ; ne transforme pas une possibilité en geste obligatoire.',
+ 'Chaque réponse correcte correspond à son explication et au dossier. Aucun distracteur correct marqué faux.',
+ 'Ne déduis pas un stade tumoral de signes non discriminants. Si la fiche fournie comporte une erreur factuelle, ne la transforme pas en vérité : explicite la correction dans le QCM.',
+ 'Précise le contexte lorsqu il existe plusieurs traitements ou examens recommandés ; ne crée pas de préférence arbitraire entre alternatives équivalentes.',
+ 'Dans TON raisonnement de génération, compare les cinq propositions avec les données et recommandations avant de fixer correct et explanation, sans demander un autre appel.',
+ 'Une péritonite par perforation digestive est secondaire, même si l ulcère perforé était spontané : ne confonds pas mécanisme et classification.',
+ 'Utilise une classification uniquement dans la pathologie où elle est définie : Hinchey concerne la diverticulite, pas une perforation duodénale. Un score ne peut être calculé si ses variables manquent.',
+ 'Dans un cas, précise ce qui est observé plutôt que des conclusions impossibles : une radiographie simple ne prouve pas l absence de collection. Une fuite de contraste digestif nécessite de préciser que du contraste oral ou entéral a été administré.',
+ 'Les study_core et objectifs d une fiche sont un contexte pédagogique, jamais une source faisant autorité. Ne recopie pas ses erreurs dans le dossier ou les réponses.',
  'Ne fais aucun contrôle indépendant après génération; auto-cohérence interne dans ta production.'
 ].join('\n');
 function sourcePrompt(topic:string, refs:string){return medicalRules+'\nSUJET CENTRAL (IMMUTABLE): '+topic+'\nRÉFÉRENCES RÉCUPÉRÉES (ne cite que des références réellement pertinentes):\n'+refs+'\n';}
@@ -208,19 +236,25 @@ Deno.serve(async(req)=>{
       const existing=Array.isArray(session.course_qcms)?session.course_qcms:[];
       if(existing.length>=20)return answer({session});
       const count=Math.min(10,20-existing.length);
-      const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
-        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le contenu de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite.\nFICHE:\n'+compact(session.fiche,17000)+
-        '\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>q.statement),2400);
+      const evidence=await guidelines(session.topic);
+      const prompt=sourcePrompt(session.topic,evidence)+
+        '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM, cinq propositions A-E, une ou plusieurs réponses exactes, expliquer individuellement chaque proposition et donner une explication synthétique. Les QCM portent EXCLUSIVEMENT sur le sujet et les chapitres de la fiche, pas sur un autre sujet. Mélange anatomie, chirurgie, radiologie, techniques. category précise le domaine. phase=1 pour tous les QCM de cours. Aucune redite. Le plan indique les domaines pédagogiques ; les réponses doivent venir des connaissances médicales et des sources pertinentes, jamais de citations supposées de la fiche.\nPLAN DE LA FICHE:\n'+compact({title:session.fiche?.title,sections:(session.fiche?.sections||[]).map((x:any)=>({title:x.title}))},2600)+
+        '\nOBJECTIFS OBLIGATOIRES, UN PAR QUESTION ET DANS CET ORDRE:\n'+courseBatchPlan(existing.length,count)+
+        '\nLe nouveau lot explore ces objectifs avec des décisions et des faits différents des questions précédentes. Changer seulement les mots ou les options constitue une redite interdite.\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>str(q.statement,160)),1900);
       const produced=await groq(generationContract('course_qcms',{count}),prompt);
       validQuestions(produced,count);
+      assertNewStatements(existing,produced.questions);
       patch.course_qcms=[...existing,...sanitized(produced.questions)];
+      patch.medical_sources=evidence;
     }else if(action==='case'){
       if(session.case_data)return answer({session});
-      const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
+      const evidence=await guidelines(session.topic);
+      const prompt=sourcePrompt(session.topic,evidence)+
         '\nMODE CAS CLINIQUE: construis un patient FICTIF, même sujet médical exact que la fiche. Quatre étapes chronologiques: (1) admission/examen, (2) biologie et imagerie, (3) diagnostic/prise en charge/intervention, (4) suites/complications/suivi. Les décisions respectent les recommandations. Radiologie réellement centrale, prévoir images de sémiologie qui correspondent à ton scénario; les images sont externes, illustratives, jamais du patient fictif. Ne révèle pas le diagnostic dans la phase 1. Le dossier complet contient le diagnostic pour les générations ultérieures. Propose recommended_qcms 10 (simple), 15 (intermédiaire) ou 20 (complexe).\nSYNTHÈSE FICHE:\n'+compact(session.fiche?.study_core,9000);
       const scenario=sanitized(await groq(generationContract('case'),prompt));
       if(!Array.isArray(scenario.stages)||scenario.stages.length!==4)throw new Error('invalid_case_stages');
       patch.case_data=scenario;patch.case_target=scenario.recommended_qcms;
+      patch.medical_sources=evidence;
     }else if(action==='case_qcms'){
       if(!session.case_data)return answer({error:'case_required'},409);
       const existing=Array.isArray(session.case_qcms)?session.case_qcms:[];
@@ -229,13 +263,16 @@ Deno.serve(async(req)=>{
       const count=Math.min(10,target-existing.length);
       const offset=existing.length;
       const phaseSequence=Array.from({length:count},(_,i)=>Math.min(4,1+Math.floor((offset+i)/target*4)));
-      const prompt=sourcePrompt(session.topic,session.medical_sources||'')+
-        '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER COMPLET (NE PAS divulguer précocement):\n'+compact(session.case_data,31000)+
-        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>q.statement),4000);
+      const evidence=await guidelines(session.topic);
+      const prompt=sourcePrompt(session.topic,evidence)+
+        '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER COMPLET (NE PAS divulguer précocement):\n'+compact({title:session.case_data?.title,patient:session.case_data?.patient,stages:(session.case_data?.stages||[]).map((x:any)=>({phase:x.phase,title:x.title,narrative:str(x.narrative,900),clinical_findings:str(x.clinical_findings,500),imaging_findings:str(x.imaging_findings,500),decisions:str(x.decisions,500)})),final_diagnosis:session.case_data?.final_diagnosis},11000)+
+        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>str(q.statement,150)),2000);
       const produced=await groq(generationContract('case_qcms',{count,phases:phaseSequence}),prompt);
       validQuestions(produced,count);
+      assertNewStatements(existing,produced.questions);
       produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];});
       patch.case_qcms=[...existing,...sanitized(produced.questions)];
+      patch.medical_sources=evidence;
     }else if(action==='progress'){
       patch.progress={...(session.progress||{}),...(input.progress||{})};
     }else return answer({error:'unknown_action'},400);

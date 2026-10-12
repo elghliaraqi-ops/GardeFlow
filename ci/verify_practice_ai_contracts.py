@@ -68,14 +68,16 @@ require("for(let attempt=0;attempt<3" not in daily,
 require("if(questions.length!==10)" in daily,
         "Daily QCM count contract is not enforced")
 
-# The clinical dossier is a separate generation; its ten progressive questions
-# must come back in ONE structured answer, checked against stages 1..4.
+# The initial dossier and ten linked progressive QCMs share one provider call.
+# A saved draft can instead generate only its missing questions.
 require("decoded.qcms.length!==10" in progressive,
         "Progressive case QCM count is no longer ten")
 require("const questions=[...first,...last]" in progressive,
         "Progressive clinical sequence no longer validated in both halves")
-require("const batch=await newGroqBatch(prompt" in progressive,
+require("const batch=generatedBatch??await newGroqBatch(prompt" in progressive,
         "Single-request progressive question generation missing")
+require("generatedBatch=await newGroqBatch(prompt,{})" in progressive,
+        "Initial progressive dossier must include its QCMs in one call")
 require("for(let attempt=0;attempt<2" not in progressive,
         "A progressive Groq hot-retry loop returned")
 
@@ -111,3 +113,6 @@ require("statusCode === 429" in glossary,
         "Gemini glossary quota status is no longer recognized")
 
 print("OK: nine Practice Edge source pairs and AI/SQL contracts checked")
+
+preview_sql=(ROOT / "supabase/migrations/20261009100000_practice_qcm_preview.sql").read_text()
+require("values (p_post_id,p_user_id,p_qcms,v_qty,p_difficulty,v_count)" in preview_sql, "Preview insert must supply base_count, its sixth target column")

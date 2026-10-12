@@ -48,7 +48,7 @@ export const sectionSchema = object({
   title: stringType,
   content: stringType,
   key_points: stringList,
-  image_requests: { type: 'array', items: imageRequestSchema },
+  image_requests: { type: 'array', maxItems: 1, items: imageRequestSchema },
 });
 export const ficheSchema = object({
   title: stringType,
@@ -64,7 +64,7 @@ export const caseStageSchema = object({
   clinical_findings: stringType,
   imaging_findings: stringType,
   decisions: stringType,
-  image_requests: { type: 'array', items: imageRequestSchema },
+  image_requests: { type: 'array', maxItems: 1, items: imageRequestSchema },
 });
 export const caseSchema = object({
   title: stringType,
@@ -94,7 +94,7 @@ export function questionSchema(allowedPhases: number[]): JsonSchema {
     options: fixedArray(questionOptionSchema, 5),
     global_explanation: stringType,
     reference: stringType,
-    image_requests: { type: 'array', items: imageRequestSchema },
+    image_requests: { type: 'array', maxItems: 1, items: imageRequestSchema },
   });
 }
 export function qcmSchema(count: number, phases: number[]): JsonSchema {
