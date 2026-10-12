@@ -1,4 +1,3 @@
-import type { GenerationContract } from './generation_contract.ts';
 
 export type EmcDocument = {id:string;title:string;category:string;url:string;content?:string};
 const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -20,10 +19,17 @@ export function rankEmc(topic:string,docs:EmcDocument[]):EmcDocument[] {
 export function emcExcerpt(topic:string,content:string,max=3200):string {
   const terms=emcTerms(topic);
   // Keep the article header/date and the relevant consecutive surgical passages.
-  const blocks=Array.from({length:Math.ceil(content.length/900)},(_,i)=>({i,text:content.slice(i*900,(i+1)*900)}));
+  const cleaned=content.replace(/\u0002/g,'').replace(/^.*Document téléchargé.*$/gm,'');
+  const blocks:{i:number;text:string}[]=[];
+  let start=0;
+  while(start<cleaned.length){
+    let end=Math.min(start+1000,cleaned.length);
+    if(end<cleaned.length){const newline=cleaned.lastIndexOf('\n',end);if(newline>start+500)end=newline+1;}
+    blocks.push({i:blocks.length,text:cleaned.slice(start,end).trim()});start=end;
+  }
   const best=blocks.map(b=>({...b,score:terms.reduce((n,t)=>n+(normalize(b.text).includes(t)?1:0),0)+(/installation|trocart|dissection|anastomose|temps op[eé]ratoire/i.test(b.text)?2:0)}))
-    .sort((a,b)=>b.score-a.score).slice(0,3).sort((a,b)=>a.i-b.i);
-  return (content.slice(0,400)+'\n'+best.map(b=>'[Passage '+(b.i+1)+'] '+b.text).join('\n')).slice(0,max);
+    .sort((a,b)=>b.score-a.score).slice(0,Math.max(1,Math.floor((max-400)/1050))).sort((a,b)=>a.i-b.i);
+  return (cleaned.slice(0,400)+'\n\n'+best.map(b=>'[Passage '+(b.i+1)+']\n'+b.text).join('\n\n')).slice(0,max);
 }
 export async function retrieveEmc(db:any,owner:string,topic:string):Promise<EmcDocument[]> {
   const {data,error}=await db.from('practice_emc_documents').select('id,title,category,url').eq('owner_id',owner);
@@ -33,10 +39,4 @@ export async function retrieveEmc(db:any,owner:string,topic:string):Promise<EmcD
   const {data:full,error:readError}=await db.from('practice_emc_documents').select('id,title,category,url,content').eq('owner_id',owner).in('id',ranked.map(d=>d.id));
   if(readError)throw new Error('emc_document_unavailable');
   return ranked.map(d=>full.find((x:EmcDocument)=>x.id===d.id)).filter(Boolean);
-}
-export function emcContract():GenerationContract {
-  const section={type:'object',additionalProperties:false,required:['title','content','key_points'],properties:{title:{type:'string'},content:{type:'string'},key_points:{type:'array',items:{type:'string'}}}};
-  return {mode:'case',name:'emc_surgical_supplement',requestedCount:null,
-    schema:{type:'object',additionalProperties:false,required:['sections'],properties:{sections:{type:'array',minItems:6,maxItems:6,items:section}}},
-    outputInstructions:'Complément EMC uniquement : six rubriques dans cet ordre : indications et limites, anatomie et structures à protéger, installation et voies d abord, temps opératoires, variantes et difficultés, complications et surveillance. Chaque rubrique explique les faits présents dans les passages fournis. Reformulation synthétique, aucune copie longue, aucun détail absent inventé. Signale si un détail est absent. Pas de QCM ni image. Les documents EMC anciens ne constituent pas les dernières recommandations.'};
 }
