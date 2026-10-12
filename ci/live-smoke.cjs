@@ -20,7 +20,7 @@ async function check(label, fn) {
   }
 }
 
-await (async () => {
+(async () => {
   await check('Live GitHub Pages responds HTML', async () => {
     const r = await fetch(base, {signal:AbortSignal.timeout(20000)});
     const html = await r.text();
@@ -79,8 +79,8 @@ await (async () => {
       return { ...details, browserErrors:errors.length, screenshot:'mobile-login.png' };
     } finally { await browser.close(); }
   });
-})();
-
-fs.writeFileSync(dir+'/results.json',JSON.stringify(results,null,2));
-console.log('LIVE_SMOKE_RESULTS',JSON.stringify(results));
-if(results.some(r=>r.result==='FAIL'))process.exitCode=1;
+})().catch(e=>{ results.push({label:'runner',result:'FAIL',reason:String(e)}); console.error(e); }).finally(()=>{
+  fs.writeFileSync(dir+'/results.json',JSON.stringify(results,null,2));
+  console.log('LIVE_SMOKE_RESULTS',JSON.stringify(results));
+  if(results.some(r=>r.result==='FAIL'))process.exitCode=1;
+});
