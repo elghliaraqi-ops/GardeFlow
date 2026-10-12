@@ -17,10 +17,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install Playwright and Chromium
+      - name: Install Playwright against preinstalled Chrome
         run: |
           npm install --no-save playwright@1.56.1
-          npx playwright install --with-deps chromium
+          which google-chrome
       - name: Smoke test the actual published website and auth boundary
         run: node ci/live-smoke.cjs
       - name: Preserve screenshots and diagnostics
