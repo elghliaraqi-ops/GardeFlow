@@ -72,7 +72,7 @@ async function check(label, fn) {
       try{
         await page.waitForSelector('flutter-view, flt-glass-pane',{state:'attached',timeout:30000});
       }catch(e){mounted=false;why=String(e).slice(0,260)}
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(8500);
       const details=await page.evaluate(()=>({
         title:document.title,language:navigator.language,languages:navigator.languages,flutterView:document.querySelectorAll('flutter-view').length,
         glassPane:document.querySelectorAll('flt-glass-pane').length,
