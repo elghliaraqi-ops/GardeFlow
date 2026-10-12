@@ -23,7 +23,7 @@ messaging.onBackgroundMessage((payload) => {
     return;
   }
   const data = payload.data || {};
-  self.registration.showNotification(
+  return self.registration.showNotification(
     data.title || 'Défi quotidien · GardeFlow Practice',
     {
       body: data.body || 'Vos 10 QCM du jour vous attendent.',
