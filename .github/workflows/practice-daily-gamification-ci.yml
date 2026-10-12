@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/*practice_daily_gamification*'
+      - 'supabase/migrations/*practice_daily_today_leaderboard*'
       - 'source/lib/models/practice_daily_gamification_models.dart'
       - 'source/lib/services/practice_daily_gamification_service.dart'
+      - 'source/lib/screens/practice_daily_screen.dart'
       - 'source/lib/screens/practice_daily_gamification_screen.dart'
       - 'source/lib/screens/practice_screen.dart'
       - 'source/test/practice_daily_gamification_test.dart'
@@ -47,3 +49,8 @@ jobs:
           grep -Fq 'leaderboard_opt_in' "$SQL"
           grep -Fq 'revoke all on function public.practice_daily_game_profile() from public,anon;' "$SQL"
           ! grep -Fq 'practice_daily_replay_attempts' "$SQL"
+          TODAY=supabase/migrations/20261012190500_practice_daily_today_leaderboard.sql
+          grep -Fq "p_period not in ('day','month','all')" "$TODAY"
+          grep -Fq "a.challenge_date=v_today" "$TODAY"
+          grep -Fq "practice_daily_attempts" "$TODAY"
+          grep -Fq "leaderboard_opt_in" "$TODAY"

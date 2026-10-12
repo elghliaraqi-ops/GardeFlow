@@ -67,16 +67,18 @@ async function sendFcm(
   const message: Record<string, unknown> = { token, data };
 
   if (platform === 'android') {
-    // Data-only: Android must not display this before GardeFlow verifies
-    // recipientId in its background isolate.
-    message.android = { priority: 'HIGH' };
+    // FCM notification+data: Android displays the reminder even when Dart
+    // background isolates are unavailable (closed/killed app).
+    message.notification = { title: data.title, body: data.body };
+    message.android = { priority: 'HIGH', notification: { sound: 'default' } };
   } else if (platform === 'ios') {
+    message.notification = { title: data.title, body: data.body };
     message.apns = {
       headers: {
-        'apns-priority': '5',
-        'apns-push-type': 'background',
+        'apns-priority': '10',
+        'apns-push-type': 'alert',
       },
-      payload: { aps: { 'content-available': 1 } },
+      payload: { aps: { sound: 'default' } },
     };
   } else {
     message.webpush = {
@@ -135,13 +137,13 @@ Deno.serve(async(req:Request)=>{
   if(!people.length)return Response.json({ok:true,day,users:0,sent:0,failed:0},{headers:corsHeaders});
   let sent=0,failed=0,claimed=0;
   const title='Défi quotidien · GardeFlow Practice';
-  const body='Vos 10 QCM du jour sont prêts : cours ou cas clinique. Quel sera votre score ?';
+  const body='Votre défi médical du jour vous attend : 10 QCM à découvrir dans Practice !';
   // Use batches to bound database and FCM concurrency within Edge limits.
   for(let offset=0;offset<people.length;offset+=40){
     const ids=people.slice(offset,offset+40);
     const {data:tokens,error:tokenError}=await admin.from('push_tokens')
       .select('token,owner_id,platform').in('owner_id',ids).limit(1000);
-    if(tokenError){failed+=ids.length;continue;}
+    if(tokenError){failed+=ids.length;console.error('daily_push_token_lookup_failed');continue;}
     const tokenMap=new Map<string,{token:string;platform:string}[]>();
     for(const row of tokens??[]){
       const owner=String(row.owner_id??'');
@@ -155,21 +157,30 @@ Deno.serve(async(req:Request)=>{
         const claim=await admin.rpc('practice_daily_claim_push',{p_user_id:id,p_day:day});
         if(claim.error||claim.data!==true)return;
         claimed++;
+        let sentForUser=0;
         for(const device of devices){
           try{
             const delivery=await sendFcm(serviceAccount,access,device.token,device.platform,{
               title,body,kind:'practice_daily_challenge',resourceId:day,recipientId:id
             });
-            if(delivery.ok)sent++;else{
+            if(delivery.ok){sent++;sentForUser++;}else{
               failed++;
+              console.warn('daily_push_fcm_rejected',delivery.status);
               if(delivery.text.includes('UNREGISTERED')||delivery.text.includes('registration-token-not-registered')){
                 await admin.from('push_tokens').delete().eq('token',device.token);
               }
             }
-          }catch{failed++;}
+          }catch(e){failed++;console.warn('daily_push_network_failed',String(e).slice(0,140));}
+        }
+        // The reservation was made before FCM. Roll it back if every device
+        // failed so the next 08:xx retry can safely attempt delivery again.
+        if(sentForUser===0){
+          const release=await admin.rpc('practice_daily_release_push',{p_user_id:id,p_day:day});
+          if(release.error)console.error('daily_push_release_failed',release.error.code);
         }
       }));
     }
   }
+  console.info('daily_push_dispatch_summary',JSON.stringify({eligible:people.length,claimed,sent,failed}));
   return Response.json({ok:true,day,eligible:people.length,users_claimed:claimed,sent,failed},{headers:corsHeaders});
 });

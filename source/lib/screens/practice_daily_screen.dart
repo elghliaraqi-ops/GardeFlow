@@ -197,10 +197,31 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
         _error = null;
       });
       if (!_replayMode) {
-        final entries = await _service.calendar(_month);
-        if (!mounted) return;
-        setState(() => _days = {for (final e in entries) e.day.day: e});
-        await _scheduleReminders(entries);
+        // The RPC already committed the immutable official result. A calendar
+        // refresh error must never be reported as a failed score submission.
+        try {
+          final entries = await _service.calendar(_month);
+          if (mounted) {
+            setState(() => _days = {for (final e in entries) e.day.day: e});
+            await _scheduleReminders(entries);
+          }
+        } catch (refreshError) {
+          if (mounted) {
+            setState(
+              () => _error =
+                  'Score enregistré. Actualisez le calendrier si nécessaire.',
+            );
+          }
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Défi validé · ${updated.score}/10 · Score officiel enregistré',
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _error = 'Validation du score échouée : $e');
@@ -233,10 +254,26 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
 
   Future<void> _toggle(bool enabled) async {
     try {
+      // A preference alone cannot deliver a push: request OS permission and
+      // register the current Firebase device when enabling daily reminders.
+      if (enabled) {
+        await NotificationService.instance.requestPermission();
+        await PushNotificationService.instance.activateForSignedInUser();
+      }
       await _service.setRemindersEnabled(enabled);
       if (!mounted) return;
       setState(() => _enabled = enabled);
       await _scheduleReminders(_days.values.toList());
+      if (enabled && !PushNotificationService.instance.hasActiveRemotePush) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Push distant indisponible : vérifiez les permissions. '
+              'Le rappel local est utilisé sur mobile.',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'Rappels non modifiés : $e');
     }

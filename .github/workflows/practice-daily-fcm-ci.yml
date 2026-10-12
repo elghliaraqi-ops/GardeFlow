@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/*practice_daily_remote_push*'
+      - 'supabase/migrations/*practice_daily_push_delivery_recovery*'
       - 'supabase/functions/send-practice-daily-reminder/**'
       - 'source/supabase/functions/send-practice-daily-reminder/**'
       - 'source/lib/services/push_notification_service.dart'
@@ -28,6 +29,7 @@ jobs:
         run: |
           deno check supabase/functions/send-practice-daily-reminder/index.ts
           deno check source/supabase/functions/send-practice-daily-reminder/index.ts
+          cmp supabase/functions/send-practice-daily-reminder/index.ts source/supabase/functions/send-practice-daily-reminder/index.ts
       - name: Security invariants
         run: |
           set -euo pipefail
@@ -37,6 +39,11 @@ jobs:
           grep -Fq "to service_role" "$SQL"
           grep -Fq "0 7,8 * * *" "$SQL"
           grep -Fq "X-Practice-Cron-Token" supabase/functions/send-practice-daily-reminder/index.ts
+          grep -Fq "practice_daily_release_push" supabase/functions/send-practice-daily-reminder/index.ts
+          grep -Fq "message.notification = { title: data.title, body: data.body }" supabase/functions/send-practice-daily-reminder/index.ts
+          grep -Fq "*/15 7,8 * * *" supabase/migrations/20261012185000_practice_daily_push_delivery_recovery.sql
+          grep -Fq "to service_role" supabase/migrations/20261012185000_practice_daily_push_delivery_recovery.sql
+          grep -Fq "message.notification != null" source/lib/services/push_notification_service.dart
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.5'

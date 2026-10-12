@@ -483,7 +483,7 @@ class PracticeDailyLeaderboardScreen extends StatefulWidget {
 
 class _PracticeDailyLeaderboardScreenState
     extends State<PracticeDailyLeaderboardScreen> {
-  String _period = 'month';
+  String _period = 'day';
   List<PracticeDailyGameRank> _rows = [];
   bool _loading = true;
   String? _error;
@@ -589,8 +589,9 @@ class _PracticeDailyLeaderboardScreenState
                 ),
                 showSelectedIcon: false,
                 segments: const [
+                  ButtonSegment(value: 'day', label: Text('Aujourd’hui')),
                   ButtonSegment(value: 'month', label: Text('Ce mois')),
-                  ButtonSegment(value: 'all', label: Text('Tout le temps')),
+                  ButtonSegment(value: 'all', label: Text('Global')),
                 ],
                 selected: {_period},
                 onSelectionChanged: (values) {

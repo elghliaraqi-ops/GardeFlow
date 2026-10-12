@@ -33,7 +33,7 @@ class PracticeDailyGamificationService {
     int limit = 30,
   }) async {
     currentUserId;
-    if (period != 'month' && period != 'all') {
+    if (period != 'day' && period != 'month' && period != 'all') {
       throw ArgumentError('Période invalide.');
     }
     final response = await _backend.client.rpc(
