@@ -158,10 +158,26 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
     final checked=done.contains(current);
     final picked=selections.putIfAbsent(current,()=> <String>{});
     final countTarget=caseQuiz?(_session?['case_target']??10):20;
+    final sectionKey=_str(q['course_section_key']);
+    final sections=_records(_obj(_session?['fiche'])['sections']);
+    final matches=sections.where((s)=>_str(s['key'])==sectionKey).toList();
+    final section=matches.isEmpty?null:matches.first;
     return _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       _title(caseQuiz?'QCM clinique progressif':'QCM de la fiche',
         'Question '+(current+1).toString()+'/'+list.length.toString()+' · cible '+_str(countTarget)),
       if(caseQuiz)..._clinicalPhase((q['phase'] is int ? q['phase'] as int : 1).clamp(1,4).toInt()),
+      if(section!=null)_button('Relire le cours · '+_str(section['title']),(){
+        showModalBottomSheet<void>(context:context,isScrollControlled:true,
+          backgroundColor:PracticeDailyVisualTheme.surface,builder:(context)=>SafeArea(
+            child:SizedBox(height:MediaQuery.sizeOf(context).height*.75,
+              child:SingleChildScrollView(padding:const EdgeInsets.all(20),child:Column(
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  _title(_str(section['title']),'Cours de résidanat · notion évaluée'),
+                  VisceralCourseText(_str(section['content'])),
+                  ..._arr(section['key_points']).map((point)=>Padding(
+                    padding:const EdgeInsets.only(top:8),child:_label('• '+_str(point),size:13))),
+                ])))));
+      },outlined:true,icon:Icons.menu_book_outlined),
       _label(_str(q['statement']),heavy:true,size:15),
       const SizedBox(height:12),
       ..._records(q['options']).map((o){
@@ -191,6 +207,10 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
           child:_label(_str(o['key'])+' '+(o['correct']==true?'✓ ':'✗ ')+_str(o['explanation']),
             size:12,color:o['correct']==true?PracticeDailyVisualTheme.mint:PracticeDailyVisualTheme.muted))),
         const SizedBox(height:8),_label(_str(q['global_explanation']),size:13),
+        if(_str(q['teaching_point']).isNotEmpty)...[
+          const SizedBox(height:8),_label('Notion du cours',heavy:true,size:13),
+          _label(_str(q['teaching_point']),size:13),
+        ],
         _imageQueries(q['image_requests']),
         _button(current+1<list.length?'Question suivante':'Recommencer',(){
           setState((){

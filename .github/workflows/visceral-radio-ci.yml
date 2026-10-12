@@ -48,4 +48,4 @@ jobs:
       - name: Test external medical image search terms
         run: deno test --allow-env=SERPAPI_KEY source/supabase/functions/generate-visceral-radio/medical_image_previews_test.ts
       - name: Test four Groq prompt/JSON contracts (no API calls)
-        run: deno test source/supabase/functions/generate-visceral-radio/generation_contract_test.ts
+        run: deno test source/supabase/functions/generate-visceral-radio/generation_contract_test.ts source/supabase/functions/generate-visceral-radio/residency_course_context_test.ts
