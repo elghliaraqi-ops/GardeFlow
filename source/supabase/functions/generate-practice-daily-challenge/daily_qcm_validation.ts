@@ -26,7 +26,7 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
   return {accepted:[],rejected:[{position:0,reason:'qcms_not_array'}]};
  const accepted:DailyCandidate[]=[],rejected:Rejection[]=[];
  const refMap=new Map(refs.map(r=>[canon(r.url),r]));
- for(const [index,entry] of input.qcms.slice(0,10).entries()){
+ for(const [index,entry] of input.qcms.entries()){
   const position=index+1;
   if(!entry||typeof entry!=='object'||Array.isArray(entry)){
    rejected.push({position,reason:'invalid_object'});continue;
@@ -35,7 +35,8 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
   const question=plain(q.question,1400),options=Array.isArray(q.options)
    ?q.options.map(x=>plain(x,450)):[];
   const correct=Number(q.correct_index),correction=plain(q.correction,6500);
-  const topic=String(q.topic??'synthese'),fingerprint=dailyQcmFingerprint(question);
+  const rawTopic=String(q.topic??'synthese');
+  const topic=topics.includes(rawTopic)?rawTopic:'synthese',fingerprint=dailyQcmFingerprint(question);
   const refsByUrl=Array.isArray(q.references)?q.references:[];
   const refsById=Array.isArray(q.source_ids)?q.source_ids:[];
   const permitted:DailyRef[]=[];
@@ -57,10 +58,9 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
    new Set(options.map(dailyQcmFingerprint)).size!==4?'duplicate_options':
    correction.length<25?'correction_too_short':
    !Number.isInteger(correct)||correct<0||correct>3?'invalid_answer_index':
-   !references.length?'unverified_source':
-   !topics.includes(topic)?'invalid_topic':
    seen.has(fingerprint)?'duplicate_question':'';
   if(failure){rejected.push({position,reason:failure});continue;}
+  if(accepted.length===10)break;
   seen.add(fingerprint);
   accepted.push({
    question,options,correct_index:correct,correction,topic,references,
@@ -69,7 +69,7 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
      ?q.image_request as Record<string,unknown>:{}
   });
  }
- if(input.qcms.length>10)rejected.push({position:11,reason:'too_many_questions'});
+ // Keep at most ten usable questions even if the provider returns extra items.
  return {accepted,rejected};
 }
 export function validCachedDailyQuestion(raw:unknown):raw is Record<string,unknown>{

@@ -38,16 +38,26 @@ Deno.test('le rechargement et le remplacement des QCM évitent les doublons',()=
  assertEquals(rejected[0].reason,'duplicate_question');
  assertEquals(seen.size,2);
 });
-Deno.test('sources imaginaires rejetées, identifiants documentés acceptés',()=>{
+Deno.test('source inconnue omise sans perdre la question, identifiants résolus',()=>{
  const fake={...q(1),source_ids:[42],
    references:[{url:'https://fake.example/unknown'}]};
  const validated=validateDailyBatch({qcms:[fake]},references,new Set());
- assertEquals(validated.accepted.length,0);
- assertEquals(validated.rejected[0].reason,'unverified_source');
+ assertEquals(validated.accepted.length,1);
+ assertEquals(validated.accepted[0].references,[]);
+ assertEquals(validated.rejected,[]);
  const checked=validateDailyBatch({qcms:[{...fake,source_ids:[2]}]},
   references,new Set());
  assertEquals(checked.accepted.length,1);
  assertEquals(checked.accepted[0].references[0].url,references[1].url);
+});
+
+Deno.test('catégories libres et surplus ne bloquent pas dix questions utilisables',()=>{
+ const data=Array.from({length:12},(_,i)=>({...q(i+1),topic:i===0?'diagnostic':i===8?'traitement':'examen'}));
+ const result=validateDailyBatch({qcms:data},references,new Set());
+ assertEquals(result.accepted.length,10);
+ assertEquals(result.accepted[0].topic,'synthese');
+ assertEquals(result.accepted[8].topic,'synthese');
+ assertEquals(result.rejected,[]);
 });
 Deno.test('réponses JSON incomplètes restent récupérables',()=>{
  const result=validateDailyBatch({qcms:[q(1),q(2)]},references,new Set());

@@ -150,7 +150,7 @@ begin
   ) then raise exception 'duplicate_qcm_existing'; end if;
 
   insert into private.practice_qcm_previews (post_id,user_id,payload,quantity,difficulty,base_count)
-  values (p_post_id,p_user_id,p_qcms,v_qty,p_difficulty)
+  values (p_post_id,p_user_id,p_qcms,v_qty,p_difficulty,v_count)
   on conflict (post_id,user_id) do update
     set id=gen_random_uuid(),payload=excluded.payload,quantity=excluded.quantity,
       difficulty=excluded.difficulty,base_count=excluded.base_count,

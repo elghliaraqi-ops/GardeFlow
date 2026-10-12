@@ -29,10 +29,10 @@ function dailyJsonContract(count:number):string{
   'references peut être [] car source_ids (1 à 3 indices de la bibliographie vérifiée) suffit. '+
   'Quatre options distinctes, correct_index entre 0 et 3, topic parmi '+topics.join('/')+
   '. Ne jamais recopier les placeholders. Exemple JSON valide : '+JSON.stringify(sample)+
-  '. '+medicalImagePrompt+' Aucun Markdown, préambule ni champ supplémentaire.';
+  '. Les catégories topic sont des identifiants EXACTS non traduits, pas des titres de cours. '+medicalImagePrompt+' Aucun Markdown, préambule ni champ supplémentaire.';
 }
 
-type Ref={title:string;url:string;year:string;organization:string;kind:string};
+type Ref={title:string;url:string;year:string;organization:string;kind:string;abstract?:string};
 function plain(value:unknown,max=2500):string {
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
 }
@@ -64,7 +64,7 @@ async function literature(specialty:string):Promise<Ref[]> {
  const key=canon(url);if(!key||!title||found.has(key))continue;
  const titleLower=title.toLowerCase();
  found.set(key,{title,url,year:plain(item.pubYear,12),organization:plain(item.journalTitle||'Europe PMC',160),
- kind:/guideline|recommendation/.test(titleLower)?'recommandation':/consensus/.test(titleLower)?'consensus':'revue'});
+ abstract:plain(item.abstractText,1600),kind:/guideline|recommendation/.test(titleLower)?'recommandation':/consensus/.test(titleLower)?'consensus':'revue'});
  }return [...found.values()].slice(0,14);
  }catch{return [];}finally{clearTimeout(timer);}
 }
@@ -95,19 +95,16 @@ async function newGroqBatch(
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
  // A single model and one request per user action. Never retry on 429 automatically.
- const configured=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
- const model=overrideModel??(
-  ['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
-   ?configured:'openai/gpt-oss-20b');
+ const model=overrideModel??(Deno.env.get('GROQ_TEXT_MODEL')?.trim()||'openai/gpt-oss-120b');
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),Math.min(85000,Math.max(8000,timeoutMs)));
  try{
   const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
    method:'POST',signal:ctrl.signal,
    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
    body:JSON.stringify({
-    model,messages:[{role:'user',content:prompt}],
-    temperature:0.12,reasoning_effort:'low',reasoning_format:'hidden',
-    max_completion_tokens:11000,stream:false,
+    model,messages:[{role:'system',content:'Enseignant médical expert. Une seule réponse correcte par QCU ; correction alignée sur cette option. Ne force aucune source hors sujet ni recommandation datée inconnue.'},{role:'user',content:prompt}],
+    temperature:0.12,reasoning_effort:'medium',reasoning_format:'hidden',
+    max_completion_tokens:7500,stream:false,
     // Strict json_schema caused Groq json_validate_failed 400 in production.
     response_format:{type:'json_object'}
    })
@@ -192,7 +189,7 @@ Deno.serve(async(req:Request)=>{
    const specialty=specialties[numericSeed(date+mode)%specialties.length];
    const refs=await literature(specialty);
    if(!refs.length)throw Error('literature_unavailable');
-   const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url}`).join('\n');
+   const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url} | Résumé : ${r.abstract??''}`).join('\n');
    const common=medicalEvidencePolicy+'\nSOURCES NUMÉROTÉES VÉRIFIÉES :\n'+refList+
     '\nChaque question est inédite, niveau internat, avec correction détaillée (3-5 phrases) '+ 
     'fondée sur ces sources et sans données personnelles. '+ 
@@ -240,7 +237,6 @@ Deno.serve(async(req:Request)=>{
       seen.add(fp);questions.push(q);
       if(questions.length===10)break;
      }
-     if(questions.length!==10)throw Error('invalid_generated_questions');
      // The checkpoint table intentionally allows a maximum of five QCMs per row.
      // Persist ten generated QCMs as two rows in ONE DB request; Groq is called only once.
      // Keep both indexes so an interrupted challenge can reuse completed questions.
@@ -248,13 +244,14 @@ Deno.serve(async(req:Request)=>{
      const checkpointRows=[
       {challenge_date:date,mode,batch_index:0,questions:questions.slice(0,5),updated_at:updatedAt},
       {challenge_date:date,mode,batch_index:1,questions:questions.slice(5,10),updated_at:updatedAt},
-     ];
+     ].filter(row=>row.questions.length>0);
      const {error:saveError}=await admin.from('practice_daily_generation_batches')
       .upsert(checkpointRows,{onConflict:'challenge_date,mode,batch_index'});
      // Staging is best-effort only: a valid complete batch must always reach
      // the authoritative daily challenge table, even if checkpoint writing fails.
      if(saveError)console.warn('daily_checkpoint_write_failed_nonblocking',
        {code:saveError.code});
+     if(questions.length!==10)throw Error('invalid_generated_questions');
     }
    }
    if(questions.length!==10)throw Error('invalid_question_count');

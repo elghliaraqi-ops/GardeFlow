@@ -20,7 +20,23 @@ export const medicalEvidencePolicy=[
  'NE PAS présenter comme « dernière recommandation » un texte ancien ou non vérifié.',
  'Si aucune recommandation fiable ne peut être vérifiée, expliquer les incertitudes et ne pas',
  'inventer de recommandations datées, scores, posologies, seuils ou certitudes.',
- 'Chaque question/correction cite les références vérifiées du catalogue fourni, sans inventer',
+ 'Avant de finaliser TON JSON, raisonne sur chaque option et vérifie toi-même que les données',
+ 'du dossier suffisent à la réponse choisie, que les autres options sont réellement fausses et',
+ 'que la correction ne les contredit pas. Ce raisonnement reste dans ta génération, aucun autre appel.',
+ 'Aucun score ou classement ne doit être déduit sans les variables nécessaires dans le dossier.',
+ 'Une pâleur ne localise pas une MICI ; ne révèle pas de diagnostic ou résultat futur avant sa phase.',
+ 'Une classification appartient à sa pathologie : Hinchey concerne la diverticulite, pas une perforation duodénale.',
+ 'Décris les limites des examens : une radiographie simple n exclut pas une collection ; une fuite de contraste digestif suppose une opacification digestive.',
+ 'Réanimation, antibiothérapie et contrôle de la source peuvent être simultanés : ne crée pas une priorité unique artificielle.',
+ 'QCU : exactement UNE option correcte. correct_index doit désigner exactement cette option.',
+ 'La correction explique la même option, sans recommander un traitement absent des propositions.',
+ 'Si plusieurs propositions seraient acceptables selon les recommandations, reformuler la question',
+ 'avec le contexte discriminant avant de produire le JSON. Ne pas fabriquer un choix unique.',
+ 'Tous les distracteurs sont médicaux, plausibles et différents ; pas de réponses absurdes répétées.',
+ 'N invente aucun terme, aucune surveillance systématique ou effet indésirable pour remplir un QCM.',
+ 'Une année récente ou un titre bibliographique ne prouve pas une recommandation : ne citer une',
+ 'source que si le contenu fourni soutient réellement la correction. Sinon references/source_ids=[].',
+ 'Chaque question/correction cite les références pertinentes du catalogue fourni, sans inventer',
  'de source, de date, de citation, de fait du dossier clinique ou de résultat d’imagerie.',
  'ILLUSTRATIONS : proposer image_search_query EN ANGLAIS uniquement si une image externe',
  'cliniquement adaptée (ECG, imagerie, anatomie) enrichit le dossier; sinon laisser vide.',
@@ -30,7 +46,17 @@ export const medicalEvidencePolicy=[
  'doit être étiquetée « illustration pédagogique, non issue du patient ».'
 ].join('\n');
 export async function recentGuidelineCatalog(specialty:string):Promise<string>{
- const query=clean(specialty,85);
+ const english:Record<string,string>={
+  'Chirurgie viscérale':'abdominal surgery','Orthopédie':'orthopedics','Cardiologie':'cardiology',
+  'Neurologie':'neurology','Urologie':'urology','ORL':'otolaryngology','Gynécologie':'gynecology',
+  'Réanimation':'critical care','Pneumologie':'pulmonology','Gastro-entérologie':'gastroenterology',
+  'Néphrologie':'nephrology','Endocrinologie':'endocrinology','Dermatologie':'dermatology',
+  'Psychiatrie':'psychiatry','Pédiatrie':'pediatrics','Ophtalmologie':'ophthalmology',
+  'Neurochirurgie':'neurosurgery','Chirurgie thoracique':'thoracic surgery',
+  'Chirurgie vasculaire':'vascular surgery','Maladies infectieuses':'infectious diseases',
+  'Médecine interne':'internal medicine',
+ };
+ const query=clean(english[specialty] || specialty,85);
  if(!query)return '';
  const abort=new AbortController();
  const timeout=setTimeout(()=>abort.abort(),8000);
@@ -52,12 +78,12 @@ export async function recentGuidelineCatalog(specialty:string):Promise<string>{
    const url=/^10\.\d{4,9}\//.test(doi)?'https://doi.org/'+doi:
     /^\d+$/.test(pmid)?'https://europepmc.org/article/MED/'+pmid:'';
    if(!title||!url||year<2000||year>now)return [];
-   return [{title,year,url,rank:/(guideline|recommendation|consensus|position statement)/i.test(title)?1:0}];
+   return [{title,year,url,abstract:clean(item.abstractText,650),rank:/(guideline|recommendation|consensus|position statement)/i.test(title)?1:0}];
   }).sort((a,b)=>b.rank-a.rank||b.year-a.year);
   const latest=entries.filter(e=>e.year>=now-6);
   const unique=[...new Map((latest.length?latest:entries).map(e=>[e.url,e])).values()]
-   .slice(0,7);
-  return unique.map(e=>e.year+' | '+e.title+' | '+e.url).join('\n');
+   .slice(0,3);
+  return unique.map(e=>e.year+' | '+e.title+' | '+e.url+' | Résumé : '+e.abstract).join('\n').slice(0,3200);
  }catch{return '';}finally{clearTimeout(timeout);}
 }
 export function supportedMedicalImageLink(preview:unknown,source:unknown):boolean{
