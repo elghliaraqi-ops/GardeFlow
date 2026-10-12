@@ -67,8 +67,9 @@ jobs:
           const progressive = get('generate-practice-progressive-case');
           assert.match(progressive, /clinicalCaseJsonContract;/);
           assert.match(progressive, /JSON\.stringify\(clinicalCaseJsonExample\)/);
-          assert.match(progressive, /progressiveJsonContract\(0\)/);
-          assert.match(progressive, /progressiveJsonContract\(1\)/);
+          assert.match(progressive, /const batch=await newGroqBatch\(prompt/);
+          assert.match(progressive, /minItems:10,maxItems:10/);
+          assert.match(progressive, /Object\.keys\(itemSchema\.properties\)/);
           assert.match(progressive, /validateProgressiveAxisSequence\(batch\.qcms,batchIndex\)/);
           for (const fn of ['generate-practice-daily-challenge','generate-practice-progressive-case','generate-clinical-case-qcm','preview-clinical-case-qcm']) { const v=get(fn); assert.match(v,/image_request:medicalImageSchema/); assert.match(v,/medicalImagePrompt/); }
           console.log('PASS: five generator prompt/JSON contracts and progressive QCM sequence aligned.');
