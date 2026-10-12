@@ -19,7 +19,7 @@ function dailyBatchSchema(count:number){
   properties:{qcms:{type:'array',minItems:count,maxItems:count,items:itemSchema}}};
 }
 function dailyJsonContract(count:number):string{
- const sample={qcms:Array.from({length:count},(_,i)=>({
+ const sample={qcms:Array.from({length:1},(_,i)=>({
   question:'REMPLACER par une vraie question médicale '+(i+1),
   options:['Proposition clinique A','Proposition clinique B','Proposition clinique C','Proposition clinique D'],
   correct_index:0,correction:'REMPLACER par une explication clinique conforme aux sources fournies.',
@@ -90,16 +90,16 @@ const batchSchema={type:'object',additionalProperties:false,required:['qcms'],
 // QCM schema is now supplied dynamically via dailyBatchSchema(missing).
 
 async function newGroqBatch(
- prompt:string,format:Record<string,unknown>,overrideModel?:string,timeoutMs=30000
+ prompt:string,format:Record<string,unknown>,overrideModel?:string,timeoutMs=82000
 ):Promise<Record<string,unknown>> {
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
- // Prefer smaller model to reduce token consumption; one backup attempt per batch.
+ // A single model and one request per user action. Never retry on 429 automatically.
  const configured=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
  const model=overrideModel??(
   ['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
    ?configured:'openai/gpt-oss-20b');
- const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),Math.min(30000,Math.max(8000,timeoutMs)));
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),Math.min(85000,Math.max(8000,timeoutMs)));
  try{
   const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
    method:'POST',signal:ctrl.signal,
@@ -107,7 +107,7 @@ async function newGroqBatch(
    body:JSON.stringify({
     model,messages:[{role:'user',content:prompt}],
     temperature:0.12,reasoning_effort:'low',reasoning_format:'hidden',
-    max_completion_tokens:5400,stream:false,
+    max_completion_tokens:11000,stream:false,
     // Strict json_schema caused Groq json_validate_failed 400 in production.
     response_format:{type:'json_object'}
    })
@@ -207,74 +207,45 @@ Deno.serve(async(req:Request)=>{
     throw Error('checkpoint_unavailable');
    }
    const seen=new Set<string>();
-   const runtimeDeadline=Date.now()+102000;
+   // Retain all previously generated checkpoint questions; do not regenerate them.
+   const runtimeDeadline=Date.now()+115000;
    if(mode==='cours_ia'){
-    for(let index=0;index<2;index++){
-     const goal=index===0?'Diagnostic, démarche clinique, examens et interprétation.':
-      'Traitements, décisions, recommandations, complications et suivi.';
-     const existingBatch=(checkpoint??[]).find(x=>x.batch_index===index);
-     const rawCached=Array.isArray(existingBatch?.questions)?existingBatch.questions:[];
-     const accepted:Record<string,unknown>[]=[];
-     for(const q of rawCached){
-      if(!validCachedDailyQuestion(q))continue;
-      const fingerprint=dailyQcmFingerprint(q.question);
-      if(seen.has(fingerprint))continue;
-      seen.add(fingerprint);
-      accepted.push(q);
-      if(accepted.length>=5)break;
+    // A previous release stored two lots of five. Recover both before spending tokens.
+    const cached=[...(checkpoint??[])].sort((a,b)=>a.batch_index-b.batch_index);
+    for(const part of cached)for(const q of Array.isArray(part.questions)?part.questions:[]){
+     if(!validCachedDailyQuestion(q))continue;
+     const fp=dailyQcmFingerprint(q.question);
+     if(seen.has(fp))continue;
+     seen.add(fp);questions.push(q);
+     if(questions.length===10)break;
+    }
+    questions=questions.slice(0,10);
+    const missing=10-questions.length;
+    if(missing>0){
+     if(runtimeDeadline-Date.now()<20000)throw Error('generation_time_budget');
+     const prompt='Crée EXACTEMENT '+missing+
+      ' QCM IA NOUVEAUX de cours, niveau internat, en français, discipline '+specialty+
+      '. EN UN SEUL LOT : questions 1 à 5 sur diagnostic, démarche clinique, examens et interprétation; '+
+      'questions 6 à 10 sur traitements, recommandations, complications et suivi. '+
+      'Varie les catégories et évite les doublons. Ne répète pas : '+
+      questions.map(q=>String(q.question)).join(' / ')+'. '+
+      common+'\\n'+dailyJsonContract(missing);
+     // Strictly one Groq request: no backup model, no silent automatic retry.
+     const result=await newGroqBatch(prompt,dailyBatchSchema(missing),undefined,
+      Math.min(82000,runtimeDeadline-Date.now()-2000));
+     const accepted=await checkAndFormat(result,refs,new Set(seen));
+     for(const q of accepted){
+      const fp=dailyQcmFingerprint(q.question);
+      if(seen.has(fp))continue;
+      seen.add(fp);questions.push(q);
+      if(questions.length===10)break;
      }
-     if(accepted.length>0)
-      console.info('daily_batch_checkpoint_loaded',{batch:index+1,count:accepted.length});
-     let batchError='generation_failed';
-     for(let attempt=0;attempt<3&&accepted.length<5;attempt++){
-      const available=runtimeDeadline-Date.now();
-      if(available<11000)throw Error('generation_time_budget');
-      const missing=5-accepted.length;
-      const prompt='Crée EXACTEMENT '+missing+
-       ' QCM IA NOUVEAUX de cours, niveau internat, en français, discipline '+specialty+
-       '. Lot '+(index+1)+'/2. '+goal+
-       ' Ne répète aucune de ces questions déjà conservées : '+
-       [...questions,...accepted].map(q=>String(q.question)).join(' / ')+'. '+
-       common+'\n'+dailyJsonContract(missing);
-      const firstModel=(Deno.env.get('GROQ_DAILY_MODEL')??'').trim();
-      const backup=firstModel==='openai/gpt-oss-120b'
-       ?'openai/gpt-oss-20b':'openai/gpt-oss-120b';
-      const selectedModel=attempt===1?backup:undefined;
-      try{
-       const response=await newGroqBatch(prompt,dailyBatchSchema(missing),selectedModel,
-        Math.min(30000,available-2000));
-       const candidateSeen=new Set(seen);
-       const replacement=await checkAndFormat(response,refs,candidateSeen);
-       for(const q of replacement){
-        if(accepted.length>=5)break;
-        const fingerprint=dailyQcmFingerprint(q.question);
-        if(seen.has(fingerprint))continue;
-        seen.add(fingerprint);
-        accepted.push(q);
-       }
-       if(accepted.length>0){
-        const {error:saveError}=await admin.from('practice_daily_generation_batches')
-         .upsert({challenge_date:date,mode,batch_index:index,questions:accepted,
-          updated_at:new Date().toISOString()},{onConflict:'challenge_date,mode,batch_index'});
-        if(saveError){
-         console.warn('daily_checkpoint_write_failed',{code:saveError.code});
-         throw Error('checkpoint_unavailable');
-        }
-       }
-       if(accepted.length<5)
-        batchError='invalid_generated_questions';
-       else batchError='';
-      }catch(err){
-       batchError=err instanceof Error?err.message:'generation_failed';
-       console.warn('daily_ai_batch_retry',{batch:index+1,attempt:attempt+1,
-        accepted:accepted.length,code:batchError});
-       if(['groq_auth_failed','groq_configuration_missing',
-        'checkpoint_unavailable'].includes(batchError))throw err;
-       if(batchError==='groq_rate_limited'&&attempt>=1)break;
-      }
-     }
-     if(accepted.length!==5)throw Error(batchError||'invalid_generated_questions');
-     questions.push(...accepted);
+     if(questions.length!==10)throw Error('invalid_generated_questions');
+     const {error:saveError}=await admin.from('practice_daily_generation_batches')
+      .upsert({challenge_date:date,mode,batch_index:0,questions,
+       updated_at:new Date().toISOString()},
+       {onConflict:'challenge_date,mode,batch_index'});
+     if(saveError)throw Error('checkpoint_unavailable');
     }
    }
    if(questions.length!==10)throw Error('invalid_question_count');
@@ -284,7 +255,7 @@ Deno.serve(async(req:Request)=>{
  }catch(e){
    const error=e instanceof Error?e.message:'generation_failed';
    console.warn('practice_daily_ai_failure',{code:error,mode,date});
-   return send(req,{ok:false,error,retryable:!['groq_auth_failed','groq_configuration_missing'].includes(error)},503);
+   return send(req,{ok:false,error,retryable:!['groq_auth_failed','groq_configuration_missing'].includes(error),retry_after_seconds:error==='groq_rate_limited'?60:undefined},error==='groq_rate_limited'?429:503);
  }finally{
    await admin.from('practice_daily_generation_claims').delete().eq('challenge_date',date).eq('mode',mode);
  }

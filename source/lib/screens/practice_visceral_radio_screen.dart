@@ -68,7 +68,13 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
         _history.insert(0,result);
         if(action=='create')_clearAnswers();
       });
-    }catch(e){if(mounted)setState(()=>_error='Génération impossible : '+e.toString());}
+    }catch(e){if(mounted){
+      final message=e.toString();
+      final rateLimited=message.contains('429')||message.contains('groq_rate_limited')||message.contains('rate_limit_exceeded');
+      setState(()=>_error=rateLimited
+        ?'Quota Groq temporairement atteint. Les QCM déjà générés sont conservés. Réessayez après la période indiquée par Groq.'
+        :'Génération impossible : '+message);
+    }}
     finally{if(mounted)setState(()=>_busy=false);}
   }
   void _clearAnswers(){
@@ -234,7 +240,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
                 _title('20 QCM de cours','2 lots Groq de 10 questions, corrections et explications IA'),
                 _label(_arr(_session!['course_qcms']).length.toString()+'/20 générés'),
                 if(_arr(_session!['course_qcms']).length<20)
-                  _button('Générer 10 QCM de la fiche',()=>_generate('course_qcms')),
+                  _button('Générer ${20-_arr(_session!['course_qcms']).length > 10 ? 10 : 20-_arr(_session!['course_qcms']).length} QCM de la fiche',()=>_generate('course_qcms')),
               ])),
               _quiz(false),
               _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[

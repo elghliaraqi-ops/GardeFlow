@@ -65,3 +65,10 @@ Deno.test('checkpoint exige les 4 options et les sources déjà validées',()=>{
  assertEquals(validCachedDailyQuestion({...data,options:['A','A','C','D']}),false);
  assertEquals(validCachedDailyQuestion({...data,correction:'Raisonnement explicatif sans bibliographie.'}),false);
 });
+
+Deno.test('lot de dix QCM validé en entier sans couper les deux derniers',()=>{
+ const data=Array.from({length:10},(_,i)=>q(i+1));
+ const result=validateDailyBatch({qcms:data},references,new Set());
+ assertEquals(result.accepted.length,10);
+ assertEquals(result.rejected.length,0);
+});

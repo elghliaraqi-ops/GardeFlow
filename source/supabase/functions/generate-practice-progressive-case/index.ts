@@ -308,76 +308,44 @@ function narrativeFromCase(c:Record<string,unknown>):
  return {title:plain('Cas fictif · '+field('chief_complaint',140),180),stem,stages};
 }
 
-async function newGroqBatch(
- prompt:string,format:Record<string,unknown>,preferred?:string
-):Promise<Record<string,unknown>> {
+async function newGroqBatch(prompt:string,_format:Record<string,unknown>):Promise<Record<string,unknown>> {
  const key=Deno.env.get('GROQ_API_KEY');
  if(!key)throw Error('groq_configuration_missing');
- // Independent training uses the smaller model by default; the configured override is optional.
  const configured=(Deno.env.get('GROQ_PROGRESSIVE_CASE_MODEL')??'').trim();
- const primary=preferred??(
-  ['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
-   ?configured:'openai/gpt-oss-20b'
- );
- const models=[primary,primary==='openai/gpt-oss-20b'?'openai/gpt-oss-120b':'openai/gpt-oss-20b'];
- let code='groq_unavailable',rateLimited=0;
- // Complex first-case schemas are more reliable in JSON object mode on GPT-OSS.
- const isCaseFormat=Boolean(
-  (format.properties as Record<string,unknown>|undefined)?.case_stages
- );
- for(const model of models){
-  for(const strict of [false]){ // JSON object mode avoids Groq strict-schema 400 responses.
-   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),38000);
-   try{
-    const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
-     method:'POST',signal:ctrl.signal,
-     headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-     body:JSON.stringify({
-      model,messages:[{role:'user',content:prompt}],
-      temperature:0.15,reasoning_effort:'low',reasoning_format:'hidden',
-      max_completion_tokens:5200,stream:false,
-      response_format:strict
-       ?{type:'json_schema',json_schema:{name:'practice_progressive_case_batch',strict:true,schema:format}}
-       :{type:'json_object'}
-     })
-    });
-    if(response.status===429){
-     rateLimited++;
-     const retryAfter=Number(response.headers.get('retry-after')??'');
-     console.warn('progressive_groq_rate_limit',{model,
-      retry_after_seconds:Number.isFinite(retryAfter)?Math.max(0,Math.min(3600,retryAfter)):null});
-     code='groq_rate_limited';
-     break; // A different model may have separate available quota; no hot-loop retries.
-    }
-    if(!response.ok){
-     const raw=await response.json().catch(()=>null);
-     const reason=String(raw?.error?.code??raw?.error?.type??'').slice(0,70);
-     console.warn('progressive_groq_http',{status:response.status,model,reason});
-     if(response.status===401||response.status===403)throw Error('groq_auth_failed');
-     code=response.status===400?'groq_request_rejected':'groq_provider_unavailable';
-     if(strict&&response.status===400)continue; // Unsupported/malformed strict JSON: try JSON mode.
-     break;
-    }
-    const raw=await response.json().catch(()=>null);
-    const content=raw?.choices?.[0]?.message?.content;
-    if(typeof content==='string'){
-     try{
-      const parsed=JSON.parse(content);
-      if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;
-     }catch{/* Validate again using a different output format. */}
-    }
-    code='groq_invalid_json';
-   }catch(err){
-    const e=err instanceof Error?err:Error('groq_network_error');
-    if(e.message==='groq_auth_failed')throw e;
-    code=e.name==='AbortError'?'groq_timeout':e.message;
-    console.warn('progressive_groq_exception',{code,model});
-    break;
-   }finally{clearTimeout(timer);}
+ const model=['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(configured)
+  ?configured:'openai/gpt-oss-20b';
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),85000);
+ try{
+  // Exactly one request for all 10 progressive questions, no model fallback.
+  const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+   method:'POST',signal:ctrl.signal,
+   headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+   body:JSON.stringify({model,messages:[{role:'user',content:prompt}],
+    temperature:0.15,reasoning_effort:'low',reasoning_format:'hidden',
+    max_completion_tokens:12500,stream:false,response_format:{type:'json_object'}})
+  });
+  if(!response.ok){
+   const raw=await response.json().catch(()=>null);
+   const reason=String(raw?.error?.code??raw?.error?.type??'').slice(0,70);
+   console.warn('progressive_groq_http',{status:response.status,model,reason,
+    retry_after:response.headers.get('retry-after')??''});
+   if(response.status===429)throw Error('groq_rate_limited');
+   if(response.status===401||response.status===403)throw Error('groq_auth_failed');
+   throw Error(response.status===400?'groq_request_rejected':'groq_provider_unavailable');
   }
- }
- if(rateLimited===models.length)throw Error('groq_rate_limited');
- throw Error(code);
+  const body=await response.json().catch(()=>null);
+  const value=body?.choices?.[0]?.message?.content;
+  if(typeof value!=='string')throw Error('groq_invalid_json');
+  let decoded:Record<string,unknown>;
+  try{decoded=JSON.parse(value);}catch{throw Error('groq_invalid_json');}
+  if(!decoded||typeof decoded!=='object'||!Array.isArray(decoded.qcms)
+    ||decoded.qcms.length!==10)throw Error('invalid_generated_question_count');
+  return decoded;
+ }catch(err){
+  const e=err instanceof Error?err:Error('groq_network_error');
+  if(e.name==='AbortError')throw Error('groq_timeout');
+  throw e;
+ }finally{clearTimeout(timer);}
 }
 
 async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>,batchIndex:0|1)
@@ -508,63 +476,28 @@ Deno.serve(async(req:Request)=>{
     'correction détaillée, topic (motif/symptome/examen/imagerie/synthese/prise_en_charge/orientation/avis_specialise), '+
     'references (1 à 3 objets {url}), image_search_query (vide si non pertinent), image_request avec champs du schéma. '+medicalImagePrompt+' '+
     'Utilise seulement les liens bibliographiques suivants :\n'+refList;
-   const early=progressiveJsonContract(0)+'\n'+
-    'Génère exactement les QCM 1 à 5, pour CE patient et pas un cours : '+
-    '1 SYMPTÔMES : identifier manifestations positives, négatives et signes d’alerte; '+
-    '2 EXAMEN CLINIQUE : examen ciblé, constantes et degré d’urgence; '+
-    '3 HYPOTHÈSES DIAGNOSTIQUES : diagnostic principal et différentiels plausibles; '+
-    '4 CLASSIFICATION / GRAVITÉ : stadification ou score UNIQUEMENT si les critères sont disponibles; '+
-    '5 EXAMENS COMPLÉMENTAIRES : choisir et hiérarchiser les examens indiqués. '+
-    'Ne révèle jamais traitement final, résultats futurs ni évolution avant leur étape. '+
-    common+'\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
+   // One Groq call covers all ten questions. Preserve the two five-question
+   // clinical phases for deterministic chronological verification only.
+   const coursePath=progressiveAxes.map((axis,i)=>(i+1)+': '+axis).join(' → ');
+   const prompt=medicalEvidencePolicy+
+    '\\nGénère EXACTEMENT DIX QCM progressifs d’un SEUL patient fictif, dans un objet JSON {qcms:[...]}.'+
+    ' Chaque QCM est relié aux données de CE patient et suit strictement cet ordre clinique : '+
+    coursePath+'. Aucun QCM théorique hors dossier. Quatre propositions différentes, correct_index entier 0 à 3,'+
+    ' correction détaillée, topic autorisé, references (1 à 3 liens exacts du catalogue),'+
+    ' image_search_query et image_request conformes au contrat. '+
+    ' Ne révèle jamais une information future dans une question précoce.'+
+    ' Questions 1–5 : symptômes, examen clinique, hypothèses, classification, examens complémentaires.'+
+    ' Questions 6–10 : interprétation, choix thérapeutique, conduite à tenir, surveillance, complications/suivi.'+
+    medicalImagePrompt+'\\nDOSSIER FICTIF UNIQUE :\\n'+context+
+    '\\nSOURCES AUTORISÉES :\\n'+refList+
+    '\\nEXACTEMENT 10 QCM dans cet ordre. Structure des champs : '+
+    Object.keys(itemSchema.properties).join(', ')+'. Aucun Markdown.';
+   const batch=await newGroqBatch(prompt,{...batchSchema,
+    properties:{qcms:{...batchSchema.properties.qcms,minItems:10,maxItems:10}}});
    const seen=new Set<string>();
-   let questions:Record<string,unknown>[]=[];
-   for(let attempt=0;attempt<2;attempt++){
-    try{
-     const first=await newGroqBatch(early,batchSchema,
-      attempt===1?'openai/gpt-oss-120b':undefined);
-     const localSeen=new Set<string>();
-     const accepted=await checkAndFormat(first,refs,localSeen,0);
-     questions=accepted;
-     for(const fingerprint of localSeen)seen.add(fingerprint);
-     break;
-    }catch(err){
-     const code=err instanceof Error?err.message:'groq_invalid_response';
-     if(['groq_auth_failed','groq_rate_limited','groq_configuration_missing'].includes(code))throw err;
-     console.warn('progressive_case_qcm_retry',{code,attempt:attempt+1});
-     if(attempt===1)throw err;
-    }
-   }
-   if(Number(questions.length)!==5)throw Error('invalid_generated_question_count');
-   const continuation=progressiveJsonContract(1)+'\n'+
-    'Toujours le MÊME patient fictif, questions 6 à 10 STRICTEMENT dans cet ordre : '+
-    '6 INTERPRÉTATION ET DIAGNOSTIC : interpréter les examens disponibles et retenir le diagnostic; '+
-    '7 DÉCISION THÉRAPEUTIQUE : sélectionner une option fondée sur gravité et recommandations; '+
-    '8 CONDUITE À TENIR : traitement et intervention éventuelle, contre-indications, orientation; '+
-    '9 SURVEILLANCE/RÉÉVALUATION : critères de réponse, signes d’alerte et bilans de contrôle; '+
-    '10 COMPLICATIONS ET SUIVI : prévenir les complications et programmer le suivi. '+
-    'Ne crée aucun autre patient, aucune question indépendante du dossier. '+
-    'Ne répète pas les questions précédentes : '+
-    questions.map(x=>String(x.question)).join(' / ')+'. '+common+
-    '\nDOSSIER CLINIQUE FICTIF (source unique) :\n'+context;
-   let secondBatch:Record<string,unknown>[]|null=null;
-   for(let attempt=0;attempt<2;attempt++){
-    try{
-     const batch=await newGroqBatch(continuation,batchSchema,
-      attempt===1?'openai/gpt-oss-120b':undefined);
-     const localSeen=new Set(seen);
-     secondBatch=await checkAndFormat(batch,refs,localSeen,1);
-     for(const fingerprint of localSeen)seen.add(fingerprint);
-     break;
-    }catch(err){
-     const code=err instanceof Error?err.message:'groq_invalid_response';
-     if(['groq_auth_failed','groq_rate_limited','groq_configuration_missing'].includes(code))throw err;
-     console.warn('progressive_case_second_qcm_retry',{code,attempt:attempt+1});
-     if(attempt===1)throw err;
-    }
-   }
-   if(!secondBatch||secondBatch.length!==5)throw Error('invalid_generated_question_count');
-   questions.push(...secondBatch);
+   const first=await checkAndFormat({qcms:(batch.qcms as unknown[]).slice(0,5)},refs,seen,0);
+   const last=await checkAndFormat({qcms:(batch.qcms as unknown[]).slice(5,10)},refs,seen,1);
+   const questions=[...first,...last];
    if(questions.length!==10)throw Error('invalid_question_count');
    // Optional Wikimedia Commons link metadata only; no remote media file storage.
    const illustrations=await externalMedicalIllustrations(simulated);
@@ -593,6 +526,8 @@ Deno.serve(async(req:Request)=>{
    }
    console.warn('independent_case_generation_failure',{code});
    return send(req,{ok:false,error:code,case_id:draftId,
-    retryable:!['groq_auth_failed','groq_configuration_missing'].includes(code)},503);
+    retryable:!['groq_auth_failed','groq_configuration_missing'].includes(code),
+    retry_after_seconds:code==='groq_rate_limited'?60:undefined},
+    code==='groq_rate_limited'?429:503);
  }
 });
