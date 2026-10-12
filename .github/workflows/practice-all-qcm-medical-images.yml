@@ -42,7 +42,7 @@ jobs:
           for fn in generate-visceral-radio practice-medical-images generate-random-clinical-case generate-practice-progressive-case generate-practice-daily-challenge generate-clinical-case-qcm preview-clinical-case-qcm practice-context-glossary process-clinical-case-qcm-queue; do
             cmp "source/supabase/functions/$fn/radiology_assistant.ts" "supabase/functions/$fn/radiology_assistant.ts"
             cmp source/supabase/functions/practice-medical-images/radiology_assistant.ts "supabase/functions/$fn/radiology_assistant.ts"
-            deno check "source/supabase/functions/$fn/index.ts"
+            deno check "source/supabase/functions/$fn/radiology_assistant.ts"
           done
           cmp source/supabase/functions/practice-medical-images/index.ts supabase/functions/practice-medical-images/index.ts
           cmp source/supabase/functions/practice-medical-images/medical_image_previews.ts supabase/functions/practice-medical-images/medical_image_previews.ts
