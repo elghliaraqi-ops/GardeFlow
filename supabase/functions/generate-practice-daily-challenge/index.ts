@@ -245,7 +245,11 @@ Deno.serve(async(req:Request)=>{
       .upsert({challenge_date:date,mode,batch_index:0,questions,
        updated_at:new Date().toISOString()},
        {onConflict:'challenge_date,mode,batch_index'});
-     if(saveError)throw Error('checkpoint_unavailable');
+     // The complete ten-question challenge is more important than its optional
+     // resumability cache. A staging write failure must never waste a successful
+     // Groq generation: proceed to the authoritative daily challenge upsert.
+     if(saveError)console.warn('daily_checkpoint_write_failed_nonblocking',
+       {code:saveError.code});
     }
    }
    if(questions.length!==10)throw Error('invalid_question_count');
