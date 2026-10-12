@@ -59,26 +59,36 @@ async function check(label, fn) {
 
   await check('Headless Chromium renders published Flutter app', async () => {
     const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-    const errors=[];
+    const errors=[],consoleErrors=[],failedRequests=[],badResponses=[];
     try {
       const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
-      page.on('pageerror',e=>errors.push(String(e).slice(0,300)));
+      page.on('pageerror',e=>errors.push(String(e).slice(0,350)));
+      page.on('console',msg=>{if(msg.type()==='error'||msg.type()==='warning')consoleErrors.push(msg.text().slice(0,240))});
+      page.on('requestfailed',req=>failedRequests.push({url:req.url().slice(0,170),failure:req.failure()?.errorText}));
+      page.on('response',res=>{if(res.status()>=400)badResponses.push({url:res.url().slice(0,160),status:res.status()})});
       const nav=await page.goto(base,{waitUntil:'domcontentloaded',timeout:45000});
       assert.ok(nav && nav.status()===200,'Browser main navigation failed');
-      await page.waitForSelector('flutter-view, flt-glass-pane',{state:'attached',timeout:60000});
-      await page.waitForTimeout(6000);
+      let mounted=true,why='';
+      try{
+        await page.waitForSelector('flutter-view, flt-glass-pane',{state:'attached',timeout:30000});
+      }catch(e){mounted=false;why=String(e).slice(0,260)}
+      await page.waitForTimeout(2000);
       const details=await page.evaluate(()=>({
         title:document.title,flutterView:document.querySelectorAll('flutter-view').length,
         glassPane:document.querySelectorAll('flt-glass-pane').length,
         canvas:document.querySelectorAll('canvas').length,
-        bodyText:document.body?.innerText?.slice(0,250)||''
+        loaderVisible:!!document.querySelector('#gardeflow-loader'),
+        bodyText:document.body?.innerText?.slice(0,250)||'',
+        bodyHtml:document.body?.innerHTML?.slice(0,400)||''
       }));
       await page.screenshot({path:dir+'/mobile-login.png',fullPage:true});
-      assert.ok(details.flutterView>0 || details.glassPane>0);
+      console.log('BROWSER_DIAGNOSTICS',JSON.stringify({mounted,why,details,errors,consoleErrors,failedRequests,badResponses}));
+      assert.ok(mounted,'Flutter not mounted; '+JSON.stringify({details,errors,consoleErrors,failedRequests,badResponses}).slice(0,1000));
       assert.equal(errors.length,0,'Uncaught JS exceptions: '+errors.join(' | '));
-      return { ...details, browserErrors:errors.length, screenshot:'mobile-login.png' };
+      return { ...details, browserErrors:errors.length,consoleErrors,failedRequests,badResponses,screenshot:'mobile-login.png' };
     } finally { await browser.close(); }
   });
+
 })().catch(e=>{ results.push({label:'runner',result:'FAIL',reason:String(e)}); console.error(e); }).finally(()=>{
   fs.writeFileSync(dir+'/results.json',JSON.stringify(results,null,2));
   console.log('LIVE_SMOKE_RESULTS',JSON.stringify(results));
