@@ -9,6 +9,8 @@ on:
       - 'supabase/functions/send-practice-daily-reminder/**'
       - 'source/supabase/functions/send-practice-daily-reminder/**'
       - 'source/lib/services/push_notification_service.dart'
+      - 'source/web/firebase-messaging-sw.js'
+      - 'source/web/flutter_bootstrap.js'
       - 'source/lib/screens/practice_daily_screen.dart'
       - '.github/workflows/practice-daily-fcm-ci.yml'
   workflow_dispatch:
@@ -29,6 +31,7 @@ jobs:
         run: |
           deno check supabase/functions/send-practice-daily-reminder/index.ts
           deno check source/supabase/functions/send-practice-daily-reminder/index.ts
+          node --check source/web/firebase-messaging-sw.js
           cmp supabase/functions/send-practice-daily-reminder/index.ts source/supabase/functions/send-practice-daily-reminder/index.ts
       - name: Security invariants
         run: |
@@ -44,6 +47,10 @@ jobs:
           grep -Fq "*/15 7,8 * * *" supabase/migrations/20261012185000_practice_daily_push_delivery_recovery.sql
           grep -Fq "to service_role" supabase/migrations/20261012185000_practice_daily_push_delivery_recovery.sql
           grep -Fq "message.notification != null" source/lib/services/push_notification_service.dart
+          grep -Fq 'serviceWorkerScriptPath:' source/lib/services/push_notification_service.dart
+          grep -Fq 'firebase.messaging()' source/web/firebase-messaging-sw.js
+          grep -Fq 'staleFlutterWorkers' source/web/flutter_bootstrap.js
+          ! grep -Fq 'registrations.map((registration) => registration.unregister())' source/web/flutter_bootstrap.js
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.5'
