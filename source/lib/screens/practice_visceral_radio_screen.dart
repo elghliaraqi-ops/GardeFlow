@@ -135,7 +135,14 @@ class _PracticeVisceralRadioScreenState
       _error = null;
     });
     final emc = _obj(_obj(entry['fiche'])['emc']);
-    if (emc.isEmpty || emc['status'] == 'pending') _generate('emc');
+    final sections = _records(_obj(entry['fiche'])['sections']);
+    final surgical = sections.length > 7
+        ? _arr(sections[7]['operative_techniques'])
+        : const [];
+    if (surgical.isEmpty) {
+      _generate('surgical_techniques');
+    } else if (emc.isEmpty || emc['status'] == 'pending')
+      _generate('emc');
   }
 
   Widget _label(
@@ -583,6 +590,20 @@ class _PracticeVisceralRadioScreenState
                         ),
                       if (_session != null) ...[
                         _fiche(),
+                        if (_records(_obj(_session?['fiche'])['sections'])
+                                    .length >
+                                7 &&
+                            _arr(
+                              _records(
+                                _obj(_session?['fiche'])['sections'],
+                              )[7]['operative_techniques'],
+                            ).isEmpty)
+                          _button(
+                            'Compléter les techniques du chapitre 08',
+                            () => _generate('surgical_techniques'),
+                            outlined: true,
+                            icon: Icons.medical_services_outlined,
+                          ),
                         if (_obj(_obj(_session?['fiche'])['emc'])['status'] ==
                             'pending')
                           _button(

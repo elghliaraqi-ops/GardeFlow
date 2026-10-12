@@ -1,10 +1,11 @@
+import {operativeTechniquesSchema,surgicalTeachingPolicy} from './surgical_techniques.ts';
 /**
  * Single source of truth for Groq output contracts in Practice Viscéral × Radio.
  * The prompt instructions and the JSON Schema are produced together.
  * Strict JSON formatting is not a second medical reviewer.
  */
 type JsonSchema = Record<string, unknown>;
-export type GenerationMode = 'fiche' | 'course_qcms' | 'case' | 'case_qcms';
+export type GenerationMode = 'fiche' | 'course_qcms' | 'case' | 'case_qcms' | 'surgical_techniques';
 export type GenerationContract = {
   mode: GenerationMode;
   name: string;
@@ -54,6 +55,7 @@ export const ficheSchema = object({
   title: stringType,
   summary: stringType,
   sections: fixedArray(sectionSchema, 10),
+  operative_techniques: operativeTechniquesSchema,
   study_core: {type:'array',minItems:10,maxItems:20,items:{type:'string',maxLength:240}},
   references: stringList,
 });
@@ -110,8 +112,9 @@ export function qcmSchema(count: number, phases: number[],courseKeys:string[]=[]
 }
 
 const prescriptions: Record<GenerationMode, string> = {
+  surgical_techniques: surgicalTeachingPolicy+' Retourne uniquement operative_techniques pour enrichir le chapitre 08 existant ; ni cours entier ni QCM.',
   fiche:
-    'Cours de RÉSIDANAT, pas résumé d externat : EXACTEMENT 10 sections. Chaque content contient 650 à 1800 caractères, vise 900 à 1200 caractères avec paragraphes et sous-titres. Chaque section enseigne 4 à 6 key_points précis et expliqués (au plus 240 caractères chacun), non de simples intitulés. Définition, rapports anatomiques/espaces/nerfs, physiopathologie, clinique et gravité, biologie et limites, protocole imagerie/sémiologie/classifications, indications et alternatives, étapes opératoires/repères/pièges, complications et surveillance, synthèse décisionnelle. Expliquer critères, contexte, exceptions et implications chirurgicales. study_core contient 10 à 20 faits enseignés, jamais de simples objectifs. La fiche doit permettre de résoudre les futurs QCM sans notion absente du cours.',
+    surgicalTeachingPolicy+' Cours de RÉSIDANAT, pas résumé d externat : EXACTEMENT 10 sections. Chaque content contient 650 à 1800 caractères, vise 900 à 1200 caractères avec paragraphes et sous-titres. Chaque section enseigne 4 à 6 key_points précis et expliqués (au plus 240 caractères chacun), non de simples intitulés. Définition, rapports anatomiques/espaces/nerfs, physiopathologie, clinique et gravité, biologie et limites, protocole imagerie/sémiologie/classifications, indications et alternatives, étapes opératoires/repères/pièges, complications et surveillance, synthèse décisionnelle. Expliquer critères, contexte, exceptions et implications chirurgicales. study_core contient 10 à 20 faits enseignés, jamais de simples objectifs. La fiche doit permettre de résoudre les futurs QCM sans notion absente du cours.',
   course_qcms:
     'Les QCM de niveau résidanat portent EXCLUSIVEMENT sur les faits enseignés dans les chapitres transmis. course_section_key est la clé du chapitre correspondant et teaching_point rappelle le fait expliqué dans ce chapitre. Chaque proposition A–E possède text, correct et explanation. Les distracteurs sont des erreurs ou inversions des faits enseignés, jamais des notions nouvelles. Au moins une réponse correcte par question. Expliquer les cinq propositions et donner global_explanation. category vaut chirurgie, radiologie ou technique_operatoire. phase vaut toujours 1.',
   case:
@@ -127,7 +130,9 @@ export function generationContract(
   const isQcm = mode === 'course_qcms' || mode === 'case_qcms';
   const count = isQcm ? (options.count ?? 10) : null;
   const phases = mode === 'course_qcms' ? [1] : (options.phases ?? [1, 2, 3, 4]);
-  const schema = mode === 'fiche'
+  const schema = mode === 'surgical_techniques'
+    ? object({operative_techniques:operativeTechniquesSchema})
+    : mode === 'fiche'
     ? ficheSchema
     : mode === 'case'
     ? caseSchema
@@ -139,6 +144,8 @@ export function generationContract(
     'Champs racine EXACTS : ' + rootFields.join(', ') + '.',
     isQcm
       ? 'Retourner EXACTEMENT ' + count + ' questions dans questions, chaque question avec EXACTEMENT cinq options A, B, C, D et E dans cet ordre.'
+      : mode === 'surgical_techniques'
+      ? 'Retourner 1 à 3 objets operative_techniques, chacun avec name, indications et 4 à 6 steps.'
       : mode === 'fiche'
       ? 'Retourner EXACTEMENT 10 objets sections dans sections.'
       : 'Retourner EXACTEMENT 4 objets stages dans stages, dans l’ordre phase 1, 2, 3, 4.',
@@ -161,13 +168,14 @@ export function generationContract(
   return {
     mode,
     name: ({
+      surgical_techniques: 'visceral_radio_surgical_techniques',
       fiche: 'visceral_radio_fiche',
       course_qcms: 'visceral_radio_course_questions',
       case: 'visceral_radio_case',
       case_qcms: 'visceral_radio_progressive_questions',
     })[mode],
     schema,
-    outputInstructions: instruction,
+    outputInstructions: mode==='surgical_techniques' ? instruction.split('CONTRAT DES IMAGES')[0]+'Tous les objets renseignent les champs required du schéma ; aucune clé supplémentaire.' : instruction,
     requestedCount: count,
   };
 }

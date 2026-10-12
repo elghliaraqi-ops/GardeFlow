@@ -1,3 +1,5 @@
+import '../widgets/practice_surgical_techniques.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 
@@ -131,6 +133,10 @@ class VisceralFicheView extends StatelessWidget {
                       text(part['content']),
                       fontSize: lower.contains('point') ? 13.5 : 14.5,
                     ),
+                    if (records(part['operative_techniques']).isNotEmpty)
+                      PracticeSurgicalTechniques(
+                        techniques: records(part['operative_techniques']),
+                      ),
                     if (keyPoints.isNotEmpty)
                       Container(
                         margin: const EdgeInsets.only(top: 4, bottom: 8),
