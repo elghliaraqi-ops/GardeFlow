@@ -61,7 +61,7 @@ async function check(label, fn) {
     const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
     const errors=[],consoleErrors=[],failedRequests=[],badResponses=[];
     try {
-      const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+      const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,locale:'fr-FR'});
       page.on('pageerror',e=>errors.push(String(e).slice(0,350)));
       page.on('console',msg=>{if(msg.type()==='error'||msg.type()==='warning')consoleErrors.push(msg.text().slice(0,240))});
       page.on('requestfailed',req=>failedRequests.push({url:req.url().slice(0,170),failure:req.failure()?.errorText}));
@@ -74,7 +74,7 @@ async function check(label, fn) {
       }catch(e){mounted=false;why=String(e).slice(0,260)}
       await page.waitForTimeout(2000);
       const details=await page.evaluate(()=>({
-        title:document.title,flutterView:document.querySelectorAll('flutter-view').length,
+        title:document.title,language:navigator.language,languages:navigator.languages,flutterView:document.querySelectorAll('flutter-view').length,
         glassPane:document.querySelectorAll('flt-glass-pane').length,
         canvas:document.querySelectorAll('canvas').length,
         loaderVisible:!!document.querySelector('#gardeflow-loader'),
