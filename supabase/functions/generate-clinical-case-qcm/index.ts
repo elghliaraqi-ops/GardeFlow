@@ -1,3 +1,4 @@
+import {radiologyAssistantContext} from './radiology_assistant.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 import {medicalImageSchema,medicalImagePrompt,emptyMedicalImageRequest,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
@@ -478,7 +479,7 @@ Deno.serve(async(req)=>{
        'Axes dans l’ordre : '+axes.join(' → ')+medicalImagePrompt+' '+
        '. Exemple de JSON valide, à remplacer intégralement : '+JSON.stringify(exampleQcms)+
        '. Remplace tous les placeholders, sans JSON supplémentaire ni Markdown.';
-     const prompt=medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
+     const prompt=await radiologyAssistantContext(JSON.stringify(clean).slice(0,2200))+medicalEvidencePolicy+'\n'+`Tu es responsable pédagogique de QCM pour externes et internes en médecine. DATE DE RÉFÉRENCE : ${new Date().toISOString().slice(0,10)}.
 Le cas ci-dessous est ANONYMISÉ et sert d'ancrage pédagogique. N'essaie jamais d'identifier le patient et ne restitue jamais de données d'identification.
 
 Crée EXACTEMENT 5 QCM autonomes, exigeants et utiles, dans cet ordre : cours_fondamental, diagnostic, explorations, prise_en_charge, recommandations.

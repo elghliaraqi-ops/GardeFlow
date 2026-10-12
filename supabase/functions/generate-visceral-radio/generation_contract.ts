@@ -38,12 +38,13 @@ export const imageRequestSchema = object({
   required_features: stringList,
   excluded_features: stringList,
   fallback_queries: stringList,
-  preferred_sources: stringList,
+  preferred_sources: {...stringList,description:'Radiology Assistant first, then PubMed Central, Europe PMC, Radiopaedia, Eurorad'},
   allow_article_figures: {type:'boolean'},
   allow_source_illustrations: {type:'boolean'},
   allow_open_graph_preview: {type:'boolean'},
   allow_page_preview: {type:'boolean'},
 });
+export const imageContractInstructions='image_requests : renseigner '+Object.keys(imageRequestSchema.properties as Record<string,unknown>).join(', ')+'. query en anglais ; image_type selon la vraie modalité ; preferred_sources commence par Radiology Assistant. Pas d’URL inventée ; [] si aucun visuel pertinent.';
 export const sectionSchema = object({
   key: stringType,
   title: stringType,
@@ -160,7 +161,7 @@ export function generationContract(
     'query doit être une requête visuelle précise en anglais combinant organe + modalité/type + anomalie ou repères recherchés. required_features énumère 2 à 4 éléments réellement visibles et nécessaires; excluded_features proscrit couvertures de livres, publicités, graphiques statistiques, images d’un autre organe ou d’un autre examen. Les vraies figures d’articles sources médicaux sont AUTORISÉES.',
     'Exemple anatomie rectale : image_type=anatomical_diagram, anatomy=rectum mesorectum sphincter, query=rectum mesorectum levator ani labeled sagittal anatomy illustration, required_features=[rectum,mesorectum,levator ani], excluded_features=[book cover,prostate screening,annual report].',
     'Exemple stade T3/T4 rectal : image_type=radiology_scan, modality=IRM T2, plane=axial, anatomy=rectum, query=rectal cancer T2 axial pelvic MRI extramural invasion, required_features=[rectal tumor,T2 MRI], excluded_features=[book cover,non medical photo,wrong organ].',
-    'fallback_queries : 2 à 4 alternatives courtes en anglais. preferred_sources : Europe PMC, PubMed Central, Radiopaedia, Eurorad, The Radiology Assistant selon le type de figure. allow_article_figures, allow_source_illustrations, allow_open_graph_preview et allow_page_preview = true pour les demandes pertinentes. La recherche peut proposer une carte article sourcée quand sa figure n’est pas directement utilisable.',
+    'fallback_queries : 2 à 4 alternatives courtes en anglais. preferred_sources : Radiology Assistant en premier, puis PubMed Central, Europe PMC, Radiopaedia, Eurorad selon le type de figure. allow_article_figures, allow_source_illustrations, allow_open_graph_preview et allow_page_preview = true pour les demandes pertinentes. La recherche peut proposer une carte article sourcée quand sa figure n’est pas directement utilisable.',
     'Les aperçus recherchés doivent illustrer fidèlement les signes et structures demandés, sans affirmer qu’ils viennent du patient fictif. Si aucun visuel fiable n’est approprié, image_requests=[] plutôt qu’une proposition hors sujet.',
     'Tous les objets doivent renseigner chaque champ required du schéma, même si un tableau est vide.',
     'Ne créer aucune clé supplémentaire ni champ manquant, aucun Markdown, aucun texte hors JSON.',

@@ -1,3 +1,4 @@
+import '../models/practice_external_medical_media_policy.dart';
 import '../widgets/practice_keyword_text.dart';
 
 import 'package:flutter/material.dart';
@@ -1601,6 +1602,14 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
             label: 'Imagerie',
             value: post.imagingConclusion,
           ),
+          if (post.imagingConclusion.trim().isNotEmpty)
+            PracticeQcmMedicalIllustration(
+              correction: PracticeQcmImageMetadata.imagingCorrection(
+                post.imagingConclusion,
+                post.presentation,
+              ),
+              caseContext: post.presentation,
+            ),
           _CaseSection(
             icon: Icons.psychology_alt_outlined,
             label: 'Synthèse',
@@ -2459,8 +2468,7 @@ class _GuidelineCorrection extends StatelessWidget {
           source == null ||
           preview.scheme != 'https' ||
           source.scheme != 'https' ||
-          preview.host.toLowerCase() != 'upload.wikimedia.org' ||
-          source.host.toLowerCase() != 'commons.wikimedia.org' ||
+          !isSupportedExternalMedicalPreview(preview, source) ||
           preview.userInfo.isNotEmpty ||
           source.userInfo.isNotEmpty) {
         continue;

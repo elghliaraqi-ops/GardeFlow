@@ -1,3 +1,4 @@
+import {findRadiologyArticles,radiologyFigures,radiologyAsset,radiologyCaptionFitsQuery} from './radiology_assistant.ts';
 /**
  * Viscéral × Radio: visual search constrained by the SAME image_request
  * defined by Groq's JSON schema/prompt. Medical content is not re-reviewed
@@ -65,6 +66,7 @@ export function allowedAsset(raw: string) {
   try {
     const uri=new URL(raw);
     if(uri.protocol!=='https:'||uri.username||uri.password||uri.port)return false;
+    if(uri.hostname==='radiologyassistant.nl')return radiologyAsset(raw);
     if(!clinicalHosts.has(uri.hostname.toLowerCase()))return false;
     if(uri.pathname.length>1100 || /%2e|%2f|%5c/i.test(raw))return false;
     if(uri.searchParams.has('download'))return false;
@@ -146,7 +148,7 @@ export function legacyImageRequest(input:any):MedicalImageRequest {
     required_features:selectedFeatures,
     excluded_features:exclusions,
     fallback_queries:alternatives,
-    preferred_sources:preferred,
+    preferred_sources:['Radiology Assistant',...preferred.filter((x:string)=>!/radiology.?assistant/i.test(x))].slice(0,7),
     allow_article_figures:input?.allow_article_figures!==false,
     allow_source_illustrations:input?.allow_source_illustrations!==false,
     allow_open_graph_preview:input?.allow_open_graph_preview!==false,
@@ -169,7 +171,7 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!/^https:\/\//i.test(image.source))return false;
   // Openverse only indexes openly licensed media, including attribution,
   // share-alike and non-commercial licenses. Keep creator/source attribution.
-  if(image.provider!=='Google Images' &&
+  if(!['Google Images','The Radiology Assistant'].includes(image.provider) &&
      !/(Open access|CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
      && !['by','by-sa','by-nc','by-nc-sa','by-nd','by-nc-nd','cc0','pdm']
        .includes(image.license.toLowerCase()))return false;
@@ -215,9 +217,9 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
 }
 function pages(query:string){
   return [
+    {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query})},
     {title:'Google Images',source:'https://www.google.com/search?'+new URLSearchParams({tbm:'isch',q:query})},
     {title:'Radiopaedia',source:'https://radiopaedia.org/search?'+new URLSearchParams({q:query})},
-    {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query})},
     {title:'Eurorad',source:'https://www.eurorad.org/search?'+new URLSearchParams({keys:query})},
     {title:'Europe PMC',source:'https://europepmc.org/search?'+new URLSearchParams({query:query+' AND OPEN_ACCESS:y'})},
     {title:'PubMed Central',source:'https://pmc.ncbi.nlm.nih.gov/?'+new URLSearchParams({term:query})},
@@ -813,14 +815,29 @@ export async function resolveGoogleMedicalImages(input:any){
   };
 }
 
+export function radiologyFigureMatches(image:ImagePreview,request:MedicalImageRequest):boolean{
+ const caption=ascii(image.description),modality=ascii(request.modality+' '+request.query);
+ if(request.image_type==='radiology_scan'){
+  if(!radiologyCaptionFitsQuery(caption,request.modality+' '+request.query))return false;
+  if(/\b(mri|irm)\b/.test(modality)&&!/(\bmri\b|magnetic resonance|\bt[12]\b|dwi|adc|diffusion)/.test(caption))return false;
+  if(/\b(ct|tdm|scanner)\b/.test(modality)&&!/(\bct\b|computed tomography|computed tomographic)/.test(caption))return false;
+  if(/ultrasound|echograph|sonograph/.test(modality)&&!/ultrasound|sonograph|echograph/.test(caption))return false;
+  if(/dwi|adc|diffusion/.test(modality)&&!/dwi|adc|diffusion/.test(caption))return false;
+  if(/\bt2\b/.test(modality)&&!/\bt2\b/.test(caption))return false;
+  if(['axial','sagittal','coronal'].includes(request.plane)&&!caption.includes(request.plane))return false;
+ }
+ return imageIsTopical({...image,title:''},request);
+}
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
   const articleQueries=articleSearchVariants(request);
+  const radiologyArticles=await findRadiologyArticles(articleQueries[0]||request.query);
+  const radiologyImages=request.allow_source_illustrations===false?[]:radiologyArticles.flatMap(a=>radiologyFigures(a.html,a.source).map(f=>({thumbnail:f.thumbnail,full:f.full,source:a.source,title:a.title,creator:'The Radiology Assistant',license:'Droits réservés — aperçu externe ; consulter la source',provider:'The Radiology Assistant',description:f.caption}))).filter(x=>radiologyFigureMatches(x,request));
   const articleResults:Awaited<ReturnType<typeof articleSourcePreviews>>[]=[];
-  // FIRST: open-access PubMed Central articles and their real, caption-
+  // FALLBACK: open-access PubMed Central articles and their real, caption-
   // matched CDN figures. Do not spend Google/SerpApi credits automatically.
-  if(request.allow_page_preview!==false&&articleQueries.length){
+  if(radiologyImages.length<2&&request.allow_page_preview!==false&&articleQueries.length){
     const first=await articleSourcePreviews(request,articleQueries[0]);
     articleResults.push(first);
     if(first.figures.length===0&&articleQueries.length>1)
@@ -838,7 +855,8 @@ export async function resolveMedicalPreviews(input:any){
     }
   }
   articles.sort((a,b)=>Number(Boolean(b.thumbnail))-Number(Boolean(a.thumbnail)));
-  let images=[...articleFigures];
+  if(request.allow_page_preview!==false)articles.unshift(...radiologyArticles.map(({html,...a})=>({...a,thumbnail:radiologyImages.find(x=>x.source===a.source)?.thumbnail})));
+  let images=[...radiologyImages,...articleFigures];
   let catalogCandidates=0;
   // SECOND: try other freely usable catalogues only when PMC didn't supply
   // enough useful figures. The original medical image request is unchanged.
@@ -873,7 +891,7 @@ export async function resolveMedicalPreviews(input:any){
     return true;
   }).slice(0,8);
   console.info('medical_image_result',JSON.stringify({
-    type:request.image_type,primary:'pubmed_central',
+    type:request.image_type,primary:'radiology_assistant',
     articleQueries:articleResults.length,queries:queries.length,
     candidates:catalogCandidates,accepted:images.length
   }));
@@ -882,7 +900,7 @@ export async function resolveMedicalPreviews(input:any){
     medical_searches:pages(articleQueries[0]||queries[0]||request.query),
     image_request:request,google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
     google_cache_key:googleMedicalCacheKey(input),
-    image_sources_searched:[...articleQueries.slice(0,articleResults.length),...queries],
+    image_sources_searched:[...radiologyArticles.map(a=>a.source),...articleQueries.slice(0,articleResults.length),...queries],
     unavailable_reason:images.length===0&&articles.length===0?'no_matching_accessible_images':null,
   };
 }

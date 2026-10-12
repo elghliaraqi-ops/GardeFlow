@@ -1,3 +1,4 @@
+import {radiologyAssistantContext} from './radiology_assistant.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,recentGuidelineCatalog,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
 
@@ -172,7 +173,8 @@ Deno.serve(async (req: Request) => {
     const model = Deno.env.get('GROQ_CASE_MODEL')?.trim() ||
       'openai/gpt-oss-120b';
     const evidence=await recentGuidelineCatalog(specialty);
-    const prompt = medicalEvidencePolicy+'\nRECOMMANDATIONS RÉCENTES RETROUVÉES :\n'+
+    const imagingContext=await radiologyAssistantContext(specialty+' '+evidence.slice(0,1500));
+    const prompt = imagingContext+medicalEvidencePolicy+'\nRECOMMANDATIONS RÉCENTES RETROUVÉES :\n'+
       (evidence||'Aucune recommandation récente vérifiée, éviter les affirmations non sourcées.')+
       '\n'+`Crée UN cas clinique ENTIÈREMENT FICTIF, pédagogique et vraisemblable pour des internes en médecine.
 Spécialité imposée : ${specialty}. Niveau : ${level}.

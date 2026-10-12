@@ -86,4 +86,28 @@ void main() {
       isNull,
     );
   });
+  test('saved clinical imaging requests preserve findings and select the same primary source', () {
+    final request = PracticeQcmImageMetadata.fromCorrection(
+      PracticeQcmImageMetadata.imagingCorrection(
+        'IRM pelvienne axiale : tumeur rectale',
+        'Rectorragies',
+      ),
+    )!;
+    expect(request['image_type'], 'radiology_scan');
+    expect(request['modality'], 'IRM');
+    expect(request['plane'], 'axial');
+    expect((request['preferred_sources'] as List).first, 'Radiology Assistant');
+    expect(request.containsKey('image_url'), isFalse);
+    final untyped = PracticeQcmImageMetadata.fromCorrection(
+      PracticeQcmImageMetadata.imagingCorrection(
+        'Épaississement rectal',
+        'Rectorragies',
+      ),
+    )!;
+    expect(untyped['modality'], isEmpty);
+    expect(
+      PracticeQcmImageMetadata.imagingCorrection('', 'Rectorragies'),
+      isEmpty,
+    );
+  });
 }

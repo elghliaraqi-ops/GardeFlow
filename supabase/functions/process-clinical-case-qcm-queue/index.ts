@@ -1,3 +1,4 @@
+import {radiologyAssistantContext,radiologyPriorityPolicy} from './radiology_assistant.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
 const AXES = ['cours_fondamental','diagnostic','explorations','prise_en_charge','recommandations'];
@@ -152,7 +153,7 @@ Deno.serve(async(req:Request)=>{
       'ou [] si absence de références vérifiées. '+
       'Réponds UNIQUEMENT en JSON avec les champs axis, question, options, '+
       'correct_index, correction, topic, source_indexes et la racine qcms.';
-    const prompt=conciseRules+
+    const prompt=radiologyPriorityPolicy+await radiologyAssistantContext(JSON.stringify(clean).slice(0,2200))+conciseRules+
       '\nAXES : '+AXES.join(', ')+
       '\nTOPICS : '+TOPICS.join(', ')+
       '\nCAS ANONYMISÉ : '+JSON.stringify(clean)+
