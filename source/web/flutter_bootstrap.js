@@ -8,9 +8,18 @@
 
   try {
     if ('serviceWorker' in navigator) {
-      hadServiceWorkerController = navigator.serviceWorker.controller != null;
+      const controllerUrl = navigator.serviceWorker.controller?.scriptURL || '';
+      // Keep the Firebase Messaging worker: deleting it disables push in the
+      // background every time the user opens GardeFlow.
+      hadServiceWorkerController = controllerUrl.includes('flutter_service_worker.js');
       const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map((registration) => registration.unregister()));
+      const staleFlutterWorkers = registrations.filter((registration) => {
+        const script = registration.active?.scriptURL ||
+          registration.waiting?.scriptURL ||
+          registration.installing?.scriptURL || '';
+        return script.includes('flutter_service_worker.js');
+      });
+      await Promise.all(staleFlutterWorkers.map((registration) => registration.unregister()));
     }
 
     if ('caches' in window) {
