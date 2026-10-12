@@ -19,7 +19,7 @@ class PracticeQcmImageMetadata {
     if (findings.trim().isEmpty) return '';
     final text = findings.trim();
     final shortContext = context.length > 100 ? context.substring(0, 100) : context;
-    final modality = RegExp(r'IRM|MRI|TDM|scanner|CT|échographie|echographie|ultrasound|radiographie', caseSensitive: false).firstMatch(text)?.group(0) ?? '';
+    final modality = RegExp(r'(?<![A-Za-zÀ-ÿ])(?:IRM|MRI|TDM|scanner|CT|échographie|echographie|ultrasound|radiographie)(?![A-Za-zÀ-ÿ])', caseSensitive: false).firstMatch(text)?.group(0) ?? '';
     final planeText = RegExp(r'axial|sagittal|coronal', caseSensitive: false).firstMatch(text)?.group(0)?.toLowerCase() ?? 'not_applicable';
     final query = '$shortContext $text';
     return '$marker\n${jsonEncode(<String, dynamic>{

@@ -93,6 +93,8 @@ void main() {
     expect(request['plane'], 'axial');
     expect((request['preferred_sources'] as List).first, 'Radiology Assistant');
     expect(request.containsKey('image_url'), isFalse);
+    final untyped = PracticeQcmImageMetadata.fromCorrection(PracticeQcmImageMetadata.imagingCorrection('Épaississement rectal', 'Rectorragies'))!;
+    expect(untyped['modality'], isEmpty);
     expect(PracticeQcmImageMetadata.imagingCorrection('', 'Rectorragies'), isEmpty);
   });
 }
