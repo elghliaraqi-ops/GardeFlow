@@ -150,7 +150,7 @@ class _PracticeVisceralRadioScreenState
     double size = 14,
     Color color = PracticeDailyVisualTheme.text,
     bool heavy = false,
-  }) => Text(
+  }) => PracticeKeywordText(
     text,
     style: TextStyle(
       color: color,
@@ -566,15 +566,20 @@ class _PracticeVisceralRadioScreenState
                                     (s) => ListTile(
                                       dense: true,
                                       contentPadding: EdgeInsets.zero,
-                                      title: _label(
+                                      title: Text(
                                         _str(s['title']),
-                                        size: 13,
-                                        heavy: true,
+                                        style: const TextStyle(
+                                          color: PracticeDailyVisualTheme.text,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
-                                      subtitle: _label(
+                                      subtitle: Text(
                                         _str(s['topic']),
-                                        size: 11,
-                                        color: PracticeDailyVisualTheme.muted,
+                                        style: const TextStyle(
+                                          color: PracticeDailyVisualTheme.muted,
+                                          fontSize: 11,
+                                        ),
                                       ),
                                       leading: Icon(
                                         s['id'] == _session?['id']

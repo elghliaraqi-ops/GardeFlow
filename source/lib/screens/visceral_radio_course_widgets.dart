@@ -1,3 +1,4 @@
+import '../widgets/practice_keyword_text.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -51,7 +52,7 @@ class VisceralCourseText extends StatelessWidget {
                   color: PracticeDailyVisualTheme.mint,fontWeight:FontWeight.w900)),
               ),
               const SizedBox(width: 11),
-              Expanded(child: Text(points[i], style: TextStyle(
+              Expanded(child: PracticeKeywordText(points[i], style: TextStyle(
                 color: PracticeDailyVisualTheme.text, fontSize: fontSize,
                 height: 1.5))),
             ]),
@@ -61,7 +62,7 @@ class VisceralCourseText extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start,children: [
       for (final paragraph in value.trim().split(RegExp(r'\n\s*\n')))
         if (paragraph.trim().isNotEmpty)
-          Padding(padding: const EdgeInsets.only(bottom: 12),child: Text(
+          Padding(padding: const EdgeInsets.only(bottom: 12),child: PracticeKeywordText(
             paragraph.trim(),style:TextStyle(
               color:PracticeDailyVisualTheme.text,fontSize:fontSize,height:1.58))),
     ]);
@@ -320,7 +321,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       Row(children:[
         const Icon(Icons.image_search_rounded,color:PracticeDailyVisualTheme.mint,size:21),
         const SizedBox(width:9),
-        Expanded(child:Text(widget.caption.isEmpty?'Illustration radio-chirurgicale':widget.caption,
+        Expanded(child:PracticeKeywordText(widget.caption.isEmpty?'Illustration radio-chirurgicale':widget.caption,
           style:const TextStyle(color:PracticeDailyVisualTheme.text,
             fontWeight:FontWeight.w800,fontSize:13))),
       ]),

@@ -1,3 +1,5 @@
+import 'practice_keyword_text.dart';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -73,7 +75,7 @@ class PracticeSurgicalTechniques extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
+            PracticeKeywordText(
               name,
               style: const TextStyle(
                 fontWeight: FontWeight.w900,
@@ -86,7 +88,10 @@ class PracticeSurgicalTechniques extends StatelessWidget {
               'Indications',
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
-            Text(value(t['indications']), style: const TextStyle(height: 1.45)),
+            PracticeKeywordText(
+              value(t['indications']),
+              style: const TextStyle(height: 1.45),
+            ),
             const SizedBox(height: 10),
             const Text(
               'Principales étapes opératoires',
@@ -95,7 +100,7 @@ class PracticeSurgicalTechniques extends StatelessWidget {
             ...steps.asMap().entries.map(
               (e) => Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
+                child: PracticeKeywordText(
                   '${e.key + 1}. ${value(e.value)}',
                   style: const TextStyle(height: 1.45),
                 ),

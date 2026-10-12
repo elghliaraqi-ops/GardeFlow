@@ -1,3 +1,5 @@
+import 'practice_keyword_text.dart';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -108,7 +110,7 @@ class PracticeClinicalDossier extends StatelessWidget {
                         ),
                 ),
                 Expanded(
-                  child: Text(
+                  child: PracticeKeywordText(
                     items[i].replaceFirst(RegExp(r'^\d{1,2}[.)]\s*'), ''),
                     style: const TextStyle(
                       color: PracticeDailyVisualTheme.text,
@@ -183,7 +185,7 @@ class PracticeClinicalDossier extends StatelessWidget {
           ),
           if (complaint.isNotEmpty) ...[
             const SizedBox(height: 7),
-            Text(
+            PracticeKeywordText(
               complaint,
               style: const TextStyle(
                 color: Colors.white,
@@ -385,7 +387,7 @@ class PracticeClinicalDossier extends StatelessWidget {
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Text(
+                                child: PracticeKeywordText(
                                   stages[i].title,
                                   style: const TextStyle(
                                     color: PracticeDailyVisualTheme.gold,
@@ -480,7 +482,7 @@ class ExternalMedicalImagePreview extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          PracticeKeywordText(
             data['title'] ?? 'Illustration pédagogique',
             style: const TextStyle(
               color: PracticeDailyVisualTheme.text,

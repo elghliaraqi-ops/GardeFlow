@@ -1,3 +1,4 @@
+import '../widgets/practice_keyword_text.dart';
 import '../widgets/practice_surgical_techniques.dart';
 
 import 'package:url_launcher/url_launcher.dart';
@@ -109,7 +110,7 @@ class VisceralFicheView extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
+                      PracticeKeywordText(
                         title,
                         style: const TextStyle(
                           color: ink,
@@ -186,7 +187,7 @@ class VisceralFicheView extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 9),
                                     Expanded(
-                                      child: Text(
+                                      child: PracticeKeywordText(
                                         text(point),
                                         style: const TextStyle(
                                           color: ink,
@@ -257,7 +258,7 @@ class VisceralFicheView extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 13),
-              Text(
+              PracticeKeywordText(
                 text(fiche['title']),
                 style: const TextStyle(
                   color: ink,
@@ -267,7 +268,7 @@ class VisceralFicheView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
+              PracticeKeywordText(
                 text(fiche['summary']),
                 style: const TextStyle(
                   color: Color(0xFFE2EEF8),
@@ -330,7 +331,7 @@ class VisceralFicheView extends StatelessWidget {
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Text(
+                              child: PracticeKeywordText(
                                 text(v),
                                 style: const TextStyle(
                                   color: ink,
@@ -387,7 +388,7 @@ class VisceralFicheView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 9),
-                Text(
+                PracticeKeywordText(
                   text(emc['message']),
                   style: const TextStyle(
                     color: muted,
@@ -473,7 +474,7 @@ class VisceralFicheView extends StatelessWidget {
                       .map(
                         (x) => Padding(
                           padding: const EdgeInsets.only(bottom: 9),
-                          child: Text(
+                          child: PracticeKeywordText(
                             '• ' + text(x),
                             style: const TextStyle(
                               color: muted,
