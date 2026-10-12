@@ -26,6 +26,11 @@ Future<void> huimBackgroundMessage(RemoteMessage message) async {
   final activeUserId = await LocalStorageService.loadPushActiveUserId();
   if (activeUserId == null || activeUserId != recipientId) return;
 
+  // FCM displays notification+data messages in the OS background itself.
+  // Do not create a second local notification for the same daily challenge.
+  if (message.notification != null &&
+      message.data['kind'] == 'practice_daily_challenge') return;
+
   final title = message.data['title']?.toString() ?? 'GardeFlow';
   final body = message.data['body']?.toString() ?? 'Nouvelle notification';
   final kind = message.data['kind']?.toString() ?? '';
