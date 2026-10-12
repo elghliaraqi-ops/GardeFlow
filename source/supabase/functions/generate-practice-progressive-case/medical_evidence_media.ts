@@ -9,7 +9,7 @@ function clean(value:unknown,max=250):string{
  return String(value??'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x1f]/g,' ')
   .replace(/\s+/g,' ').trim().slice(0,max);
 }
-export const medicalEvidencePolicy=[
+export const medicalEvidencePolicy='Dans le champ question, entoure 2 à 5 termes cliniques clés avec **double astérisque** : affichage souligné et recherche Google au clic. Pas d URL, pas d indice de la réponse correcte.\n'+[
  'SUPPORT ET NIVEAU : lorsque le niveau résidanat est demandé, enseigner les critères discriminants, leurs raisons, les rapports anatomiques utiles, classifications applicables, alternatives selon stabilité et terrain, étapes opératoires et surveillance. Expliquer les notions nécessaires aux réponses dans le cours ou la correction pédagogique ; pas de simple lettre ni de titres vagues. Respecter le même patient et la chronologie, sans inventer ses résultats.',
  'PRIORITÉ CLINIQUE OBLIGATOIRE — date actuelle : '+new Date().toISOString().slice(0,10)+'.',
  'Le cas fictif, chaque question, TOUTES les corrections, les examens complémentaires, indications,',

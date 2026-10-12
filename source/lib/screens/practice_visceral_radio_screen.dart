@@ -1,3 +1,4 @@
+import '../widgets/practice_keyword_text.dart';
 import 'package:flutter/material.dart';
 import '../services/supabase_backend_service.dart';
 import 'practice_daily_visual_theme.dart';
@@ -82,7 +83,11 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
     _courseSelected.clear();_caseSelected.clear();
     _courseDone.clear();_caseDone.clear();
   }
-  void _open(Map<String,dynamic> entry)=>setState((){_session=entry;_clearAnswers();_error=null;});
+  void _open(Map<String,dynamic> entry) {
+    setState((){_session=entry;_clearAnswers();_error=null;});
+    final emc=_obj(_obj(entry['fiche'])['emc']);
+    if(emc.isEmpty||emc['status']=='pending')_generate('emc');
+  }
   Widget _label(String text,{double size=14,Color color=PracticeDailyVisualTheme.text,bool heavy=false}) =>
     Text(text,style:TextStyle(color:color,fontSize:size,fontWeight:heavy?FontWeight.w800:FontWeight.normal,height:1.42));
   Widget _box(Widget child)=>Container(
@@ -178,7 +183,7 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
                     padding:const EdgeInsets.only(top:8),child:_label('• '+_str(point),size:13))),
                 ])))));
       },outlined:true,icon:Icons.menu_book_outlined),
-      _label(_str(q['statement']),heavy:true,size:15),
+      PracticeKeywordText(_str(q['statement']),style:const TextStyle(color:PracticeDailyVisualTheme.text,fontWeight:FontWeight.w800,fontSize:15,height:1.42)),
       const SizedBox(height:12),
       ..._records(q['options']).map((o){
         final key=_str(o['key']);
@@ -256,6 +261,8 @@ class _PracticeVisceralRadioScreenState extends State<PracticeVisceralRadioScree
             ])),
             if(_session!=null)...[
               _fiche(),
+              if(_obj(_obj(_session?['fiche'])['emc'])['status']=='pending')
+                _button('Réessayer le complément EMC',()=>_generate('emc'),outlined:true,icon:Icons.menu_book_outlined),
               _box(Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                 _title('20 QCM de cours','2 lots Groq de 10 questions, corrections et explications IA'),
                 _label(_arr(_session!['course_qcms']).length.toString()+'/20 générés'),

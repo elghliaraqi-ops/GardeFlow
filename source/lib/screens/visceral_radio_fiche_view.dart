@@ -1,3 +1,4 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'practice_daily_visual_theme.dart';
 import 'visceral_radio_course_widgets.dart';
@@ -104,6 +105,7 @@ class VisceralFicheView extends StatelessWidget {
   }
   @override Widget build(BuildContext context){
     final chapters=records(fiche['sections']);
+    final emc=fiche['emc'] is Map ? Map<String,dynamic>.from(fiche['emc']) : <String,dynamic>{};
     final refs=items(fiche['references']);
     final highlights=items(fiche['study_core']);
     return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -166,6 +168,27 @@ class VisceralFicheView extends StatelessWidget {
             style:const TextStyle(color:ink,fontSize:17,fontWeight:FontWeight.w900))),
         ])),
       ...chapters.asMap().entries.map((e)=>section(e.value,e.key)),
+      if(emc.isNotEmpty)Container(
+        margin:const EdgeInsets.only(bottom:14),padding:const EdgeInsets.all(15),
+        decoration:BoxDecoration(color:PracticeDailyVisualTheme.surface,
+          borderRadius:BorderRadius.circular(17),border:Border.all(color:mint)),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          const Text('TECHNIQUES CHIRURGICALES — EMC',style:TextStyle(
+            color:mint,fontWeight:FontWeight.w900,fontSize:17)),
+          const SizedBox(height:9),
+          Text(text(emc['message']),style:const TextStyle(color:muted,fontSize:12,height:1.4)),
+          const SizedBox(height:12),
+          ...records(emc['sections']).asMap().entries.map((e)=>section(e.value,chapters.length+e.key)),
+          ...records(emc['sources']).map((source)=>TextButton.icon(
+            onPressed:() async {
+              final uri=Uri.tryParse(text(source['url']));
+              if(uri==null||uri.scheme!='https'||uri.host!='drive.google.com')return;
+              try { await launchUrl(uri,mode:LaunchMode.platformDefault,webOnlyWindowName:'_blank'); }
+              catch (_) { if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content:Text('Impossible d’ouvrir le PDF EMC.'))); }
+            },icon:const Icon(Icons.picture_as_pdf_outlined,color:mint),
+            label:Text(text(source['title']),style:const TextStyle(color:mint)))),
+        ])),
       if(refs.isNotEmpty)Container(
         margin:const EdgeInsets.only(bottom:14),
         decoration:BoxDecoration(color:PracticeDailyVisualTheme.surface,
