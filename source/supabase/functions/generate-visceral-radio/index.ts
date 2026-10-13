@@ -56,6 +56,19 @@ function extract(payload:any): string {
   for(const item of payload?.output??[])for(const c of item?.content??[])if(typeof c?.text==='string')return c.text;
   return '';
 }
+// Groq strict mode uses a constrained JSON Schema subset. Preserve the full
+// prompt/JSON contract in generation_contract.ts; omit unsupported size keywords
+// from the API decoding schema without removing any fields or allowed values.
+function strictGroqSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(strictGroqSchema);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).filter(([k]) =>
+      !['minLength','maxLength','minItems','maxItems','pattern','format','default'].includes(k)
+    ).map(([k,v]) => [k,strictGroqSchema(v)]));
+  }
+  return value;
+}
+
 async function groq(contract: GenerationContract, prompt: string) {
   const key = Deno.env.get('GROQ_API_KEY');
   if (!key) throw new Error('groq_key_missing');
@@ -68,24 +81,44 @@ async function groq(contract: GenerationContract, prompt: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 110000);
   try {
+    const schema = strictGroqSchema(contract.schema);
+    // The schema enforces field names/types. Do not repeat verbose examples
+    // in the prompt: this preserves the free-tier 8k TPM budget for the answer.
+    const modeNote = contract.mode === 'fiche'
+      ? '\nCours de résidanat : 10 chapitres, contenu explicatif concis (650–850 caractères/ch.), 4 points clés factuels/ch., chapitre 08 et techniques structurées. Pas de répétitions.'
+      : contract.mode === 'surgical_techniques'
+      ? '\nUniquement 1 à 3 techniques opératoires structurées, indications et 4 à 6 étapes chacune.'
+      : '\nChaque option est expliquée en une phrase clinique utile ; global_explanation en deux phrases. Pour les questions d imagerie, deux demandes image au maximum par lot. Complète TOUTES les questions.';
     const payload = {
       model,
-      instructions:'Tu es enseignant universitaire en chirurgie viscérale et radiologie. '+
-       'JSON conforme au schéma, données du cas uniquement, explications et réponses cohérentes.',
-      input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+(contract.mode==='surgical_techniques'?'':'\n'+imageContractInstructions)+
-       (contract.mode==='surgical_techniques'?'\nNoms précis, indications conditionnelles et étapes opératoires ordonnées. Aucun QCM.':contract.mode==='fiche'?'\nLa priorité est un cours développé de résidanat : paragraphes explicatifs, critères et pièges, pas une liste de titres. 900 à 1200 caractères par chapitre, sauf le chapitre 08 dont content contient 650 à 800 caractères en complément de operative_techniques ; 4 key_points factuels de 100 à 160 caractères par chapitre, utilisables pour les QCM.':'\nUne phrase de justification par option, deux phrases de raisonnement pour global_explanation, teaching_point explicatif de niveau résidanat. ')+
-       (contract.mode==='surgical_techniques'
-         ?'Aucun champ de question, image ou URL ; renseigne uniquement name, indications et steps dans operative_techniques.'
-         :'Au maximum DEUX questions illustrées par lot, une demande image au plus par question ; image_requests=[] pour les autres. Ne répète pas les métadonnées des images dans les explications. Complète tous les éléments demandés avant toute digression.'),
-      text:{format:{type:'json_schema',name:contract.name,schema:contract.schema}},
-      reasoning:{effort:contract.mode==='fiche'||contract.mode==='surgical_techniques'?'low':'medium'},
+      instructions:'Tu enseignes la chirurgie viscérale et la radiologie au niveau résidanat. Réponse strictement JSON, raisonnement médical précis et cohérent.',
+      input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+
+        (contract.mode==='surgical_techniques'?'':'\n'+imageContractInstructions)+modeNote,
+      text:{format:{type:'json_schema',name:contract.name,strict:true,schema}},
+      reasoning:{effort:'low'},
       store:false,
-      max_output_tokens:contract.mode==='surgical_techniques'?2000:contract.requestedCount===5?3500:contract.requestedCount===10?4800:
-       contract.mode==='fiche'?5800:4500,
+      max_output_tokens:0,
     };
-    const inputEstimate=Math.ceil((payload.input.length+payload.instructions.length+JSON.stringify(contract.schema).length)/3);
-    payload.max_output_tokens=Math.min(payload.max_output_tokens,7800-inputEstimate);
-    if(payload.max_output_tokens<(contract.mode==='surgical_techniques'?1000:2200))throw new Error('groq_request_too_large');
+    // Groq free-tier combined TPM is 8k. Reserve real output headroom
+    // instead of the previous 7800-inputChars/3 clipping to ~2k output.
+    // Conservative token approximation includes JSON schema + safety margin.
+    const inputEstimate=Math.ceil((
+      payload.input.length+payload.instructions.length+JSON.stringify(schema).length
+    )/3.8)+250;
+    const desired=contract.mode==='fiche'?5700:
+      contract.mode==='surgical_techniques'?1800:
+      contract.requestedCount===10?5400:
+      contract.requestedCount===5?3200:4000;
+    payload.max_output_tokens=Math.min(desired,7900-inputEstimate);
+    const minimum=contract.mode==='fiche'?3800:
+      contract.mode==='surgical_techniques'?650:
+      contract.requestedCount===10?3000:1500;
+    if(payload.max_output_tokens<minimum){
+      console.warn('visceral_groq_budget_insufficient',{
+        mode:contract.mode,input_estimate:inputEstimate,output_budget:payload.max_output_tokens,
+      });
+      throw new Error('groq_request_too_large');
+    }
     const response = await fetch('https://api.groq.com/openai/v1/responses', {
       method: 'POST',
       signal: controller.signal,
@@ -109,6 +142,7 @@ async function groq(contract: GenerationContract, prompt: string) {
       throw new Error('groq_http_' + response.status + ':' + code);
     }
     if (data?.status === 'incomplete') {
+      console.warn('visceral_groq_incomplete',{mode:contract.mode,reason:str(data?.incomplete_details?.reason,80),used:data?.usage?.output_tokens,budget:payload.max_output_tokens});
       throw new Error('groq_output_token_limit');
     }
     const raw = typeof data?.output_text==='string'?data.output_text:
@@ -171,7 +205,7 @@ const medicalRules=[
  'Une radiographie n exclut pas une collection ; fuite de contraste digestif seulement après opacification digestive.',
  'Aucun résultat futur dans une phase précoce. Images externes illustratives, aucune URL. Raisonne dans cette génération, aucun second contrôle.'
 ].join('\n');
-function sourcePrompt(topic:string, refs:string){return medicalRules+'\nSUJET CENTRAL (IMMUTABLE): '+topic+'\nRÉFÉRENCES RÉCUPÉRÉES (ne cite que des références réellement pertinentes):\n'+refs+'\n';}
+function sourcePrompt(topic:string, refs:string){return medicalRules+'\nSUJET CENTRAL (IMMUTABLE): '+topic+'\nRÉFÉRENCES RÉCUPÉRÉES (ne cite que des références réellement pertinentes):\n'+refs.slice(0,1450)+'\n';}
 function validQuestions(obj:any,count:number,phaseLimit=4) {
   if(!Array.isArray(obj?.questions)||obj.questions.length!==count)throw new Error('invalid_question_count');
   for(const q of obj.questions) {
