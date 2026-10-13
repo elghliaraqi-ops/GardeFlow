@@ -1,3 +1,4 @@
+import '../widgets/practice_quiz_widgets.dart';
 import '../widgets/practice_keyword_text.dart';
 
 import 'package:flutter/material.dart';
@@ -304,194 +305,186 @@ class _PracticeVisceralRadioScreenState
         .where((s) => _str(s['key']) == sectionKey)
         .toList();
     final section = matches.isEmpty ? null : matches.first;
-    return _box(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _title(
-            caseQuiz ? 'QCM clinique progressif' : 'QCM de la fiche',
-            'Question ' +
-                (current + 1).toString() +
-                '/' +
-                list.length.toString() +
-                ' · cible ' +
-                _str(countTarget),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _title(
+          caseQuiz ? 'QCM clinique progressif' : 'QCM de la fiche',
+          'Question ' +
+              (current + 1).toString() +
+              '/' +
+              list.length.toString() +
+              ' · cible ' +
+              _str(countTarget),
+        ),
+        if (caseQuiz)
+          ..._clinicalPhase(
+            (q['phase'] is int ? q['phase'] as int : 1).clamp(1, 4).toInt(),
           ),
-          if (caseQuiz)
-            ..._clinicalPhase(
-              (q['phase'] is int ? q['phase'] as int : 1).clamp(1, 4).toInt(),
-            ),
-          if (section != null)
-            _button(
-              'Relire le cours · ' + _str(section['title']),
-              () {
-                showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: PracticeDailyVisualTheme.surface,
-                  builder: (context) => SafeArea(
-                    child: SizedBox(
-                      height: MediaQuery.sizeOf(context).height * .75,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _title(
-                              _str(section['title']),
-                              'Cours de résidanat · notion évaluée',
+        if (section != null)
+          _button(
+            'Relire le cours · ' + _str(section['title']),
+            () {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: PracticeDailyVisualTheme.surface,
+                builder: (context) => SafeArea(
+                  child: SizedBox(
+                    height: MediaQuery.sizeOf(context).height * .75,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _title(
+                            _str(section['title']),
+                            'Cours de résidanat · notion évaluée',
+                          ),
+                          VisceralCourseText(_str(section['content'])),
+                          ..._arr(section['key_points']).map(
+                            (point) => Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _label('• ' + _str(point), size: 13),
                             ),
-                            VisceralCourseText(_str(section['content'])),
-                            ..._arr(section['key_points']).map(
-                              (point) => Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: _label('• ' + _str(point), size: 13),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
-              outlined: true,
-              icon: Icons.menu_book_outlined,
-            ),
-          PracticeKeywordText(
-            _str(q['statement']),
-            style: const TextStyle(
-              color: PracticeDailyVisualTheme.text,
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-              height: 1.42,
-            ),
+                ),
+              );
+            },
+            outlined: true,
+            icon: Icons.menu_book_outlined,
           ),
-          const SizedBox(height: 12),
-          ..._records(q['options']).map((o) {
-            final key = _str(o['key']);
-            final isPicked = picked.contains(key);
-            final correct = o['correct'] == true;
-            final accent = checked
-                ? (correct
-                      ? PracticeDailyVisualTheme.mint
-                      : isPicked
-                      ? Colors.redAccent
-                      : PracticeDailyVisualTheme.muted)
-                : (isPicked
-                      ? PracticeDailyVisualTheme.mint
-                      : PracticeDailyVisualTheme.border);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: InkWell(
+        PracticeQuizCard(
+          index: current,
+          total: list.length,
+          topic:
+              'Réponses multiples · ' + (caseQuiz ? 'Cas clinique' : 'Cours'),
+          question: _str(q['statement']),
+          options: [
+            for (final entry in _records(q['options']).asMap().entries)
+              PracticeQuizOption(
+                index: entry.key,
+                label: _str(entry.value['text']),
+                selected: picked.contains(_str(entry.value['key'])),
+                showCorrection: checked,
+                isCorrect: entry.value['correct'] == true,
                 onTap: checked
                     ? null
                     : () => setState(() {
-                        isPicked ? picked.remove(key) : picked.add(key);
+                        final key = _str(entry.value['key']);
+                        picked.contains(key)
+                            ? picked.remove(key)
+                            : picked.add(key);
                       }),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: accent),
-                    borderRadius: BorderRadius.circular(12),
-                    color: PracticeDailyVisualTheme.elevated,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isPicked
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color: accent,
-                        size: 21,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _label(key + '. ' + _str(o['text']), size: 13),
-                      ),
-                    ],
-                  ),
-                ),
               ),
-            );
-          }),
-          if (!checked)
-            _button(
-              'Valider mes réponses',
-              picked.isEmpty
-                  ? null
-                  : () {
-                      setState(() => done.add(current));
-                      _recordProgress(caseQuiz);
-                    },
-              icon: Icons.check_circle_outline,
-            ),
-          if (checked) ...[
-            ..._records(q['options']).map(
-              (o) => Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: _label(
-                  _str(o['key']) +
-                      ' ' +
-                      (o['correct'] == true ? '✓ ' : '✗ ') +
-                      _str(o['explanation']),
-                  size: 12,
-                  color: o['correct'] == true
-                      ? PracticeDailyVisualTheme.mint
-                      : PracticeDailyVisualTheme.muted,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _label(_str(q['global_explanation']), size: 13),
-            if (_str(q['teaching_point']).isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _label('Notion du cours', heavy: true, size: 13),
-              _label(_str(q['teaching_point']), size: 13),
-            ],
-            _imageQueries(q['image_requests']),
-            _button(
-              current + 1 < list.length ? 'Question suivante' : 'Recommencer',
-              () {
-                setState(() {
-                  if (current + 1 < list.length) {
-                    if (caseQuiz) {
-                      _casePosition++;
-                    } else {
-                      _coursePosition++;
-                    }
-                  } else {
-                    if (caseQuiz) {
-                      _casePosition = 0;
-                      _caseDone.clear();
-                      _caseSelected.clear();
-                    } else {
-                      _coursePosition = 0;
-                      _courseDone.clear();
-                      _courseSelected.clear();
-                    }
-                  }
-                });
-              },
-              icon: Icons.arrow_forward,
-            ),
           ],
-          if (current > 0)
-            _button(
-              'Question précédente',
-              () => setState(() {
-                if (caseQuiz) {
-                  _casePosition--;
-                } else {
-                  _coursePosition--;
-                }
-              }),
-              outlined: true,
-              icon: Icons.arrow_back,
+        ),
+        if (!checked)
+          _button(
+            'Valider mes réponses',
+            picked.isEmpty
+                ? null
+                : () {
+                    setState(() => done.add(current));
+                    _recordProgress(caseQuiz);
+                  },
+            icon: Icons.check_circle_outline,
+          ),
+        if (checked) ...[
+          PracticeQuizFeedback(
+            key: ValueKey('visceral-$caseQuiz-$current'),
+            correct: _records(q['options']).every(
+              (o) => picked.contains(_str(o['key'])) == (o['correct'] == true),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ..._records(q['options']).map(
+                  (o) => Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: _label(
+                      _str(o['key']) +
+                          ' ' +
+                          (o['correct'] == true ? '✓ ' : '✗ ') +
+                          _str(o['explanation']),
+                      size: 12,
+                      color: o['correct'] == true
+                          ? PracticeDailyVisualTheme.mint
+                          : PracticeDailyVisualTheme.muted,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _label(_str(q['global_explanation']), size: 13),
+                if (_str(q['teaching_point']).isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _label('Notion du cours', heavy: true, size: 13),
+                  _label(_str(q['teaching_point']), size: 13),
+                ],
+                _imageQueries(q['image_requests']),
+              ],
+            ),
+          ),
         ],
-      ),
+        const SizedBox(height: 12),
+        PracticeQuizNavigation(
+          index: current,
+          onNext: checked
+              ? () {
+                  setState(() {
+                    if (current + 1 < list.length) {
+                      if (caseQuiz) {
+                        _casePosition++;
+                      } else {
+                        _coursePosition++;
+                      }
+                    } else {
+                      if (caseQuiz) {
+                        _casePosition = 0;
+                        _caseDone.clear();
+                        _caseSelected.clear();
+                      } else {
+                        _coursePosition = 0;
+                        _courseDone.clear();
+                        _courseSelected.clear();
+                      }
+                    }
+                  });
+                }
+              : null,
+          nextLabel: current + 1 < list.length
+              ? 'Question suivante'
+              : 'Recommencer',
+          nextIcon: current + 1 < list.length
+              ? Icons.chevron_right_rounded
+              : Icons.replay_rounded,
+          results: List.generate(
+            list.length,
+            (j) => done.contains(j)
+                ? _records(list[j]['options']).every(
+                    (o) =>
+                        (selections[j] ?? <String>{}).contains(
+                          _str(o['key']),
+                        ) ==
+                        (o['correct'] == true),
+                  )
+                : null,
+          ),
+          onPrevious: current == 0
+              ? null
+              : () => setState(() {
+                  if (caseQuiz) {
+                    _casePosition--;
+                  } else {
+                    _coursePosition--;
+                  }
+                }),
+        ),
+      ],
     );
   }
 
