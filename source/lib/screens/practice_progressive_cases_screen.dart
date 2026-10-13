@@ -1,3 +1,4 @@
+import '../widgets/practice_quiz_widgets.dart';
 import '../widgets/practice_keyword_text.dart';
 
 import 'package:flutter/material.dart';
@@ -294,14 +295,6 @@ class _PracticeProgressiveCasesScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'EXPLICATION IA',
-          style: TextStyle(
-            color: PracticeDailyVisualTheme.gold,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 7),
         PracticeKeywordText(
           PracticeQcmImageMetadata.visibleText(correction),
           style: const TextStyle(
@@ -360,123 +353,61 @@ class _PracticeProgressiveCasesScreenState
       progressive: true,
       completed: _submitted,
     );
-    return _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'QUESTION ${i + 1}/10 · ${q.topic.toUpperCase()}',
-            style: const TextStyle(
-              color: PracticeDailyVisualTheme.mint,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PracticeQuizCard(
+          index: i,
+          total: _questions.length,
+          topic: q.topic.toUpperCase(),
+          question: q.question,
+          options: [
+            for (var choice = 0; choice < q.options.length; choice++)
+              PracticeQuizOption(
+                index: choice,
+                label: q.options[choice],
+                selected: _answers[i] == choice,
+                showCorrection: _submitted,
+                isCorrect: q.correctIndex == choice,
+                onTap: _submitted
+                    ? null
+                    : () => setState(() => _answers[i] = choice),
+              ),
+          ],
+        ),
+        if (_submitted) ...[
           const SizedBox(height: 11),
-          PracticeKeywordText(
-            q.question,
-            style: const TextStyle(
-              color: PracticeDailyVisualTheme.text,
-              fontSize: 16,
-              height: 1.4,
-              fontWeight: FontWeight.w700,
+          PracticeQuizFeedback(
+            key: ValueKey('progressive-$i'),
+            correct: _answers[i] == q.correctIndex,
+            child: _explanation(
+              q.correction,
+              question: q.question,
+              topic: q.topic,
             ),
-          ),
-          const SizedBox(height: 15),
-          for (var choice = 0; choice < q.options.length; choice++) ...[
-            InkWell(
-              onTap: _submitted
-                  ? null
-                  : () => setState(() => _answers[i] = choice),
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: _answers[i] == choice
-                      ? PracticeDailyVisualTheme.mint.withOpacity(.14)
-                      : PracticeDailyVisualTheme.elevated,
-                  border: Border.all(
-                    width: _answers[i] == choice ? 2 : 1,
-                    color:
-                        (_submitted && q.correctIndex == choice) ||
-                            _answers[i] == choice
-                        ? PracticeDailyVisualTheme.mint
-                        : PracticeDailyVisualTheme.border,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      '${String.fromCharCode(65 + choice)}. ',
-                      style: const TextStyle(
-                        color: PracticeDailyVisualTheme.gold,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Expanded(
-                      child: PracticeKeywordText(
-                        q.options[choice],
-                        style: const TextStyle(
-                          color: PracticeDailyVisualTheme.text,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    if (_submitted && q.correctIndex == choice)
-                      const Icon(
-                        Icons.check_circle,
-                        color: PracticeDailyVisualTheme.mint,
-                        size: 20,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (_submitted) ...[
-            const SizedBox(height: 11),
-            _explanation(q.correction, question: q.question, topic: q.topic),
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: PracticeDailyVisualTheme.secondaryButtonStyle,
-                  onPressed: i == 0
-                      ? null
-                      : () => setState(() => _question = i - 1),
-                  icon: const Icon(Icons.chevron_left_rounded),
-                  label: const Text('Précédent'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  style: PracticeDailyVisualTheme.primaryButtonStyle,
-                  onPressed: i < 9
-                      ? (canNext
-                            ? () => setState(() => _question = i + 1)
-                            : null)
-                      : (!_submitted &&
-                                _answers.every((answer) => answer != null)
-                            ? () => setState(() {
-                                _submitted = true;
-                                _question = 0;
-                              })
-                            : null),
-                  icon: Icon(
-                    i < 9 ? Icons.chevron_right_rounded : Icons.check_rounded,
-                  ),
-                  label: Text(i < 9 ? 'Suivant' : 'Terminer'),
-                ),
-              ),
-            ],
           ),
         ],
-      ),
+        const SizedBox(height: 14),
+        PracticeQuizNavigation(
+          index: i,
+          results: List.generate(
+            _questions.length,
+            (j) =>
+                _submitted ? _answers[j] == _questions[j].correctIndex : null,
+          ),
+          onPrevious: i == 0 ? null : () => setState(() => _question = i - 1),
+          onNext: i < 9
+              ? (canNext ? () => setState(() => _question = i + 1) : null)
+              : (!_submitted && _answers.every((answer) => answer != null)
+                    ? () => setState(() {
+                        _submitted = true;
+                        _question = 0;
+                      })
+                    : null),
+          nextLabel: i < 9 ? 'Suivant' : 'Terminer',
+          nextIcon: i < 9 ? Icons.chevron_right_rounded : Icons.check_rounded,
+        ),
+      ],
     );
   }
 

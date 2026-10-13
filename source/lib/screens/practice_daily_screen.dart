@@ -1,3 +1,4 @@
+import '../widgets/practice_quiz_widgets.dart';
 import '../widgets/practice_keyword_text.dart';
 
 import 'package:flutter/material.dart';
@@ -452,58 +453,24 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     );
   }
 
-  Widget _options(PracticeDailyQuestion q, int index, bool completed) {
-    return Column(
-      children: [
-        for (var i = 0; i < q.options.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: InkWell(
-              onTap: completed
-                  ? null
-                  : () => setState(() => _selected[index] = i),
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: (_selected[index] == i)
-                      ? _green.withOpacity(.15)
-                      : const Color(0xFF17314E),
-                  border: Border.all(
-                    color: completed && q.correctIndex == i
-                        ? _green
-                        : _selected[index] == i
-                        ? _green
-                        : const Color(0xFF244B68),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      '${String.fromCharCode(65 + i)}. ',
-                      style: const TextStyle(
-                        color: _gold,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Expanded(
-                      child: PracticeKeywordText(
-                        q.options[i],
-                        style: const TextStyle(color: _text),
-                      ),
-                    ),
-                    if (completed && q.correctIndex == i)
-                      const Icon(Icons.check_circle_rounded, color: _green),
-                  ],
-                ),
-              ),
-            ),
+  Widget _options(PracticeDailyQuestion q, int index, bool completed) => Column(
+    children: [
+      for (var i = 0; i < q.options.length; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 7),
+          child: PracticeQuizOption(
+            index: i,
+            label: q.options[i],
+            selected: _selected[index] == i,
+            showCorrection: completed,
+            isCorrect: q.correctIndex == i,
+            onTap: completed
+                ? null
+                : () => setState(() => _selected[index] = i),
           ),
-      ],
-    );
-  }
+        ),
+    ],
+  );
 
   Widget _explanation(
     String correction, {
@@ -522,12 +489,6 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 14),
-        const Text(
-          'Explication IA',
-          style: TextStyle(color: _green, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
         PracticeKeywordText(
           explanation,
           style: const TextStyle(color: _text, height: 1.5),
@@ -651,237 +612,198 @@ class _PracticeDailyScreenState extends State<PracticeDailyScreen> {
       progressive: s.isProgressiveCase,
       completed: s.completed,
     );
-    return _box(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (s.completed) ...[
-            Text(
-              _replayMode || s.isReplay
-                  ? 'Entraînement terminé · ${s.score}/10'
-                  : 'Défi terminé · ${s.score}/10',
-              style: const TextStyle(
-                color: _green,
-                fontSize: 23,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          if ((_replayMode || s.isReplay) && s.officialScore != null) ...[
-            Text(
-              'Note officielle inchangée : ${s.officialScore}/10',
-              style: const TextStyle(
-                color: _gold,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (s.completed) ...[
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                style: PracticeDailyVisualTheme.secondaryButtonStyle,
-                onPressed: _replayMode
-                    ? _replayAgain
-                    : () => _openReplay(s.day),
-                icon: const Icon(Icons.replay_rounded),
-                label: Text(_replayMode ? 'Rejouer encore' : 'Rejouer'),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (s.completed) ...[
           Text(
-            s.mode == 'cas_clinique'
-                ? 'Ancien défi · cas clinique (historique)'
-                : 'Défi du jour · 10 nouveaux QCM IA',
-            style: const TextStyle(color: _gold, fontWeight: FontWeight.bold),
+            _replayMode || s.isReplay
+                ? 'Entraînement terminé · ${s.score}/10'
+                : 'Défi terminé · ${s.score}/10',
+            style: const TextStyle(
+              color: _green,
+              fontSize: 23,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          if (s.isProgressiveCase) ...[
-            const SizedBox(height: 10),
-            Text(
-              s.caseTitle,
-              style: const TextStyle(
-                color: _text,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
+          const SizedBox(height: 10),
+        ],
+        if ((_replayMode || s.isReplay) && s.officialScore != null) ...[
+          Text(
+            'Note officielle inchangée : ${s.officialScore}/10',
+            style: const TextStyle(
+              color: _gold,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 10),
-            Text(
-              'Étape ${stageIndex + 1}/4 · Répondez aux QCM '
-              'de chaque étape pour découvrir la suivante.',
-              style: const TextStyle(color: _gold, fontSize: 12),
-            ),
-            const SizedBox(height: 10),
-            for (var stage = 0; stage < 4; stage++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: stage <= unlockedStage
-                    ? ExpansionTile(
-                        key: ValueKey('practice-case-stage-$stage-$stageIndex'),
-                        initiallyExpanded: stage == stageIndex,
-                        tilePadding: const EdgeInsets.symmetric(horizontal: 9),
-                        childrenPadding: const EdgeInsets.fromLTRB(
-                          12,
-                          0,
-                          12,
-                          14,
-                        ),
-                        backgroundColor: const Color(0xFF17314E),
-                        collapsedBackgroundColor: const Color(0xFF17314E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        collapsedShape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        iconColor: _green,
-                        collapsedIconColor: _gold,
-                        title: Text(
-                          '${stage + 1}. ${s.caseStages[stage].title}',
-                          style: const TextStyle(
-                            color: _text,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        children: [
-                          Text(
-                            s.caseStages[stage].narrative,
-                            style: const TextStyle(color: _muted, height: 1.5),
-                          ),
-                        ],
-                      )
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 13,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF17314E),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.lock_outline_rounded,
-                              size: 18,
-                              color: _muted,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Étape ${stage + 1} · À débloquer',
-                              style: const TextStyle(
-                                color: _muted,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-          ] else if (s.caseStem.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              s.caseTitle,
-              style: const TextStyle(
-                color: _text,
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              s.caseStem,
-              style: const TextStyle(color: _muted, height: 1.45),
-            ),
-          ],
-          const SizedBox(height: 15),
-          Row(
-            children: [
-              Expanded(
-                child: LinearProgressIndicator(
-                  value: (index + 1) / 10,
-                  minHeight: 6,
-                  color: _green,
-                  backgroundColor: const Color(0xFF244B68),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '${index + 1}/10',
-                style: const TextStyle(
-                  color: _gold,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: 13),
-          PracticeKeywordText(
-            q.question,
+          const SizedBox(height: 8),
+        ],
+        if (s.completed) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              style: PracticeDailyVisualTheme.secondaryButtonStyle,
+              onPressed: _replayMode ? _replayAgain : () => _openReplay(s.day),
+              icon: const Icon(Icons.replay_rounded),
+              label: Text(_replayMode ? 'Rejouer encore' : 'Rejouer'),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Text(
+          s.mode == 'cas_clinique'
+              ? 'Ancien défi · cas clinique (historique)'
+              : 'Défi du jour · 10 nouveaux QCM IA',
+          style: const TextStyle(color: _gold, fontWeight: FontWeight.bold),
+        ),
+        if (s.isProgressiveCase) ...[
+          const SizedBox(height: 10),
+          Text(
+            s.caseTitle,
             style: const TextStyle(
               color: _text,
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
-              height: 1.4,
             ),
           ),
-          const SizedBox(height: 12),
-          _options(q, index, s.completed),
-          if (s.completed)
-            _explanation(q.correction, question: q.question, topic: q.topic),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              OutlinedButton(
-                style: PracticeDailyVisualTheme.secondaryButtonStyle,
-                onPressed: index == 0
-                    ? null
-                    : () => setState(() => _current = index - 1),
-                child: const Text('Précédent'),
-              ),
-              const Spacer(),
-              if (index < 9)
-                FilledButton(
-                  style: PracticeDailyVisualTheme.primaryButtonStyle,
-                  onPressed: canAdvance
-                      ? () => setState(() => _current = index + 1)
-                      : null,
-                  child: const Text('Suivant'),
-                )
-              else if (!s.completed)
-                FilledButton(
-                  style: PracticeDailyVisualTheme.primaryButtonStyle,
-                  onPressed: _busy || _selected.any((x) => x == null)
-                      ? null
-                      : _finish,
-                  child: const Text('Terminer · note sur 10'),
-                )
-              else
-                const Icon(Icons.verified_rounded, color: _green),
-            ],
+          const SizedBox(height: 10),
+          Text(
+            'Étape ${stageIndex + 1}/4 · Répondez aux QCM '
+            'de chaque étape pour découvrir la suivante.',
+            style: const TextStyle(color: _gold, fontSize: 12),
           ),
-          if (s.isProgressiveCase &&
-              !s.completed &&
-              index < 9 &&
-              !canAdvance) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'Complétez les réponses de cette étape pour poursuivre.',
-              style: TextStyle(color: _gold, fontSize: 12),
+          const SizedBox(height: 10),
+          for (var stage = 0; stage < 4; stage++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: stage <= unlockedStage
+                  ? ExpansionTile(
+                      key: ValueKey('practice-case-stage-$stage-$stageIndex'),
+                      initiallyExpanded: stage == stageIndex,
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 9),
+                      childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                      backgroundColor: const Color(0xFF17314E),
+                      collapsedBackgroundColor: const Color(0xFF17314E),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      collapsedShape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      iconColor: _green,
+                      collapsedIconColor: _gold,
+                      title: Text(
+                        '${stage + 1}. ${s.caseStages[stage].title}',
+                        style: const TextStyle(
+                          color: _text,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      children: [
+                        Text(
+                          s.caseStages[stage].narrative,
+                          style: const TextStyle(color: _muted, height: 1.5),
+                        ),
+                      ],
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 13,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF17314E),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 18,
+                            color: _muted,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Étape ${stage + 1} · À débloquer',
+                            style: const TextStyle(color: _muted, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
             ),
-          ],
-          if (!s.completed)
-            Text(
-              '${_selected.where((x) => x != null).length}/10 réponses sélectionnées',
-              style: const TextStyle(color: _muted, fontSize: 12),
+        ] else if (s.caseStem.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            s.caseTitle,
+            style: const TextStyle(
+              color: _text,
+              fontWeight: FontWeight.bold,
+              fontSize: 17,
             ),
+          ),
+          const SizedBox(height: 7),
+          Text(s.caseStem, style: const TextStyle(color: _muted, height: 1.45)),
         ],
-      ),
+        const SizedBox(height: 15),
+        PracticeQuizCard(
+          index: index,
+          total: s.questions.length,
+          topic: q.topic.toUpperCase(),
+          question: q.question,
+          options: [_options(q, index, s.completed)],
+        ),
+        if (s.completed) ...[
+          const SizedBox(height: 12),
+          PracticeQuizFeedback(
+            key: ValueKey('daily-$index'),
+            correct: _selected[index] == q.correctIndex,
+            child: _explanation(
+              q.correction,
+              question: q.question,
+              topic: q.topic,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        PracticeQuizNavigation(
+          index: index,
+          results: List.generate(
+            s.questions.length,
+            (j) => s.completed
+                ? _selected[j] == s.questions[j].correctIndex
+                : null,
+          ),
+          onPrevious: index == 0
+              ? null
+              : () => setState(() => _current = index - 1),
+          onNext: index < 9
+              ? (canAdvance ? () => setState(() => _current = index + 1) : null)
+              : (!s.completed && !_busy && !_selected.any((x) => x == null)
+                    ? _finish
+                    : null),
+          nextLabel: index < 9 ? 'Suivant' : 'Terminer · note sur 10',
+          nextIcon: index < 9
+              ? Icons.chevron_right_rounded
+              : Icons.check_rounded,
+        ),
+        if (s.isProgressiveCase &&
+            !s.completed &&
+            index < 9 &&
+            !canAdvance) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'Complétez les réponses de cette étape pour poursuivre.',
+            style: TextStyle(color: _gold, fontSize: 12),
+          ),
+        ],
+        if (!s.completed)
+          Text(
+            '${_selected.where((x) => x != null).length}/10 réponses sélectionnées',
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+      ],
     );
   }
 

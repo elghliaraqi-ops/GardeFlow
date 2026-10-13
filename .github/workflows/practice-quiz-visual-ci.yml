@@ -1,0 +1,34 @@
+name: Practice Shared QCM Presentation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/widgets/practice_quiz_widgets.dart'
+      - 'source/lib/screens/clinical_cases_section.dart'
+      - 'source/lib/screens/practice_daily_screen.dart'
+      - 'source/lib/screens/practice_progressive_cases_screen.dart'
+      - 'source/lib/screens/practice_visceral_radio_screen.dart'
+      - 'source/test/practice_quiz_widgets_test.dart'
+      - '.github/workflows/practice-quiz-visual-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quiz-visuals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - working-directory: source
+        run: flutter pub get
+      - working-directory: source
+        run: dart format --output=none --set-exit-if-changed lib/widgets/practice_quiz_widgets.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_visceral_radio_screen.dart test/practice_quiz_widgets_test.dart
+      - working-directory: source
+        run: flutter analyze lib/widgets/practice_quiz_widgets.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_visceral_radio_screen.dart --no-fatal-infos --no-fatal-warnings
+      - working-directory: source
+        run: flutter test test/practice_quiz_widgets_test.dart test/practice_progressive_cases_screen_test.dart test/practice_clinical_dossier_test.dart test/practice_daily_models_test.dart test/practice_visceral_radio_test.dart test/clinical_case_qcm_preview_test.dart test/practice_keyword_text_test.dart test/practice_qcm_medical_illustration_test.dart

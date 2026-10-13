@@ -1,3 +1,4 @@
+import '../widgets/practice_quiz_widgets.dart';
 import '../models/practice_external_medical_media_policy.dart';
 import '../widgets/practice_keyword_text.dart';
 
@@ -1457,20 +1458,20 @@ class _ClinicalCaseCardState extends State<_ClinicalCaseCard> {
               separatorBuilder: (_, __) => const Divider(height: 24),
               itemBuilder: (context, index) {
                 final q = preview.questions[index];
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    PracticeKeywordText(
-                      '${index + 1}. ${q.question}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
+                return PracticeQuizCard(
+                  index: index,
+                  total: preview.questions.length,
+                  topic: 'Aperçu avant publication',
+                  question: q.question,
+                  options: [
                     for (var i = 0; i < q.options.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text(
-                          '${String.fromCharCode(65 + i)}. ${q.options[i]}',
-                        ),
+                      PracticeQuizOption(
+                        index: i,
+                        label: q.options[i],
+                        selected: false,
+                        showCorrection: false,
+                        isCorrect: false,
+                        onTap: null,
                       ),
                   ],
                 );
@@ -1971,11 +1972,9 @@ class _QcmPreparing extends StatelessWidget {
 
 class _QcmPanel extends StatelessWidget {
   final ClinicalCaseQcm current;
-  final int currentIndex;
-  final int total;
+  final int currentIndex, total;
   final bool submitting;
   final ValueChanged<int> onAnswer;
-
   const _QcmPanel({
     required this.current,
     required this.currentIndex,
@@ -1983,231 +1982,25 @@ class _QcmPanel extends StatelessWidget {
     required this.submitting,
     required this.onAnswer,
   });
-
   @override
-  Widget build(BuildContext context) {
-    final answered = current.answered;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _PracticeGame.purple.withOpacity(.32),
-            _PracticeGame.elevated,
-            _PracticeGame.blue.withOpacity(.18),
-          ],
+  Widget build(BuildContext context) => PracticeQuizCard(
+    index: currentIndex,
+    total: total,
+    topic: current.topicLabel,
+    question: current.question,
+    submitting: submitting,
+    options: [
+      for (var i = 0; i < current.options.length; i++)
+        PracticeQuizOption(
+          index: i,
+          label: current.options[i],
+          selected: current.mySelectedIndex == i,
+          showCorrection: current.answered,
+          isCorrect: current.correctIndex == i,
+          onTap: current.answered || submitting ? null : () => onAnswer(i),
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _PracticeGame.purple.withOpacity(.50)),
-        boxShadow: [
-          BoxShadow(
-            color: _PracticeGame.purple.withOpacity(.14),
-            blurRadius: 22,
-            offset: const Offset(0, 9),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.sports_esports_rounded,
-                color: _PracticeGame.gold,
-                size: 19,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'DÉFI ${currentIndex + 1} / $total',
-                style: const TextStyle(
-                  color: _PracticeGame.gold,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .7,
-                ),
-              ),
-              const Spacer(),
-              if (current.generationSource == 'openai') ...[
-                const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: _PracticeGame.purple,
-                  size: 13,
-                ),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                current.topicLabel,
-                style: const TextStyle(
-                  color: _PracticeGame.secondary,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: total == 0 ? 0 : (currentIndex + 1) / total,
-              minHeight: 5,
-              backgroundColor: _PracticeGame.line,
-              color: _PracticeGame.gold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(.13),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withOpacity(.10)),
-            ),
-            child: PracticeKeywordText(
-              current.question,
-              style: const TextStyle(
-                color: _PracticeGame.text,
-                fontSize: 15.2,
-                height: 1.43,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          for (var index = 0; index < current.options.length; index++) ...[
-            _QcmOption(
-              index: index,
-              label: current.options[index],
-              selected: current.mySelectedIndex == index,
-              showCorrection: answered,
-              isCorrect: current.correctIndex == index,
-              onTap: answered || submitting ? null : () => onAnswer(index),
-            ),
-            if (index != current.options.length - 1) const SizedBox(height: 7),
-          ],
-          if (submitting) ...[
-            const SizedBox(height: 10),
-            const LinearProgressIndicator(
-              minHeight: 2,
-              color: _PracticeGame.gold,
-              backgroundColor: _PracticeGame.line,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _QcmOption extends StatelessWidget {
-  final int index;
-  final String label;
-  final bool selected;
-  final bool showCorrection;
-  final bool isCorrect;
-  final VoidCallback? onTap;
-
-  const _QcmOption({
-    required this.index,
-    required this.label,
-    required this.selected,
-    required this.showCorrection,
-    required this.isCorrect,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Color border = _PracticeGame.line;
-    Color background = _PracticeGame.surface;
-    Color foreground = _PracticeGame.text;
-    if (showCorrection && isCorrect) {
-      border = AppColors.success;
-      background = AppColors.success.withOpacity(.10);
-      foreground = AppColors.success;
-    } else if (showCorrection && selected && !isCorrect) {
-      border = AppColors.danger;
-      background = AppColors.danger.withOpacity(.10);
-      foreground = AppColors.danger;
-    } else if (selected) {
-      border = _PracticeGame.purple;
-      background = _PracticeGame.purple.withOpacity(.20);
-      foreground = _PracticeGame.gold;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: border,
-              width: selected || (showCorrection && isCorrect) ? 1.35 : 1,
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: foreground.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: foreground.withOpacity(.18)),
-                ),
-                child: Text(
-                  String.fromCharCode(65 + index),
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 3),
-                  child: PracticeKeywordText(
-                    label,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 12.3,
-                      height: 1.43,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              if (showCorrection && isCorrect)
-                const Padding(
-                  padding: EdgeInsets.only(left: 7, top: 4),
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    color: AppColors.success,
-                    size: 19,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+    ],
+  );
 }
 
 class _AnswerFeedback extends StatelessWidget {
@@ -2228,95 +2021,16 @@ class _AnswerFeedback extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final semantic = correct ? AppColors.success : AppColors.danger;
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            semantic.withOpacity(.14),
-            _PracticeGame.surface,
-            _PracticeGame.purple.withOpacity(.12),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: semantic.withOpacity(.48)),
-      ),
-      child: Column(
-        children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onToggle,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Icon(
-                      correct
-                          ? Icons.check_circle_rounded
-                          : Icons.cancel_rounded,
-                      color: semantic,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      correct ? 'Bonne réponse' : 'À revoir',
-                      style: TextStyle(
-                        color: semantic,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: _PracticeGame.gold,
-                      size: 15,
-                    ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'EXPLICATION IA',
-                      style: TextStyle(
-                        color: _PracticeGame.gold,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .5,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Icon(
-                      expanded
-                          ? Icons.expand_less_rounded
-                          : Icons.expand_more_rounded,
-                      color: _PracticeGame.gold,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 220),
-            crossFadeState: expanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: _GuidelineCorrection(
-                correction: correction,
-                question: question,
-                caseContext: caseContext,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => PracticeQuizFeedback(
+    correct: correct,
+    expanded: expanded,
+    onToggle: onToggle,
+    child: _GuidelineCorrection(
+      correction: correction,
+      question: question,
+      caseContext: caseContext,
+    ),
+  );
 }
 
 class _QcmNavigation extends StatelessWidget {
@@ -2335,59 +2049,13 @@ class _QcmNavigation extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _GamingIconButton(
-          tooltip: 'QCM précédent',
-          icon: Icons.chevron_left_rounded,
-          onPressed: onPrevious,
-        ),
-        Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(qcms.length, (index) {
-              final q = qcms[index];
-              final active = index == currentIndex;
-              final Color color = q.myIsCorrect == true
-                  ? AppColors.success
-                  : q.answered
-                  ? AppColors.danger
-                  : active
-                  ? _PracticeGame.gold
-                  : _PracticeGame.purple;
-              return GestureDetector(
-                onTap: () => onSelect(index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: active ? 22 : 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(99),
-                    boxShadow: active
-                        ? [
-                            BoxShadow(
-                              color: color.withOpacity(.24),
-                              blurRadius: 8,
-                            ),
-                          ]
-                        : null,
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        _GamingIconButton(
-          tooltip: 'QCM suivant',
-          icon: Icons.chevron_right_rounded,
-          onPressed: onNext,
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => PracticeQuizNavigation(
+    index: currentIndex,
+    results: qcms.map((q) => q.answered ? q.myIsCorrect : null).toList(),
+    onPrevious: onPrevious,
+    onNext: onNext,
+    onSelect: onSelect,
+  );
 }
 
 class _GuidelineReference {
