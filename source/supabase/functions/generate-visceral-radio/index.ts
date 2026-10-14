@@ -2,7 +2,8 @@ import {radiologyAssistantContext,radiologyPriorityPolicy} from './radiology_ass
 import {hasSurgicalTechniques,addSurgicalTechniques,surgicalTeachingPolicy} from './surgical_techniques.ts';
 import { retrieveEmc, emcExcerpt } from './emc_context.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { imageContractInstructions, expandQcmImages, generationContract, type GenerationContract } from './generation_contract.ts';
+import { expandQcmImages, generationContract, type GenerationContract } from './generation_contract.ts';
+import { generateJson } from './groq_transport.ts';
 import { courseBatchPlan, assertNewStatements } from './qcm_batch_plan.ts';
 import { courseContext, courseTeachingPolicy } from './residency_course_context.ts';
 import { resolveMedicalPreviews, proxyMedicalImage } from './medical_image_previews.ts';
@@ -51,126 +52,14 @@ function compact(value: unknown, maxChars = 26000): string {
   return JSON.stringify({ abridged_context: json.slice(0, maxChars - 150) });
 }
 
-function extract(payload:any): string {
-  if(typeof payload?.output_text==='string')return payload.output_text;
-  for(const item of payload?.output??[])for(const c of item?.content??[])if(typeof c?.text==='string')return c.text;
-  return '';
-}
-// Groq strict mode uses a constrained JSON Schema subset. Preserve the full
-// prompt/JSON contract in generation_contract.ts; omit unsupported size keywords
-// from the API decoding schema without removing any fields or allowed values.
-function strictGroqSchema(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(strictGroqSchema);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).filter(([k]) =>
-      !['minLength','maxLength','minItems','maxItems','pattern','format','default'].includes(k)
-    ).map(([k,v]) => [k,strictGroqSchema(v)]));
+async function groq(contract:GenerationContract,prompt:string){
+  const qcm=contract.mode==='course_qcms'||contract.mode==='case_qcms';
+  if(contract.mode!=='surgical_techniques'&&!qcm){
+    const topic=prompt.match(/SUJET CENTRAL \(IMMUTABLE\): ([^\n]+)/)?.[1]||prompt.slice(0,400);
+    const external=await radiologyAssistantContext(topic);
+    prompt=radiologyPriorityPolicy+'\n'+prompt+'\n'+external.slice(0,1300);
   }
-  return value;
-}
-
-async function groq(contract: GenerationContract, prompt: string) {
-  const key = Deno.env.get('GROQ_API_KEY');
-  if (!key) throw new Error('groq_key_missing');
-  const isQcm=contract.mode==='course_qcms'||contract.mode==='case_qcms';
-  // Avoid duplicating course/context in 10-QCM requests and exhausting TPM.
-  if(contract.mode!=='surgical_techniques'&&!isQcm)prompt=radiologyPriorityPolicy+'\n'+prompt+await radiologyAssistantContext(prompt.match(/SUJET CENTRAL \(IMMUTABLE\): ([^\n]+)/)?.[1]||prompt.slice(0,1500));
-  // One native Responses schema request aligned with the shared contract.
-  const model = Deno.env.get('GROQ_TEXT_MODEL') || 'openai/gpt-oss-120b';
-  if (!['openai/gpt-oss-120b', 'openai/gpt-oss-20b'].includes(model)) {
-    throw new Error('groq_model_without_strict_json_schema_support');
-  }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 110000);
-  try {
-    const schema = strictGroqSchema(contract.schema);
-    // The schema enforces field names/types. Do not repeat verbose examples
-    // in the prompt: this preserves the free-tier 8k TPM budget for the answer.
-    const modeNote = contract.mode === 'fiche'
-      ? '\nCours de résidanat : 10 chapitres, contenu explicatif concis (650–850 caractères/ch.), 4 points clés factuels/ch., chapitre 08 et techniques structurées. Pas de répétitions.'
-      : contract.mode === 'surgical_techniques'
-      ? '\nUniquement 1 à 3 techniques opératoires structurées, indications et 4 à 6 étapes chacune.'
-      : '\nChaque option est expliquée en une phrase clinique utile ; global_explanation en deux phrases. Pour les questions d imagerie, deux demandes image au maximum par lot. Complète TOUTES les questions.';
-    const payload = {
-      model,
-      instructions:'Tu enseignes la chirurgie viscérale et la radiologie au niveau résidanat. Réponse strictement JSON, raisonnement médical précis et cohérent.',
-      input:prompt+'\n'+(isQcm?contract.outputInstructions:contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+(contract.mode==='surgical_techniques'?'':'\n'+imageContractInstructions))+modeNote,
-      text:{format:{type:'json_schema',name:contract.name,strict:true,schema}},
-      reasoning:{effort:'low'},
-      store:false,
-      max_output_tokens:0,
-    };
-    // Groq free-tier combined TPM is 8k. Reserve real output headroom
-    // instead of the previous 7800-inputChars/3 clipping to ~2k output.
-    // Conservative token approximation includes JSON schema + safety margin.
-    const inputEstimate=Math.ceil((
-      payload.input.length+payload.instructions.length+JSON.stringify(schema).length
-    )/3.8)+250;
-    const desired=contract.mode==='fiche'?5700:
-      contract.mode==='surgical_techniques'?1800:
-      contract.requestedCount===10?5700:
-      contract.requestedCount===5?3200:4000;
-    payload.max_output_tokens=Math.min(desired,7900-inputEstimate);
-    const minimum=contract.mode==='fiche'?3800:
-      contract.mode==='surgical_techniques'?650:
-      contract.requestedCount===10?3000:1500;
-    if(payload.max_output_tokens<minimum){
-      console.warn('visceral_groq_budget_insufficient',{
-        mode:contract.mode,input_estimate:inputEstimate,output_budget:payload.max_output_tokens,
-      });
-      throw new Error('groq_request_too_large');
-    }
-    let response = await fetch('https://api.groq.com/openai/v1/responses', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: 'Bearer ' + key,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    let data = await response.json().catch(() => null);
-    // Normal path: one Groq call. Recover once from strict decoder failure only.
-    if(isQcm&&response.status===400&&data?.error?.code==='json_validate_failed'){
-      console.warn('visceral_groq_schema_recovery',{mode:contract.mode,requested:contract.requestedCount,inputEstimate,outputBudget:payload.max_output_tokens});
-      response=await fetch('https://api.groq.com/openai/v1/responses',{
-        method:'POST',signal:controller.signal,
-        headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-        body:JSON.stringify({...payload,text:{format:{type:'json_object'}}}),
-      });
-      data=await response.json().catch(()=>null);
-    }
-    if (!response.ok) {
-      const code = str(data?.error?.code || data?.error?.type || 'unknown_error', 100);
-      if (response.status === 429) {
-        const after = Number(response.headers.get('retry-after') || '');
-        throw Object.assign(new Error('groq_rate_limited'), {
-          retryAfterSeconds: Number.isFinite(after) && after > 0 ? Math.min(3600, Math.ceil(after)) : 60,
-        });
-      }
-      console.warn('visceral_groq_failure',{mode:contract.mode,status:response.status,code,prompt_chars:prompt.length,outputBudget:payload.max_output_tokens,reason:str(data?.error?.message,300)});
-      if(response.status===413)throw new Error('groq_request_too_large');
-      throw new Error('groq_http_' + response.status + ':' + code);
-    }
-    if (data?.status === 'incomplete') {
-      console.warn('visceral_groq_incomplete',{mode:contract.mode,reason:str(data?.incomplete_details?.reason,80),used:data?.usage?.output_tokens,budget:payload.max_output_tokens});
-      throw new Error('groq_output_token_limit');
-    }
-    const raw = typeof data?.output_text==='string'?data.output_text:
-      (Array.isArray(data?.output)?data.output:[]).filter((x:any)=>x.type==='message')
-      .flatMap((x:any)=>Array.isArray(x.content)?x.content:[])
-      .filter((x:any)=>x.type==='output_text'||x.type==='text')
-      .map((x:any)=>String(x.text??'')).join('');
-    if (typeof raw !== 'string' || !raw.trim()) throw new Error('groq_empty_response');
-    try {
-      return JSON.parse(raw);
-    } catch (_) {
-      // Technical failure only: no independent medical/content reviewing.
-      throw new Error('groq_invalid_json_response');
-    }
-  } finally {
-    clearTimeout(timer);
-  }
+  return generateJson(contract,prompt);
 }
 
 async function guidelines(topic:string):Promise<string> {
@@ -278,8 +167,9 @@ Deno.serve(async(req)=>{
       const evidence=await guidelines(topic);
       const prompt=sourcePrompt(topic,evidence.slice(0,1000))+courseTeachingPolicy()+
         '\nMODE FICHE: cours détaillé de RÉSIDANAT en 10 chapitres, avec rapports anatomiques, protocoles d imagerie, critères de classification, stratégie selon gravité, gestes et pièges opératoires. Le cours explique toutes les notions des 20 QCM de résidanat à venir. Ne produis pas un simple résumé. key_points et study_core sont des faits expliqués et non une liste d objectifs.';
-      const generated=sanitized(await groq(generationContract('fiche'),prompt));
-      const fiche=addSurgicalTechniques(generated,generated.operative_techniques);
+      const generated=await groq(generationContract('fiche'),prompt);
+      expandQcmImages(generated.sections);
+      const fiche=addSurgicalTechniques(sanitized(generated),generated.operative_techniques);
       if(!fiche?.title||!Array.isArray(fiche?.sections))throw new Error('incomplete_fiche');
       try { fiche.emc=await emcSupplement(db,user.id,topic); }
       catch (_) { fiche.emc={status:'pending',message:'Complément EMC temporairement indisponible. Le cours reste conservé.',sections:[],sources:[]}; }
@@ -326,7 +216,8 @@ Deno.serve(async(req)=>{
       const evidence=await guidelines(session.topic);
       const prompt=sourcePrompt(session.topic,evidence.slice(0,1000))+courseTeachingPolicy()+
         '\nMODE CAS CLINIQUE: patient FICTIF du même sujet que le cours, niveau résidanat. Quatre étapes chronologiques: admission/examen, biologie/imagerie, diagnostic/traitement/intervention, complications/suivi. Les décisions explicitent les critères, les alternatives et leurs raisons. Enseigne les connaissances requises par les futurs QCM dans le cours et les données de la phase concernée. Diagnostic non révélé en phase 1. recommended_qcms 10/15/20.\nCOURS ENSEIGNÉ:\n'+courseContext(session.fiche);
-      const scenario=sanitized(await groq(generationContract('case'),prompt));
+      const scenario=await groq(generationContract('case'),prompt);
+      expandQcmImages(scenario.stages);
       if(!Array.isArray(scenario.stages)||scenario.stages.length!==4)throw new Error('invalid_case_stages');
       patch.case_data=scenario;patch.case_target=scenario.recommended_qcms;
       patch.medical_sources=evidence;
