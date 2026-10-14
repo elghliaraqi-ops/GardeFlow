@@ -73,7 +73,7 @@ Deno.test('10 QCM and 50 explained options stay aligned after JSON transport',as
  assert(data.questions.every((q:any)=>q.options.length===5&&q.options.every((o:any)=>o.explanation)),'all options explained');
 });
 Deno.test('failed medical depth cannot be saved even after retry',async()=>{
- const c=generationContract('fiche'),short=fixture('fiche');
+ const c=generationContract('fiche'),short=fixture('fiche') as any;
  short.sections[0].content='Résumé superficiel';
  let calls=0;
  const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(short)},finish_reason:'stop'}]});}) as typeof fetch;
