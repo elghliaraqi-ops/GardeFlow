@@ -90,7 +90,7 @@ Deno.test('QCM Groq image schema stays compact, expanded contract supports previ
   const schema=(qcmSchema(10,[1]) as any).properties.questions.items.properties.image_requests.items;
   const fields=Object.keys(schema.properties);
   assert(JSON.stringify(fields)===JSON.stringify(['query','modality','purpose','image_type','plane','required_features']),'compact image fields');
-  const items=[{image_requests:[{query:'CT free air',modality:'CT',purpose:'pneumoperitoneum',image_type:'radiology_scan',plane:'axial',required_features:['free air']}]},{image_requests:[]}];
+  const items:any[]=[{image_requests:[{query:'CT free air',modality:'CT',purpose:'pneumoperitoneum',image_type:'radiology_scan',plane:'axial',required_features:['free air']}]},{image_requests:[]}];
   expandQcmImages(items);
   assert(items[0].image_requests[0].preferred_sources[0]==='Radiology Assistant','source order');
   assert(items[0].image_requests[0].allow_article_figures,'external image previews');
