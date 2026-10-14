@@ -394,3 +394,22 @@ Deno.test('all-specialty fallback uses free catalogues only after PubMed yields 
     assert(!calls.some(x=>x.includes('serpapi.com')),'paid search must never execute');
   }finally{globalThis.fetch=old;}
 });
+
+Deno.test('biliary CT images match the requested organ and exclude unrelated scans',()=>{
+ const request=legacyImageRequest({
+  query:'Common bile duct dilation on abdominal CT',
+  anatomy:'biliary',modality:'CT',purpose:'show bile duct dilatation',
+  image_type:'radiology_scan',required_features:['bile duct'],
+ });
+ const source='https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Rectum_anatomy.jpg';
+ const item:ImagePreview={
+  thumbnail:source,full:source,
+  source:'https://commons.wikimedia.org/wiki/File:Rectum_anatomy.jpg',
+  title:'Dilated common bile duct on axial CT scan',
+  description:'CT scan with dilated CBD and intrahepatic bile duct',
+  provider:'Wikimedia Commons',creator:'',license:'CC BY 4.0',
+ };
+ assert(imageIsTopical(item,request),'relevant biliary CT should be accepted');
+ assert(!imageIsTopical({...item,title:'Spine fracture',description:'Axial CT scan of lumbar spine'},request),
+  'unrelated CT image should be rejected');
+});
