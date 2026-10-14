@@ -151,6 +151,20 @@ export function imageSearchTerms(request:MedicalImageRequest):string{
   }
   return request.query.slice(0,180).trim()||'abdominal anatomy medical illustration';
 }
+/** Match organ synonyms in authentic figure captions (e.g. CBD = common bile duct). */
+function matchesMedicalOrgan(description:string,anatomy:string):boolean{
+ const organ=medicalOrganTerm(anatomy);
+ const aliases:Record<string,string[]>={
+  biliary:['biliary','bile duct','common bile duct','cholangi','choledoch','choleduc','intrahepatic duct','cbd','gallbladder'],
+  brain:['brain','cerebral','cranial','intracranial','ventricul','hydrocephal','basal ganglia'],
+  liver:['liver','hepatic','hepatobiliary'],
+  kidney:['kidney','renal','urinary','ureter'],
+  pancreas:['pancreas','pancreatic'],
+  lung:['lung','pulmonary','thoracic'],
+ };
+ const known=aliases[organ]||[organ];
+ return known.some(alias=>alias.length>2&&description.includes(alias));
+}
 export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!allowedAsset(image.thumbnail)||!allowedAsset(image.full))return false;
   if(!/^https:\/\//i.test(image.source))return false;
@@ -192,7 +206,8 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!rectal && features.length){
     const key=ascii(request.anatomy);
     const salient=terms(key);
-    if(salient.length && !salient.some(term=>hay.includes(term)))return false;
+    if(salient.length && !matchesMedicalOrgan(hay,request.anatomy) &&
+       !salient.some(term=>hay.includes(term)))return false;
   }
   for(const exclusion of request.excluded_features||[]){
     const term=ascii(exclusion);
@@ -476,7 +491,7 @@ function articleTopical(text:string,request:MedicalImageRequest):boolean{
     && !/lymph|nodal|node|ganglion|adenopath|iliac/.test(hay))return false;
   const organ=medicalOrganTerm(request.anatomy);
   if(!/rect|mesorect|sphinct|levator|ganglion|lymph|nodal|adenopath|iliac|node/.test(subject)
-    && organ.length>=4 && organ!=='abdomen' && !hay.includes(organ))return false;
+    && organ.length>=4 && organ!=='abdomen' && !matchesMedicalOrgan(hay,organ))return false;
   if(request.image_type==='radiology_scan')
     return /mri|magnetic resonance|diffusion|dwi|ct scan|computed tomography|ultrasound|radiolog|imaging|t2/.test(hay);
   if(request.image_type==='anatomical_diagram')
