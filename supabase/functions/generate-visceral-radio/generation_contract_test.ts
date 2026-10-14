@@ -1,5 +1,5 @@
 import {
-  generationContract, qcmSchema, ficheSchema, caseSchema,
+  generationContract, qcmSchema, ficheSchema, caseSchema, expandQcmImages,
 } from './generation_contract.ts';
 
 function assert(ok: unknown, message: string) {
@@ -60,4 +60,14 @@ Deno.test('20 course questions in 10+10 and 15 clinical questions in 10+5',()=>{
     assert(JSON.stringify(batches)===JSON.stringify(expected),'wrong batch splitting for '+target);
     for(const count of batches)qcmSchema(count,[1,2,3,4]);
   }
+});
+Deno.test('QCM Groq image schema stays compact, expanded contract supports previews',()=>{
+  const schema=(qcmSchema(10,[1]) as any).properties.questions.items.properties.image_requests.items;
+  const fields=Object.keys(schema.properties);
+  assert(JSON.stringify(fields)===JSON.stringify(['query','modality','purpose','image_type','plane','required_features']),'compact image fields');
+  const items:any[]=[{image_requests:[{query:'CT free air',modality:'CT',purpose:'pneumoperitoneum',image_type:'radiology_scan',plane:'axial',required_features:['free air']}]},{image_requests:[]}];
+  expandQcmImages(items);
+  assert(items[0].image_requests[0].preferred_sources[0]==='Radiology Assistant','source order');
+  assert(items[0].image_requests[0].allow_article_figures,'external image previews');
+  assert(items[1].image_requests.length===0,'no fabricated image');
 });

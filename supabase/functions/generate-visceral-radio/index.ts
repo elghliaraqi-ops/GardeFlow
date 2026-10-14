@@ -2,7 +2,7 @@ import {radiologyAssistantContext,radiologyPriorityPolicy} from './radiology_ass
 import {hasSurgicalTechniques,addSurgicalTechniques,surgicalTeachingPolicy} from './surgical_techniques.ts';
 import { retrieveEmc, emcExcerpt } from './emc_context.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { imageContractInstructions, generationContract, type GenerationContract } from './generation_contract.ts';
+import { imageContractInstructions, expandQcmImages, generationContract, type GenerationContract } from './generation_contract.ts';
 import { courseBatchPlan, assertNewStatements } from './qcm_batch_plan.ts';
 import { courseContext, courseTeachingPolicy } from './residency_course_context.ts';
 import { resolveMedicalPreviews, resolveGoogleMedicalImages, proxyMedicalImage } from './medical_image_previews.ts';
@@ -72,7 +72,9 @@ function strictGroqSchema(value: unknown): unknown {
 async function groq(contract: GenerationContract, prompt: string) {
   const key = Deno.env.get('GROQ_API_KEY');
   if (!key) throw new Error('groq_key_missing');
-  if(contract.mode!=='surgical_techniques')prompt=radiologyPriorityPolicy+'\n'+prompt+await radiologyAssistantContext(prompt.match(/SUJET CENTRAL \(IMMUTABLE\): ([^\n]+)/)?.[1]||prompt.slice(0,1500));
+  const isQcm=contract.mode==='course_qcms'||contract.mode==='case_qcms';
+  // Avoid duplicating course/context in 10-QCM requests and exhausting TPM.
+  if(contract.mode!=='surgical_techniques'&&!isQcm)prompt=radiologyPriorityPolicy+'\n'+prompt+await radiologyAssistantContext(prompt.match(/SUJET CENTRAL \(IMMUTABLE\): ([^\n]+)/)?.[1]||prompt.slice(0,1500));
   // One native Responses schema request aligned with the shared contract.
   const model = Deno.env.get('GROQ_TEXT_MODEL') || 'openai/gpt-oss-120b';
   if (!['openai/gpt-oss-120b', 'openai/gpt-oss-20b'].includes(model)) {
@@ -92,8 +94,7 @@ async function groq(contract: GenerationContract, prompt: string) {
     const payload = {
       model,
       instructions:'Tu enseignes la chirurgie viscérale et la radiologie au niveau résidanat. Réponse strictement JSON, raisonnement médical précis et cohérent.',
-      input:prompt+'\n'+contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+
-        (contract.mode==='surgical_techniques'?'':'\n'+imageContractInstructions)+modeNote,
+      input:prompt+'\n'+(isQcm?contract.outputInstructions:contract.outputInstructions.split('CONTRAT DES IMAGES')[0]+(contract.mode==='surgical_techniques'?'':'\n'+imageContractInstructions))+modeNote,
       text:{format:{type:'json_schema',name:contract.name,strict:true,schema}},
       reasoning:{effort:'low'},
       store:false,
@@ -107,7 +108,7 @@ async function groq(contract: GenerationContract, prompt: string) {
     )/3.8)+250;
     const desired=contract.mode==='fiche'?5700:
       contract.mode==='surgical_techniques'?1800:
-      contract.requestedCount===10?5400:
+      contract.requestedCount===10?5700:
       contract.requestedCount===5?3200:4000;
     payload.max_output_tokens=Math.min(desired,7900-inputEstimate);
     const minimum=contract.mode==='fiche'?3800:
@@ -119,7 +120,7 @@ async function groq(contract: GenerationContract, prompt: string) {
       });
       throw new Error('groq_request_too_large');
     }
-    const response = await fetch('https://api.groq.com/openai/v1/responses', {
+    let response = await fetch('https://api.groq.com/openai/v1/responses', {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -128,7 +129,17 @@ async function groq(contract: GenerationContract, prompt: string) {
       },
       body: JSON.stringify(payload),
     });
-    const data = await response.json().catch(() => null);
+    let data = await response.json().catch(() => null);
+    // Normal path: one Groq call. Recover once from strict decoder failure only.
+    if(isQcm&&response.status===400&&data?.error?.code==='json_validate_failed'){
+      console.warn('visceral_groq_schema_recovery',{mode:contract.mode,requested:contract.requestedCount,inputEstimate,outputBudget:payload.max_output_tokens});
+      response=await fetch('https://api.groq.com/openai/v1/responses',{
+        method:'POST',signal:controller.signal,
+        headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+        body:JSON.stringify({...payload,text:{format:{type:'json_object'}}}),
+      });
+      data=await response.json().catch(()=>null);
+    }
     if (!response.ok) {
       const code = str(data?.error?.code || data?.error?.type || 'unknown_error', 100);
       if (response.status === 429) {
@@ -137,7 +148,7 @@ async function groq(contract: GenerationContract, prompt: string) {
           retryAfterSeconds: Number.isFinite(after) && after > 0 ? Math.min(3600, Math.ceil(after)) : 60,
         });
       }
-      console.warn('visceral_groq_failure',{status:response.status,code,prompt_chars:prompt.length,reason:str(data?.error?.message,300)});
+      console.warn('visceral_groq_failure',{mode:contract.mode,status:response.status,code,prompt_chars:prompt.length,outputBudget:payload.max_output_tokens,reason:str(data?.error?.message,300)});
       if(response.status===413)throw new Error('groq_request_too_large');
       throw new Error('groq_http_' + response.status + ':' + code);
     }
@@ -209,7 +220,7 @@ function sourcePrompt(topic:string, refs:string){return medicalRules+'\nSUJET CE
 function validQuestions(obj:any,count:number,phaseLimit=4) {
   if(!Array.isArray(obj?.questions)||obj.questions.length!==count)throw new Error('invalid_question_count');
   for(const q of obj.questions) {
-    if(!Array.isArray(q.options)||q.options.length!==5||q.options.map((o:any)=>o.key).join('')!=='ABCDE'||!q.options.some((o:any)=>o.correct===true))throw new Error('invalid_question_format');
+    if(!Array.isArray(q.options)||q.options.length!==5||q.options.map((o:any)=>o.key).join('')!=='ABCDE'||!q.options.some((o:any)=>o.correct===true)||q.options.some((o:any)=>typeof o.text!=='string'||!o.text.trim()||typeof o.correct!=='boolean'||typeof o.explanation!=='string'||!o.explanation.trim())||typeof q.statement!=='string'||!q.statement.trim()||typeof q.global_explanation!=='string'||!q.global_explanation.trim())throw new Error('invalid_question_format');
     if(!Number.isInteger(q.phase)||q.phase<1||q.phase>phaseLimit)throw new Error('invalid_question_phase');
   }
 }
@@ -301,11 +312,12 @@ Deno.serve(async(req)=>{
       if(existing.length>=20)return answer({session});
       const count=Math.min(10,20-existing.length);
       const evidence=await guidelines(session.topic);
-      const prompt=sourcePrompt(session.topic,evidence.slice(0,1000))+courseTeachingPolicy()+
+      const prompt=sourcePrompt(session.topic,evidence.slice(0,350))+
         '\nMODE QCM DE FICHE: EXACTEMENT '+count+' QCM de résidanat. Utilise uniquement les faits enseignés ci-dessous, y compris pour construire les distracteurs. course_section_key désigne un chapitre transmis ; teaching_point explicite la notion de ce chapitre. Si un objectif n est pas enseigné, choisis une autre notion enseignée du même domaine. Pas de nouvelle connaissance cachée hors du cours. phase=1.\nCOURS ENSEIGNÉ:\n'+courseContext(session.fiche,3500,existing.length)+
         '\nOBJECTIFS OBLIGATOIRES, UN PAR QUESTION ET DANS CET ORDRE:\n'+courseBatchPlan(existing.length,count)+
-        '\nLe nouveau lot explore ces objectifs avec des décisions et des faits différents des questions précédentes. Changer seulement les mots ou les options constitue une redite interdite.\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>str(q.statement,130)),1300);
+        '\nLe nouveau lot explore ces objectifs avec des décisions et des faits différents des questions précédentes. Changer seulement les mots ou les options constitue une redite interdite.\nQUESTIONS DÉJÀ CRÉÉES:\n'+compact(existing.map((q:any)=>str(q.statement,100)),700);
       const produced=await groq(generationContract('course_qcms',{count,courseKeys:(session.fiche.sections||[]).map((s:any)=>s.key)}),prompt);
+      expandQcmImages(produced.questions);
       validQuestions(produced,count);
       assertNewStatements(existing,produced.questions);
       patch.course_qcms=[...existing,...sanitized(produced.questions)];
@@ -328,10 +340,11 @@ Deno.serve(async(req)=>{
       const offset=existing.length;
       const phaseSequence=Array.from({length:count},(_,i)=>Math.min(4,1+Math.floor((offset+i)/target*4)));
       const evidence=await guidelines(session.topic);
-      const prompt=sourcePrompt(session.topic,evidence.slice(0,1000))+courseTeachingPolicy()+
+      const prompt=sourcePrompt(session.topic,evidence.slice(0,350))+
         '\nMODE QCM DE CAS: EXACTEMENT '+count+' QCM, cinq propositions A-E et corrections détaillées par proposition. Il s’agit du MÊME PATIENT de ce dossier. Les questions suivent la chronologie clinique et concernent examen, signes de gravité, bilan, imagerie, diagnostic, conduite à tenir, intervention, suivi. Ne formule AUCUNE question générique hors cas. Respecte la séquence obligatoire des phase par question: '+phaseSequence.join(',')+'. La phase correspond à la partie du cas utilisable. Jamais de révélation d’un événement futur dans la question ou sa correction. Rattache chaque proposition aux faits du patient. image_requests pour questions d’imagerie.\nDOSSIER (NE PAS divulguer précocement):\n'+compact({title:session.case_data?.title,patient:session.case_data?.patient,stages:(session.case_data?.stages||[]).map((x:any)=>({phase:x.phase,title:x.title,narrative:str(x.narrative,900),clinical_findings:str(x.clinical_findings,500),imaging_findings:str(x.imaging_findings,500),decisions:str(x.decisions,500)})),final_diagnosis:session.case_data?.final_diagnosis},4500)+
-        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>str(q.statement,130)),1300);
+        '\nQUESTIONS PRÉCÉDENTES:\n'+compact(existing.map((q:any)=>str(q.statement,100)),700);
       const produced=await groq(generationContract('case_qcms',{count,phases:phaseSequence,courseKeys:(session.fiche.sections||[]).map((s:any)=>s.key)}),prompt);
+      expandQcmImages(produced.questions);
       validQuestions(produced,count);
       assertNewStatements(existing,produced.questions);
       produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];});
