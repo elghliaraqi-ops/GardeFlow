@@ -100,7 +100,7 @@ export async function generateJson(
 ):Promise<any>{
  const key=settings.apiKey??Deno.env.get('GROQ_API_KEY');
  if(!key)throw new Error('groq_key_missing');
- const model=settings.model??Deno.env.get('GROQ_TEXT_MODEL')??'openai/gpt-oss-120b';
+ const model=settings.model??(settings.fetcher?'openai/gpt-oss-120b':Deno.env.get('GROQ_TEXT_MODEL')??'openai/gpt-oss-120b');
  if(!['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(model))
    throw new Error('groq_model_without_json_support');
  const max=groqBudget(contract,prompt);
