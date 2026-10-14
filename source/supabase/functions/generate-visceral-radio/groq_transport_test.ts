@@ -145,3 +145,17 @@ Deno.test('bibliographic metadata formats cannot reject an otherwise complete QC
  assert(data.questions[2].reference===''&&data.questions[3].reference==='','no invented sources');
  assert(data.questions.every((q:any)=>q.options.length===5),'all clinical corrections retained');
 });
+
+Deno.test('surplus QCM keep the requested prefix with one provider request',async()=>{
+ for(const count of [5,10]){
+   const c=generationContract('course_qcms',{count});const sample=fixture('course_qcms') as any;
+   sample.questions.push({...sample.questions[0],statement:'Surplus question'});
+   let calls=0;
+   const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]});}) as typeof fetch;
+   const data=await generateJson(c,'cours',{apiKey:'test',fetcher});
+   assert(calls===1,'surplus must not trigger a quota-consuming retry');
+   assert(data.questions.length===count,'exact requested count');
+   assert(data.questions[count-1].statement===sample.questions[count-1].statement,'original order preserved');
+   assert(data.questions.every((q:any)=>q.options.length===5),'all retained corrections present');
+ }
+});
