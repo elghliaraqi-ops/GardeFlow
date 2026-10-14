@@ -1,4 +1,4 @@
-import type {GenerationContract} from './generation_contract.ts';
+import {generationContract, type GenerationContract} from './generation_contract.ts';
 
 // One Groq request normally; only technical JSON failures get one alternate attempt.
 // No medical second opinion, independent reviewer, or fabricated result.
@@ -39,9 +39,12 @@ export function normalizeResponse(contract:GenerationContract,result:any){
    if(node.image_requests==null)node.image_requests=[];
    if(Array.isArray(node.image_requests))node.image_requests=node.image_requests.slice(0,1).map((v:any)=>{
      if(!object(v))return v;
+     const aliases:Record<string,string>={transverse:'axial',transversal:'axial',frontal:'coronal',sagittale:'sagittal',coronale:'coronal',multiple:'multiplanar',none:'not_applicable','n/a':'not_applicable',na:'not_applicable'};
+     const plane=String(v.plane??'').trim().toLowerCase();
+     v.plane=aliases[plane]??plane;
      const keys=['query','modality','purpose','image_type','plane','required_features'];
      return Object.fromEntries(keys.map(k=>[k,k==='required_features'?(v[k]??[]):v[k]]).filter(([_,value])=>value!==undefined));
-   });
+   }).filter((v:any)=>object(v)&&['axial','sagittal','coronal','multiplanar','not_applicable'].includes(v.plane)&&['anatomical_diagram','radiology_scan','operative_diagram','clinical_photo'].includes(v.image_type)&&typeof v.query==='string'&&typeof v.modality==='string'&&typeof v.purpose==='string'&&Array.isArray(v.required_features)&&v.required_features.every((f:any)=>typeof f==='string'));
    if(Array.isArray(node.options))node.options.forEach((v:any,i:number)=>{
      if(object(v)&&i<5)v.key='ABCDE'[i];
    });
@@ -104,16 +107,17 @@ export async function generateJson(
  if(!['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(model))
    throw new Error('groq_model_without_json_support');
  const max=groqBudget(contract,prompt);
+ let failureReason='';
  const messages=[
    {role:'system',content:'Professeur en chirurgie viscérale et radiologie, niveau résidanat. Réponds exclusivement avec un objet JSON valide. Conserve les nuances cliniques et sources réelles.'},
    {role:'user',content:prompt+'\n'+contract.outputInstructions+'\n'+formatGuide[contract.mode]+
-     '\nJSON UNIQUEMENT. Toutes les clés demandées et les comptes imposés, aucun texte hors JSON.'},
+     '\nJSON UNIQUEMENT. Toutes les clés demandées et les comptes imposés, aucun texte hors JSON. Pour les QCM: une phrase clinique précise par option, sans répéter son texte; global_explanation complémentaire en 1-2 phrases. Conserver les nuances et les cinq corrections.'},
  ];
  const fetcher=settings.fetcher??fetch;
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),110000);
  try{
    for(let attempt=0;attempt<2;attempt++){
-     const body:any={model,messages:attempt?[...messages,{role:'user',content:'Le décodage précédent était techniquement invalide. Génère de nouveau un objet JSON complet, avec toutes les clés, tous les chapitres/questions et les explications.'}]:messages,
+     const body:any={model,messages:attempt?[...messages,{role:'user',content:'Erreur technique exacte: '+failureReason+'. Le décodage précédent était techniquement invalide. Génère de nouveau un objet JSON complet, avec toutes les clés, tous les chapitres/questions et les explications.'}]:messages,
        reasoning_effort:'low',temperature:0.2,max_completion_tokens:max,stream:false};
      if(attempt===0)body.response_format={type:'json_object'};
      let response:Response;
@@ -136,6 +140,20 @@ export async function generateJson(
        validateStructure(contract.schema,parsed);
        return parsed;
      }catch(e){
+       failureReason=String((e as Error).message).slice(0,130);
+       // A truncated ten-question answer cannot be repaired by repeating it at the same budget.
+       // Regenerate two bounded halves, retaining all fifty clinical corrections.
+       if(failureReason==='groq_output_token_limit'&&contract.requestedCount===10){
+         const qs=(contract.schema as any).properties.questions.items;
+         const half=generationContract(contract.mode,{count:5,phases:qs.properties.phase.enum,courseKeys:qs.properties.course_section_key.enum??[]});
+         const phases=prompt.match(/séquence obligatoire des phase par question: ([1-4,]+)/)?.[1].split(',');
+         const phaseNote=(offset:number)=>phases?' Pour ces cinq questions, phases obligatoires dans cet ordre: '+phases.slice(offset,offset+5).join(',')+'.':'';
+         const first=await generateJson(half,prompt+'\nTRANSPORT FRACTIONNÉ PRIORITAIRE: produire seulement les questions 1 à 5 du lot initial, EXACTEMENT 5 questions.'+phaseNote(0),settings);
+         const second=await generateJson(half,prompt+'\nTRANSPORT FRACTIONNÉ PRIORITAIRE: produire seulement les questions 6 à 10 du lot initial, EXACTEMENT 5 questions. Ne pas répéter ces énoncés: '+JSON.stringify(first.questions.map((q:any)=>q.statement))+phaseNote(5),settings);
+         const combined={questions:[...first.questions,...second.questions]};
+         validateStructure(contract.schema,combined);
+         return combined;
+       }
        if(attempt===0){
          console.warn('visceral_json_recovery',{mode:contract.mode,reason:String((e as Error).message).slice(0,130)});
          continue;

@@ -67,7 +67,7 @@ export function expandQcmImages(questions:any[]):void {
     }));
   }
 }
-export const imageContractInstructions='image_requests (transport compact) : renseigner '+Object.keys(qcmImageSchema.properties as Record<string,unknown>).join(', ')+'. query en anglais ; image_type, modalité et plan doivent correspondre au signe recherché. Le backend enrichit anatomy, sources et paramètres ; [] si aucun visuel pertinent. Aucune URL inventée.';
+export const imageContractInstructions='image_requests (transport compact) : renseigner '+Object.keys(qcmImageSchema.properties as Record<string,unknown>).join(', ')+'. plane vaut exclusivement axial, sagittal, coronal, multiplanar ou not_applicable (pour un schéma sans plan). query en anglais ; image_type, modalité et plan doivent correspondre au signe recherché. Le backend enrichit anatomy, sources et paramètres ; [] si aucun visuel pertinent. Aucune URL inventée.';
 export const sectionSchema = object({
   key: stringType,
   title: stringType,

@@ -104,3 +104,28 @@ Deno.test('compact image data is normalized but clinical facts are not created',
  assert(parseJSON('some text {"answer":42}').answer===42,'plain text fallback extracts JSON');
  assert(groqBudget(c,'small prompt')>1800,'sufficient budget');
 });
+Deno.test('optional image plane aliases normalize without discarding QCM clinical content',()=>{
+ const c=generationContract('course_qcms');
+ const data=fixture('course_qcms') as any;
+ const intent={query:'biliary CT',modality:'CT',purpose:'bile ducts',image_type:'radiology_scan',plane:'transverse',required_features:['dilation']};
+ data.questions[0].image_requests=[{...intent}];
+ data.questions[1].image_requests=[{...intent,plane:'unknown-plane'}];
+ normalizeResponse(c,data);validateStructure(c.schema,data);
+ assert(data.questions[0].image_requests[0].plane==='axial','known plane mapped');
+ assert(data.questions[1].image_requests.length===0,'unknown optional intent omitted');
+ assert(data.questions.length===10&&data.questions[1].options.length===5,'medical corrections retained');
+});
+Deno.test('truncated 10 QCM recover as two complete five-question halves',async()=>{
+ const c=generationContract('course_qcms');let calls=0;
+ const fetcher=(async(_url:unknown,opts:any)=>{
+   calls++; const request=JSON.parse(String(opts.body));
+   if(calls===1)return answer({choices:[{message:{content:'{"questions":['},finish_reason:'length'}]});
+   assert(request.messages[1].content.includes('EXACTEMENT 5 questions'),'half contract sent');
+   const data=fixture('course_qcms') as any;
+   data.questions=data.questions.slice(calls===2?0:5,calls===2?5:10);
+   return answer({choices:[{message:{content:JSON.stringify(data)},finish_reason:'stop'}]});
+ }) as typeof fetch;
+ const data=await generateJson(c,'cours',{apiKey:'test',fetcher});
+ assert(calls===3&&data.questions.length===10,'complete ten-question recovery');
+ assert(new Set(data.questions.map((q:any)=>q.statement)).size===10,'distinct halves');
+});
