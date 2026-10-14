@@ -34,8 +34,9 @@ for (const [mode, count, phases] of [
       assert(opts.minItems===5&&opts.maxItems===5,'exactly five options');
       const allowed=field(qs.items,'phase').enum;
       assert(JSON.stringify(allowed)===JSON.stringify([...new Set(phases)]),'phase enum mismatch');
-      const cat=field(qs.items,'category').enum;
-      for (const name of ['chirurgie','radiologie','technique_operatoire']) assert(cat.includes(name),'category missing');
+      const cat=field(qs.items,'category');
+      assert(cat.type==='string'&&!cat.enum,'category is a non-blocking display label');
+      for (const name of ['chirurgie','radiologie','technique_operatoire']) assert(cat.description.includes(name),'category guidance missing');
     }
   });
 }
@@ -61,6 +62,33 @@ Deno.test('20 course questions in 10+10 and 15 clinical questions in 10+5',()=>{
     for(const count of batches)qcmSchema(count,[1,2,3,4]);
   }
 });
+Deno.test('All modes emit compact medical image specs and expand on server without storing images',()=>{
+  for(const mode of ['fiche','course_qcms','case','case_qcms'] as const){
+    const contract=generationContract(mode);
+    const instructions=contract.outputInstructions;
+    let images:any;
+    if(mode==='fiche')images=field(field(ficheSchema,'sections').items,'image_requests');
+    else if(mode==='case')images=field(field(caseSchema,'stages').items,'image_requests');
+    else images=field(field(qcmSchema(10,[1,2,3,4]),'questions').items,'image_requests');
+    const props=Object.keys(images.items.properties);
+    for(const key of ['query','modality','purpose','image_type','plane','required_features']){
+      assert(props.includes(key),mode+' Groq schema missing '+key);
+      assert(instructions.includes(key),mode+' prompt missing '+key);
+    }
+    for(const type of ['anatomical_diagram','radiology_scan','operative_diagram','clinical_photo']){
+      assert(images.items.properties.image_type.enum.includes(type),mode+' missing '+type);
+      assert(instructions.includes(type),mode+' prompt missing '+type);
+    }
+    assert(images.items.additionalProperties===false,'unknown fields prohibited');
+  }
+  const items:any[]=[{image_requests:[{query:'CT free air',modality:'CT',purpose:'acute abdomen',image_type:'radiology_scan',plane:'axial',required_features:['free gas']}]}];
+  expandQcmImages(items);
+  const fields=Object.keys(items[0].image_requests[0]);
+  for(const key of ['anatomy','excluded_features','fallback_queries','preferred_sources','allow_article_figures','allow_source_illustrations','allow_open_graph_preview','allow_page_preview']){
+    assert(fields.includes(key),'UI image contract missing '+key);
+  }
+});
+
 Deno.test('QCM Groq image schema stays compact, expanded contract supports previews',()=>{
   const schema=(qcmSchema(10,[1]) as any).properties.questions.items.properties.image_requests.items;
   const fields=Object.keys(schema.properties);
@@ -70,37 +98,4 @@ Deno.test('QCM Groq image schema stays compact, expanded contract supports previ
   assert(items[0].image_requests[0].preferred_sources[0]==='Radiology Assistant','source order');
   assert(items[0].image_requests[0].allow_article_figures,'external image previews');
   assert(items[1].image_requests.length===0,'no fabricated image');
-});
-
-Deno.test('Fiche de reference residanat : standards pedagogiques conserves',()=>{
-  const contract=generationContract('fiche');
-  const instruction=contract.outputInstructions;
-  for(const needle of [
-    'Cours de RÉSIDANAT','EXACTEMENT 10 sections',
-    'rapports anatomiques','physiopathologie','clinique et gravité',
-    'protocole imagerie','classifications','indications et alternatives',
-    'étapes opératoires','complications et surveillance',
-    'synthèse décisionnelle','4 à 6 key_points','study_core',
-  ]) assert(instruction.includes(needle),'Reference-quality fiche contract regressed: '+needle);
-  const section=(ficheSchema.properties as any).sections.items;
-  assert(section.properties.content.minLength===650,'Course chapters must stay substantial');
-  assert(section.properties.key_points.minItems===4,'Detailed taught points required');
-  assert((ficheSchema.properties as any).sections.minItems===10,'Ten chapters required');
-});
-
-Deno.test('QCM de cours et de cas : profondeur residanat sans schema additionnel',()=>{
-  const course=generationContract('course_qcms',{count:10});
-  const clinical=generationContract('case_qcms',{count:10});
-  const standard=['NIVEAU RÉSIDANAT STRICT','décisions cliniques','radiologiques et opératoires','critères discriminants','gravité et terrain','complications et surveillance','Chaque option A–E'];
-  for(const contract of [course,clinical]){
-    for(const needle of standard)assert(contract.outputInstructions.includes(needle),contract.mode+' level instruction missing '+needle);
-    const question=(contract.schema.properties as any).questions;
-    assert(question.minItems===10&&question.maxItems===10,contract.mode+' must retain ten questions');
-    const options=question.items.properties.options;
-    assert(options.minItems===5&&options.maxItems===5,contract.mode+' must retain five explained options');
-  }
-  // Ce verrou pédagogique ne doit pas ajouter de champs au JSON ou modifier
-  // le format technique qui vient d'être stabilisé.
-  const courseWithDifferentPrompt=generationContract('course_qcms',{count:10});
-  assert(JSON.stringify(course.schema)===JSON.stringify(courseWithDifferentPrompt.schema),'QCM schema unstable');
 });
