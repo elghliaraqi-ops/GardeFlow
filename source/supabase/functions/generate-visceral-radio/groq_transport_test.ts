@@ -1,5 +1,5 @@
 import {generationContract} from './generation_contract.ts';
-import {generateJson,groqBudget,normalizeResponse,validateStructure,parseJSON} from './groq_transport.ts';
+import {generateJson,groqBudget,normalizeResponse,validateStructure,parseJSON,formatInstructions} from './groq_transport.ts';
 
 function assert(ok:unknown,message:string){if(!ok)throw Error(message);}
 function fixture(mode:'fiche'|'course_qcms'|'case'){
@@ -157,5 +157,31 @@ Deno.test('surplus QCM keep the requested prefix with one provider request',asyn
    assert(data.questions.length===count,'exact requested count');
    assert(data.questions[count-1].statement===sample.questions[count-1].statement,'original order preserved');
    assert(data.questions.every((q:any)=>q.options.length===5),'all retained corrections present');
+ }
+});
+
+Deno.test('case patient object retains all supplied clinical facts without regenerating',async()=>{
+ const c=generationContract('case');const sample=fixture('case') as any;
+ sample.patient={age:62,sex:'femme',history:['HTA','diabète'],presentation:{pain:'48 h',fever:false},weight:'67 kg'};
+ let calls=0;
+ const fetcher=(async(_url:unknown,opts:any)=>{
+   calls++;const sent=JSON.parse(String(opts.body)).messages[1].content;
+   assert(sent.includes('patient:string'),'patient type actually sent');
+   assert(sent.includes('clinical_findings:string'),'stage field types actually sent');
+   return answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]});
+ }) as typeof fetch;
+ const got=await generateJson(c,'cas clinique',{apiKey:'test',fetcher});
+ assert(calls===1,'no technical regeneration');
+ for(const fact of ['age: 62','femme','HTA','diabète','48 h','fever: false','67 kg'])
+   assert(got.patient.includes(fact),'patient fact retained: '+fact);
+ assert(got.stages.length===4,'four original stages');
+});
+Deno.test('all five modes send field types derived from their validation schemas',()=>{
+ for(const mode of ['fiche','case','course_qcms','case_qcms','surgical_techniques'] as const){
+   const c=generationContract(mode);const guide=formatInstructions(c);
+   assert(guide.includes('string'),'explicit text type');
+   for(const field of Object.keys((c.schema as any).properties))assert(guide.includes(field+':'),'typed root '+field);
+   if(mode==='case')assert(guide.includes('"simple"|"intermediaire"|"complexe"'),'difficulty enum');
+   if(mode.includes('qcms'))assert(guide.includes('reference:string'),'reference type');
  }
 });

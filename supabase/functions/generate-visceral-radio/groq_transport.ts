@@ -19,8 +19,23 @@ const formatGuide={
  case_qcms:'JSON questions:[N objects {phase,category,statement,course_section_key,teaching_point,options:[{key:"A",text,correct,explanation},... jusqu’à E],global_explanation,reference,image_requests}]. Même patient, phases chronologiques.',
  surgical_techniques:'JSON operative_techniques:[1 à 3 objects {name,indications,steps:[4 à 6 étapes]}].',
 };
+// Derive the actual provider instructions from the same schema used by validation.
+// JSON-object mode does not transmit a decoding schema: field names alone are insufficient.
+export function schemaShape(schema:any):string {
+ if(Array.isArray(schema.enum))return schema.enum.map((v:any)=>JSON.stringify(v)).join('|');
+ if(schema.type==='object')return '{'+Object.entries(schema.properties??{}).map(([k,v])=>k+':'+schemaShape(v)).join(',')+'}';
+ if(schema.type==='array')return '['+schemaShape(schema.items)+']'+
+   (schema.minItems===schema.maxItems&&typeof schema.minItems==='number'?' x'+schema.minItems:
+    ' ('+(schema.minItems??0)+'..'+(schema.maxItems??'n')+')');
+ return schema.type+(schema.type==='string'&&(schema.minLength||schema.maxLength)?
+   '('+(schema.minLength??0)+'..'+(schema.maxLength??'n')+' caractères)':'');
+}
+export function formatInstructions(contract:GenerationContract):string {
+ return formatGuide[contract.mode]+'\nTYPES ET VALEURS OBLIGATOIRES (notation descriptive, retourner un vrai objet JSON): '+
+   schemaShape(contract.schema)+'. Chaque champ est requis; string signifie texte, jamais objet/tableau. Aucun champ supplémentaire.';
+}
 export function groqBudget(contract:GenerationContract,prompt:string){
- const input=prompt+'\n'+contract.outputInstructions+'\n'+formatGuide[contract.mode];
+ const input=prompt+'\n'+contract.outputInstructions+'\n'+formatInstructions(contract);
  const inputEstimate=Math.ceil((input.length+390)/3.6)+220;
  const cfg=profiles[contract.mode];
  const five=contract.requestedCount===5;
@@ -42,8 +57,19 @@ export function referenceText(value:unknown):string {
  }
  return '';
 }
+// Lossless presentation conversion: retain supplied labels, values and units.
+// No inference, clinical completion or replacement of an absent patient.
+export function clinicalText(value:unknown):string {
+ if(typeof value==='string')return value;
+ if(value===null)return 'null';
+ if(Array.isArray(value))return value.map(clinicalText).join(' ; ');
+ if(object(value))return Object.entries(value).map(([k,v])=>k+': '+clinicalText(v)).join(' ; ');
+ return String(value);
+}
 export function normalizeResponse(contract:GenerationContract,result:any){
  if(!object(result))return result;
+ if(contract.mode==='case'&&(object(result.patient)||Array.isArray(result.patient)))
+   result.patient=clinicalText(result.patient);
  // Keep the requested prefix of an overproduced batch; validate every retained question.
  // A surplus must not spend another provider request or erase a complete usable batch.
  if((contract.mode==='course_qcms'||contract.mode==='case_qcms')&&
@@ -128,7 +154,7 @@ export async function generateJson(
  let failureReason='';
  const messages=[
    {role:'system',content:'Professeur en chirurgie viscérale et radiologie, niveau résidanat. Réponds exclusivement avec un objet JSON valide. Conserve les nuances cliniques et sources réelles.'},
-   {role:'user',content:prompt+'\n'+contract.outputInstructions+'\n'+formatGuide[contract.mode]+
+   {role:'user',content:prompt+'\n'+contract.outputInstructions+'\n'+formatInstructions(contract)+
      '\nJSON UNIQUEMENT. Toutes les clés demandées et les comptes imposés, aucun texte hors JSON. Pour les QCM: une phrase clinique précise par option, sans répéter son texte; global_explanation complémentaire en 1-2 phrases. Conserver les nuances et les cinq corrections.'},
  ];
  const fetcher=settings.fetcher??fetch;
