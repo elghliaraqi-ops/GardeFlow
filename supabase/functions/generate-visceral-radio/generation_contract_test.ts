@@ -71,3 +71,36 @@ Deno.test('QCM Groq image schema stays compact, expanded contract supports previ
   assert(items[0].image_requests[0].allow_article_figures,'external image previews');
   assert(items[1].image_requests.length===0,'no fabricated image');
 });
+
+Deno.test('Fiche de reference residanat : standards pedagogiques conserves',()=>{
+  const contract=generationContract('fiche');
+  const instruction=contract.outputInstructions;
+  for(const needle of [
+    'Cours de RÉSIDANAT','EXACTEMENT 10 sections',
+    'rapports anatomiques','physiopathologie','clinique et gravité',
+    'protocole imagerie','classifications','indications et alternatives',
+    'étapes opératoires','complications et surveillance',
+    'synthèse décisionnelle','4 à 6 key_points','study_core',
+  ]) assert(instruction.includes(needle),'Reference-quality fiche contract regressed: '+needle);
+  const section=(ficheSchema.properties as any).sections.items;
+  assert(section.properties.content.minLength===650,'Course chapters must stay substantial');
+  assert(section.properties.key_points.minItems===4,'Detailed taught points required');
+  assert((ficheSchema.properties as any).sections.minItems===10,'Ten chapters required');
+});
+
+Deno.test('QCM de cours et de cas : profondeur residanat sans schema additionnel',()=>{
+  const course=generationContract('course_qcms',{count:10});
+  const clinical=generationContract('case_qcms',{count:10});
+  const standard=['NIVEAU RÉSIDANAT STRICT','décisions cliniques','radiologiques et opératoires','critères discriminants','gravité et terrain','complications et surveillance','Chaque option A–E'];
+  for(const contract of [course,clinical]){
+    for(const needle of standard)assert(contract.outputInstructions.includes(needle),contract.mode+' level instruction missing '+needle);
+    const question=(contract.schema.properties as any).questions;
+    assert(question.minItems===10&&question.maxItems===10,contract.mode+' must retain ten questions');
+    const options=question.items.properties.options;
+    assert(options.minItems===5&&options.maxItems===5,contract.mode+' must retain five explained options');
+  }
+  // Ce verrou pédagogique ne doit pas ajouter de champs au JSON ou modifier
+  // le format technique qui vient d'être stabilisé.
+  const courseWithDifferentPrompt=generationContract('course_qcms',{count:10});
+  assert(JSON.stringify(course.schema)===JSON.stringify(courseWithDifferentPrompt.schema),'QCM schema unstable');
+});
