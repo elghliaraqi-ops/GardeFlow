@@ -30,12 +30,25 @@ export function groqBudget(contract:GenerationContract,prompt:string){
  return budget;
 }
 function object(x:any):x is Record<string,any>{return x!==null&&typeof x==='object'&&!Array.isArray(x);}
+/** Preserve supplied citation text; never invent a source for missing metadata. */
+export function referenceText(value:unknown):string {
+ if(typeof value==='string')return value.trim();
+ if(value==null)return '';
+ if(Array.isArray(value))return value.map(referenceText).filter(Boolean).join(' ; ');
+ if(object(value)){
+   return [...new Set(['title','citation','text','source','authors','year','url','doi']
+     .map(k=>typeof value[k]==='string'?value[k].trim():k==='year'&&typeof value[k]==='number'?String(value[k]):'')
+     .filter(Boolean))].join(' — ');
+ }
+ return '';
+}
 export function normalizeResponse(contract:GenerationContract,result:any){
  if(!object(result))return result;
  const nodes=contract.mode==='fiche'?result.sections:contract.mode==='case'?result.stages:
    (contract.mode==='course_qcms'||contract.mode==='case_qcms')?result.questions:[];
  if(Array.isArray(nodes))for(const node of nodes){
    if(!object(node))continue;
+   if(contract.mode==='course_qcms'||contract.mode==='case_qcms')node.reference=referenceText(node.reference);
    if(node.image_requests==null)node.image_requests=[];
    if(Array.isArray(node.image_requests))node.image_requests=node.image_requests.slice(0,1).map((v:any)=>{
      if(!object(v))return v;

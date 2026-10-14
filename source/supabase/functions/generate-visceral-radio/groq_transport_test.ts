@@ -129,3 +129,19 @@ Deno.test('truncated 10 QCM recover as two complete five-question halves',async(
  assert(calls===3&&data.questions.length===10,'complete ten-question recovery');
  assert(new Set(data.questions.map((q:any)=>q.statement)).size===10,'distinct halves');
 });
+
+Deno.test('bibliographic metadata formats cannot reject an otherwise complete QCM batch',async()=>{
+ const c=generationContract('course_qcms');const sample=fixture('course_qcms') as any;
+ sample.questions[0].reference={title:'Guideline',year:2025,url:'https://example.org/guideline'};
+ sample.questions[1].reference=['Source A',{citation:'Source B'}];
+ sample.questions[2].reference=null;
+ delete sample.questions[3].reference;
+ let calls=0;
+ const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]});}) as typeof fetch;
+ const data=await generateJson(c,'cours',{apiKey:'test',fetcher});
+ assert(calls===1,'no quota-consuming retry for citation formatting');
+ assert(data.questions[0].reference==='Guideline — 2025 — https://example.org/guideline','source metadata retained');
+ assert(data.questions[1].reference==='Source A ; Source B','citation list retained');
+ assert(data.questions[2].reference===''&&data.questions[3].reference==='','no invented sources');
+ assert(data.questions.every((q:any)=>q.options.length===5),'all clinical corrections retained');
+});

@@ -121,7 +121,7 @@ export function questionSchema(allowedPhases: number[],courseKeys:string[]=[]): 
     teaching_point: {type:'string',minLength:40,maxLength:300},
     options: fixedArray(questionOptionSchema, 5),
     global_explanation: stringType,
-    reference: stringType,
+    reference: {...stringType,description:'Texte bibliographique, jamais objet ni tableau ; chaîne vide si aucune référence disponible'},
     image_requests: { type: 'array', maxItems: 1, items: qcmImageSchema },
   });
 }
@@ -193,6 +193,7 @@ export function generationContract(
     !isQcm && 'Exemple stade T3/T4 rectal : image_type=radiology_scan, modality=IRM T2, plane=axial, anatomy=rectum, query=rectal cancer T2 axial pelvic MRI extramural invasion, required_features=[rectal tumor,T2 MRI], excluded_features=[book cover,non medical photo,wrong organ].',
     !isQcm && 'La recherche externe privilégie Radiology Assistant puis les figures PubMed Central/Europe PMC, le backend complète les requêtes et la licence ; aucune URL générée par Groq.',
     !isQcm && 'Les aperçus recherchés doivent illustrer fidèlement les signes et structures demandés, sans affirmer qu’ils viennent du patient fictif. Si aucun visuel fiable n’est approprié, image_requests=[] plutôt qu’une proposition hors sujet.',
+    'reference est une chaîne de texte bibliographique, jamais un objet ou un tableau ; utiliser une chaîne vide si aucune référence disponible.',
     'Tous les objets doivent renseigner chaque champ required du schéma, même si un tableau est vide.',
     'Ne créer aucune clé supplémentaire ni champ manquant, aucun Markdown, aucun texte hors JSON.',
   ].filter(Boolean).join('\n');
