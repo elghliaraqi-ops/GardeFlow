@@ -61,7 +61,7 @@ Deno.test('20 course questions in 10+10 and 15 clinical questions in 10+5',()=>{
     for(const count of batches)qcmSchema(count,[1,2,3,4]);
   }
 });
-Deno.test('All generation modes retain medically relevant image selection, QCMs expand on server',()=>{
+Deno.test('All modes emit compact medical image specs and expand on server without storing images',()=>{
   for(const mode of ['fiche','course_qcms','case','case_qcms'] as const){
     const contract=generationContract(mode);
     const instructions=contract.outputInstructions;
@@ -70,10 +70,7 @@ Deno.test('All generation modes retain medically relevant image selection, QCMs 
     else if(mode==='case')images=field(field(caseSchema,'stages').items,'image_requests');
     else images=field(field(qcmSchema(10,[1,2,3,4]),'questions').items,'image_requests');
     const props=Object.keys(images.items.properties);
-    const qcm=mode==='course_qcms'||mode==='case_qcms';
-    for(const key of qcm
-      ? ['query','modality','purpose','image_type','plane','required_features']
-      : ['query','modality','purpose','image_type','anatomy','plane','required_features','excluded_features']){
+    for(const key of ['query','modality','purpose','image_type','plane','required_features']){
       assert(props.includes(key),mode+' Groq schema missing '+key);
       assert(instructions.includes(key),mode+' prompt missing '+key);
     }

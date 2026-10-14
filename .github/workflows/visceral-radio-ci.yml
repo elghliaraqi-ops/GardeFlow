@@ -51,10 +51,17 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check private Edge Function and JSON contract
-        run: deno check source/supabase/functions/generate-visceral-radio/index.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts
+        run: deno check source/supabase/functions/generate-visceral-radio/index.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts source/supabase/functions/generate-visceral-radio/groq_transport.ts
       - name: Type-check multi-source preview module
         run: deno check source/supabase/functions/generate-visceral-radio/medical_image_previews.ts
       - name: Test external medical image search terms
         run: deno test source/supabase/functions/generate-visceral-radio/medical_image_previews_test.ts
+      - name: Verify mirrored Edge entrypoint, contracts and transport
+        run: |
+          for file in index.ts generation_contract.ts groq_transport.ts; do
+            cmp "source/supabase/functions/generate-visceral-radio/$file" "supabase/functions/generate-visceral-radio/$file"
+          done
+      - name: Test JSON 400 recovery, one-call success, residency depth and quota
+        run: deno test source/supabase/functions/generate-visceral-radio/groq_transport_test.ts
       - name: Test four Groq prompt/JSON contracts (no API calls)
         run: deno test source/supabase/functions/generate-visceral-radio/surgical_techniques_test.ts source/supabase/functions/generate-visceral-radio/emc_context_test.ts source/supabase/functions/generate-visceral-radio/generation_contract_test.ts source/supabase/functions/generate-visceral-radio/residency_course_context_test.ts
