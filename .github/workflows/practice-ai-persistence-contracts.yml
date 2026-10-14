@@ -23,6 +23,11 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Verify 10-QCM JSON generation and image contract
+        run: |
+          deno check supabase/functions/generate-visceral-radio/index.ts
+          deno test supabase/functions/generate-visceral-radio/generation_contract_test.ts
+          deno test supabase/functions/generate-visceral-radio/qcm_batch_plan_test.ts
       - name: Typecheck production-only Gemini glossary and QCM queue
         run: |
           deno check supabase/functions/practice-context-glossary/index.ts
