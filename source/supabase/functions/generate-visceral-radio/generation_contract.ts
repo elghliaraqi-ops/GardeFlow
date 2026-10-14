@@ -57,7 +57,7 @@ export function expandQcmImages(questions:any[]):void {
     q.image_requests=requests.filter((v:any)=>v&&typeof v.query==='string'&&v.query.trim()).map((v:any)=>({
       query:String(v.query).slice(0,320),modality:String(v.modality??'').slice(0,80),
       purpose:String(v.purpose??'').slice(0,240),
-      image_type:v.image_type,anatomy:'',plane:v.plane,
+      image_type:v.image_type,anatomy:String(v.query??'').slice(0,130),plane:v.plane,
       required_features:Array.isArray(v.required_features)?v.required_features.slice(0,4).map(String):[],
       excluded_features:['book cover','advertisement','wrong organ','nonmedical photo'],
       fallback_queries:[],
@@ -67,13 +67,13 @@ export function expandQcmImages(questions:any[]):void {
     }));
   }
 }
-export const imageContractInstructions='image_requests : renseigner '+Object.keys(imageRequestSchema.properties as Record<string,unknown>).join(', ')+'. query en anglais ; image_type selon la vraie modalité ; preferred_sources commence par Radiology Assistant. Pas d’URL inventée ; [] si aucun visuel pertinent.';
+export const imageContractInstructions='image_requests (transport compact) : renseigner '+Object.keys(qcmImageSchema.properties as Record<string,unknown>).join(', ')+'. query en anglais ; image_type, modalité et plan doivent correspondre au signe recherché. Le backend enrichit anatomy, sources et paramètres ; [] si aucun visuel pertinent. Aucune URL inventée.';
 export const sectionSchema = object({
   key: stringType,
   title: stringType,
   content: {type:'string',minLength:650,maxLength:1800},
   key_points: {type:'array',minItems:4,maxItems:6,items:{type:'string',maxLength:240}},
-  image_requests: { type: 'array', maxItems: 1, items: imageRequestSchema },
+  image_requests: { type: 'array', maxItems: 1, items: qcmImageSchema },
 });
 export const ficheSchema = object({
   title: stringType,
@@ -90,7 +90,7 @@ export const caseStageSchema = object({
   clinical_findings: stringType,
   imaging_findings: stringType,
   decisions: stringType,
-  image_requests: { type: 'array', maxItems: 1, items: imageRequestSchema },
+  image_requests: { type: 'array', maxItems: 1, items: qcmImageSchema },
 });
 export const caseSchema = object({
   title: stringType,
@@ -186,12 +186,12 @@ export function generationContract(
       ? 'Phases autorisées: ' + [...new Set(phases)].join(', ') + '.'
       : '',
     prescriptions[mode],
-    isQcm ? 'QCM image_requests : [] sauf image médicale utile, au plus un objet avec query, modality, purpose, image_type, plane, required_features (2 à 4 signes visibles). Requête précise en anglais, aucune URL inventée. image_type=anatomical_diagram pour anatomie, radiology_scan pour coupes médicales, operative_diagram pour technique et clinical_photo si pertinent.' : 'CONTRAT DES IMAGES OBLIGATOIRE POUR CHAQUE image_requests (dans sections ou stages) : les champs query, modality, purpose, image_type, anatomy, plane, required_features, excluded_features, fallback_queries, preferred_sources, allow_article_figures, allow_source_illustrations, allow_open_graph_preview et allow_page_preview sont tous requis. Ne jamais ajouter d’URL d’image.',
+    imageContractInstructions+' image_type=anatomical_diagram pour anatomie, radiology_scan pour coupes médicales, operative_diagram pour technique et clinical_photo si pertinent. [] si non pertinent.',
     !isQcm && 'Choisir image_type de façon clinique : anatomical_diagram uniquement pour les rapports anatomiques (schéma annoté; pas de radiographie ou ouvrage), radiology_scan pour une vraie coupe médicale (IRM/TDM/échographie) avec modalité, plan, séquence et signes attendus, operative_diagram pour les gestes chirurgicaux; clinical_photo uniquement si pertinent.',
     !isQcm && 'query doit être une requête visuelle précise en anglais combinant organe + modalité/type + anomalie ou repères recherchés. required_features énumère 2 à 4 éléments réellement visibles et nécessaires; excluded_features proscrit couvertures de livres, publicités, graphiques statistiques, images d’un autre organe ou d’un autre examen. Les vraies figures d’articles sources médicaux sont AUTORISÉES.',
     !isQcm && 'Exemple anatomie rectale : image_type=anatomical_diagram, anatomy=rectum mesorectum sphincter, query=rectum mesorectum levator ani labeled sagittal anatomy illustration, required_features=[rectum,mesorectum,levator ani], excluded_features=[book cover,prostate screening,annual report].',
     !isQcm && 'Exemple stade T3/T4 rectal : image_type=radiology_scan, modality=IRM T2, plane=axial, anatomy=rectum, query=rectal cancer T2 axial pelvic MRI extramural invasion, required_features=[rectal tumor,T2 MRI], excluded_features=[book cover,non medical photo,wrong organ].',
-    !isQcm && 'fallback_queries : 2 à 4 alternatives courtes en anglais. preferred_sources : Radiology Assistant en premier, puis PubMed Central, Europe PMC, Radiopaedia, Eurorad selon le type de figure. allow_article_figures, allow_source_illustrations, allow_open_graph_preview et allow_page_preview = true pour les demandes pertinentes. La recherche peut proposer une carte article sourcée quand sa figure n’est pas directement utilisable.',
+    !isQcm && 'La recherche externe privilégie Radiology Assistant puis les figures PubMed Central/Europe PMC, le backend complète les requêtes et la licence ; aucune URL générée par Groq.',
     !isQcm && 'Les aperçus recherchés doivent illustrer fidèlement les signes et structures demandés, sans affirmer qu’ils viennent du patient fictif. Si aucun visuel fiable n’est approprié, image_requests=[] plutôt qu’une proposition hors sujet.',
     'Tous les objets doivent renseigner chaque champ required du schéma, même si un tableau est vide.',
     'Ne créer aucune clé supplémentaire ni champ manquant, aucun Markdown, aucun texte hors JSON.',
