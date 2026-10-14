@@ -1,5 +1,5 @@
 import {
-  generationContract, qcmSchema, ficheSchema, caseSchema,
+  generationContract, qcmSchema, ficheSchema, caseSchema, expandQcmImages,
 } from './generation_contract.ts';
 
 function assert(ok: unknown, message: string) {
@@ -84,4 +84,15 @@ Deno.test('all four generator prompts and schemas enforce the same image-selecti
     }
     assert(images.items.additionalProperties===false,'extraneous image URL must not be allowed');
   }
+});
+
+Deno.test('QCM Groq image schema stays compact, expanded contract supports previews',()=>{
+  const schema=(qcmSchema(10,[1]) as any).properties.questions.items.properties.image_requests.items;
+  const fields=Object.keys(schema.properties);
+  assert(JSON.stringify(fields)===JSON.stringify(['query','modality','purpose','image_type','plane','required_features']),'compact image fields');
+  const items=[{image_requests:[{query:'CT free air',modality:'CT',purpose:'pneumoperitoneum',image_type:'radiology_scan',plane:'axial',required_features:['free air']}]},{image_requests:[]}];
+  expandQcmImages(items);
+  assert(items[0].image_requests[0].preferred_sources[0]==='Radiology Assistant','source order');
+  assert(items[0].image_requests[0].allow_article_figures,'external image previews');
+  assert(items[1].image_requests.length===0,'no fabricated image');
 });
