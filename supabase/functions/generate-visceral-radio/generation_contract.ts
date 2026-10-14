@@ -12,6 +12,7 @@ export type GenerationContract = {
   schema: JsonSchema;
   outputInstructions: string;
   requestedCount: number | null;
+  phaseSequence?: number[];
 };
 
 const stringType = { type: 'string' };
@@ -114,7 +115,7 @@ export function questionSchema(allowedPhases: number[],courseKeys:string[]=[]): 
     phase: { type: 'integer', enum: [...new Set(allowedPhases)] },
     category: {
       type: 'string',
-      enum: ['chirurgie', 'radiologie', 'technique_operatoire'],
+      description: 'Préférer chirurgie, radiologie ou technique_operatoire ; libellé de classement sans effet sur les réponses.',
     },
     statement: stringType,
     course_section_key: courseKeys.length?{type:'string',enum:courseKeys}:stringType,
@@ -209,5 +210,6 @@ export function generationContract(
     schema,
     outputInstructions: mode==='surgical_techniques' ? instruction.split('image_requests (transport compact)')[0]+'Tous les objets renseignent les champs required du schéma ; aucune clé supplémentaire.' : instruction,
     requestedCount: count,
+    phaseSequence: mode==='case_qcms'&&options.phases?.length===count?options.phases:undefined,
   };
 }

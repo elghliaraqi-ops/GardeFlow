@@ -1,5 +1,5 @@
 import {generationContract} from './generation_contract.ts';
-import {generateJson,groqBudget,normalizeResponse,validateStructure,parseJSON,formatInstructions} from './groq_transport.ts';
+import {generateJson,groqBudget,normalizeResponse,validateStructure,parseJSON,formatInstructions,quotaInfo} from './groq_transport.ts';
 
 function assert(ok:unknown,message:string){if(!ok)throw Error(message);}
 function fixture(mode:'fiche'|'course_qcms'|'case'){
@@ -72,9 +72,9 @@ Deno.test('10 QCM and 50 explained options stay aligned after JSON transport',as
  assert(data.questions.length===10,'ten QCM required');
  assert(data.questions.every((q:any)=>q.options.length===5&&q.options.every((o:any)=>o.explanation)),'all options explained');
 });
-Deno.test('failed medical depth cannot be saved even after retry',async()=>{
+Deno.test('empty course content cannot be saved even after retry',async()=>{
  const c=generationContract('fiche'),short=fixture('fiche') as any;
- short.sections[0].content='Résumé superficiel';
+ short.sections[0].content='';
  let calls=0;
  const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(short)},finish_reason:'stop'}]});}) as typeof fetch;
  let error='';
@@ -184,4 +184,45 @@ Deno.test('all five modes send field types derived from their validation schemas
    if(mode==='case')assert(guide.includes('"simple"|"intermediaire"|"complexe"'),'difficulty enum');
    if(mode.includes('qcms'))assert(guide.includes('reference:string'),'reference type');
  }
+});
+
+Deno.test('editorial character targets never discard a complete course or trigger retries',async()=>{
+ const c=generationContract('fiche');const sample=fixture('fiche') as any;
+ sample.sections[3].content='La gravité se juge sur la stabilité hémodynamique, la défaillance d’organe et le contrôle de la source.';
+ let calls=0;const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]});}) as typeof fetch;
+ const got=await generateJson(c,'cours',{apiKey:'test',fetcher});
+ assert(calls===1,'no retry for character target');
+ assert(got.sections[3].content===sample.sections[3].content,'no padding, truncation or invention');
+ assert(c.outputInstructions.includes('650 à 1800'),'residency depth target retained in prompt');
+});
+Deno.test('category labels and structured stage prose are normalized without regeneration',async()=>{
+ const c=generationContract('case_qcms',{count:5,phases:[1,1,2,2,3]});const sample=fixture('course_qcms') as any;
+ sample.questions=sample.questions.slice(0,5);
+ sample.questions.forEach((q:any,i:number)=>{q.category=['Imagerie médicale','Technique opératoire','prise en charge','Chirurgie viscérale','diagnostic'][i];q.phase=4;});
+ const fetcher=(async()=>answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]})) as typeof fetch;
+ const got=await generateJson(c,'cas',{apiKey:'test',fetcher});
+ assert(got.questions[0].category==='radiologie','image label');
+ assert(got.questions[1].category==='technique_operatoire','operative label');
+ assert(got.questions[2].category==='prise en charge','unknown label preserved');
+ assert(got.questions.map((q:any)=>q.phase).join(',')==='1,1,2,2,3','planned phase sequence used');
+ const data=fixture('case') as any;
+ data.stages[0].clinical_findings={temperature:'38 °C',abdomen:['défense','douleur']};
+ data.references={title:'Reference',url:'https://example.org'};data.extra='decorative';
+ const normalized=normalizeResponse(generationContract('case'),data);
+ validateStructure(generationContract('case').schema,normalized);
+ assert(normalized.stages[0].clinical_findings.includes('38 °C'),'stage facts retained');
+ assert(!('extra' in normalized),'extra transport key removed');
+});
+Deno.test('quota diagnostics preserve known delays and never invent a reset time',()=>{
+ const info=quotaInfo({error:{message:'Rate limit reached on tokens per minute (TPM). Please try again in 1m2.5s.'}},new Headers());
+ assert(info.retryAfterSeconds===63&&info.quotaScope==='tokens_per_minute','provider delay parsed');
+ const daily=quotaInfo({error:{message:'tokens per day (TPD) limit'}},new Headers());
+ assert(daily.retryAfterSeconds===null&&daily.quotaScope==='tokens_per_day','unknown reset stays unknown');
+});
+Deno.test('incorrect boolean options are still rejected rather than guessed',async()=>{
+ const c=generationContract('course_qcms');const sample=fixture('course_qcms') as any;
+ sample.questions[0].options[0].correct='true';
+ const fetcher=(async()=>answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]})) as typeof fetch;
+ let rejected=false;try{await generateJson(c,'cours',{apiKey:'test',fetcher});}catch(_){rejected=true;}
+ assert(rejected,'medical answer values must not be inferred');
 });

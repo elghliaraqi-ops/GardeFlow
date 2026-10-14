@@ -2,6 +2,7 @@ import '../widgets/practice_quiz_widgets.dart';
 import '../widgets/practice_keyword_text.dart';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../services/supabase_backend_service.dart';
 import 'practice_daily_visual_theme.dart';
@@ -24,6 +25,7 @@ class _PracticeVisceralRadioScreenState
   Map<String, dynamic>? _session;
   bool _busy = false;
   String? _error;
+  DateTime? _groqRetryAt;
   int _coursePosition = 0, _casePosition = 0;
   final Map<int, Set<String>> _courseSelected = {}, _caseSelected = {};
   final Set<int> _courseDone = {}, _caseDone = {};
@@ -81,6 +83,11 @@ class _PracticeVisceralRadioScreenState
 
   Future<void> _generate(String action) async {
     if (_busy || !_authorized) return;
+    if (action != 'emc' && _groqRetryAt != null && DateTime.now().isBefore(_groqRetryAt!)) {
+      final seconds = _groqRetryAt!.difference(DateTime.now()).inSeconds + 1;
+      setState(() => _error = 'Quota Groq : nouvel essai possible dans $seconds secondes. Le contenu existant est conservé.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -105,13 +112,20 @@ class _PracticeVisceralRadioScreenState
     } catch (e) {
       if (mounted) {
         final message = e.toString();
+        final details = e is FunctionException ? _obj(e.details) : <String, dynamic>{};
+        final retryAfter = int.tryParse(_str(details['retry_after_seconds']));
         final rateLimited =
             message.contains('429') ||
             message.contains('groq_rate_limited') ||
             message.contains('rate_limit_exceeded');
+        if (rateLimited && retryAfter != null && retryAfter > 0) {
+          _groqRetryAt = DateTime.now().add(Duration(seconds: retryAfter));
+        }
         setState(
           () => _error = rateLimited
-              ? 'Quota Groq temporairement atteint. Les QCM déjà générés sont conservés. Réessayez après la période indiquée par Groq.'
+              ? (_str(details['detail']).isNotEmpty
+                  ? _str(details['detail'])
+                  : 'Quota Groq atteint. Le fournisseur ne précise pas le délai de reprise. Le contenu existant est conservé.')
               : 'Génération impossible : ' + message,
         );
       }
