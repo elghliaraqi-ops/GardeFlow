@@ -226,3 +226,11 @@ Deno.test('incorrect boolean options are still rejected rather than guessed',asy
  let rejected=false;try{await generateJson(c,'cours',{apiKey:'test',fetcher});}catch(_){rejected=true;}
  assert(rejected,'medical answer values must not be inferred');
 });
+
+Deno.test('phase one can omit imaging not yet performed without inventing future findings',async()=>{
+ const c=generationContract('case');const sample=fixture('case') as any;
+ sample.stages[0].imaging_findings='';sample.stages[0].decisions='';
+ let calls=0;const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]});}) as typeof fetch;
+ const data=await generateJson(c,'cas progressif',{apiKey:'test',fetcher});
+ assert(calls===1&&data.stages[0].imaging_findings==='','no unnecessary retry or invented exam');
+});

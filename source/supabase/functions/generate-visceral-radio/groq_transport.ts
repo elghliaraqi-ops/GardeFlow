@@ -142,7 +142,7 @@ export function validateStructure(schema:any,value:any,path='$'):void{
    if(typeof value!=='string')throw new Error('json_string:'+path);
    // Character targets guide writing; they are not structural validity or medical quality.
    // Never discard a complete response and spend another quota solely on prose length.
-   if(!value.trim()&&!/\.(reference|modality|purpose|plane)$/.test(path))throw new Error('json_text_empty:'+path);
+   if(!value.trim()&&/\.(content|statement|global_explanation|teaching_point|text|explanation|patient|narrative|final_diagnosis|title|name|indications)$/.test(path))throw new Error('json_text_empty:'+path);
  }else if(schema?.type==='integer'&&!Number.isInteger(value))throw new Error('json_integer:'+path);
  else if(schema?.type==='boolean'&&typeof value!=='boolean')throw new Error('json_boolean:'+path);
  if(Array.isArray(schema?.enum)&&!schema.enum.includes(value))throw new Error('json_enum:'+path);
