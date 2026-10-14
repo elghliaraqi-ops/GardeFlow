@@ -135,16 +135,23 @@ export function qcmSchema(count: number, phases: number[],courseKeys:string[]=[]
   return object({ questions: fixedArray(questionSchema(phases,courseKeys), count) });
 }
 
+// Baseline de niveau pédagogique applicable aux QCM de cours et de cas.
+// Le prompt de génération des fiches reste volontairement inchangé :
+// il a produit la fiche de référence « Hémorroïdes et complications ».
+export const residencyQcmStandard =
+  'NIVEAU RÉSIDANAT STRICT : privilégier les décisions cliniques, radiologiques et opératoires argumentées, les critères discriminants, indications et alternatives selon gravité et terrain, pièges, complications et surveillance. '+
+  'Ni question élémentaire de simple restitution, ni distracteur gratuit. Chaque option A–E est expliquée par un fait effectivement enseigné, avec nuance clinique utile. ';
+
 const prescriptions: Record<GenerationMode, string> = {
   surgical_techniques: surgicalTeachingPolicy+' Retourne uniquement operative_techniques pour enrichir le chapitre 08 existant ; ni cours entier ni QCM.',
   fiche:
     surgicalTeachingPolicy+' Cours de RÉSIDANAT, pas résumé d externat : EXACTEMENT 10 sections. Chaque content contient 650 à 1800 caractères, vise 900 à 1200 caractères avec paragraphes et sous-titres. Chaque section enseigne 4 à 6 key_points précis et expliqués (au plus 240 caractères chacun), non de simples intitulés. Définition, rapports anatomiques/espaces/nerfs, physiopathologie, clinique et gravité, biologie et limites, protocole imagerie/sémiologie/classifications, indications et alternatives, étapes opératoires/repères/pièges, complications et surveillance, synthèse décisionnelle. Expliquer critères, contexte, exceptions et implications chirurgicales. study_core contient 10 à 20 faits enseignés, jamais de simples objectifs. La fiche doit permettre de résoudre les futurs QCM sans notion absente du cours.',
   course_qcms:
-    'Les QCM de niveau résidanat portent EXCLUSIVEMENT sur les faits enseignés dans les chapitres transmis. course_section_key est la clé du chapitre correspondant et teaching_point rappelle le fait expliqué dans ce chapitre. Chaque proposition A–E possède text, correct et explanation. Les distracteurs sont des erreurs ou inversions des faits enseignés, jamais des notions nouvelles. Au moins une réponse correcte par question. Expliquer les cinq propositions et donner global_explanation. category vaut chirurgie, radiologie ou technique_operatoire. phase vaut toujours 1.',
+    residencyQcmStandard+'Les QCM de niveau résidanat portent EXCLUSIVEMENT sur les faits enseignés dans les chapitres transmis. course_section_key est la clé du chapitre correspondant et teaching_point rappelle le fait expliqué dans ce chapitre. Chaque proposition A–E possède text, correct et explanation. Les distracteurs sont des erreurs ou inversions des faits enseignés, jamais des notions nouvelles. Au moins une réponse correcte par question. Expliquer les cinq propositions et donner global_explanation. category vaut chirurgie, radiologie ou technique_operatoire. phase vaut toujours 1.',
   case:
     'Créer un SEUL cas clinique fictif strictement lié au sujet de la fiche, avec EXACTEMENT quatre phases 1, 2, 3, 4 chronologiques : admission, explorations et imagerie, traitement/chirurgie, suites et suivi. Ne pas révéler le diagnostic dans la première phase. difficulty vaut simple/intermediaire/complexe et recommended_qcms vaut 10/15/20, en cohérence avec la difficulté.',
   case_qcms:
-    'Chaque QCM porte exclusivement sur le même patient du cas transmis et les notions expliquées dans le cours. course_section_key rattache la notion au chapitre et teaching_point explique le raisonnement de niveau résidanat. Questions chronologiques : clinique puis examens/radiologie puis diagnostic/traitement puis chirurgie/suivi. Chaque proposition A–E comporte text, correct et explanation, avec une ou plusieurs bonnes réponses, global_explanation et référence si disponible. Ne jamais divulguer les résultats futurs.',
+    residencyQcmStandard+'Chaque QCM porte exclusivement sur le même patient du cas transmis et les notions expliquées dans le cours. course_section_key rattache la notion au chapitre et teaching_point explique le raisonnement de niveau résidanat. Questions chronologiques : clinique puis examens/radiologie puis diagnostic/traitement puis chirurgie/suivi. Chaque proposition A–E comporte text, correct et explanation, avec une ou plusieurs bonnes réponses, global_explanation et référence si disponible. Ne jamais divulguer les résultats futurs.',
 };
 
 export function generationContract(
