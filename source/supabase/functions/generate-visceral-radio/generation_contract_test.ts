@@ -34,8 +34,9 @@ for (const [mode, count, phases] of [
       assert(opts.minItems===5&&opts.maxItems===5,'exactly five options');
       const allowed=field(qs.items,'phase').enum;
       assert(JSON.stringify(allowed)===JSON.stringify([...new Set(phases)]),'phase enum mismatch');
-      const cat=field(qs.items,'category').enum;
-      for (const name of ['chirurgie','radiologie','technique_operatoire']) assert(cat.includes(name),'category missing');
+      const cat=field(qs.items,'category');
+      assert(cat.type==='string'&&!cat.enum,'category is a non-blocking display label');
+      for (const name of ['chirurgie','radiologie','technique_operatoire']) assert(cat.description.includes(name),'category guidance missing');
     }
   });
 }

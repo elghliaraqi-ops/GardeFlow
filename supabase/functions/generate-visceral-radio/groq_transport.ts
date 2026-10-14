@@ -66,10 +66,22 @@ export function clinicalText(value:unknown):string {
  if(object(value))return Object.entries(value).map(([k,v])=>k+': '+clinicalText(v)).join(' ; ');
  return String(value);
 }
+function normalizeShape(schema:any,value:any):any {
+ if(value==null)return value;
+ if(schema.type==='string'&&(object(value)||Array.isArray(value)))return clinicalText(value);
+ if(schema.type==='array'&&Array.isArray(value))return value.map(v=>normalizeShape(schema.items,v));
+ if(schema.type==='object'&&object(value))return Object.fromEntries(Object.entries(schema.properties??{})
+   .filter(([k])=>k in value).map(([k,v])=>[k,normalizeShape(v,value[k])]));
+ return value;
+}
+function label(value:unknown):string {return String(value??'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().trim();}
 export function normalizeResponse(contract:GenerationContract,result:any){
  if(!object(result))return result;
- if(contract.mode==='case'&&(object(result.patient)||Array.isArray(result.patient)))
-   result.patient=clinicalText(result.patient);
+ if(contract.mode==='case'){
+   const difficulty=label(result.difficulty);
+   const aliases:Record<string,string>={intermediate:'intermediaire',intermediaire:'intermediaire',moderate:'intermediaire',complex:'complexe',complexe:'complexe',difficult:'complexe',simple:'simple',easy:'simple'};
+   if(aliases[difficulty])result.difficulty=aliases[difficulty];
+ }
  // Keep the requested prefix of an overproduced batch; validate every retained question.
  // A surplus must not spend another provider request or erase a complete usable batch.
  if((contract.mode==='course_qcms'||contract.mode==='case_qcms')&&
@@ -77,9 +89,19 @@ export function normalizeResponse(contract:GenerationContract,result:any){
    result.questions=result.questions.slice(0,contract.requestedCount);
  const nodes=contract.mode==='fiche'?result.sections:contract.mode==='case'?result.stages:
    (contract.mode==='course_qcms'||contract.mode==='case_qcms')?result.questions:[];
- if(Array.isArray(nodes))for(const node of nodes){
+ if(Array.isArray(nodes))for(const [index,node] of nodes.entries()){
    if(!object(node))continue;
-   if(contract.mode==='course_qcms'||contract.mode==='case_qcms')node.reference=referenceText(node.reference);
+   if(contract.mode==='course_qcms'||contract.mode==='case_qcms'){
+     node.reference=referenceText(node.reference);
+     // Category is only a display label, never a correctness decision.
+     const category=label(node.category);
+     if(/radiolog|imag|scan|irm|tdm/.test(category))node.category='radiologie';
+     else if(/techni|operat/.test(category))node.category='technique_operatoire';
+     else if(/chirurg|surg/.test(category))node.category='chirurgie';
+     if(node.category==null||node.category==='')node.category='non_classe';
+     if(contract.mode==='course_qcms')node.phase=1;
+     else if(contract.phaseSequence)node.phase=contract.phaseSequence[index];
+   }
    if(node.image_requests==null)node.image_requests=[];
    if(Array.isArray(node.image_requests))node.image_requests=node.image_requests.slice(0,1).map((v:any)=>{
      if(!object(v))return v;
@@ -94,10 +116,11 @@ export function normalizeResponse(contract:GenerationContract,result:any){
    });
    if(typeof node.phase==='string'&&/^[1-4]$/.test(node.phase))node.phase=Number(node.phase);
  }
- if((contract.mode==='fiche'||contract.mode==='case')&&result.references==null)result.references=[];
+ if(contract.mode==='fiche'||contract.mode==='case')result.references=
+   result.references==null?[]:(Array.isArray(result.references)?result.references:[result.references]).map(referenceText).filter(Boolean);
  if(contract.mode==='case'&&typeof result.recommended_qcms==='string'&&/^(10|15|20)$/.test(result.recommended_qcms))
    result.recommended_qcms=Number(result.recommended_qcms);
- return result;
+ return normalizeShape(contract.schema,result);
 }
 /** Technical validation only, using the existing contract unchanged. */
 export function validateStructure(schema:any,value:any,path='$'):void{
@@ -110,13 +133,16 @@ export function validateStructure(schema:any,value:any,path='$'):void{
    for(const k of names)if(k in value)validateStructure(schema.properties[k],value[k],path+'.'+k);
  }else if(schema?.type==='array'){
    if(!Array.isArray(value))throw new Error('json_array:'+path);
-   if(typeof schema.minItems==='number'&&value.length<schema.minItems)throw new Error('json_array_short:'+path);
-   if(typeof schema.maxItems==='number'&&value.length>schema.maxItems)throw new Error('json_array_long:'+path);
+   const exactStructure=/\.(questions|options|sections|stages)$/.test(path);
+   const minimum=exactStructure?schema.minItems:(schema.minItems>0?1:0);
+   if(typeof minimum==='number'&&value.length<minimum)throw new Error('json_array_short:'+path);
+   if(exactStructure&&typeof schema.maxItems==='number'&&value.length>schema.maxItems)throw new Error('json_array_long:'+path);
    value.forEach((v:any,i:number)=>validateStructure(schema.items,v,path+'['+i+']'));
  }else if(schema?.type==='string'){
    if(typeof value!=='string')throw new Error('json_string:'+path);
-   if(typeof schema.minLength==='number'&&value.length<schema.minLength)throw new Error('json_text_short:'+path);
-   if(typeof schema.maxLength==='number'&&value.length>schema.maxLength)throw new Error('json_text_long:'+path);
+   // Character targets guide writing; they are not structural validity or medical quality.
+   // Never discard a complete response and spend another quota solely on prose length.
+   if(!value.trim()&&/\.(content|statement|global_explanation|teaching_point|text|explanation|patient|narrative|final_diagnosis|title|name|indications)$/.test(path))throw new Error('json_text_empty:'+path);
  }else if(schema?.type==='integer'&&!Number.isInteger(value))throw new Error('json_integer:'+path);
  else if(schema?.type==='boolean'&&typeof value!=='boolean')throw new Error('json_boolean:'+path);
  if(Array.isArray(schema?.enum)&&!schema.enum.includes(value))throw new Error('json_enum:'+path);
@@ -135,9 +161,22 @@ export function parseJSON(text:unknown){
  try{const value=JSON.parse(raw);if(object(value))return value;}catch(_){}
  throw new Error('groq_invalid_json_response');
 }
-function errorResponse(status:number,body:any,after:string|null){
- if(status===429){const wait=Number(after||0);return Object.assign(new Error('groq_rate_limited'),{
-   retryAfterSeconds:Number.isFinite(wait)&&wait>0?Math.min(3600,Math.ceil(wait)):60});}
+export function quotaInfo(body:any,headers:Headers){
+ const message=String(body?.error?.message??'');
+ const scope=/tokens per day|tokens.*\(TPD\)/i.test(message)?'tokens_per_day':
+   /tokens per minute|tokens.*\(TPM\)/i.test(message)?'tokens_per_minute':
+   /requests per day|requests.*\(RPD\)/i.test(message)?'requests_per_day':
+   /requests per minute|requests.*\(RPM\)/i.test(message)?'requests_per_minute':'unknown';
+ const after=headers.get('retry-after');
+ let seconds=after&&Number.isFinite(Number(after))?Number(after):after?Math.max(0,(Date.parse(after)-Date.now())/1000):NaN;
+ if(!Number.isFinite(seconds)){
+   const retry=message.match(/try again in\s+([0-9.hms\s]+)/i)?.[1];
+   if(retry){seconds=0;for(const m of retry.matchAll(/(\d+(?:\.\d+)?)\s*(h|m|s)/g))seconds+=Number(m[1])*({h:3600,m:60,s:1}[m[2]]??1);}
+ }
+ return {retryAfterSeconds:Number.isFinite(seconds)&&seconds>0?Math.min(86400,Math.ceil(seconds)):null,quotaScope:scope};
+}
+function errorResponse(status:number,body:any,headers:Headers){
+ if(status===429)return Object.assign(new Error('groq_rate_limited'),quotaInfo(body,headers));
  if(status===413)return new Error('groq_request_too_large');
  const code=String(body?.error?.code||body?.error?.type||'unknown_error').slice(0,90);
  return new Error('groq_http_'+status+':'+code);
@@ -176,12 +215,15 @@ export async function generateJson(
          console.warn('visceral_json_recovery',{mode:contract.mode,reason:'provider_json_400'});
          continue;
        }
-       throw errorResponse(response.status,data,response.headers.get('retry-after'));
+       if(response.status===429)console.warn('visceral_groq_quota',{mode:contract.mode,...quotaInfo(data,response.headers)});
+       throw errorResponse(response.status,data,response.headers);
      }
      try{
        if(data?.choices?.[0]?.finish_reason==='length')throw new Error('groq_output_token_limit');
        const parsed=normalizeResponse(contract,parseJSON(data?.choices?.[0]?.message?.content));
        validateStructure(contract.schema,parsed);
+       if(Array.isArray(parsed.questions)&&parsed.questions.some((q:any)=>!q.options.some((o:any)=>o.correct===true)))
+         throw new Error('json_no_correct_option');
        return parsed;
      }catch(e){
        failureReason=String((e as Error).message).slice(0,130);

@@ -250,8 +250,11 @@ Deno.serve(async(req)=>{
     const msg=str((e as Error).message,260);
     console.error('visceral_radio_error',{error:msg});
     if(msg==='groq_rate_limited'){
-      const seconds=(e as Error & {retryAfterSeconds?:number}).retryAfterSeconds ?? 60;
-      return answer({error:'groq_rate_limited',detail:'Quota Groq temporairement atteint : les QCM existants restent conservés.',retry_after_seconds:seconds},429);
+      const quota=e as Error & {retryAfterSeconds?:number|null;quotaScope?:string};
+      const detail=quota.retryAfterSeconds
+        ?'Quota Groq atteint. Réessayez dans '+quota.retryAfterSeconds+' secondes. Le contenu existant est conservé.'
+        :'Quota Groq atteint. Le fournisseur ne précise pas le délai de reprise. Le contenu existant est conservé.';
+      return answer({error:'groq_rate_limited',detail,retry_after_seconds:quota.retryAfterSeconds??null,quota_scope:quota.quotaScope??'unknown'},429);
     }
     return answer({error:'generation_failed',detail:msg},502);
   }
