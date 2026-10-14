@@ -206,7 +206,7 @@ export function generationContract(
       case_qcms: 'visceral_radio_progressive_questions',
     })[mode],
     schema,
-    outputInstructions: mode==='surgical_techniques' ? instruction.split('CONTRAT DES IMAGES')[0]+'Tous les objets renseignent les champs required du schéma ; aucune clé supplémentaire.' : instruction,
+    outputInstructions: mode==='surgical_techniques' ? instruction.split('image_requests (transport compact)')[0]+'Tous les objets renseignent les champs required du schéma ; aucune clé supplémentaire.' : instruction,
     requestedCount: count,
   };
 }
