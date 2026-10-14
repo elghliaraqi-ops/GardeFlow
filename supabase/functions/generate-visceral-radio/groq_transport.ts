@@ -44,6 +44,11 @@ export function referenceText(value:unknown):string {
 }
 export function normalizeResponse(contract:GenerationContract,result:any){
  if(!object(result))return result;
+ // Keep the requested prefix of an overproduced batch; validate every retained question.
+ // A surplus must not spend another provider request or erase a complete usable batch.
+ if((contract.mode==='course_qcms'||contract.mode==='case_qcms')&&
+    contract.requestedCount&&Array.isArray(result.questions)&&result.questions.length>contract.requestedCount)
+   result.questions=result.questions.slice(0,contract.requestedCount);
  const nodes=contract.mode==='fiche'?result.sections:contract.mode==='case'?result.stages:
    (contract.mode==='course_qcms'||contract.mode==='case_qcms')?result.questions:[];
  if(Array.isArray(nodes))for(const node of nodes){
