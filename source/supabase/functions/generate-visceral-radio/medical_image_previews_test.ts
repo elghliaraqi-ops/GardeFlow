@@ -1,5 +1,5 @@
 import { allowedAsset, imageIsTopical, imageSearchTerms, imageSearchVariants, legacyImageRequest,
-  rasterImageUrls, articleSearchVariants, articleFigureSnippets, articleFigureRelevant, pmcFigureAssets, pmcAssetForFigure, openGraphImageFromHtml, probeMedicalFigure, parseGoogleImageResults, googleMedicalCacheKey, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
+  rasterImageUrls, articleSearchVariants, articleFigureSnippets, articleFigureRelevant, pmcFigureAssets, pmcAssetForFigure, openGraphImageFromHtml, probeMedicalFigure, resolveMedicalPreviews, type ImagePreview } from './medical_image_previews.ts';
 
 function assert(value: unknown, reason: string) {
   if (!value) throw new Error(reason);
@@ -313,45 +313,15 @@ Deno.test('nodal DWI search finds article figure on second free query and preser
   }finally{globalThis.fetch=native;}
 });
 
-Deno.test('Google Images thumbnails are accepted only from narrow known hosts',()=>{
-  const google='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjK08_example123';
-  if(!allowedAsset(google))throw Error('gstatic thumbnail blocked');
-  if(!allowedAsset('https://serpapi.com/searches/1234567890/images/abcde12345.jpg'))
-    throw Error('SerpApi image thumbnail blocked');
-  if(allowedAsset('https://encrypted-tbn0.gstatic.com/unsafe/path?q=tbn:ANd9GcRjK08_example123'))
-    throw Error('arbitrary gstatic path accepted');
-  if(allowedAsset('https://serpapi.com/search.json?api_key=private'))
-    throw Error('backend API endpoint accepted as asset');
-});
-Deno.test('Google search images preserve source and do not silently grant a copyright license',()=>{
-  const valid='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjK08_example123';
-  const items=parseGoogleImageResults({images_results:[
-    {title:'Rectal cancer T2 MRI',thumbnail:valid,
-      original:'https://example.invalid/unsafe.jpg',link:'https://radiopaedia.org/articles/rectal-cancer',source:'Radiopaedia'},
-    {title:'Fake image',thumbnail:'http://localhost/internal.png',link:'http://localhost/'}
-  ]});
-  if(items.length!==1||items[0].full!==valid)throw Error('invalid Google image mapping');
-  if(items[0].provider!=='Google Images'||!items[0].license.includes('Droits à vérifier'))
-    throw Error('Google Images must not imply a reuse license');
-  const request=legacyImageRequest({query:'Rectal cancer T2 MRI',image_type:'radiology_scan',
-    anatomy:'rectum',modality:'MRI',purpose:'Rectal cancer T2 MRI'});
-  if(!imageIsTopical(items[0],request))throw Error('appropriate medical Google thumbnail rejected');
-  if(imageIsTopical({...items[0],title:'Book cover annual report',description:'Annual report'},request))
-    throw Error('Google results must still reject unrelated reports');
+Deno.test('paid image search thumbnails are refused',()=>{
+ assert(!allowedAsset('https://serpapi.com/searches/1234567890/images/abcde12345.jpg'), 'paid search images should be blocked');
+ assert(!allowedAsset('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRjK08_example123'), 'generic Google thumbnails should be blocked');
 });
 
-Deno.test('SerpApi paid search key is canonical across equivalent medical prompts',()=>{
- const first=googleMedicalCacheKey({query:'Rectal cancer T2 MRI',modality:'IRM T2',
-   image_type:'radiology_scan',anatomy:'rectum',purpose:'Illustrate the tumor'});
- const second=googleMedicalCacheKey({query:'Rectal cancer T2 MRI',modality:'IRM T2',
-   image_type:'radiology_scan',anatomy:'rectum',purpose:'Describe the tumor'});
- if(!first || first!==second)throw Error('Identical medical search must share cached Google results');
-});
-Deno.test('free medical image endpoint must not trigger SerpApi calls',()=>{
+Deno.test('medical image resolver does not call paid search providers',()=>{
  const source=resolveMedicalPreviews.toString();
- // The only paid call belongs to the explicit resolveGoogleMedicalImages handler.
  if(/googleImagesProvider\s*\(/.test(source))
-   throw Error('SerpApi invoked by automatic/free image endpoint');
+   throw Error('paid search was used in the automatic resolver');
 });
 
 
@@ -421,6 +391,25 @@ Deno.test('all-specialty fallback uses free catalogues only after PubMed yields 
     assert(firstCatalog>0,'catalogue search happens only after PubMed lookup');
     assert(calls.slice(0,firstCatalog).some(x=>x.includes('/rest/search?')),
       'PubMed search must run first');
-    assert(!calls.some(x=>x.includes('serpapi.com')),'paid search must remain manual');
+    assert(!calls.some(x=>x.includes('serpapi.com')),'paid search must never execute');
   }finally{globalThis.fetch=old;}
+});
+
+Deno.test('biliary CT images match the requested organ and exclude unrelated scans',()=>{
+ const request=legacyImageRequest({
+  query:'Common bile duct dilation on abdominal CT',
+  anatomy:'biliary',modality:'CT',purpose:'show bile duct dilatation',
+  image_type:'radiology_scan',required_features:['bile duct'],
+ });
+ const source='https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Rectum_anatomy.jpg';
+ const item:ImagePreview={
+  thumbnail:source,full:source,
+  source:'https://commons.wikimedia.org/wiki/File:Rectum_anatomy.jpg',
+  title:'Dilated common bile duct on axial CT scan',
+  description:'CT scan with dilated CBD and intrahepatic bile duct',
+  provider:'Wikimedia Commons',creator:'',license:'CC BY 4.0',
+ };
+ assert(imageIsTopical(item,request),'relevant biliary CT should be accepted');
+ assert(!imageIsTopical({...item,title:'Spine fracture',description:'Axial CT scan of lumbar spine'},request),
+  'unrelated CT image should be rejected');
 });

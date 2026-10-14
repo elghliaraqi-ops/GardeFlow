@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import '../config/backend_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/supabase_backend_service.dart';
-import '../services/practice_google_image_cache.dart';
 import 'practice_daily_visual_theme.dart';
 
 /// Renders historic and new Groq course prose without modifying stored JSON.
@@ -95,11 +94,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
   // Image bytes stay only in this widget's RAM. Flutter Web's Image.network
   // cannot reliably send Authorization to the private Supabase GET endpoint.
   final Map<String,Future<Uint8List?>> _imageFutures={};
-  List<Map<String,dynamic>> images=[], sources=[], articles=[], googleImages=[];
-  String googleKey='';
-  bool googleCached=false,googleEnabled=false,searchingGoogle=false;
-  String? googleMessage;
-  int localGoogleCount=0;
+  List<Map<String,dynamic>> images=[], sources=[], articles=[];
   List<Map<String,dynamic>> get visibleImages {
     // A figure resolved from a peer-reviewed article belongs in the zoomable
     // gallery as well as in its article card. Preserve the source article link.
@@ -114,7 +109,7 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         'provider':a['provider']??'PubMed Central',
       });
     final known=<String>{};
-    return [...images,...articleFigures,...googleImages].where((x){
+    return [...images,...articleFigures].where((x){
       final url=(x['full']??x['thumbnail']??'').toString();
       return url.startsWith('https://')&&known.add(url);
     }).take(12).toList();
@@ -143,11 +138,9 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         articles=rows(cached['article_previews']);
         busy=false;message=null;
       });
-      await _restoreGoogle(cached,n);
       return;
     }
-    setState((){busy=true;message=null;images=[];sources=[];articles=[];
-      googleImages=[];googleCached=false;googleKey='';googleEnabled=false;googleMessage=null;});
+    setState((){busy=true;message=null;images=[];sources=[];articles=[];});
     try {
       final response=await SupabaseBackendService.instance.client.functions.invoke(
         'generate-visceral-radio',
@@ -175,76 +168,10 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
         sources=rows(result['medical_searches']);
         articles=rows(result['article_previews']);
       });
-      await _restoreGoogle(result,n);
     }catch(_){
       if(mounted&&generation==n)setState(()=>message='Recherche temporairement indisponible.');
     }finally{
       if(mounted&&generation==n)setState(()=>busy=false);
-    }
-  }
-  String get _userId => SupabaseBackendService.instance.client.auth.currentUser?.id??'';
-  Future<void> _restoreGoogle(Map<String,dynamic> result,int requestNumber)async {
-    final key=(result['google_cache_key']??'').toString();
-    final enabled=result['google_images_available']==true;
-    final user=_userId;
-    List<Map<String,dynamic>>? existing;
-    var count=0;
-    try{
-      if(user.isNotEmpty&&key.isNotEmpty){
-        existing=await PracticeGoogleImageCache.read(userId:user,googleKey:key);
-        count=await PracticeGoogleImageCache.localCount(user);
-      }
-    }catch(_){/* Cache unavailable => explicit button still possible with warning. */}
-    if(!mounted||generation!=requestNumber)return;
-    setState((){
-      googleKey=key;googleEnabled=enabled;
-      localGoogleCount=count;
-      googleCached=existing!=null;
-      googleImages=existing??[];
-      googleMessage=existing!=null&&existing.isEmpty
-        ?'Aucune image Google trouvée. Nouvel essai possible après 2 heures.'
-        :null;
-    });
-  }
-  Future<void> _searchGoogle()async{
-    if(searchingGoogle||googleCached||!googleEnabled||googleKey.isEmpty)return;
-    final user=_userId;
-    if(user.isEmpty)return;
-    setState((){searchingGoogle=true;googleMessage=null;});
-    try{
-      final count=await PracticeGoogleImageCache.localCount(user);
-      if(count>=PracticeGoogleImageCache.maxPerDeviceMonth){
-        if(mounted)setState(()=>googleMessage='Limite de prudence atteinte (240 recherches déclenchées sur cet appareil ce mois-ci).');
-        return;
-      }
-      // Count BEFORE making the network request to conservatively protect quota.
-      await PracticeGoogleImageCache.countAttempt(user);
-      final response=await SupabaseBackendService.instance.client.functions.invoke(
-        'generate-visceral-radio',
-        body:{'action':'google_images','image_request':widget.imageRequest.isNotEmpty
-          ?widget.imageRequest:{'query':widget.query,'modality':widget.modality,'purpose':widget.caption}},
-      );
-      final result=response.data is Map
-        ?Map<String,dynamic>.from(response.data as Map):<String,dynamic>{};
-      if(result['error']!=null||result['google_enabled']!=true||result['search_executed']!=true){
-        throw StateError('Recherche Google indisponible');
-      }
-      final list=rows(result['images']).where((x)=>
-        (x['thumbnail']??'').toString().startsWith('https://')).take(8).toList();
-      await PracticeGoogleImageCache.write(
-        userId:user,googleKey:googleKey,images:list);
-      if(!mounted)return;
-      setState((){
-        googleImages=list;googleCached=true;
-        localGoogleCount=count+1;
-        googleMessage=list.isEmpty
-          ?'Aucune image Google adaptée trouvée ; nouvel essai possible après 2 heures.'
-          :'Résultats Google récupérés et mémorisés 30 jours sur cet appareil.';
-      });
-    }catch(_){
-      if(mounted)setState(()=>googleMessage='Recherche Google indisponible ; vérifiez votre connexion. Aucun nouvel essai automatique.');
-    }finally{
-      if(mounted)setState(()=>searchingGoogle=false);
     }
   }
   Future<Uint8List?> _fetchImageBytes(String external)async{
@@ -337,61 +264,60 @@ class _VisceralMedicalGalleryState extends State<VisceralMedicalGallery> {
       ],
       if(visibleImages.isNotEmpty)...[
         const SizedBox(height:12),
-        SizedBox(height:190,child:ListView.separated(
-          scrollDirection:Axis.horizontal,itemCount:visibleImages.length,
-          separatorBuilder:(_,__)=>const SizedBox(width:10),
-          itemBuilder:(context,i){
-            final item=visibleImages[i];
-            return Semantics(button:true,label:'Agrandir l’image '+(i+1).toString(),
-              child:InkWell(onTap:()=>_zoom(item),borderRadius:BorderRadius.circular(12),
-                child:SizedBox(width:210,child:Column(children:[
-                  Expanded(child:Stack(fit:StackFit.expand,children:[
-                    ClipRRect(borderRadius:BorderRadius.circular(12),
-                      child:_imagePreview((item['thumbnail']??'').toString())),
-                    Positioned(top:6,right:6,child:Container(
-                      padding:const EdgeInsets.all(5),
-                      decoration:BoxDecoration(color:Colors.black87,borderRadius:BorderRadius.circular(8)),
-                      child:const Icon(Icons.zoom_in_rounded,color:Colors.white,size:20))),
-                  ])),
-                  const SizedBox(height:7),
-                  Align(alignment:Alignment.centerLeft,child:Text(
-                    (item['title']??'Image médicale').toString(),maxLines:1,
-                    overflow:TextOverflow.ellipsis,
+        ...visibleImages.take(4).map((item){
+          final title=(item['title']??'Figure médicale').toString();
+          final caption=(item['description']??'').toString();
+          final provider=(item['provider']??'Source médicale').toString();
+          final source=(item['source']??'').toString();
+          return Container(
+            margin:const EdgeInsets.only(bottom:13),
+            decoration:BoxDecoration(
+              color:PracticeDailyVisualTheme.elevated.withValues(alpha:.72),
+              border:Border.all(color:PracticeDailyVisualTheme.border),
+              borderRadius:BorderRadius.circular(17)),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              InkWell(
+                onTap:()=>_zoom(item),
+                borderRadius:const BorderRadius.vertical(top:Radius.circular(17)),
+                child:Stack(children:[
+                  SizedBox(height:240,width:double.infinity,
+                    child:ClipRRect(
+                      borderRadius:const BorderRadius.vertical(top:Radius.circular(17)),
+                      child:_imagePreview((item['thumbnail']??'').toString()))),
+                  Positioned(right:10,top:10,child:Container(
+                    padding:const EdgeInsets.symmetric(horizontal:9,vertical:6),
+                    decoration:BoxDecoration(color:Colors.black87,
+                      borderRadius:BorderRadius.circular(20)),
+                    child:const Row(mainAxisSize:MainAxisSize.min,children:[
+                      Icon(Icons.zoom_in_rounded,color:Colors.white,size:17),
+                      SizedBox(width:4),
+                      Text('Agrandir',style:TextStyle(color:Colors.white,fontSize:11)),
+                    ]))),
+                ]),
+              ),
+              Padding(padding:const EdgeInsets.fromLTRB(13,11,13,10),child:Column(
+                crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  Text(provider.toUpperCase(),style:const TextStyle(
+                    color:PracticeDailyVisualTheme.mint,fontSize:10,
+                    fontWeight:FontWeight.w800,letterSpacing:.6)),
+                  const SizedBox(height:6),
+                  Text(title,maxLines:3,overflow:TextOverflow.ellipsis,
                     style:const TextStyle(color:PracticeDailyVisualTheme.text,
-                      fontWeight:FontWeight.w700,fontSize:11))),
-                  Align(alignment:Alignment.centerLeft,child:Text(
-                    (item['provider']??'Source externe').toString()+' · '+
-                      (item['license']??'').toString(),maxLines:1,
-                    overflow:TextOverflow.ellipsis,style:const TextStyle(
-                      color:PracticeDailyVisualTheme.muted,fontSize:10))),
-                ]))),
-              );
-          },
-        )),
-      ],
-      if(googleKey.isNotEmpty)...[
-        const SizedBox(height:10),
-        if(googleImages.isNotEmpty)
-          const Text('Google Images — résultats en cache local',
-            style:TextStyle(color:PracticeDailyVisualTheme.mint,fontSize:11,
-              fontWeight:FontWeight.w700)),
-        if(!googleCached&&googleEnabled)
-          OutlinedButton.icon(
-            onPressed:searchingGoogle?null:_searchGoogle,
-            icon:searchingGoogle
-              ?const SizedBox(width:15,height:15,child:CircularProgressIndicator(strokeWidth:2))
-              :const Icon(Icons.search_rounded,size:17),
-            label:Text(searchingGoogle
-              ?'Recherche Google en cours…'
-              :'Rechercher avec Google (1 crédit SerpApi maximum)')),
-        if(googleCached&&googleImages.isNotEmpty)
-          const Text('Recherche déjà effectuée : aucune nouvelle requête SerpApi.',
-            style:TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:11)),
-        if(googleMessage!=null)
-          Text(googleMessage!,style:const TextStyle(
-            color:PracticeDailyVisualTheme.muted,fontSize:11)),
-        Text('Quota prudent local : $localGoogleCount/240 recherches déclenchées ce mois-ci (cet appareil uniquement).',
-          style:const TextStyle(color:PracticeDailyVisualTheme.muted,fontSize:10)),
+                      fontWeight:FontWeight.w800,fontSize:14,height:1.3)),
+                  if(caption.isNotEmpty&&caption!=title)...[
+                    const SizedBox(height:7),
+                    Text(caption,maxLines:3,overflow:TextOverflow.ellipsis,
+                      style:const TextStyle(color:PracticeDailyVisualTheme.muted,
+                        fontSize:12,height:1.35)),
+                  ],
+                  Align(alignment:Alignment.centerRight,child:TextButton.icon(
+                    onPressed:source.startsWith('https://')?()=>_external(source):null,
+                    icon:const Icon(Icons.open_in_new_rounded,size:15),
+                    label:const Text('Voir la figure et l’article source'))),
+                ])),
+            ]),
+          );
+        }),
       ],
       if(articles.isNotEmpty)...[
         const SizedBox(height:12),
