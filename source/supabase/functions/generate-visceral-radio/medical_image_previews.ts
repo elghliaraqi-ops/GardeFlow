@@ -56,10 +56,7 @@ const clinicalHosts=new Set([
  'i0.wp.com','i1.wp.com','i2.wp.com','i3.wp.com',
  'images.pexels.com','images.unsplash.com',
  'pmc.ncbi.nlm.nih.gov',
- 'encrypted-tbn0.gstatic.com','encrypted-tbn1.gstatic.com',
- 'encrypted-tbn2.gstatic.com','encrypted-tbn3.gstatic.com',
- 'encrypted-tbn4.gstatic.com',
- 'serpapi.com','europepmc.org',
+ 'europepmc.org',
 ]);
 const openversePreviewPath=/^\/v1\/images\/[a-f\d-]{36}\/thumb\/?$/i;
 export function allowedAsset(raw: string) {
@@ -70,18 +67,6 @@ export function allowedAsset(raw: string) {
     if(!clinicalHosts.has(uri.hostname.toLowerCase()))return false;
     if(uri.pathname.length>1100 || /%2e|%2f|%5c/i.test(raw))return false;
     if(uri.searchParams.has('download'))return false;
-    // SerpApi results may use its thumbnail CDN instead of gstatic.
-    if(uri.hostname==='serpapi.com'){
-      return /^\/searches\/[A-Za-z0-9_-]{5,120}\/images\/[A-Za-z0-9_.-]{5,250}$/.test(uri.pathname) &&
-        uri.search==='';
-    }
-    // Google thumbnails are served from a very narrow image-only endpoint.
-    // Never proxy arbitrary Google, search or user-controlled URL hosts.
-    if(/^encrypted-tbn[0-4]\.gstatic\.com$/.test(uri.hostname)){
-      return uri.pathname==='/images' &&
-        [...uri.searchParams.keys()].every(k=>k==='q') &&
-        /^tbn:[A-Za-z0-9_-]{8,300}$/.test(uri.searchParams.get('q')||'');
-    }
     if(uri.hostname==='api.openverse.org'){
       // Only the documented image-thumbnail endpoint, never arbitrary API paths.
       return openversePreviewPath.test(uri.pathname) &&
@@ -171,7 +156,7 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
   if(!/^https:\/\//i.test(image.source))return false;
   // Openverse only indexes openly licensed media, including attribution,
   // share-alike and non-commercial licenses. Keep creator/source attribution.
-  if(!['Google Images','The Radiology Assistant'].includes(image.provider) &&
+  if(image.provider!=='The Radiology Assistant' &&
      !/(Open access|CC\s?BY|CC0|CC-BY|PUBLIC DOMAIN|PDM|PD-|BY-SA|GFDL)/i.test(image.license)
      && !['by','by-sa','by-nc','by-nc-sa','by-nd','by-nc-nd','cc0','pdm']
        .includes(image.license.toLowerCase()))return false;
@@ -218,7 +203,6 @@ export function imageIsTopical(image:ImagePreview,request:MedicalImageRequest){
 function pages(query:string){
   return [
     {title:'The Radiology Assistant',source:'https://radiologyassistant.nl/search?'+new URLSearchParams({q:query})},
-    {title:'Google Images',source:'https://www.google.com/search?'+new URLSearchParams({tbm:'isch',q:query})},
     {title:'Radiopaedia',source:'https://radiopaedia.org/search?'+new URLSearchParams({q:query})},
     {title:'Eurorad',source:'https://www.eurorad.org/search?'+new URLSearchParams({keys:query})},
     {title:'Europe PMC',source:'https://europepmc.org/search?'+new URLSearchParams({query:query+' AND OPEN_ACCESS:y'})},
@@ -726,95 +710,6 @@ async function articleSourcePreviews(request:MedicalImageRequest,query:string,al
   return {articles,figures};
 }
 
-/**
- * Google Images is accessed via an authorized SERP API when configured, never
- * by scraping Google HTML. SERPAPI_KEY remains a backend-only Supabase secret.
- * Without a key, the Google Images search link still works in the UI.
- *
- * A Google result is a link to a third-party work, NOT permission to reuse it.
- * The app does not persist the image, and displays source and rights notice.
- */
-export function parseGoogleImageResults(data:any):ImagePreview[]{
-  const out:ImagePreview[]=[];
-  for(const value of (Array.isArray(data?.images_results)?data.images_results:[]).slice(0,12)){
-    const thumb=String(value?.thumbnail||'');
-    const original=String(value?.original||'');
-    const page=String(value?.link||'');
-    const title=clean(value?.title,180);
-    if(!allowedAsset(thumb)||!title)continue;
-    try{
-      const u=new URL(page);
-      if(u.protocol!=='https:'||u.username||u.password||u.port||!u.hostname.includes('.'))continue;
-      if(/^localhost$|\.local$|^127\.|^10\.|^192\.168\./.test(u.hostname))continue;
-    }catch(_){continue;}
-    out.push({
-      thumbnail:thumb,full:allowedAsset(original)?original:thumb,
-      source:page,title,description:clean(value?.title+' '+(value?.source||''),300),
-      license:'Droits à vérifier sur le site source',creator:'',provider:'Google Images',
-    });
-  }
-  return out;
-}
-async function googleImagesProvider(query:string):Promise<ImagePreview[]>{
-  const key=Deno.env.get('SERPAPI_KEY');
-  if(!key)return[];
-  try{
-    const url='https://serpapi.com/search.json?'+new URLSearchParams({
-      engine:'google_images',q:query,api_key:key,
-    });
-    const response=await fetch(url,{
-      headers:{Accept:'application/json'},signal:AbortSignal.timeout(9000)
-    });
-    if(!response.ok)return[];
-    return parseGoogleImageResults(await response.json());
-  }catch(_){return[];}
-}
-
-/**
- * SerpApi has a paid quota. Google is NEVER called in resolveMedicalPreviews;
- * explicit google_images user action is mandatory. The Flutter client keeps
- * a persistent per-device metadata cache, and this warm-instance memo also
- * deduplicates near-simultaneous requests without storing image bytes.
- */
-export function googleMedicalCacheKey(input:any):string{
-  const request=legacyImageRequest(input);
-  return (request.image_type+'|'+imageSearchTerms(request)).toLowerCase()
-    .replace(/\s+/g,' ').trim().slice(0,240);
-}
-const paidGoogleMemo=new Map<string,{until:number;value:Promise<ImagePreview[]>}>();
-export async function resolveGoogleMedicalImages(input:any){
-  const request=legacyImageRequest(input);
-  const key=googleMedicalCacheKey(input);
-  if(!Deno.env.get('SERPAPI_KEY'))return {
-    images:[],google_cache_key:key,google_enabled:false,search_executed:false
-  };
-  const now=Date.now();
-  let cached=paidGoogleMemo.get(key);
-  if(!cached||cached.until<=now){
-    const promise=googleImagesProvider(imageSearchTerms(request))
-      .then(data=>data.filter(image=>imageIsTopical(image,request)).slice(0,8));
-    // Empty responses are cached for 2 hours; successful responses for 7 days.
-    cached={until:now+2*60*60*1000,value:promise};
-    paidGoogleMemo.set(key,cached);
-    void promise.then(images=>{
-      const current=paidGoogleMemo.get(key);
-      if(current?.value===promise)
-        current.until=Date.now()+(images.length?7*24*60*60*1000:2*60*60*1000);
-    }).catch(()=>{if(paidGoogleMemo.get(key)?.value===promise)paidGoogleMemo.delete(key);});
-    if(paidGoogleMemo.size>150){
-      const first=paidGoogleMemo.keys().next().value;
-      if(first)paidGoogleMemo.delete(first);
-    }
-  }
-  const images=await cached.value;
-  return {
-    images,
-    google_cache_key:key,
-    google_enabled:Boolean(Deno.env.get('SERPAPI_KEY')),
-    search_executed:true,
-  };
-}
-
 export function radiologyFigureMatches(image:ImagePreview,request:MedicalImageRequest):boolean{
  const caption=ascii(image.description),modality=ascii(request.modality+' '+request.query);
  if(request.image_type==='radiology_scan'){
@@ -828,6 +723,34 @@ export function radiologyFigureMatches(image:ImagePreview,request:MedicalImageRe
  }
  return imageIsTopical({...image,title:''},request);
 }
+/** Prefer caption-matched clinical or course figures, without storing images. */
+export function imageRelevanceScore(image:ImagePreview,request:MedicalImageRequest):number{
+ const caption=ascii(image.description),title=ascii(image.title);
+ const organ=medicalOrganTerm(request.anatomy);
+ const aliases:Record<string,string[]>={
+   biliary:['biliary','bile duct','common bile duct','cholangi','choleduc'],
+   brain:['brain','cerebral','cranial','intracranial'],
+   liver:['liver','hepatic','hepatobiliary'],
+   kidney:['kidney','renal','ureter','urinary'],
+   pancreas:['pancreas','pancreatic'],
+   lung:['lung','pulmonary','thoracic'],
+ };
+ let rank=image.provider==='PubMed Central'?6:image.provider==='The Radiology Assistant'?5:1;
+ if((aliases[organ]||[organ]).some(w=>w.length>3&&(caption+' '+title).includes(w)))rank+=5;
+ for(const word of terms(request.query+' '+request.purpose).filter(w=>w.length>=5).slice(0,8))
+   if(caption.includes(word))rank+=2;
+ if(request.image_type==='radiology_scan'){
+   const modality=medicalModalityTerm(request);
+   if(modality==='CT imaging'&&/(computed tomograph|ct scan|\bct\b)/.test(caption))rank+=4;
+   if(modality==='MRI'&&/(mri|magnetic resonance|mr imaging)/.test(caption))rank+=4;
+   if(modality==='diffusion MRI'&&/(diffus|dwi|adc)/.test(caption))rank+=6;
+   if(['axial','sagittal','coronal'].includes(request.plane)&&caption.includes(request.plane))rank+=3;
+ }
+ for(const f of request.required_features||[]){
+   if(terms(f).slice(0,3).some(w=>caption.includes(w)))rank+=3;
+ }
+ return rank;
+}
 export async function resolveMedicalPreviews(input:any){
   const request=legacyImageRequest(input);
   const queries=imageSearchVariants(request);
@@ -836,7 +759,7 @@ export async function resolveMedicalPreviews(input:any){
   const radiologyImages=request.allow_source_illustrations===false?[]:radiologyArticles.flatMap(a=>radiologyFigures(a.html,a.source).map(f=>({thumbnail:f.thumbnail,full:f.full,source:a.source,title:a.title,creator:'The Radiology Assistant',license:'Droits réservés — aperçu externe ; consulter la source',provider:'The Radiology Assistant',description:f.caption}))).filter(x=>radiologyFigureMatches(x,request));
   const articleResults:Awaited<ReturnType<typeof articleSourcePreviews>>[]=[];
   // FALLBACK: open-access PubMed Central articles and their real, caption-
-  // matched CDN figures. Do not spend Google/SerpApi credits automatically.
+  // matched CDN figures. Do not spend paid search services.
   if(radiologyImages.length<2&&request.allow_page_preview!==false&&articleQueries.length){
     const first=await articleSourcePreviews(request,articleQueries[0]);
     articleResults.push(first);
@@ -889,7 +812,7 @@ export async function resolveMedicalPreviews(input:any){
     if(!url||seen.has(url))return false;
     seen.add(url);
     return true;
-  }).slice(0,8);
+  }).sort((a,b)=>imageRelevanceScore(b,request)-imageRelevanceScore(a,request)).slice(0,8);
   console.info('medical_image_result',JSON.stringify({
     type:request.image_type,primary:'radiology_assistant',
     articleQueries:articleResults.length,queries:queries.length,
@@ -898,8 +821,7 @@ export async function resolveMedicalPreviews(input:any){
   return {
     images,article_previews:articles.slice(0,ARTICLE_LIMIT),
     medical_searches:pages(articleQueries[0]||queries[0]||request.query),
-    image_request:request,google_images_available:Boolean(Deno.env.get('SERPAPI_KEY')),
-    google_cache_key:googleMedicalCacheKey(input),
+    image_request:request,
     image_sources_searched:[...radiologyArticles.map(a=>a.source),...articleQueries.slice(0,articleResults.length),...queries],
     unavailable_reason:images.length===0&&articles.length===0?'no_matching_accessible_images':null,
   };
