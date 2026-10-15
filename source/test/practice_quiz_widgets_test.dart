@@ -57,6 +57,54 @@ void main() {
     },
   );
   testWidgets(
+    'radiology uses the clinical quiz visual layout without correctness scoring',
+    (tester) async {
+      final selections = <int>{};
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StatefulBuilder(
+                builder: (context, setState) => PracticeQuizCard(
+                  index: 1,
+                  total: 48,
+                  headerLabel: 'QUESTION',
+                  topic: 'QCM · Radiologie',
+                  question: 'Quels signes sont observés sur cette TDM ?',
+                  afterQuestion: const Text(
+                    'DÉFINITION ET CRITÈRES RADIOLOGIQUES',
+                  ),
+                  options: [
+                    for (var i = 0; i < 3; i++)
+                      PracticeQuizOption(
+                        index: i,
+                        label: 'Signe radiologique ' + (i + 1).toString(),
+                        selected: selections.contains(i),
+                        showCorrection: false,
+                        isCorrect: false,
+                        onTap: () => setState(() {
+                          if (!selections.add(i)) selections.remove(i);
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('QUESTION 2 / 48'), findsOneWidget);
+      expect(find.text('DÉFINITION ET CRITÈRES RADIOLOGIQUES'), findsOneWidget);
+      expect(find.text('Signe radiologique 2'), findsOneWidget);
+      await tester.ensureVisible(find.text('Signe radiologique 2'));
+      await tester.tap(find.text('Signe radiologique 2'));
+      await tester.pumpAndSettle();
+      expect(selections, {1});
+      expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
+    },
+  );
+
+  testWidgets(
     'shared navigation respects disabled future transition and fits long batches on mobile',
     (tester) async {
       tester.view.physicalSize = const Size(320, 800);
