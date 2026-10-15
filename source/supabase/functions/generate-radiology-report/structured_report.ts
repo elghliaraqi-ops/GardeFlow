@@ -62,8 +62,13 @@ export function structuredReport(
   // idiomatic global statement instead of repetitive "X : absent" lines.
   const mucosa = questions.filter(q => q.section === 'Sinus' &&
     /(maxillaire|frontal|ethmoïdal|sphénoïdal)/i.test(q.title));
+  const liquid = questions.find(q => q.section === 'Sinus' &&
+    /niveau hydro.aérique/i.test(q.title));
+  // A fluid level invalidates a broad "all sinuses correctly aerated" claim,
+  // even when the four isolated mucosal-thickening checks are negative.
   const groupedMucosa = sinus && mucosa.length === 4 &&
-    mucosa.every(q => okNegative(q, answers));
+    mucosa.every(q => okNegative(q, answers)) &&
+    (!liquid || okNegative(liquid, answers));
   const risk = questions.filter(q => q.section === 'Variantes à risque chirurgical');
   const groupedRisk = sinus && risk.length >= 4 && risk.every(q => okNegative(q, answers));
   let mucosaWritten = false;
