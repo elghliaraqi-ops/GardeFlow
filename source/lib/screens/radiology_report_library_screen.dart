@@ -46,7 +46,7 @@ class _RadiologyReportLibraryScreenState
   }
 
   Future<void> _search({bool append = false}) async {
-    if (_loading) return;
+    if (_loading && append) return;
     final serial = ++_generation;
     setState(() { _loading = true; _error = ''; });
     try {
