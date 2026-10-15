@@ -71,6 +71,29 @@ const abdomenCt: Entry[] = [
   ['Pelvis','Anomalie des organes pelviens visibles ?', 'Pas d’anomalie pelvienne morphologique évidente sur les organes évaluables.', 'Vessie et organes pelviens.', 'Distension vésicale, morphologie et limites.'],
   ['Os et parois','Lésion osseuse agressive ou anomalie pariétale ?', 'Pas de lésion osseuse agressive visible.', 'Parois et squelette.', 'Fenêtre osseuse et hernies.'],
 ];
+// Only exam-covered pelvic structures; no presumed gender or contrast phase.
+const tapPelvis: Entry[] = [
+  ['Vessie', 'Anomalie de la paroi ou du contenu vésical ?', 'Pas d’anomalie morphologique vésicale évidente sur les segments et le degré de remplissage évaluables.', 'Analyse du contenu et des parois de la vessie.', 'Apprécier réplétion, épaississement, calcul ou formation focale visible ; une vessie peu remplie peut être non évaluable.', 'bladder wall thickening pelvic CT'],
+  ['Organes pelviens', 'Anomalie des organes génitaux pelviens évaluables ?', 'Pas d’anomalie morphologique évidente des organes génitaux pelviens évaluables.', 'Utérus et annexes ou prostate et vésicules séminales selon l’anatomie présente.', 'Vérifier taille, contours, masses et limites de la TDM ; ne pas présumer une structure non identifiable.', 'uterus adnexa prostate seminal vesicles CT anatomy'],
+  ['Tube digestif pelvien', 'Anomalie du rectum, du sigmoïde ou des anses pelviennes ?', 'Pas d’épaississement rectosigmoïdien ni de dilatation des anses pelviennes visibles.', 'Exploration du tube digestif pelvien.', 'Rechercher épaississement, transition, masse, infiltration et collections péridigestives.', 'rectosigmoid bowel wall thickening CT pelvis'],
+  ['Péritoine pelvien', 'Épanchement ou collection dans les espaces pelviens ?', 'Pas d’épanchement ni de collection visible dans les espaces pelviens.', 'Analyse des récessus pelviens et de la graisse adjacente.', 'Cul-de-sac rectovésical ou de Douglas selon l’anatomie ; localisation et densité si positif.', 'pelvic free fluid Douglas pouch CT'],
+  ['Chaînes ganglionnaires', 'Adénopathies pelviennes ou inguinales suspectes ?', 'Pas d’adénomégalie pelvienne ou inguinale significative sur les territoires visualisés.', 'Analyse des chaînes iliaques, obturatrices et inguinales visibles.', 'Mesurer petit axe et préciser territoire ; distinguer taille et morphologie suspecte.', 'pelvic iliac lymph nodes CT'],
+  ['Vaisseaux pelviens', 'Anomalie des axes vasculaires iliaques visible ?', 'Pas d’anomalie morphologique évidente des axes iliaques sur les segments évaluables.', 'Artères et veines iliaques selon phase d’acquisition.', 'Vérifier calibre, perméabilité uniquement si phase adaptée et anomalies périvasculaires.', 'iliac artery vein pelvic CT anatomy'],
+  ['Squelette pelvien', 'Lésion osseuse suspecte du bassin ou des hanches ?', 'Pas de lésion osseuse agressive visible des os du bassin et des hanches examinées.', 'Analyse des os iliaques, sacrum, pubis et hanches sur fenêtre osseuse.', 'Rechercher ostéolyse, condensation, tassement ou fracture uniquement selon indication.', 'pelvic bone metastasis osteolytic CT'],
+];
+function tagged(rows: Entry[], region: string): Entry[] {
+  return rows.map(([section, title, normal, definition, criteria, query]) =>
+    [region + ' · ' + section, title, normal, definition, criteria, query]);
+}
+/** Identifies a true TDM thoraco-abdomino-pelvienne, never chest CT alone. */
+export function isTapCt(exam: string, region: string): boolean {
+  const value = s(exam + ' ' + region);
+  const ct = /\b(tdm|ct|scanner|tomodensitometrie)\b/.test(value);
+  const shorthand = /(?:^|[^a-z])t\s*\.?\s*a\s*\.?\s*p(?:[^a-z]|$)/.test(value);
+  const complete = /(thorac|thorax|poumon)/.test(value) &&
+    /abdom/.test(value) && /pelv|bassin/.test(value);
+  return ct && (shorthand || complete);
+}
 const temporalCt: Entry[] = [
   ['Oreille externe','Comblement du conduit auditif externe ?', 'Conduits auditifs externes libres.', 'Analyse du conduit externe.', 'Distinguer cérumen, épaississement et érosion.'],
   ['Oreille moyenne','Comblement de la caisse du tympan ?', 'Caisses du tympan aérées.', 'Compartiments mésotympan et épitympan.', 'Préciser compartiments et latéralité.'],
@@ -124,8 +147,14 @@ const ultraAbd: Entry[] = [
   ['Reins','Calcul, dilatation ou lésion rénale ?', 'Pas de dilatation des cavités rénales ni de lésion focale visible.', 'Reins bilatéraux.', 'Cortico-médullaire, ombre, calices.'],
   ['Péritoine','Épanchement intrapéritonéal ?', 'Pas d’épanchement intrapéritonéal visualisé.', 'Récessus péritonéaux.', 'Morrison, Douglas selon champ exploré.'],
 ];
+const tapCt: Entry[] = [
+  ...tagged(chestCt, 'Thorax'),
+  ...tagged(abdomenCt.filter(row => row[0] !== 'Pelvis'), 'Abdomen'),
+  ...tagged(tapPelvis, 'Pelvis'),
+];
 const catalogs: Record<string, Entry[]> = {
   'sinus': sinus, 'brain_ct': brainCt, 'chest_ct': chestCt,
+  'tap_ct': tapCt,
   'abdomen_ct': abdomenCt, 'temporal_ct': temporalCt,
   'chest_xray': xrayChest, 'brain_mri': brainMri,
   'spine_mri': mriSpine, 'urinary_ct': renalCt,
@@ -135,7 +164,8 @@ export type ExamTemplate = { key: string; label: string; questions: GuidedQuesti
 export function examTemplate(exam: string, region: string, indication = '', technique = ''): ExamTemplate | null {
   const e = s(exam), r = s(region), ind = s(indication), tech = s(technique);
   let key = '';
-  if (/(sinus|rhin|naso.sinus)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'sinus';
+  if (isTapCt(exam, region)) key = 'tap_ct';
+  else if (/(sinus|rhin|naso.sinus)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'sinus';
   else if (/(rocher|temporal|oreille)/.test(r) && /(tdm|ct|scanner)/.test(e)) key = 'temporal_ct';
   else if (/(uro|rein|urinaire|renal)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'urinary_ct';
   else if (/(cerveau|encephal|cranien|cerebral|tete)/.test(r) && /(tdm|ct|scanner)/.test(e)) key = 'brain_ct';
@@ -170,5 +200,6 @@ export function examTemplate(exam: string, region: string, indication = '', tech
       'Haller cell uncinate process CT']], exam));
   }
   qs.forEach((v, i) => v.id = 'q' + (i + 1));
-  return { key, label: key === 'sinus' ? 'Scanner des sinus' : region, questions: qs };
+  return { key, label: key === 'tap_ct' ? 'Scanner thoraco-abdomino-pelvien'
+    : key === 'sinus' ? 'Scanner des sinus' : region, questions: qs };
 }
