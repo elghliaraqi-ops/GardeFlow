@@ -431,6 +431,7 @@ class _RadiologyArchivedReportDetailState
               const SizedBox(height: 14),
               TextField(
                 controller: _indication,
+                maxLength: 3500,
                 onChanged: (_) => setState(() => _dirty = true),
                 style: const TextStyle(color: PracticeDailyVisualTheme.text),
                 maxLines: 3,
