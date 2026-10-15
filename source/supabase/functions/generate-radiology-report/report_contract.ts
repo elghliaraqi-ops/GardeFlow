@@ -99,11 +99,11 @@ export function factualDraft(
       findings.push('- ' + negativeDescription(o.question));
     } else if (o.status === 'incertain') {
       findings.push('- ' + sentence(
-        'Caractère indéterminé du signe recherché (' + o.question + ')' +
+        'Évaluation incertaine du signe recherché (' + o.question + ')' +
         (physicianNote ? ' ; ' + physicianNote : '')));
     } else if (o.status === 'non_evaluable') {
       findings.push('- ' + sentence(
-        'Le signe recherché ne peut être évalué de façon fiable (' +
+        'Analyse non évaluable du signe recherché (' +
         o.question + ')' + (physicianNote ? ' ; ' + physicianNote : '')));
     }
   }
