@@ -1,4 +1,4 @@
-import { examTemplate } from './radiology_templates.ts';
+import { examTemplate, isTapCt } from './radiology_templates.ts';
 import { structuredReport } from './structured_report.ts';
 function assert(v: unknown, msg: string) { if (!v) throw Error(msg); }
 function sinus() {
@@ -115,4 +115,68 @@ Deno.test('sinus air-fluid level prevents global normal aeration shortcut', () =
     'Positive fluid and laterality must remain');
   assert(!report.conclusion.includes('Pas d’anomalie inflammatoire'),
     'Do not conclude normality when abnormal fluid observed');
+});
+
+
+Deno.test('scanner TAP full anatomy: shorthand and French variants cover 3 regions', () => {
+  const variants: Array<[string, string]> = [
+    ['TDM', 'TAP'],
+    ['Scanner', 'thoraco-abdomino-pelvien'],
+    ['TDM TAP', 'Thorax'],
+    ['TDM', 'thorax abdomen pelvis'],
+    ['TDM', 'T.A.P.'],
+    ['Scanner', 'thoraco-abdomino-pelvienne'],
+  ];
+  for (const [exam, region] of variants) {
+    assert(isTapCt(exam, region), 'TAP recognition failed for ' + exam + ' / ' + region);
+    const t = examTemplate(exam, region, 'bilan oncologique', 'injecté');
+    assert(t?.key === 'tap_ct', 'Unexpected template for ' + region);
+    const categories = t!.questions.map(q => q.section);
+    assert(categories.some(s => s.startsWith('Thorax · ')), 'Thorax missed');
+    assert(categories.some(s => s.startsWith('Abdomen · ')), 'Abdomen missed');
+    assert(categories.some(s => s.startsWith('Pelvis · ')), 'Pelvis missed');
+    assert(t!.questions.length >= 22 && t!.questions.length <= 48,
+      'Complete high-yield TAP checklist expected');
+    assert(t!.questions.every((q,i) => q.id === 'q'+(i+1)), 'Sequential ids');
+    assert(t!.questions.every(q => q.definition && q.criteria.length &&
+      q.reference_query && q.normal_text), 'Definition, criteria, illustration for each sign');
+    const sections = categories.join(' | ');
+    assert(sections.indexOf('Thorax · ') < sections.indexOf('Abdomen · '),
+      'Chest before abdomen');
+    assert(sections.indexOf('Abdomen · ') < sections.indexOf('Pelvis · '),
+      'Abdomen before pelvis');
+  }
+  assert(!isTapCt('TDM','Thorax'), 'Thorax alone must remain chest-only');
+  assert(!isTapCt('TDM','abdomen-pelvis'), 'Abdominal CT must not invent chest');
+  assert(!isTapCt('Radiographie','thoraco-abdomino-pelvien'),
+    'Radiograph is not a CT');
+  assert(examTemplate('TDM','thorax')?.key === 'chest_ct', 'Chest CT retained');
+  assert(examTemplate('TDM','abdomen-pelvis')?.key === 'abdomen_ct',
+    'Abdomino-pelvic CT retained');
+});
+Deno.test('scanner TAP report: 3 verified regions appear; skipped pelvis is not normal', () => {
+  const t = examTemplate('TDM','TAP','bilan oncologique','injecté')!;
+  const allChecked = Object.fromEntries(t.questions.map(q => [
+    q.id, {status: 'observed',value: 'non',notes: ''},
+  ]));
+  const ctx = {
+    exam:'TDM', region:'TAP', indication:'Bilan oncologique',
+    technique:'Acquisition thoraco-abdomino-pelvienne injectée',
+    comparative:false, oldReports:'',
+  };
+  const normal = structuredReport(ctx, t.questions, allChecked);
+  assert(normal.results.includes('THORAX · '), 'Thoracic section missing');
+  assert(normal.results.includes('ABDOMEN · '), 'Abdominal section missing');
+  assert(normal.results.includes('PELVIS · '), 'Pelvic section missing');
+  const pelvisSkipped = Object.fromEntries(t.questions.map(q => [
+    q.id, q.section.startsWith('Pelvis · ')
+      ? {status: 'unanswered',value: '',notes: ''}
+      : {status: 'observed',value: 'non',notes: ''},
+  ]));
+  const incomplete = structuredReport(ctx, t.questions, pelvisSkipped);
+  assert(!incomplete.results.includes('PELVIS · '),
+    'Never fabricate normal pelvic findings if not assessed');
+  assert(!incomplete.fullyNormal, 'Incomplete assessment must not be normal');
+  assert(incomplete.missing.some(s => /vésic|pelvien/i.test(s)),
+    'Skipped pelvic structures must be explicitly identified');
 });
