@@ -18,7 +18,11 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: RadiologyReportScreen()),
     );
-    await tester.ensureVisible(find.text('Examen comparatif'));
+    await tester.dragUntilVisible(
+      find.text('Examen comparatif'), find.byType(ListView),
+      const Offset(0, -250),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Examen comparatif'));
     await tester.pumpAndSettle();
     expect(find.text('Ancien(s) compte(s) rendu(s) *'), findsOneWidget);
@@ -29,7 +33,11 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: RadiologyReportScreen()),
     );
-    await tester.ensureVisible(find.text('Démarrer les questions'));
+    await tester.dragUntilVisible(
+      find.text('Démarrer les questions'), find.byType(ListView),
+      const Offset(0, -250),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Démarrer les questions'));
     await tester.pump();
     expect(find.text('Champ obligatoire'), findsWidgets);
