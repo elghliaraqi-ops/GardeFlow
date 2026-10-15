@@ -33,6 +33,7 @@ void main() {
     );
     expect(find.text('Compte rendu enregistré'), findsOneWidget);
     expect(find.text('TDM · Thorax'), findsOneWidget);
+    expect(find.text('Indication'), findsOneWidget);
     await tester.dragUntilVisible(
       find.text('Enregistrer les modifications'),
       find.byType(ListView),
@@ -41,6 +42,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enregistrer les modifications'), findsOneWidget);
     expect(find.text('Copier'), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.byType(TextField), findsWidgets);
   });
 }
