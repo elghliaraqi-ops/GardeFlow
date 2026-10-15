@@ -90,6 +90,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         'generate-radiology-report',
         body: {
           'action': action, 'clinical': contextData,
+          if (action == 'plan') 'max_questions': 48,
           if (action == 'report') 'questions': questions,
           if (action == 'report') 'answers': {
             for (final q in questions) qid(q): response(q),
@@ -101,8 +102,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       if (!mounted) return;
       if (action == 'plan') {
         final received = records(data['questions']);
-        if (received.length < 5 || received.length > 24) {
-          throw StateError('Questions reçues incomplètes.');
+        if (received.length < 5 || received.length > 48) {
+          throw StateError('Grille de questions invalide (' +
+              received.length.toString() + ' questions reçues).');
         }
         setState(() {
           questions = received;
