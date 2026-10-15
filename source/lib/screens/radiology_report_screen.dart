@@ -235,13 +235,16 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       field(technique, 'Protocole effectivement réalisé', rows: 2,
         hint: 'Avec/sans contraste, phases, séquences et limites'),
       field(clinical, 'Contexte / antécédents / bilan utiles', rows: 3),
-      SwitchListTile.adaptive(
+      Material(
+        type: MaterialType.transparency,
+        child: SwitchListTile.adaptive(
         value: comparison, activeColor: mint, contentPadding: EdgeInsets.zero,
         title: const Text('Examen comparatif',
           style: TextStyle(color: Colors.white)),
         subtitle: const Text('Joindre les rapports antérieurs',
           style: TextStyle(color: muted)),
         onChanged: (v) => setState(() => comparison = v),
+        ),
       ),
       if (comparison)
         field(previous, 'Ancien(s) compte(s) rendu(s) *',
