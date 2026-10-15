@@ -130,6 +130,40 @@ Deno.test('truncated 10 QCM recover as two complete five-question halves',async(
  assert(new Set(data.questions.map((q:any)=>q.statement)).size===10,'distinct halves');
 });
 
+Deno.test('malformed ten-case-QCM JSON recovers as five-question halves without losing planned phases',async()=>{
+ const phases=[1,1,2,2,2,3,3,4,4,4];
+ const c=generationContract('case_qcms',{count:10,phases,courseKeys:Array.from({length:10},(_,i)=>'s'+i)});
+ let calls=0;
+ const fetcher=(async(_url:unknown,opts:any)=>{
+   calls++;
+   const req=JSON.parse(String(opts.body));
+   if(calls===1)return answer({choices:[{message:{content:'{"questions":[{"statement":"incomplete"'},finish_reason:'stop'}]});
+   assert(req.messages[1].content.includes('EXACTEMENT 5 questions'),'bounded recovery used');
+   const result=fixture('course_qcms') as any;
+   result.questions=result.questions.slice(calls===2?0:5,calls===2?5:10);
+   return answer({choices:[{message:{content:JSON.stringify(result)},finish_reason:'stop'}]});
+ }) as typeof fetch;
+ const got=await generateJson(c,'DOSSIER clinique fictif',{apiKey:'test',fetcher});
+ assert(calls===3,'one failed large request and two bounded halves');
+ assert(got.questions.length===10,'ten questions recovered');
+ assert(got.questions.map((q:any)=>q.phase).join(',')===phases.join(','),'original chronological phases kept');
+ assert(new Set(got.questions.map((q:any)=>q.statement)).size===10,'unique questions retained');
+ assert(got.questions.every((q:any)=>q.options.length===5&&q.options.every((o:any)=>o.explanation)),'all clinical explanations kept');
+});
+Deno.test('Groq HTTP413 token quota is classified as rate-limited, not invalid payload',async()=>{
+ const c=generationContract('case_qcms',{count:10});
+ let calls=0;
+ const fetcher=(async()=>{
+   calls++;
+   return answer({error:{code:'rate_limit_exceeded',type:'tokens',message:'Tokens per minute (TPM) exceeded'}},413,{'Retry-After':'45'});
+ }) as typeof fetch;
+ let err:any;
+ try{await generateJson(c,'QCM de cas',{apiKey:'test',fetcher});}catch(e){err=e;}
+ assert(err?.message==='groq_rate_limited','HTTP 413 must preserve token quota diagnostic');
+ assert(err?.retryAfterSeconds===45,'provider retry delay honored');
+ assert(calls===1,'no blind retry on quota');
+});
+
 Deno.test('bibliographic metadata formats cannot reject an otherwise complete QCM batch',async()=>{
  const c=generationContract('course_qcms');const sample=fixture('course_qcms') as any;
  sample.questions[0].reference={title:'Guideline',year:2025,url:'https://example.org/guideline'};
