@@ -488,7 +488,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       onTap: _newRandomClinicalCase,
                     ),
                   ];
-                  return constraints.maxWidth >= 380
+                  return constraints.maxWidth >= 345
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -764,90 +764,83 @@ class _PracticePrimaryActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: PracticeColors.surface.withOpacity(.95),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Ink(
-          height: 154,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
           decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withOpacity(.30)),
             gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
               colors: [
-                accent.withOpacity(.22),
-                PracticeColors.surface.withOpacity(.96),
+                accent.withOpacity(.12),
+                PracticeColors.surface.withOpacity(.98),
               ],
             ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accent.withOpacity(.34)),
           ),
-          child: Stack(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Positioned(
-                right: -8,
-                top: -10,
-                child: Icon(icon, size: 66, color: accent.withOpacity(.07)),
+              Container(
+                width: 47,
+                height: 47,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(.17),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: accent, size: 24),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: accent.withOpacity(.14),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(icon, color: accent, size: 20),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 9.5,
+                        letterSpacing: .6,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const Spacer(),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        color: accent.withOpacity(.92),
-                        size: 19,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: PracticeColors.text,
+                        fontSize: 15.5,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
                       ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: PracticeColors.text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: PracticeColors.textSecondary,
-                      fontSize: 10.5,
-                      height: 1.25,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 5),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: PracticeColors.textSecondary,
+                        fontSize: 11.2,
+                        height: 1.35,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right_rounded,
+                color: accent.withOpacity(.9), size: 23),
             ],
           ),
         ),
@@ -857,14 +850,18 @@ class _PracticePrimaryActionCard extends StatelessWidget {
 }
 
 class _PracticeHubSectionHeader extends StatelessWidget {
+  final String number;
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color accent;
 
   const _PracticeHubSectionHeader({
+    required this.number,
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.accent = PracticeColors.accent,
   });
 
   @override
@@ -873,16 +870,24 @@ class _PracticeHubSectionHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 34,
-          height: 34,
+          width: 39,
+          height: 39,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: PracticeColors.accent.withOpacity(.10),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: PracticeColors.accent.withOpacity(.16)),
+            color: accent.withOpacity(.13),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: accent.withOpacity(.32)),
           ),
-          child: Icon(icon, color: PracticeColors.accent, size: 18),
+          child: Text(
+            number,
+            style: TextStyle(
+              color: accent,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 11),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -891,25 +896,27 @@ class _PracticeHubSectionHeader extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: PracticeColors.text,
-                  fontSize: 15,
+                  fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: PracticeColors.textSecondary,
-                  fontSize: 10.5,
-                  height: 1.25,
+                  fontSize: 11,
+                  height: 1.3,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
         ),
+        const SizedBox(width: 8),
+        Icon(icon, size: 21, color: accent.withOpacity(.75)),
       ],
     );
   }
