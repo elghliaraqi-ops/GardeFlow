@@ -69,8 +69,6 @@ const practiceSpecialties = <String>[
   'Autre',
 ];
 
-enum _PracticeHomeTab { learning, guard, results }
-
 class PracticeScreen extends StatefulWidget {
   final AppState appState;
   const PracticeScreen({super.key, required this.appState});
@@ -80,7 +78,7 @@ class PracticeScreen extends StatefulWidget {
 }
 
 class _PracticeScreenState extends State<PracticeScreen> {
-  _PracticeHomeTab _selectedTab = _PracticeHomeTab.learning;
+  PracticeHomeSection _selectedTab = PracticeHomeSection.learning;
   final _service = PracticeService.instance;
   final _qcmService = ClinicalCaseService.instance;
   bool _loading = true;
@@ -350,11 +348,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
               const SizedBox(height: 14),
-              _PracticeHubTabBar(
+              PracticeHomeNavigation(
                 selected: _selectedTab,
                 onSelect: (next) => setState(() => _selectedTab = next),
               ),
-              if (_selectedTab == _PracticeHomeTab.learning) ...[
+              if (_selectedTab == PracticeHomeSection.learning) ...[
               const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
                 number: '01',
@@ -517,7 +515,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ),
 
               ],
-              if (_selectedTab == _PracticeHomeTab.guard) ...[
+              if (_selectedTab == PracticeHomeSection.guard) ...[
               const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
                 number: '01',
@@ -560,7 +558,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
               ],
 
               ],
-              if (_selectedTab == _PracticeHomeTab.results) ...[
+              if (_selectedTab == PracticeHomeSection.results) ...[
               const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
                 number: '01',
@@ -749,86 +747,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _PracticeHubTabBar extends StatelessWidget {
-  final _PracticeHomeTab selected;
-  final ValueChanged<_PracticeHomeTab> onSelect;
-
-  const _PracticeHubTabBar({
-    required this.selected,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const tabs = <(_PracticeHomeTab, String, IconData)>[
-      (_PracticeHomeTab.learning, 'Apprendre', Icons.school_rounded),
-      (_PracticeHomeTab.guard, 'Ma garde', Icons.emergency_outlined),
-      (_PracticeHomeTab.results, 'Bilan', Icons.bar_chart_rounded),
-    ];
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: PracticeColors.surface.withOpacity(.94),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: PracticeColors.line.withOpacity(.75)),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < tabs.length; i++) ...[
-            if (i > 0) const SizedBox(width: 4),
-            Expanded(
-              child: Semantics(
-                button: true,
-                selected: selected == tabs[i].$1,
-                label: tabs[i].$2,
-                child: Material(
-                  color: selected == tabs[i].$1
-                      ? PracticeColors.accent
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    onTap: () => onSelect(tabs[i].$1),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(tabs[i].$3,
-                            color: selected == tabs[i].$1
-                                ? PracticeColors.background
-                                : PracticeColors.textSecondary,
-                            size: 16),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              tabs[i].$2,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: selected == tabs[i].$1
-                                    ? PracticeColors.background
-                                    : PracticeColors.textSecondary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
