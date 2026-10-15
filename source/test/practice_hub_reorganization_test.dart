@@ -61,10 +61,10 @@ void main() {
     );
     expect(find.text('88'), findsOneWidget);
     expect(find.text('73%'), findsOneWidget);
-    expect(find.text('Explorer les cas et leurs QCM'), findsOneWidget);
-    await tester.tap(find.text('Explorer les cas et leurs QCM'));
+    expect(find.text('Cas & QCM'), findsOneWidget);
+    await tester.tap(find.text('Cas & QCM'));
     expect(open, 1);
-    await tester.tap(find.text('Stats et classement QCM'));
+    await tester.tap(find.text('Classement'));
     expect(ranking, 1);
     expect(tester.takeException(), isNull);
   });
