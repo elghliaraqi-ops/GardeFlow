@@ -20,6 +20,7 @@ import 'practice_daily_screen.dart';
 import 'practice_progressive_cases_screen.dart';
 import 'practice_visceral_radio_screen.dart';
 import 'radiology_report_screen.dart';
+import 'radiology_report_library_screen.dart';
 import 'practice_daily_gamification_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
@@ -415,6 +416,18 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const RadiologyReportScreen(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              PracticeInlineNavigation(
+                icon: Icons.folder_copy_outlined,
+                title: 'Mes comptes rendus radiologiques',
+                subtitle: 'Archives privées · recherche par examen, date et indication',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RadiologyReportLibraryScreen(),
                   ),
                 ),
               ),
