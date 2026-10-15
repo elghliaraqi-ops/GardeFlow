@@ -78,6 +78,7 @@ class PracticeScreen extends StatefulWidget {
 }
 
 class _PracticeScreenState extends State<PracticeScreen> {
+  PracticeHomeSection _selectedTab = PracticeHomeSection.learning;
   final _service = PracticeService.instance;
   final _qcmService = ClinicalCaseService.instance;
   bool _loading = true;
@@ -318,8 +319,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
             children: [
+              // The hero stays short and functional. The daily challenge,
+              // clinical training, radiology and documentation get their own
+              // semantic navigation groups instead of one mixed card stack.
               PracticeHomeHero(
                 answered: _qcmAll.answered,
                 accuracy: _qcmAll.accuracy,
@@ -339,19 +343,138 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   MaterialPageRoute(builder: (_) => const PracticeQcmScreen()),
                 ),
               ),
-              const SizedBox(height: 12),
-              const PracticeDailyGameHubCard(),
               if (_error != null) ...[
-                const SizedBox(height: 11),
+                const SizedBox(height: 12),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
-              const SizedBox(height: 19),
+              const SizedBox(height: 14),
+              PracticeHomeNavigation(
+                selected: _selectedTab,
+                onSelect: (next) => setState(() => _selectedTab = next),
+              ),
+              if (_selectedTab == PracticeHomeSection.learning) ...[
+              const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
-                icon: Icons.grid_view_rounded,
-                title: 'Explorer & s’entraîner',
-                subtitle: 'Des cas réels documentés et des simulations IA',
+                number: '01',
+                icon: Icons.bolt_rounded,
+                title: 'Défi du jour',
+                subtitle: 'Votre rendez-vous quotidien et vos défis',
+                accent: PracticeColors.gameGold,
+              ),
+              const SizedBox(height: 11),
+              const PracticeDailyGameHubCard(),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '02',
+                icon: Icons.school_rounded,
+                title: 'S’entraîner',
+                subtitle: 'Cas cliniques, QCM et simulations progressives',
+                accent: PracticeColors.gamePurple,
+              ),
+              const SizedBox(height: 11),
+              _PracticePrimaryActionCard(
+                icon: Icons.account_tree_rounded,
+                title: 'Simulation clinique progressive',
+                subtitle:
+                    'Un patient fictif · 4 étapes · 10 QCM contextualisés',
+                meta: 'SIMULATION CLINIQUE',
+                accent: PracticeColors.gamePurple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
+              ),
+              if (_me?.id == 'a6ab90cd-aa2c-41f3-a5e8-be00aedd019c') ...[
+                const SizedBox(height: 10),
+                _PracticePrimaryActionCard(
+                  icon: Icons.biotech_rounded,
+                  title: 'Viscéral × Radio · espace privé',
+                  subtitle:
+                      'Fiche surprise · 20 QCM · cas clinique et QCM progressifs',
+                  meta: 'RÉSIDANAT',
+                  accent: PracticeColors.gameGold,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PracticeVisceralRadioScreen(),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              PracticeInlineNavigation(
+                icon: Icons.menu_book_rounded,
+                title: 'Bibliothèque de cas cliniques',
+                subtitle: 'Explorer les cas publiés et leurs QCM',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClinicalCasesScreen(onEditCase: _editPublishedCase),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9),
+              PracticeInlineNavigation(
+                icon: Icons.bookmark_added_outlined,
+                title: 'Reprendre une simulation',
+                subtitle: 'Retrouver un dossier progressif enregistré',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '03',
+                icon: Icons.radar_rounded,
+                title: 'Radiologie',
+                subtitle: 'Lecture guidée, comptes rendus et archives',
+                accent: PracticeColors.accent,
+              ),
+              const SizedBox(height: 11),
+              _PracticePrimaryActionCard(
+                icon: Icons.medical_information_outlined,
+                title: 'Assistant CR Radiologie',
+                subtitle:
+                    'Recherche des signes · rédaction descriptive · révision',
+                meta: 'ASSISTANT RADIOLOGIQUE',
+                accent: PracticeColors.accent,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RadiologyReportScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
+              PracticeInlineNavigation(
+                icon: Icons.folder_copy_outlined,
+                title: 'Mes comptes rendus radiologiques',
+                subtitle: 'Rechercher, modifier ou supprimer un CR archivé',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RadiologyReportLibraryScreen(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '04',
+                icon: Icons.edit_note_rounded,
+                title: 'Créer et documenter',
+                subtitle: 'Rédiger un cas rencontré ou générer un cas IA',
+                accent: PracticeColors.gameBlue,
+              ),
+              const SizedBox(height: 11),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final modes = <Widget>[
@@ -390,109 +513,18 @@ class _PracticeScreenState extends State<PracticeScreen> {
                         );
                 },
               ),
-              const SizedBox(height: 11),
-              _PracticePrimaryActionCard(
-                icon: Icons.account_tree_rounded,
-                title: 'Simulation clinique progressive',
-                subtitle:
-                    'Un patient fictif · 4 étapes · 10 QCM contextualisés',
-                meta: 'SIMULATION LIBRE · REPRENDRE UN DOSSIER',
-                accent: PracticeColors.gamePurple,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PracticeProgressiveCasesScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 11),
-              _PracticePrimaryActionCard(
-                icon: Icons.medical_information_outlined,
-                title: 'Assistant CR Radiologie',
-                subtitle: 'Données cliniques · recherche guidée · compte rendu · révision',
-                meta: 'RADIOLOGIE · GROQ · COMPTES RENDUS',
-                accent: PracticeColors.accent,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RadiologyReportScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              PracticeInlineNavigation(
-                icon: Icons.folder_copy_outlined,
-                title: 'Mes comptes rendus radiologiques',
-                subtitle: 'Archives privées · recherche par examen, date et indication',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RadiologyReportLibraryScreen(),
-                  ),
-                ),
-              ),
-              if (_me?.id == 'a6ab90cd-aa2c-41f3-a5e8-be00aedd019c') ...[
-                const SizedBox(height: 11),
-                _PracticePrimaryActionCard(
-                  icon: Icons.biotech_rounded,
-                  title: 'Viscéral × Radio · espace privé',
-                  subtitle: 'Fiche surprise · 20 QCM · cas clinique et QCM progressifs',
-                  meta: 'RÉSIDANAT · CHIRURGIE ET RADIOLOGIE',
-                  accent: PracticeColors.gameGold,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PracticeVisceralRadioScreen(),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 11),
-              PracticeInlineNavigation(
-                icon: Icons.menu_book_rounded,
-                title: 'Bibliothèque de cas cliniques',
-                subtitle: 'Parcourir les cas publiés et leurs QCM',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        ClinicalCasesScreen(onEditCase: _editPublishedCase),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              PracticeInlineNavigation(
-                icon: Icons.bookmark_added_outlined,
-                title: 'Reprendre une simulation enregistrée',
-                subtitle: 'Retrouver les cas progressifs et terminer leurs QCM',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PracticeProgressiveCasesScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              PracticeAchievementsPreview(
-                achievements: _achievements,
-                loading: _loading,
-                onOpen: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        PracticeAchievementsScreen(appState: widget.appState),
-                  ),
-                ),
-              ),
 
-              // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
-              const SizedBox(height: 22),
+              ],
+              if (_selectedTab == PracticeHomeSection.guard) ...[
+              const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
+                number: '01',
                 icon: Icons.emergency_rounded,
                 title: 'Ma garde',
-                subtitle: 'Patients, objectif personnel et historique de garde',
+                subtitle: 'Patients, objectif personnel et historique',
+                accent: PracticeColors.gamePink,
               ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 11),
               if (guard == null)
                 _NoGuardCard(
                   onHistory: () => Navigator.push(
@@ -525,34 +557,23 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 _EncouragementCard(text: _encouragement(guard)),
               ],
 
-              // 3. Toutes les statistiques sont regroupées dans une seule zone.
-              const SizedBox(height: 22),
+              ],
+              if (_selectedTab == PracticeHomeSection.results) ...[
+              const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
+                number: '01',
                 icon: Icons.insights_rounded,
-                title: 'Mes résultats',
-                subtitle: 'QCM, activité clinique et niveau au même endroit',
+                title: 'Ma progression',
+                subtitle: 'QCM, activité clinique et succès débloqués',
+                accent: PracticeColors.gameBlue,
               ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 11),
               _QcmCanonicalStatsStrip(
                 month: _qcmMonth,
                 total: _qcmAll,
                 loading: _loading,
               ),
-              const SizedBox(height: 9),
-              const SizedBox(height: 11),
-              const _PracticeHubSectionHeader(
-                icon: Icons.medical_information_outlined,
-                title: 'Progression clinique',
-                subtitle: 'XP et séries des activités Practice historiques',
-              ),
-              const SizedBox(height: 9),
-              _PracticeGameHeader(
-                level: level,
-                xp: _all.xp,
-                streak: _all.streak,
-                unlocked: unlocked,
-              ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 10),
               _PracticeHubProgressPanel(
                 month: _month,
                 year: _year,
@@ -560,15 +581,28 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 level: level,
                 loading: _loading,
               ),
-
-              // 4. Profil et réglages : utiles mais volontairement secondaires.
-              const SizedBox(height: 22),
-              const _PracticeHubSectionHeader(
-                icon: Icons.account_circle_rounded,
-                title: 'Mon profil Practice',
-                subtitle: 'Classement, succès et progression annuelle',
+              const SizedBox(height: 10),
+              PracticeAchievementsPreview(
+                achievements: _achievements,
+                loading: _loading,
+                onOpen: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PracticeAchievementsScreen(appState: widget.appState),
+                  ),
+                ),
               ),
-              const SizedBox(height: 9),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '02',
+                icon: Icons.account_circle_rounded,
+                title: 'Mon profil et classements',
+                subtitle: 'Classements, badges et bilan de l’année',
+                accent: PracticeColors.gameGold,
+              ),
+              const SizedBox(height: 11),
               _PracticeHubQuickActions(
                 rankLabel: rankLabel,
                 achievementLabel: '$unlocked/${_achievements.length}',
@@ -617,6 +651,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              ],
             ],
           ),
         ),
@@ -737,90 +772,83 @@ class _PracticePrimaryActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: PracticeColors.surface.withOpacity(.95),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Ink(
-          height: 154,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
           decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accent.withOpacity(.30)),
             gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
               colors: [
-                accent.withOpacity(.22),
-                PracticeColors.surface.withOpacity(.96),
+                accent.withOpacity(.12),
+                PracticeColors.surface.withOpacity(.98),
               ],
             ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accent.withOpacity(.34)),
           ),
-          child: Stack(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Positioned(
-                right: -8,
-                top: -10,
-                child: Icon(icon, size: 66, color: accent.withOpacity(.07)),
+              Container(
+                width: 47,
+                height: 47,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(.17),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: accent, size: 24),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: accent.withOpacity(.14),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(icon, color: accent, size: 20),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 9.5,
+                        letterSpacing: .6,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const Spacer(),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        color: accent.withOpacity(.92),
-                        size: 19,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: PracticeColors.text,
+                        fontSize: 15.5,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
                       ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: PracticeColors.text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: PracticeColors.textSecondary,
-                      fontSize: 10.5,
-                      height: 1.25,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 5),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: PracticeColors.textSecondary,
+                        fontSize: 11.2,
+                        height: 1.35,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right_rounded,
+                color: accent.withOpacity(.9), size: 23),
             ],
           ),
         ),
@@ -830,14 +858,18 @@ class _PracticePrimaryActionCard extends StatelessWidget {
 }
 
 class _PracticeHubSectionHeader extends StatelessWidget {
+  final String number;
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color accent;
 
   const _PracticeHubSectionHeader({
+    required this.number,
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.accent = PracticeColors.accent,
   });
 
   @override
@@ -846,16 +878,24 @@ class _PracticeHubSectionHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 34,
-          height: 34,
+          width: 39,
+          height: 39,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: PracticeColors.accent.withOpacity(.10),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: PracticeColors.accent.withOpacity(.16)),
+            color: accent.withOpacity(.13),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: accent.withOpacity(.32)),
           ),
-          child: Icon(icon, color: PracticeColors.accent, size: 18),
+          child: Text(
+            number,
+            style: TextStyle(
+              color: accent,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 11),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -864,25 +904,27 @@ class _PracticeHubSectionHeader extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   color: PracticeColors.text,
-                  fontSize: 15,
+                  fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: PracticeColors.textSecondary,
-                  fontSize: 10.5,
-                  height: 1.25,
+                  fontSize: 11,
+                  height: 1.3,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
         ),
+        const SizedBox(width: 8),
+        Icon(icon, size: 21, color: accent.withOpacity(.75)),
       ],
     );
   }

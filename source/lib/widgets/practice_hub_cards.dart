@@ -13,6 +13,88 @@ abstract final class _Palette {
   static const secondary = Color(0xFFB9CBE0);
 }
 
+enum PracticeHomeSection { learning, guard, results }
+
+class PracticeHomeNavigation extends StatelessWidget {
+  final PracticeHomeSection selected;
+  final ValueChanged<PracticeHomeSection> onSelect;
+
+  const PracticeHomeNavigation({
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const tabs = <(PracticeHomeSection, String, IconData)>[
+      (PracticeHomeSection.learning, 'Apprendre', Icons.school_rounded),
+      (PracticeHomeSection.guard, 'Ma garde', Icons.emergency_outlined),
+      (PracticeHomeSection.results, 'Bilan', Icons.bar_chart_rounded),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: _Palette.surface.withOpacity(.94),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: _Palette.line.withOpacity(.75)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < tabs.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: selected == tabs[i].$1,
+                label: tabs[i].$2,
+                child: Material(
+                  color: selected == tabs[i].$1
+                      ? _Palette.mint
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: () => onSelect(tabs[i].$1),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(tabs[i].$3,
+                            color: selected == tabs[i].$1
+                                ? _Palette.bg
+                                : _Palette.secondary,
+                            size: 16),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              tabs[i].$2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: selected == tabs[i].$1
+                                    ? _Palette.bg
+                                    : _Palette.secondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class PracticeHomeHero extends StatelessWidget {
   const PracticeHomeHero({
     super.key,
@@ -31,13 +113,15 @@ class PracticeHomeHero extends StatelessWidget {
   final VoidCallback onStart, onQcmRanking;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(17),
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 15),
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(23),
+      borderRadius: BorderRadius.circular(22),
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFF563EB7), Color(0xFF204A82), Color(0xFF0B6059)],
+        colors: [
+          Color(0xFF343074), Color(0xFF163D63), Color(0xFF0B4C4D),
+        ],
       ),
       border: Border.all(color: Colors.white24),
     ),
@@ -50,86 +134,82 @@ class PracticeHomeHero extends StatelessWidget {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'PRACTICE · ESPACE D’ENTRAÎNEMENT',
+                'PRACTICE',
                 style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10.5,
+                  color: Color(0xFFE4E9FF),
+                  fontSize: 11,
+                  letterSpacing: 1.4,
                   fontWeight: FontWeight.w900,
                 ),
+              ),
+            ),
+            Text('VOTRE ESPACE CLINIQUE',
+              style: TextStyle(
+                color: Colors.white70,
+                fontWeight: FontWeight.w800,
+                fontSize: 9,
               ),
             ),
           ],
         ),
         const SizedBox(height: 10),
         const Text(
-          'Progresse, raisonne, maîtrise.',
+          'Apprendre. S’entraîner. Progresser.',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 22,
-            height: 1.15,
+            fontSize: 19,
+            height: 1.2,
             fontWeight: FontWeight.w900,
           ),
         ),
-        const SizedBox(height: 7),
-        const Text(
-          'Cas cliniques, QCM, défis et progression',
-          style: TextStyle(color: Color(0xFFE2ECFF), fontSize: 12),
-        ),
-        const SizedBox(height: 13),
+        const SizedBox(height: 11),
         Row(
           children: [
-            _Metric('QCM répondus', loading ? '—' : answered.toString()),
+            _Metric('QCM réalisés', loading ? '—' : answered.toString()),
             const SizedBox(width: 7),
-            _Metric(
-              'Réussite',
-              loading ? '—' : accuracy.toStringAsFixed(0) + '%',
-            ),
+            _Metric('Réussite',
+              loading ? '—' : accuracy.toStringAsFixed(0) + '%'),
             const SizedBox(width: 7),
             _Metric('Niveau', loading ? '—' : level.toString()),
           ],
         ),
-        const SizedBox(height: 9),
-        Text(
-          loading
-              ? 'Chargement de votre progression…'
-              : xp.toString() +
-                    ' XP Practice clinique · ' +
-                    streak.toString() +
-                    ' garde(s) de série',
-          style: const TextStyle(
-            color: Colors.white70,
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
-          ),
-        ),
-        const SizedBox(height: 13),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: onStart,
-            style: FilledButton.styleFrom(
-              backgroundColor: _Palette.mint,
-              foregroundColor: _Palette.bg,
-              minimumSize: const Size(0, 47),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: onStart,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _Palette.mint,
+                  foregroundColor: _Palette.bg,
+                  minimumSize: const Size(0, 43),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded, size: 19),
+                label: const Text(
+                  'Cas & QCM',
+                  style: TextStyle(fontSize: 12,
+                    fontWeight: FontWeight.w900),
+                ),
+              ),
             ),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text(
-              'Explorer les cas et leurs QCM',
-              style: TextStyle(fontWeight: FontWeight.w900),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: onQcmRanking,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+              ),
+              icon: const Icon(Icons.leaderboard_outlined, size: 18),
+              label: const Text(
+                'Classement',
+                style: TextStyle(fontSize: 11.5,
+                  fontWeight: FontWeight.w800),
+              ),
             ),
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: onQcmRanking,
-            icon: const Icon(Icons.leaderboard_outlined, size: 16),
-            label: const Text(
-              'Stats et classement QCM',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-            ),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-          ),
+          ],
         ),
       ],
     ),
@@ -142,7 +222,7 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
     child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(.18),
         borderRadius: BorderRadius.circular(12),
@@ -154,7 +234,7 @@ class _Metric extends StatelessWidget {
             value,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -192,7 +272,7 @@ class PracticeCompactModeCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(19),
       child: Ink(
-        height: 158,
+        height: 142,
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(19),
