@@ -599,10 +599,23 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
           style: TextStyle(color: muted)),
         const SizedBox(height: 12),
         TextField(controller: reportText, minLines: 15, maxLines: null,
+          onChanged: (_) => setState(() => unsavedEdits = true),
           style: const TextStyle(color: Colors.white, height: 1.5),
           decoration: decor('Compte rendu radiologique')),
         const SizedBox(height: 11),
+        if (savedReportId != null && !unsavedEdits)
+          const Text('CR enregistré dans votre bibliothèque',
+            style: TextStyle(color: mint, fontWeight: FontWeight.w800)),
+        if (savingToArchive)
+          const LinearProgressIndicator(color: mint),
+        if (saveError != null)
+          Text(saveError!,
+            style: const TextStyle(color: Color(0xFFFFD166))),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          button('Enregistrer le CR', saveCurrentReport,
+            icon: Icons.save_outlined),
+          button('Ma bibliothèque', openArchive,
+            secondary: true, icon: Icons.folder_copy_outlined),
           button('Copier', () async {
             await Clipboard.setData(ClipboardData(text: reportText.text));
             if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -668,7 +681,14 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: bg,
     appBar: AppBar(title: const Text('Assistant CR Radiologie'),
-      backgroundColor: bg, foregroundColor: Colors.white),
+      backgroundColor: bg, foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          tooltip: 'Mes comptes rendus',
+          icon: const Icon(Icons.folder_copy_outlined),
+          onPressed: openArchive,
+        ),
+      ]),
     body: Container(
       decoration: BoxDecoration(
         gradient: step == 1 ? PracticeDailyVisualTheme.pageGradient : null,
