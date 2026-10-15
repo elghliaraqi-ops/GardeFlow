@@ -184,6 +184,8 @@ async function groq(system: string, user: unknown, budget: number) {
 }
 const planningPrompt = `Tu es radiologue senior francophone, niveau résidanat.
 Prépare un parcours systématique pour la modalité/région/protocole réellement demandé.
+Lis chaque antécédent, comorbidité et traitement ; ajoute les signes
+spécifiques des risques qui peuvent être indépendants du motif principal.
 Lis AUSSI chaque symptôme de l'indication, déduis les principales étiologies
 et diagnostics différentiels selon le contexte et le sexe anatomique,
 puis exige des questions de signes discriminants et pas seulement de l'anatomie.
@@ -213,6 +215,12 @@ rare systématique si un scanner des sinus est demandé.`;
 const differentialPrompt = `Tu es radiologue sénior chargé de la sémiologie.
 Le médecin a fourni une indication clinique, un contexte, le protocole et
 l'anatomie pelvienne. Lis TOUS les symptômes explicitement exprimés.
+Exploite aussi TOUS les antécédents médicaux et chirurgicaux, traitements
+(anticoagulants notamment) et risques vasculaires : leurs conséquences
+à rechercher sont indépendantes du symptôme (ex. ACFA : emboles viscéraux,
+ischémie mésentérique, infarctus rénal ou splénique, signes de perfusion).
+Vérifie si les phases injectées rendent réellement les artères et les
+parenchymes évaluables ; une phase veineuse n'exclut pas une embolie artérielle.
 À partir de sémiologie radiologique fiable, établis mentalement les
 étiologies principales, les urgences et les diagnostics différentiels
 correspondant au champ et à la modalité RÉELLEMENT réalisés.
@@ -290,8 +298,11 @@ Deno.serve(async req => {
       let questions: Question[] = [...template.questions];
       let clinicalCoverageWarning: string | null = null;
       let enrichedWithGroq = false;
-      if (!semiology.matched &&
-          needsSymptomExpansion(caseInput.indication, caseInput.clinical)) {
+      // A known risk condition must not mask an unrecognized symptom,
+      // nor may a known symptom mask a significant uncatalogued history.
+      if ((!semiology.symptomMatched &&
+            needsSymptomExpansion(caseInput.indication, caseInput.clinical)) ||
+          (semiology.historyFlagged && !semiology.historyMatched)) {
         // One Groq request only for uncatalogued clinical indications.
         const supplement = await groq(differentialPrompt, {
           contexte: caseInput,
@@ -313,6 +324,22 @@ Deno.serve(async req => {
               + 'vérifier les diagnostics différentiels de l’indication.';
           }
         }
+      }
+      // A standard portal-venous abdominal CT is not an arterial CTA.
+      // Never give false reassurance about embolic arterial patency.
+      const highEmbolicRisk = semiology.topics.some(topic =>
+        topic.includes('fibrillation atriale'));
+      const protocol = (caseInput.technique + ' ' + caseInput.exam)
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      if (highEmbolicRisk &&
+          !/(phase arterielle|temps arteriel|angio.tdm|angioscanner|cta|arteres mesenteriques opacifiees)/.test(protocol)) {
+        const caution = 'ACFA et risque embolique : sans phase artérielle '
+          + 'adaptée, une TDM abdomino-pelvienne standard ne permet pas '
+          + 'd’exclure une occlusion artérielle mésentérique, rénale ou '
+          + 'splénique. Évaluer le rehaussement des organes sur les phases '
+          + 'disponibles ; si la suspicion persiste, discuter angio-TDM urgente.';
+        clinicalCoverageWarning = [caution, clinicalCoverageWarning]
+          .filter(Boolean).join(' ');
       }
       questions = questions.map((question, i) =>
         ({ ...question, id: 'q' + (i + 1) }));
@@ -389,7 +416,18 @@ Deno.serve(async req => {
         }
       }
     }
+    const highEmbolicRisk = indicationSemiology(caseInput).topics.some(
+      topic => topic.includes('fibrillation atriale'));
+    const protocol = (caseInput.technique + ' ' + caseInput.exam)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const phaseWarning = highEmbolicRisk &&
+        !/(phase arterielle|temps arteriel|angio.tdm|angioscanner|cta|arteres mesenteriques opacifiees)/.test(protocol)
+      ? ['ACFA : une acquisition sans phase artérielle adéquate '
+        + 'n’exclut pas une occlusion artérielle mésentérique ou viscérale. '
+        + 'Si ischémie suspectée, envisager angio-TDM adaptée.']
+      : [];
     const gaps = [...new Set([
+      ...phaseWarning,
       ...tapCoverageWarnings,
       ...unansweredWarnings(observations),
       ...(modelDraft?.missing ?? []),
