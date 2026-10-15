@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../services/supabase_backend_service.dart';
+import '../services/radiology_report_archive_service.dart';
+import 'radiology_report_library_screen.dart';
 import '../widgets/practice_qcm_medical_illustration.dart';
 import '../widgets/practice_quiz_widgets.dart';
 import '../widgets/practice_keyword_text.dart';
@@ -33,6 +35,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
   final Map<String, Map<String, dynamic>> answers = {};
   Map<String, dynamic>? report;
   List<String> warnings = [];
+  DateTime? examDate;
+  String? savedReportId, saveError;
+  bool savingToArchive = false, unsavedEdits = false;
 
   Map<String, dynamic> obj(dynamic x) =>
       x is Map ? Map<String, dynamic>.from(x) : <String, dynamic>{};
