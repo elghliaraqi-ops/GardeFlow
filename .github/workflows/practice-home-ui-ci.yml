@@ -7,6 +7,7 @@ on:
       - 'source/lib/screens/practice_screen.dart'
       - 'source/lib/widgets/practice_hub_cards.dart'
       - 'source/test/practice_home_layout_test.dart'
+      - 'source/test/practice_hub_reorganization_test.dart'
       - '.github/workflows/practice-home-ui-ci.yml'
   workflow_dispatch:
 
@@ -29,7 +30,7 @@ jobs:
         run: flutter pub get
       - name: Verify mobile navigation and visual card layouts
         working-directory: source
-        run: flutter test test/practice_home_layout_test.dart
+        run: flutter test test/practice_home_layout_test.dart test/practice_hub_reorganization_test.dart
       - name: Analyze Practice home widgets and hub
         working-directory: source
-        run: flutter analyze lib/screens/practice_screen.dart lib/widgets/practice_hub_cards.dart test/practice_home_layout_test.dart --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze lib/screens/practice_screen.dart lib/widgets/practice_hub_cards.dart test/practice_home_layout_test.dart test/practice_hub_reorganization_test.dart --no-fatal-infos --no-fatal-warnings
