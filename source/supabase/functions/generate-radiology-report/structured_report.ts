@@ -130,6 +130,11 @@ export function structuredReport(
       skips.push(q.title + ' : incertain'); continue;
     }
     const p = phrase(q, a, obs.status);
+    if (obs.status === 'présent' && q.kind === 'qcu' &&
+        /\b(?:ou|et\/ou)\b|\//i.test(q.title) && string(a.notes).length < 12) {
+      skips.push('Préciser le signe effectivement constaté parmi les '
+        + 'alternatives : ' + q.title);
+    }
     if (p) add(reportingSection(string(q.section), q.title), p,
       obs.status === 'présent');
   }
