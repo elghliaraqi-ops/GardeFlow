@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../services/supabase_backend_service.dart';
+import '../data/radiology_exam_regions.dart';
 import '../services/radiology_report_archive_service.dart';
 import 'radiology_report_library_screen.dart';
 import '../widgets/practice_qcm_medical_illustration.dart';
@@ -27,6 +28,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
   final clinical = TextEditingController(), technique = TextEditingController();
   final previous = TextEditingController(), reportText = TextEditingController();
   String exam = 'TDM';
+  String? selectedRegion;
   String sex = 'unknown';
   bool sexChosen = false;
   String? clinicalPlanWarning;
@@ -303,15 +305,26 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         'ou autre identifiant du patient.', style: TextStyle(color: muted)),
       const SizedBox(height: 15),
       DropdownButtonFormField<String>(
-        value: exam, dropdownColor: panel,
+        key: const ValueKey('radiology-exam-picker'),
+        value: exam,
+        isExpanded: true,
+        dropdownColor: panel,
         decoration: decor('Type d’examen'),
         style: const TextStyle(color: Colors.white),
         items: [
-          for (final x in ['TDM', 'IRM', 'Échographie', 'Radiographie',
-            'Doppler', 'Angio-TDM', 'Angio-IRM', 'Autre'])
+          for (final x in RadiologyExamRegions.exams)
             DropdownMenuItem(value: x, child: Text(x)),
         ],
-        onChanged: (x) => setState(() => exam = x ?? 'TDM'),
+        onChanged: busy ? null : (x) {
+          if (x == null || x == exam) return;
+          setState(() {
+            exam = x;
+            // The previous region may be invalid for the new modality.
+            selectedRegion = null;
+            region.clear();
+            error = null;
+          });
+        },
       ),
       const SizedBox(height: 10),
       OutlinedButton.icon(
@@ -350,8 +363,42 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         ),
       ),
       const SizedBox(height: 12),
-      field(region, 'Région anatomique *', required: true,
-        hint: 'Ex. encéphale, thorax, abdomino-pelvien, rochers'),
+      DropdownButtonFormField<String>(
+        key: ValueKey('radiology-region-picker-$exam'),
+        value: selectedRegion,
+        isExpanded: true,
+        dropdownColor: panel,
+        decoration: decor('Région anatomique *',
+          'Sélectionnez la région correspondant à l’examen'),
+        style: const TextStyle(color: Colors.white),
+        items: [
+          for (final item in RadiologyExamRegions.forExam(exam))
+            DropdownMenuItem<String>(
+              value: item,
+              child: Text(item, maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        validator: (value) => value == null
+            ? 'Choisissez une région anatomique'
+            : null,
+        onChanged: busy ? null : (value) {
+          setState(() {
+            selectedRegion = value;
+            // The existing Groq payload, report header and saved CR metadata
+            // continue to share the same canonical region controller.
+            region.text = value == RadiologyExamRegions.customRegion
+                ? '' : (value ?? '');
+            error = null;
+          });
+        },
+      ),
+      if (selectedRegion == RadiologyExamRegions.customRegion) ...[
+        const SizedBox(height: 10),
+        field(region, 'Précisez la région anatomique *',
+          required: true,
+          hint: 'Ex. étage orbitaire, membre particulier, examen combiné'),
+      ],
       field(indication, 'Indication / question clinique *',
         rows: 3, required: true, maxChars: 1800),
       field(technique, 'Protocole effectivement réalisé', rows: 2,
