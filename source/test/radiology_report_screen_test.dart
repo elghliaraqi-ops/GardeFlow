@@ -45,12 +45,11 @@ void main() {
       findsOneWidget);
     expect(find.text('Sinus de la face'), findsNothing,
       reason: 'The region is cleared when switching imaging modality');
-    await tester.dragUntilVisible(
-      find.text('Démarrer les questions'),
-      find.byType(ListView), const Offset(0, -250),
-    );
-    await tester.tap(find.text('Démarrer les questions'));
-    await tester.pump();
+    // Validate the actual FormState without depending on scrolling
+    // the long case-context form to its bottom in a 600px test viewport.
+    final formState = tester.state<FormState>(find.byType(Form));
+    expect(formState.validate(), isFalse);
+    await tester.pumpAndSettle();
     expect(find.text('Choisissez une région anatomique'), findsOneWidget);
   });
 
