@@ -259,3 +259,10 @@ export function indicationSemiology(args: {
     add('sémiologie neuroradiologique', brain);
   return { matched: topics.length > 0, entries: entries.slice(0, 22), topics };
 }
+
+/** Nontrivial symptoms not found in curated patterns need a SINGLE targeted
+ * Groq request rather than silently reverting to an anatomy-only checklist. */
+export function needsSymptomExpansion(indication: string, clinical = '') {
+  const value = normalizedClinical(indication + ' ' + clinical);
+  return /douleur|fievre|fever|vertige|dizziness|hemat[o-u]|hemoptys|saignement|hemorrag|hematur|essouffl|dyspn|toux|vomiss|diarrh|amaigr|icter|paralys|paresth|deficit|engourdissement|syndrome|oedem|edeme|tumefaction|masse|convulsion|malaise|anemie|thrombopen|syndrome infectieux|dysphag|dysurie|retention|incontinence|trouble|seizure|douleur|hypox|ict[eè]re|fracture|traumatisme|suspicion/.test(value);
+}
