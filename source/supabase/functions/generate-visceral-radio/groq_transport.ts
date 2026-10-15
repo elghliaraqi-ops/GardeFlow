@@ -191,7 +191,13 @@ export function quotaInfo(body:any,headers:Headers){
 }
 function errorResponse(status:number,body:any,headers:Headers){
  if(status===429)return Object.assign(new Error('groq_rate_limited'),quotaInfo(body,headers));
- if(status===413)return new Error('groq_request_too_large');
+ // Groq can use HTTP 413 for exhausted token quotas, not only large requests.
+ if(status===413){
+   const reason=String(body?.error?.code??'')+' '+String(body?.error?.type??'')+' '+String(body?.error?.message??'');
+   if(/rate_limit_exceeded|quota|tokens per (?:minute|day)|\bTP[MD]\b/i.test(reason))
+     return Object.assign(new Error('groq_rate_limited'),quotaInfo(body,headers));
+   return new Error('groq_request_too_large');
+ }
  const code=String(body?.error?.code||body?.error?.type||'unknown_error').slice(0,90);
  return new Error('groq_http_'+status+':'+code);
 }
@@ -248,13 +254,27 @@ export async function generateJson(
        failureReason=String((e as Error).message).slice(0,130);
        // A truncated ten-question answer cannot be repaired by repeating it at the same budget.
        // Regenerate two bounded halves, retaining all fifty clinical corrections.
-       if((failureReason==='groq_output_token_limit'||failureReason==='json_array_short:$.questions')&&contract.requestedCount===10){
+       if(contract.requestedCount===10&&
+          (contract.mode==='course_qcms'||contract.mode==='case_qcms')&&
+          (failureReason==='groq_output_token_limit'||
+           failureReason==='groq_invalid_json_response'||
+           failureReason==='groq_empty_response'||
+           failureReason.startsWith('json_array_short:$.questions')||
+           failureReason.startsWith('json_array:$.questions'))){
+         // A malformed ten-QCM JSON is often a truncated output even after finish=stop.
+         // On success there is still just one provider call. Split only on failure.
+         console.warn('visceral_qcm_bounded_recovery',{mode:contract.mode,reason:failureReason});
          const qs=(contract.schema as any).properties.questions.items;
-         const half=generationContract(contract.mode,{count:5,phases:qs.properties.phase.enum,courseKeys:qs.properties.course_section_key.enum??[]});
-         const phases=prompt.match(/séquence obligatoire des phase par question: ([1-4,]+)/)?.[1].split(',');
-         const phaseNote=(offset:number)=>phases?' Pour ces cinq questions, phases obligatoires dans cet ordre: '+phases.slice(offset,offset+5).join(',')+'.':'';
-         const first=await generateJson(half,prompt+'\nTRANSPORT FRACTIONNÉ PRIORITAIRE: produire seulement les questions 1 à 5 du lot initial, EXACTEMENT 5 questions.'+phaseNote(0),settings);
-         const second=await generateJson(half,prompt+'\nTRANSPORT FRACTIONNÉ PRIORITAIRE: produire seulement les questions 6 à 10 du lot initial, EXACTEMENT 5 questions. Ne pas répéter ces énoncés: '+JSON.stringify(first.questions.map((q:any)=>q.statement))+phaseNote(5),settings);
+         const half=(offset:number)=>generationContract(contract.mode,{
+           count:5,
+           phases:contract.phaseSequence?.slice(offset,offset+5)??qs.properties.phase.enum,
+           courseKeys:qs.properties.course_section_key.enum??[],
+         });
+         const phases=(offset:number)=>contract.phaseSequence
+           ?' Phases obligatoires de ces cinq questions: '+contract.phaseSequence.slice(offset,offset+5).join(',')+'.'
+           :'';
+         const first=await generateJson(half(0),prompt+'\nTRANSPORT FRACTIONNÉ: produire uniquement questions 1 à 5, exactement cinq questions.'+phases(0),settings);
+         const second=await generateJson(half(5),prompt+'\nTRANSPORT FRACTIONNÉ: produire uniquement questions 6 à 10, exactement cinq questions. Éviter les doublons: '+JSON.stringify(first.questions.map((q:any)=>q.statement))+phases(5),settings);
          const combined={questions:[...first.questions,...second.questions]};
          validateStructure(contract.schema,combined);
          return combined;
