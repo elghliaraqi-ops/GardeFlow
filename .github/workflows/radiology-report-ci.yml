@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'source/lib/screens/radiology_report_screen.dart'
+      - 'source/lib/data/radiology_exam_regions.dart'
+      - 'source/test/radiology_exam_regions_test.dart'
       - 'source/lib/screens/radiology_report_library_screen.dart'
       - 'source/lib/services/radiology_report_archive_service.dart'
       - 'source/test/radiology_report_library_test.dart'
@@ -35,10 +37,10 @@ jobs:
         run: flutter pub get
       - name: Radiology module widget tests
         working-directory: source
-        run: flutter test test/radiology_report_screen_test.dart test/radiology_report_library_test.dart
+        run: flutter test test/radiology_report_screen_test.dart test/radiology_report_library_test.dart test/radiology_exam_regions_test.dart
       - name: Analyze reporting screen and Practice navigation
         working-directory: source
-        run: flutter analyze lib/screens/radiology_report_screen.dart lib/screens/radiology_report_library_screen.dart lib/services/radiology_report_archive_service.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze lib/screens/radiology_report_screen.dart lib/data/radiology_exam_regions.dart lib/screens/radiology_report_library_screen.dart lib/services/radiology_report_archive_service.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
 
   edge-function:
     runs-on: ubuntu-latest
