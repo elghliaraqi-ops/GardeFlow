@@ -141,7 +141,10 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
             'CONCLUSION', str(result['conclusion']),
           ].join('\n');
           step = 2;
+          unsavedEdits = true;
         });
+        // A storage failure must never erase the generated report.
+        await saveCurrentReport();
       }
     } on FunctionException catch (e) {
       final details = obj(e.details);
