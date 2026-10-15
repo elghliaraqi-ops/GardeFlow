@@ -64,17 +64,27 @@ export function structuredReport(
     /(maxillaire|frontal|ethmoïdal|sphénoïdal)/i.test(q.title));
   const groupedMucosa = sinus && mucosa.length === 4 &&
     mucosa.every(q => okNegative(q, answers));
-  if (groupedMucosa)
-    add('Sinus', 'Bonne aération de l’ensemble des sinus de la face, sans épaississement muqueux ni comblement');
   const risk = questions.filter(q => q.section === 'Variantes à risque chirurgical');
   const groupedRisk = sinus && risk.length >= 4 && risk.every(q => okNegative(q, answers));
-  if (groupedRisk)
-    add('Variantes à risque chirurgical',
-      'Pas de déhiscence identifiée des lames criblées, lames papyracées et des canaux optiques ou carotidiens, ni de variante à risque parmi les structures chirurgicales évaluées');
+  let mucosaWritten = false;
+  let riskWritten = false;
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
-    if (groupedMucosa && mucosa.some(v => v.id === q.id)) continue;
-    if (groupedRisk && risk.some(v => v.id === q.id)) continue;
+    if (groupedMucosa && mucosa.some(v => v.id === q.id)) {
+      if (!mucosaWritten) {
+        add('Sinus', 'Bonne aération de l’ensemble des sinus de la face, sans épaississement muqueux ni comblement');
+        mucosaWritten = true;
+      }
+      continue;
+    }
+    if (groupedRisk && risk.some(v => v.id === q.id)) {
+      if (!riskWritten) {
+        add('Variantes à risque chirurgical',
+          'Pas de déhiscence identifiée des lames criblées, lames papyracées et des canaux optiques ou carotidiens, ni de variante à risque parmi les structures chirurgicales évaluées');
+        riskWritten = true;
+      }
+      continue;
+    }
     const a = record(answers[q.id]), obs = observations[i];
     if (obs.status === 'non_renseigne') {
       skips.push(q.title + ' : non renseigné'); continue;
