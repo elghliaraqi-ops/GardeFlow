@@ -96,3 +96,23 @@ Deno.test('modality and acquisition guide selection of true evaluable questions'
     .some(q => q.section === 'Voies biliaires'),
     'Abdominal ultrasound must assess bile ducts');
 });
+
+Deno.test('sinus air-fluid level prevents global normal aeration shortcut', () => {
+  const t = sinus();
+  const answers = Object.fromEntries(t.questions.map(q => [q.id, {
+    status: 'observed', value: 'non', notes: '',
+  }]));
+  const liquid = t.questions.find(q => /niveau hydro.aérique/i.test(q.title));
+  assert(liquid, 'Sinus standard checklist includes air-fluid level');
+  answers[liquid!.id] = {status: 'observed', value: 'oui', notes: 'sinus maxillaire gauche'};
+  const report = structuredReport({
+    exam:'TDM', region:'sinus', indication:'Rhinorrhée', technique:'sans injection',
+    comparative:false, oldReports:'',
+  }, t.questions, answers);
+  assert(!report.results.includes('Bonne aération de l’ensemble des sinus'),
+    'Positive sinus fluid contraindicates global aeration normality');
+  assert(report.results.includes('sinus maxillaire gauche'),
+    'Positive fluid and laterality must remain');
+  assert(!report.conclusion.includes('Pas d’anomalie inflammatoire'),
+    'Do not conclude normality when abnormal fluid observed');
+});
