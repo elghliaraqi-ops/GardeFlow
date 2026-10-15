@@ -8,7 +8,7 @@ on:
       - 'source/lib/screens/radiology_report_library_screen.dart'
       - 'source/lib/services/radiology_report_archive_service.dart'
       - 'source/test/radiology_report_library_test.dart'
-      - 'supabase/migrations/*radiology_reports_private_library.sql'
+      - 'supabase/migrations/*radiology_report*.sql'
       - 'source/lib/screens/practice_screen.dart'
       - 'source/test/radiology_report_screen_test.dart'
       - 'source/supabase/functions/generate-radiology-report/**'
@@ -49,13 +49,14 @@ jobs:
         with:
           deno-version: v2.x
       - name: Check Edge Function typing
-        run: deno check source/supabase/functions/generate-radiology-report/index.ts source/supabase/functions/generate-radiology-report/radiology_templates.ts source/supabase/functions/generate-radiology-report/structured_report.ts
+        run: deno check source/supabase/functions/generate-radiology-report/index.ts source/supabase/functions/generate-radiology-report/radiology_templates.ts source/supabase/functions/generate-radiology-report/structured_report.ts source/supabase/functions/generate-radiology-report/radiology_semiology.ts
       - name: Test factual observation logic and fallback
-        run: deno test source/supabase/functions/generate-radiology-report/report_contract_test.ts source/supabase/functions/generate-radiology-report/structured_report_test.ts source/supabase/functions/generate-radiology-report/question_compatibility_test.ts
+        run: deno test source/supabase/functions/generate-radiology-report/report_contract_test.ts source/supabase/functions/generate-radiology-report/structured_report_test.ts source/supabase/functions/generate-radiology-report/question_compatibility_test.ts source/supabase/functions/generate-radiology-report/indication_semiology_test.ts
       - name: Mirror stays identical
         run: |
           cmp source/supabase/functions/generate-radiology-report/index.ts supabase/functions/generate-radiology-report/index.ts
           cmp source/supabase/functions/generate-radiology-report/report_contract.ts supabase/functions/generate-radiology-report/report_contract.ts
           cmp source/supabase/functions/generate-radiology-report/radiology_templates.ts supabase/functions/generate-radiology-report/radiology_templates.ts
+          cmp source/supabase/functions/generate-radiology-report/radiology_semiology.ts supabase/functions/generate-radiology-report/radiology_semiology.ts
           cmp source/supabase/functions/generate-radiology-report/structured_report.ts supabase/functions/generate-radiology-report/structured_report.ts
           cmp source/supabase/functions/generate-radiology-report/question_compatibility.ts supabase/functions/generate-radiology-report/question_compatibility.ts
