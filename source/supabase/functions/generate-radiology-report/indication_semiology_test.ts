@@ -15,7 +15,7 @@ Deno.test('right iliac fossa automatically checks appendicitis and mimics', () =
     assert(matches(q,term), 'Missing differentiator ' + term);
   }
   assert(q[0].includes('appendice'), 'Focused signs prioritized');
-  assert(matches(q,/foie/), 'Full anatomic survey also retained');
+  assert(matches(q,/hépatique|biliaires/), 'Full anatomic survey also retained');
 });
 
 Deno.test('female RLQ includes separate ovarian torsion, hemorrhagic cyst and PID', () => {
