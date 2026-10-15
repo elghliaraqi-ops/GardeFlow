@@ -162,6 +162,51 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     }
   }
 
+  Future<void> saveCurrentReport() async {
+    if (savingToArchive || reportText.text.trim().isEmpty) return;
+    setState(() { savingToArchive = true; saveError = null; });
+    try {
+      final id = await RadiologyReportArchiveService.instance.save(
+        id: savedReportId,
+        examType: exam, region: region.text,
+        indication: indication.text, examDate: examDate,
+        reportText: reportText.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        savedReportId = id;
+        unsavedEdits = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        saveError = 'Enregistrement impossible : $e. '
+          'Le compte rendu reste disponible pour un nouvel essai.';
+      });
+    } finally {
+      if (mounted) setState(() => savingToArchive = false);
+    }
+  }
+
+  Future<void> chooseExamDate() async {
+    final today = DateTime.now();
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: examDate ?? today,
+      firstDate: DateTime(1990),
+      lastDate: DateTime(today.year + 2, 12, 31),
+      helpText: 'Date de l’examen',
+    );
+    if (chosen != null && mounted) {
+      setState(() => examDate = chosen);
+    }
+  }
+
+  Future<void> openArchive() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const RadiologyReportLibraryScreen(),
+    ));
+  }
+
   InputDecoration decor(String label, [String? hint]) => InputDecoration(
     labelText: label, hintText: hint,
     labelStyle: const TextStyle(color: muted),
