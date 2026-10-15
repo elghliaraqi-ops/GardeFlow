@@ -146,6 +146,9 @@ Deno.test('scanner TAP full anatomy: shorthand and French variants cover 3 regio
     assert(sections.indexOf('Abdomen · ') < sections.indexOf('Pelvis · '),
       'Abdomen before pelvis');
   }
+  assert(examTemplate('TDM','thorax','bilan',
+    'Acquisition thoraco-abdomino-pelvienne injectée')?.key === 'tap_ct',
+    'Current protocol explicitly declaring TAP must cover all three regions');
   assert(!isTapCt('TDM','Thorax'), 'Thorax alone must remain chest-only');
   assert(!isTapCt('TDM','abdomen-pelvis'), 'Abdominal CT must not invent chest');
   assert(!isTapCt('Radiographie','thoraco-abdomino-pelvien'),
