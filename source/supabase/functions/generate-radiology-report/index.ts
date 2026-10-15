@@ -91,6 +91,37 @@ function validateAnswers(questions: Question[], value: unknown): boolean {
   }
   return true;
 }
+function observedStatus(q: Question, a: Record<string, unknown>): string {
+  const status = text(a.status, 30);
+  if (status === 'not_evaluable') return 'non évaluable';
+  if (status === 'uncertain') return 'incertain';
+  if (status === 'unanswered') return 'non renseigné';
+  if (status === 'absent') return 'absent (aucune proposition retenue)';
+  if (q.kind === 'qcu') return a.value === 'oui' ? 'présent' : 'absent';
+  if (q.kind === 'qcm') {
+    const signs = cleanArray(a.selected, 6);
+    return 'présents : ' + signs.join(' ; ') +
+      ' (autres propositions non renseignées)';
+  }
+  return 'observation décrite par le lecteur';
+}
+function groundedReview(questions: Question[], answers: Record<string, unknown>,
+    generated: unknown) {
+  const learned = Array.isArray(generated) ? generated.map(object) : [];
+  return questions.map((q, i) => {
+    const a = object(answers[q.id]);
+    return {
+      sign: q.title,
+      status: observedStatus(q, a),
+      definition: q.definition,
+      criteria: q.criteria.join(' ; '),
+      // Generated pedagogical explanations are not allowed to override
+      // the physician's explicitly recorded present/absent/uncertain state.
+      takeaway: text(learned[i]?.takeaway, 600) ||
+        'Revoir les critères objectifs de ce signe.',
+    };
+  });
+}
 function rateLimitSeconds(response: Response, payload: any): number | null {
   const n = Number(response.headers.get('retry-after'));
   if (Number.isFinite(n) && n > 0) return Math.min(86400, Math.ceil(n));
@@ -174,7 +205,7 @@ Signale non-évaluable ou incertain si important. Ne conclus à une stabilité/p
 sur les comparaisons ACTUELLEMENT renseignées par le radiologue. N'invente pas de mesures,
 contraste, protocoles, antériorités, dates, diagnostics ou examens. Si la technique n'est pas
 précisée, l'indiquer sobrement sans en inventer une.
-Le bilan pédagogique doit lister les signes recherchés et leur statut réel
+Le bilan pédagogique contient un item par question, dans le même ordre.\nLe bilan pédagogique doit lister les signes recherchés et leur statut réel
 (présent/absent/non évalué/incertain), définitions, critères et points clés.
 Le bilan est DISTINCT du compte rendu copiable.
 L'utilisateur est le médecin : le texte reste un projet à vérifier et valider.`;
@@ -225,20 +256,17 @@ Deno.serve(async req => {
     };
     if (!report.indication || !report.technique || !report.results || !report.conclusion)
       return reply({ error: 'invalid_generated_report' }, 502);
-    const review = Array.isArray(result.data?.review)
-      ? result.data.review.slice(0, 18).map((v: unknown) => {
-        const o = object(v);
-        return {
-          sign: text(o.sign, 260),
-          status: text(o.status, 60),
-          definition: text(o.definition, 600),
-          criteria: text(o.criteria, 800),
-          takeaway: text(o.takeaway, 600),
-        };
-      }).filter((v: any) => v.sign)
-      : [];
+    const answers = object(input.answers);
+    const review = groundedReview(questions, answers, result.data?.review);
+    const gaps = questions.filter(q =>
+      ['unanswered', 'not_evaluable', 'uncertain']
+        .includes(text(object(answers[q.id]).status, 30)))
+      .map(q => q.title + ' : non documenté ou non évaluable.');
     return reply({
-      report, review, quality_warnings: cleanArray(result.data?.quality_warnings, 15),
+      report, review,
+      quality_warnings: [...new Set([
+        ...gaps, ...cleanArray(result.data?.quality_warnings, 15),
+      ])].slice(0, 18),
     });
   }
   return reply({ error: 'unknown_action' }, 400);
