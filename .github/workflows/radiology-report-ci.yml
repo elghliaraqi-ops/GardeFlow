@@ -60,4 +60,5 @@ jobs:
           cmp source/supabase/functions/generate-radiology-report/radiology_semiology.ts supabase/functions/generate-radiology-report/radiology_semiology.ts
           cmp source/supabase/functions/generate-radiology-report/radiology_history.ts supabase/functions/generate-radiology-report/radiology_history.ts
           cmp source/supabase/functions/generate-radiology-report/structured_report.ts supabase/functions/generate-radiology-report/structured_report.ts
+          cmp source/supabase/functions/generate-radiology-report/radiology_prose.ts supabase/functions/generate-radiology-report/radiology_prose.ts
           cmp source/supabase/functions/generate-radiology-report/question_compatibility.ts supabase/functions/generate-radiology-report/question_compatibility.ts
