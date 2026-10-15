@@ -1,4 +1,5 @@
 import { confirmedObservations, type QuestionFact } from './report_contract.ts';
+import { sentence, positiveDescription, reportingSection } from './radiology_prose.ts';
 
 // In a systematic exam each NORMAL phrase is emitted only after the physician
 // explicitly answered "absent" to its corresponding abnormality question.
@@ -22,26 +23,54 @@ const okNegative = (q: ReportingQuestion, answers: Record<string, unknown>) => {
     (q.kind === 'qcu' && a.status === 'observed' && a.value === 'non');
 };
 function minus(s: string): string {
-  return '- ' + s.replace(/^[\-•\s]+/, '').trim().replace(/\.+$/, '') + '.';
+  return '- ' + sentence(s);
 }
-function phrase(q: ReportingQuestion, a: Answer, status: string, details: string): string {
-  if (status === 'absent') {
-    return string(q.normal_text) || ('Absence de ' + q.title.toLowerCase().replace(/\?$/, ''));
-  }
+function phrase(q: ReportingQuestion, a: Answer, status: string): string {
+  if (status === 'absent') return sentence(string(q.normal_text));
   if (status !== 'présent') return '';
   const notes = string(a.notes);
-  if (q.kind === 'texte') return string(a.value) + (notes ? ' ; ' + notes : '');
+  if (q.kind === 'texte') {
+    const free = string(a.value);
+    return sentence(free + (notes ? ' (' + notes + ')' : ''));
+  }
   if (q.kind === 'qcm') {
     const selected = Array.isArray(a.selected)
       ? a.selected.filter((v): v is string => typeof v === 'string' && q.options.includes(v))
       : [];
-    return 'Présence des signes suivants : ' + selected.join(', ') +
-      (notes ? ' ; ' + notes : '');
+    if (!selected.length) return '';
+    // A multiple-choice selection documents ONLY checked options.
+    // Unchecked options remain unknown, never read as negative.
+    if (notes && notes.length > 34 &&
+        /[.;]/.test(notes)) return sentence(notes);
+    return sentence('Les signes suivants sont mis en évidence : ' +
+      selected.join(', ') + (notes ? ' (' + notes + ')' : ''));
   }
-  let base = string(q.abnormal_text) || q.title.replace(/\?$/, '');
-  if (notes) base += ' ' + notes;
-  else base += ' (topographie et caractéristiques non précisées)';
-  return base;
+  return positiveDescription(q.title, string(q.abnormal_text), notes);
+}
+/** 1-3 coherent sentences per bullet instead of a check-list of negatives. */
+function compactResults(lines: {text:string; positive:boolean}[]): string[] {
+  const written: string[] = [], negatives: string[] = [];
+  const flush = () => {
+    if (!negatives.length) return;
+    written.push(minus(negatives.join(' ')));
+    negatives.length = 0;
+  };
+  let size = 0;
+  for (const entry of lines) {
+    if (entry.positive) {
+      flush();
+      size = 0;
+      written.push(minus(entry.text));
+      continue;
+    }
+    if (size + entry.text.length > 240 || negatives.length === 3) {
+      flush(); size = 0;
+    }
+    negatives.push(sentence(entry.text));
+    size += entry.text.length;
+  }
+  flush();
+  return written;
 }
 export function structuredReport(
   clinical: ReportContext,
@@ -49,11 +78,11 @@ export function structuredReport(
   answers: Record<string, unknown>,
 ) {
   const observations = confirmedObservations(questions, answers);
-  const sections = new Map<string, string[]>();
+  const sections = new Map<string, {text:string; positive:boolean}[]>();
   const skips: string[] = [];
-  const add = (section: string, content: string) => {
+  const add = (section: string, content: string, positive = false) => {
     if (!sections.has(section)) sections.set(section, []);
-    sections.get(section)!.push(minus(content));
+    sections.get(section)!.push({text:content, positive});
   };
   const sinus = questions.length > 0 &&
     questions.some(q => q.section === 'Variantes à risque chirurgical') &&
@@ -100,11 +129,12 @@ export function structuredReport(
     if (obs.status === 'incertain') {
       skips.push(q.title + ' : incertain'); continue;
     }
-    const p = phrase(q, a, obs.status, obs.details);
-    if (p) add(string(q.section) || 'Constatations', p);
+    const p = phrase(q, a, obs.status);
+    if (p) add(reportingSection(string(q.section), q.title), p,
+      obs.status === 'présent');
   }
   const results = Array.from(sections.entries())
-    .map(([section, lines]) => section.toUpperCase() + ' :\n' + lines.join('\n'))
+    .map(([section, lines]) => section.toUpperCase() + ' :\n' + compactResults(lines).join('\n'))
     .join('\n\n') || '- Aucune observation actuelle confirmée.';
   const allSinusMucosaNegative = groupedMucosa &&
     questions.filter(q => q.section === 'Sinus').every(q => okNegative(q, answers));
