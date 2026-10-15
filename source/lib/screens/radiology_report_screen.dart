@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../services/supabase_backend_service.dart';
+import '../services/radiology_report_archive_service.dart';
+import 'radiology_report_library_screen.dart';
 import '../widgets/practice_qcm_medical_illustration.dart';
 import '../widgets/practice_quiz_widgets.dart';
 import '../widgets/practice_keyword_text.dart';
@@ -33,6 +35,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
   final Map<String, Map<String, dynamic>> answers = {};
   Map<String, dynamic>? report;
   List<String> warnings = [];
+  DateTime? examDate;
+  String? savedReportId, saveError;
+  bool savingToArchive = false, unsavedEdits = false;
 
   Map<String, dynamic> obj(dynamic x) =>
       x is Map ? Map<String, dynamic>.from(x) : <String, dynamic>{};
@@ -136,7 +141,10 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
             'CONCLUSION', str(result['conclusion']),
           ].join('\n');
           step = 2;
+          unsavedEdits = true;
         });
+        // A storage failure must never erase the generated report.
+        await saveCurrentReport();
       }
     } on FunctionException catch (e) {
       final details = obj(e.details);
@@ -157,6 +165,51 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     }
   }
 
+  Future<void> saveCurrentReport() async {
+    if (savingToArchive || reportText.text.trim().isEmpty) return;
+    setState(() { savingToArchive = true; saveError = null; });
+    try {
+      final id = await RadiologyReportArchiveService.instance.save(
+        id: savedReportId,
+        examType: exam, region: region.text,
+        indication: indication.text, examDate: examDate,
+        reportText: reportText.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        savedReportId = id;
+        unsavedEdits = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        saveError = 'Enregistrement impossible : $e. '
+          'Le compte rendu reste disponible pour un nouvel essai.';
+      });
+    } finally {
+      if (mounted) setState(() => savingToArchive = false);
+    }
+  }
+
+  Future<void> chooseExamDate() async {
+    final today = DateTime.now();
+    final chosen = await showDatePicker(
+      context: context,
+      initialDate: examDate ?? today,
+      firstDate: DateTime(1990),
+      lastDate: DateTime(today.year + 2, 12, 31),
+      helpText: 'Date de l’examen',
+    );
+    if (chosen != null && mounted) {
+      setState(() => examDate = chosen);
+    }
+  }
+
+  Future<void> openArchive() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const RadiologyReportLibraryScreen(),
+    ));
+  }
+
   InputDecoration decor(String label, [String? hint]) => InputDecoration(
     labelText: label, hintText: hint,
     labelStyle: const TextStyle(color: muted),
@@ -172,10 +225,11 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
   );
   Widget field(TextEditingController c, String label,
-      {int rows = 1, bool required = false, String? hint}) => TextFormField(
+      {int rows = 1, bool required = false, String? hint,
+       int? maxChars}) => TextFormField(
     controller: c,
     maxLines: rows,
-    maxLength: rows > 1 ? 8500 : 180,
+    maxLength: maxChars ?? (rows > 1 ? 8500 : 180),
     style: const TextStyle(color: Colors.white),
     decoration: decor(label, hint),
     validator: required
@@ -221,6 +275,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       setState(() => error = 'Collez les anciens comptes rendus du comparatif.');
       return;
     }
+    // Starting a new guided reading must never overwrite the previous
+    // patient's saved report, even if the form was reused.
+    savedReportId = null;
     generate('plan');
   }
   Widget setup() => block(Form(
@@ -243,10 +300,25 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         onChanged: (x) => setState(() => exam = x ?? 'TDM'),
       ),
       const SizedBox(height: 10),
+      OutlinedButton.icon(
+        onPressed: chooseExamDate,
+        icon: const Icon(Icons.event_outlined),
+        label: Text(examDate == null
+            ? 'Date de l’examen (facultative)'
+            : 'Examen du ' + examDate!.day.toString().padLeft(2, '0') +
+              '/' + examDate!.month.toString().padLeft(2, '0') +
+              '/' + examDate!.year.toString()),
+      ),
+      if (examDate != null)
+        TextButton(
+          onPressed: () => setState(() => examDate = null),
+          child: const Text('Effacer la date'),
+        ),
+      const SizedBox(height: 10),
       field(region, 'Région anatomique *', required: true,
         hint: 'Ex. encéphale, thorax, abdomino-pelvien, rochers'),
       field(indication, 'Indication / question clinique *',
-        rows: 3, required: true),
+        rows: 3, required: true, maxChars: 1800),
       field(technique, 'Protocole effectivement réalisé', rows: 2,
         hint: 'Avec/sans contraste, phases, séquences et limites'),
       field(clinical, 'Contexte / antécédents / bilan utiles', rows: 3),
@@ -531,10 +603,23 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
           style: TextStyle(color: muted)),
         const SizedBox(height: 12),
         TextField(controller: reportText, minLines: 15, maxLines: null,
+          onChanged: (_) => setState(() => unsavedEdits = true),
           style: const TextStyle(color: Colors.white, height: 1.5),
           decoration: decor('Compte rendu radiologique')),
         const SizedBox(height: 11),
+        if (savedReportId != null && !unsavedEdits)
+          const Text('CR enregistré dans votre bibliothèque',
+            style: TextStyle(color: mint, fontWeight: FontWeight.w800)),
+        if (savingToArchive)
+          const LinearProgressIndicator(color: mint),
+        if (saveError != null)
+          Text(saveError!,
+            style: const TextStyle(color: Color(0xFFFFD166))),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          button('Enregistrer le CR', saveCurrentReport,
+            icon: Icons.save_outlined),
+          button('Ma bibliothèque', openArchive,
+            secondary: true, icon: Icons.folder_copy_outlined),
           button('Copier', () async {
             await Clipboard.setData(ClipboardData(text: reportText.text));
             if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -600,7 +685,14 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: bg,
     appBar: AppBar(title: const Text('Assistant CR Radiologie'),
-      backgroundColor: bg, foregroundColor: Colors.white),
+      backgroundColor: bg, foregroundColor: Colors.white,
+      actions: [
+        IconButton(
+          tooltip: 'Mes comptes rendus',
+          icon: const Icon(Icons.folder_copy_outlined),
+          onPressed: openArchive,
+        ),
+      ]),
     body: Container(
       decoration: BoxDecoration(
         gradient: step == 1 ? PracticeDailyVisualTheme.pageGradient : null,
