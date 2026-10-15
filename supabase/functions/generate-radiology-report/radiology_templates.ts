@@ -86,8 +86,8 @@ function tagged(rows: Entry[], region: string): Entry[] {
     [region + ' · ' + section, title, normal, definition, criteria, query]);
 }
 /** Identifies a true TDM thoraco-abdomino-pelvienne, never chest CT alone. */
-export function isTapCt(exam: string, region: string): boolean {
-  const value = s(exam + ' ' + region);
+export function isTapCt(exam: string, region: string, technique = ''): boolean {
+  const value = s(exam + ' ' + region + ' ' + technique);
   const ct = /\b(tdm|ct|scanner|tomodensitometrie)\b/.test(value);
   const shorthand = /(?:^|[^a-z])t\s*\.?\s*a\s*\.?\s*p(?:[^a-z]|$)/.test(value);
   const complete = /(thorac|thorax|poumon)/.test(value) &&
@@ -164,7 +164,7 @@ export type ExamTemplate = { key: string; label: string; questions: GuidedQuesti
 export function examTemplate(exam: string, region: string, indication = '', technique = ''): ExamTemplate | null {
   const e = s(exam), r = s(region), ind = s(indication), tech = s(technique);
   let key = '';
-  if (isTapCt(exam, region)) key = 'tap_ct';
+  if (isTapCt(exam, region, technique)) key = 'tap_ct';
   else if (/(sinus|rhin|naso.sinus)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'sinus';
   else if (/(rocher|temporal|oreille)/.test(r) && /(tdm|ct|scanner)/.test(e)) key = 'temporal_ct';
   else if (/(uro|rein|urinaire|renal)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'urinary_ct';
