@@ -1,0 +1,50 @@
+name: Radiology report assistant - validate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/screens/radiology_report_screen.dart'
+      - 'source/lib/screens/practice_screen.dart'
+      - 'source/test/radiology_report_screen_test.dart'
+      - 'source/supabase/functions/generate-radiology-report/**'
+      - 'supabase/functions/generate-radiology-report/**'
+      - '.github/workflows/radiology-report-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Radiology module widget tests
+        working-directory: source
+        run: flutter test test/radiology_report_screen_test.dart
+      - name: Analyze reporting screen and Practice navigation
+        working-directory: source
+        run: flutter analyze lib/screens/radiology_report_screen.dart lib/screens/practice_screen.dart --no-fatal-infos --no-fatal-warnings
+
+  edge-function:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check Edge Function typing
+        run: deno check source/supabase/functions/generate-radiology-report/index.ts
+      - name: Mirror stays identical
+        run: cmp source/supabase/functions/generate-radiology-report/index.ts supabase/functions/generate-radiology-report/index.ts
