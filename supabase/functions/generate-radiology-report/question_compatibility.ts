@@ -45,9 +45,16 @@ export function compatibleQuestionSet<T extends PlanQuestion>(
   // Keep explicit clinical indication questions even in old clients with a
   // 12-item limit. Reserve the rest for the anatomical survey rather than
   // crowding it out with differential questions (or vice versa).
+  const historyIndices = questions.flatMap((q, i) =>
+    q.section?.startsWith('Antécédents · ') ? [i] : []);
   const indications = questions.flatMap((q, i) =>
     q.section?.startsWith('Indication · ') ? [i] : []);
-  const focusedBudget = Math.min(indications.length, Math.floor(capacity / 2));
+  const historyBudget = Math.min(historyIndices.length,
+    Math.max(1, Math.floor(capacity / 3)));
+  for (let i = 0; i < historyBudget && chosen.size < capacity; i++)
+    chosen.add(historyIndices[i]);
+  const focusedBudget = Math.min(indications.length, historyIndices.length > 0
+    ? Math.floor(capacity / 3) : Math.floor(capacity / 2));
   for (let i = 0; i < focusedBudget && chosen.size < capacity; i++)
     chosen.add(indications[i]);
 
