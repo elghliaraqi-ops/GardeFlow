@@ -42,6 +42,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enregistrer les modifications'), findsOneWidget);
     expect(find.text('Copier'), findsOneWidget);
+    expect(find.text('Supprimer ce CR'), findsOneWidget);
+    await tester.tap(find.text('Supprimer ce CR'));
+    await tester.pumpAndSettle();
+    expect(find.text('Supprimer ce compte rendu ?'), findsOneWidget);
+    expect(find.text('Supprimer définitivement'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    expect(find.text('Supprimer ce compte rendu ?'), findsNothing);
     expect(find.byType(TextField), findsWidgets);
   });
 }

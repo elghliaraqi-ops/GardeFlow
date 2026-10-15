@@ -63,6 +63,22 @@ class RadiologyReportArchiveService {
     return result['id'] as String;
   }
 
+  /// Delete exactly one report owned by the current authenticated user.
+  Future<void> deleteOwn(String id) async {
+    final uid = _userId();
+    if (id.isEmpty) throw StateError('Compte rendu invalide.');
+    final removed = await _backend.client
+        .from('radiology_reports')
+        .delete()
+        .eq('owner_id', uid)
+        .eq('id', id)
+        .select('id')
+        .maybeSingle();
+    if (removed == null) {
+      throw StateError('Compte rendu introuvable ou non autorisé.');
+    }
+  }
+
   /// Search is performed by PostgREST against the database, not only locally
   /// against a few recent records. A page is bounded to keep mobile use fast.
   Future<List<Map<String, dynamic>>> search({
