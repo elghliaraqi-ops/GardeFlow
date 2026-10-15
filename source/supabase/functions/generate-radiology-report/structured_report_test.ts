@@ -183,3 +183,67 @@ Deno.test('scanner TAP report: 3 verified regions appear; skipped pelvis is not 
   assert(incomplete.missing.some(s => /vésic|pelvien/i.test(s)),
     'Skipped pelvic structures must be explicitly identified');
 });
+
+
+Deno.test('professional radiology prose: objective sentences, exact findings and no status inventory', () => {
+  const t = examTemplate('TDM', 'abdomino-pelvien', 'Douleur fosse iliaque droite',
+    'Acquisition injectée en phase portale', 'female', 'ACFA connue')!;
+  const question = (token: RegExp) => {
+    const found = t.questions.find(q => token.test(q.title));
+    assert(found, 'Required targeted sign not found: ' + token);
+    return found!;
+  };
+  const app = question(/^Appendice dilaté/);
+  const renal = question(/Plage splénique périphérique/);
+  const hep = question(/^Lésion focale hépatique/);
+  const bile = question(/^Dilatation des voies biliaires/);
+  const answers = {
+    [app.id]: {
+      status: 'observed', value: 'oui',
+      notes: 'Appendice mesurant 11 mm de diamètre, à paroi épaissie, avec infiltration de la graisse périappendiculaire en fosse iliaque droite.',
+    },
+    [renal.id]: { status: 'not_evaluable', value: '', notes: '' },
+    [hep.id]: { status: 'observed', value: 'non', notes: '' },
+    [bile.id]: { status: 'observed', value: 'non', notes: '' },
+  };
+  const r = structuredReport({
+    exam:'TDM',region:'abdomino-pelvien',
+    indication:'Douleur fosse iliaque droite',technique:'phase portale',
+    comparative:false,oldReports:'',
+  },t.questions,answers);
+  assert(r.results.includes('Appendice mesurant 11 mm de diamètre'),
+    'Physician full sentence and exact measurements must be used verbatim');
+  assert(r.results.includes('infiltration de la graisse périappendiculaire'),
+    'Localisation and actual finding preserved');
+  assert(r.results.includes('FOIE ET VOIES BILIAIRES'),
+    'Anatomical organ heading used');
+  const liverLines = r.results.split('FOIE ET VOIES BILIAIRES :')[1].split('\n\n')[0]
+    .split('\n').filter(x => x.startsWith('- '));
+  assert(liverLines.length === 1,
+    'Two verified normal liver and bile observations must combine into one coherent paragraph');
+  assert(!/:\s*(présent|absent|oui|non)\b/i.test(r.results),
+    'Never show machine-status inventory in final clinical report');
+  assert(!r.results.includes('Plage splénique périphérique'),
+    'Non-evaluable infarction must not become normal or positive in the report');
+  assert(r.missing.some(x => x.includes('splénique')),
+    'Unavailable perfusion still appears in quality warnings');
+  assert(!r.results.includes('ANTÉCÉDENTS ·') && !r.results.includes('INDICATION ·'),
+    'Teaching categories must not appear as report organ headings');
+});
+
+Deno.test('partial report with a positive sign and brief measurement is readable', () => {
+  const t=examTemplate('TDM','sinus de la face','Rhinorrhée','sans injection')!;
+  const q=t.questions.find(q=>/épaississement muqueux ou comblement frontal/i.test(q.title))!;
+  const r=structuredReport({
+    exam:'TDM',region:'sinus',indication:'Rhinorrhée',
+    technique:'sans injection',comparative:false,oldReports:'',
+  },t.questions,{
+    [q.id]:{status:'observed',value:'oui',notes:'sinus frontal droit, épaisseur 3 mm'},
+  });
+  assert(r.results.includes('sinus frontal droit, épaisseur 3 mm'),
+    'Keep short exact measurements and lateralization');
+  assert(!/signe\s*:\s*présent/i.test(r.results),
+    'No status-led question transcript');
+  assert(!r.results.includes('Bonne aération de l’ensemble des sinus'),
+    'Positive finding must preclude falsely broad normality');
+});
