@@ -110,11 +110,10 @@ class _RadiologyReportLibraryScreenState
 
   @override
   Widget build(BuildContext context) {
-    const ink = PracticeDailyVisualTheme;
     return Theme(
       data: PracticeDailyVisualTheme.from(context),
       child: Scaffold(
-        backgroundColor: ink.background,
+        backgroundColor: PracticeDailyVisualTheme.background,
         appBar: AppBar(
           title: const Text('Bibliothèque des CR'),
           actions: [
@@ -126,37 +125,37 @@ class _RadiologyReportLibraryScreenState
           ],
         ),
         body: Container(
-          decoration: const BoxDecoration(gradient: ink.pageGradient),
+          decoration: const BoxDecoration(gradient: PracticeDailyVisualTheme.pageGradient),
           child: SafeArea(child: ListView(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: ink.surface,
+                  color: PracticeDailyVisualTheme.surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: ink.border),
+                  border: Border.all(color: PracticeDailyVisualTheme.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Row(children: [
                       Icon(Icons.folder_copy_rounded,
-                        color: ink.gold, size: 24),
+                        color: PracticeDailyVisualTheme.gold, size: 24),
                       SizedBox(width: 9),
                       Expanded(child: Text('Mes comptes rendus enregistrés',
-                        style: TextStyle(color: ink.text, fontSize: 17,
+                        style: TextStyle(color: PracticeDailyVisualTheme.text, fontSize: 17,
                           fontWeight: FontWeight.w900))),
                     ]),
                     const SizedBox(height: 6),
                     const Text(
                       'Archives privées de votre compte GardeFlow. '
                       'Recherchez, ouvrez, modifiez ou copiez un CR.',
-                      style: TextStyle(color: ink.muted, fontSize: 12)),
+                      style: TextStyle(color: PracticeDailyVisualTheme.muted, fontSize: 12)),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _term,
-                      style: const TextStyle(color: ink.text),
+                      style: const TextStyle(color: PracticeDailyVisualTheme.text),
                       decoration: const InputDecoration(
                         labelText: 'Rechercher par indication',
                         hintText: 'Ex. céphalées, douleur abdominale…',
@@ -233,7 +232,7 @@ class _RadiologyReportLibraryScreenState
               ),
               if (_loading) ...[
                 const SizedBox(height: 12),
-                const LinearProgressIndicator(color: ink.mint),
+                const LinearProgressIndicator(color: PracticeDailyVisualTheme.mint),
               ],
               if (_error.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -242,7 +241,7 @@ class _RadiologyReportLibraryScreenState
               ],
               const SizedBox(height: 18),
               Text('${_reports.length} résultat(s) affiché(s)',
-                style: const TextStyle(color: ink.muted,
+                style: const TextStyle(color: PracticeDailyVisualTheme.muted,
                   fontWeight: FontWeight.w800)),
               const SizedBox(height: 10),
               if (!_loading && _error.isEmpty && _reports.isEmpty)
@@ -251,12 +250,12 @@ class _RadiologyReportLibraryScreenState
                   child: Text(
                     'Aucun compte rendu pour ces filtres. '
                     'Les nouveaux CR apparaîtront ici après leur génération.',
-                    style: TextStyle(color: ink.muted),
+                    style: TextStyle(color: PracticeDailyVisualTheme.muted),
                     textAlign: TextAlign.center),
                 ),
               for (final record in _reports) ...[
                 Material(
-                  color: ink.surface,
+                  color: PracticeDailyVisualTheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   child: InkWell(
                     key: ValueKey('report-' + _str(record['id'])),
@@ -266,11 +265,11 @@ class _RadiologyReportLibraryScreenState
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: ink.border),
+                        border: Border.all(color: PracticeDailyVisualTheme.border),
                       ),
                       child: Row(children: [
                         const Icon(Icons.description_outlined,
-                          color: ink.gold, size: 23),
+                          color: PracticeDailyVisualTheme.gold, size: 23),
                         const SizedBox(width: 10),
                         Expanded(child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,22 +277,22 @@ class _RadiologyReportLibraryScreenState
                             Text(
                               '${_str(record['exam_type'])} • '
                               '${_str(record['region'])}',
-                              style: const TextStyle(color: ink.text,
+                              style: const TextStyle(color: PracticeDailyVisualTheme.text,
                                 fontWeight: FontWeight.w800, fontSize: 14)),
                             const SizedBox(height: 5),
                             Text(_str(record['indication']),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: ink.muted,
+                              style: const TextStyle(color: PracticeDailyVisualTheme.muted,
                                 fontSize: 12)),
                             const SizedBox(height: 6),
                             Text(_dateCaption(record),
-                              style: const TextStyle(color: ink.mint,
+                              style: const TextStyle(color: PracticeDailyVisualTheme.mint,
                                 fontSize: 11)),
                           ],
                         )),
                         const Icon(Icons.chevron_right_rounded,
-                          color: ink.gold),
+                          color: PracticeDailyVisualTheme.gold),
                       ]),
                     ),
                   ),
@@ -406,7 +405,6 @@ class _RadiologyArchivedReportDetailState
 
   @override
   Widget build(BuildContext context) {
-    const c = PracticeDailyVisualTheme;
     return Theme(
       data: PracticeDailyVisualTheme.from(context),
       child: PopScope(
@@ -418,23 +416,23 @@ class _RadiologyArchivedReportDetailState
           }
         },
         child: Scaffold(
-          backgroundColor: c.background,
+          backgroundColor: PracticeDailyVisualTheme.background,
           appBar: AppBar(title: const Text('Compte rendu enregistré')),
           body: SafeArea(child: ListView(
             padding: const EdgeInsets.all(15),
             children: [
               Text('${widget.report['exam_type']} · '
                 '${widget.report['region']}',
-                style: const TextStyle(color: c.text,
+                style: const TextStyle(color: PracticeDailyVisualTheme.text,
                   fontSize: 20, fontWeight: FontWeight.w900)),
               const SizedBox(height: 7),
               const Text('Projet radiologique — validation médicale requise.',
-                style: TextStyle(color: c.muted, fontSize: 12)),
+                style: TextStyle(color: PracticeDailyVisualTheme.muted, fontSize: 12)),
               const SizedBox(height: 14),
               TextField(
                 controller: _indication,
                 onChanged: (_) => setState(() => _dirty = true),
-                style: const TextStyle(color: c.text),
+                style: const TextStyle(color: PracticeDailyVisualTheme.text),
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Indication',
@@ -444,7 +442,7 @@ class _RadiologyArchivedReportDetailState
               TextField(
                 controller: _text,
                 onChanged: (_) => setState(() => _dirty = true),
-                style: const TextStyle(color: c.text, height: 1.48),
+                style: const TextStyle(color: PracticeDailyVisualTheme.text, height: 1.48),
                 minLines: 18, maxLines: null,
                 decoration: const InputDecoration(
                   labelText: 'Compte rendu modifiable',
