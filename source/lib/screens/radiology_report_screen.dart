@@ -27,6 +27,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
   final clinical = TextEditingController(), technique = TextEditingController();
   final previous = TextEditingController(), reportText = TextEditingController();
   String exam = 'TDM';
+  String sex = 'unknown';
+  bool sexChosen = false;
+  String? clinicalPlanWarning;
   bool comparison = false, busy = false;
   int step = 0, position = 0;
   String? error;
@@ -54,6 +57,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     'exam': exam, 'region': region.text.trim(),
     'indication': indication.text.trim(), 'clinical': clinical.text.trim(),
     'technique': technique.text.trim(), 'comparative': comparison,
+    'sex': sex,
     'oldReports': comparison ? previous.text.trim() : '',
   };
   String get reportTitle {
@@ -115,6 +119,8 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
               received.length.toString() + ' questions reçues).');
         }
         setState(() {
+          clinicalPlanWarning = str(data['clinical_coverage_warning']).isNotEmpty
+              ? str(data['clinical_coverage_warning']) : null;
           questions = received;
           answers.clear();
           position = 0;
@@ -275,6 +281,14 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       setState(() => error = 'Collez les anciens comptes rendus du comparatif.');
       return;
     }
+    // A pelvic interpretation needs an explicit choice of organ anatomy.
+    final scope = (exam + ' ' + region.text + ' ' + technique.text).toLowerCase();
+    if (RegExp(r'abdom|pelv|\btap\b|bassin|uro|rein').hasMatch(scope)
+        && !sexChosen) {
+      setState(() => error = 'Précisez le sexe/anatomie pelvienne '
+          'pour orienter les diagnostics différentiels.');
+      return;
+    }
     // Starting a new guided reading must never overwrite the previous
     // patient's saved report, even if the form was reused.
     savedReportId = null;
@@ -315,6 +329,26 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
           child: const Text('Effacer la date'),
         ),
       const SizedBox(height: 10),
+      Material(
+        type: MaterialType.transparency,
+        child: DropdownButtonFormField<String>(
+          value: sexChosen ? sex : null,
+          dropdownColor: panel,
+          decoration: decor('Sexe / anatomie pelvienne *',
+            'Sélection utile pour les diagnostics différentiels'),
+          style: const TextStyle(color: Colors.white),
+          items: const [
+            DropdownMenuItem(value: 'female', child: Text('Féminin · utérus / annexes')),
+            DropdownMenuItem(value: 'male', child: Text('Masculin · prostate')),
+            DropdownMenuItem(value: 'other', child: Text('Autre / anatomie non précisée')),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() { sex = value; sexChosen = true; });
+          },
+        ),
+      ),
+      const SizedBox(height: 12),
       field(region, 'Région anatomique *', required: true,
         hint: 'Ex. encéphale, thorax, abdomino-pelvien, rochers'),
       field(indication, 'Indication / question clinique *',
@@ -723,6 +757,11 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
           const SizedBox(height: 12),
         ],
         if (step == 0) setup(),
+        if (step == 1 && clinicalPlanWarning != null) ...[
+          block(Text(clinicalPlanWarning!,
+            style: const TextStyle(color: Color(0xFFFFD166)))),
+          const SizedBox(height: 10),
+        ],
         if (step == 1 && questions.isNotEmpty) questionsView(),
         if (step == 2 && report != null) reportView(),
         if (step == 3) reviewView(),
