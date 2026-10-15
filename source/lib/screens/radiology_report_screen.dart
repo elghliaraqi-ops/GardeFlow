@@ -225,10 +225,11 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
   );
   Widget field(TextEditingController c, String label,
-      {int rows = 1, bool required = false, String? hint}) => TextFormField(
+      {int rows = 1, bool required = false, String? hint,
+       int? maxChars}) => TextFormField(
     controller: c,
     maxLines: rows,
-    maxLength: rows > 1 ? 8500 : 180,
+    maxLength: maxChars ?? (rows > 1 ? 8500 : 180),
     style: const TextStyle(color: Colors.white),
     decoration: decor(label, hint),
     validator: required
@@ -274,6 +275,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       setState(() => error = 'Collez les anciens comptes rendus du comparatif.');
       return;
     }
+    // Starting a new guided reading must never overwrite the previous
+    // patient's saved report, even if the form was reused.
+    savedReportId = null;
     generate('plan');
   }
   Widget setup() => block(Form(
@@ -314,7 +318,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       field(region, 'Région anatomique *', required: true,
         hint: 'Ex. encéphale, thorax, abdomino-pelvien, rochers'),
       field(indication, 'Indication / question clinique *',
-        rows: 3, required: true),
+        rows: 3, required: true, maxChars: 1800),
       field(technique, 'Protocole effectivement réalisé', rows: 2,
         hint: 'Avec/sans contraste, phases, séquences et limites'),
       field(clinical, 'Contexte / antécédents / bilan utiles', rows: 3),
