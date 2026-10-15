@@ -184,6 +184,9 @@ async function groq(system: string, user: unknown, budget: number) {
 }
 const planningPrompt = `Tu es radiologue senior francophone, niveau résidanat.
 Prépare un parcours systématique pour la modalité/région/protocole réellement demandé.
+Lis AUSSI chaque symptôme de l'indication, déduis les principales étiologies
+et diagnostics différentiels selon le contexte et le sexe anatomique,
+puis exige des questions de signes discriminants et pas seulement de l'anatomie.
 IMPORTANT : commence par les structures anatomiques habituelles et les signes
 fréquents ou incontournables, dans l'ordre de lecture d'un radiologue.
 Les diagnostics rares et traumatiques ne viennent qu'après le bilan de base,
@@ -280,9 +283,39 @@ Deno.serve(async req => {
   if (action === 'plan') {
     const capacity = clientQuestionCapacity(input.max_questions);
     const template = examTemplate(caseInput.exam, caseInput.region,
-      caseInput.indication, caseInput.technique);
+      caseInput.indication, caseInput.technique, caseInput.sex,
+      caseInput.clinical);
     if (template) {
-      const questions: Question[] = [...template.questions];
+      const semiology = indicationSemiology(caseInput);
+      let questions: Question[] = [...template.questions];
+      let clinicalCoverageWarning: string | null = null;
+      let enrichedWithGroq = false;
+      if (!semiology.matched &&
+          needsSymptomExpansion(caseInput.indication, caseInput.clinical)) {
+        // One Groq request only for uncatalogued clinical indications.
+        const supplement = await groq(differentialPrompt, {
+          contexte: caseInput,
+          lectureAnatomiqueDisponible: template.label,
+          instructions: 'Différencier les causes du motif clinique '
+            + 'dans le champ et le protocole réalisés.',
+        }, 2600);
+        if (supplement.error) {
+          clinicalCoverageWarning = 'Questions étiologiques non générées '
+            + '(service Groq indisponible ou quota atteint). '
+            + 'Complétez la lecture dirigée de l’indication.';
+        } else {
+          const targeted = normalizedQuestions(supplement.data?.questions);
+          if (targeted) {
+            questions = [...targeted, ...questions];
+            enrichedWithGroq = true;
+          } else {
+            clinicalCoverageWarning = 'Complément sémiologique invalide : '
+              + 'vérifier les diagnostics différentiels de l’indication.';
+          }
+        }
+      }
+      questions = questions.map((question, i) =>
+        ({ ...question, id: 'q' + (i + 1) }));
       if (caseInput.comparative) {
         questions.push({
           id: 'q' + (questions.length + 1), kind: 'texte',
@@ -300,7 +333,10 @@ Deno.serve(async req => {
         template_key: template.key,
         available_questions: compatible.available,
         limited_for_legacy_client: compatible.truncated,
-        generation_mode: 'systematic_checklist',
+        generation_mode: enrichedWithGroq
+          ? 'systematic_with_indication_differential'
+          : 'systematic_checklist',
+        clinical_coverage_warning: clinicalCoverageWarning,
       });
     }
     const result = await groq(planningPrompt, {
