@@ -43,3 +43,29 @@ Deno.test('capacity cannot be forced above documented safety cap', () => {
   assert(clientQuestionCapacity(null) === 12,'Legacy default');
   assert(clientQuestionCapacity(NaN) === 12,'NaN rejected');
 });
+
+Deno.test('legacy scanner TAP keeps thorax abdomen and pelvis within 12 questions', () => {
+  const t = examTemplate('TDM', 'TAP', 'bilan', 'injecté');
+  assert(t?.key === 'tap_ct', 'TAP must not match chest-only catalog');
+  const full = t!.questions;
+  const limited = compatibleQuestionSet(full, clientQuestionCapacity(undefined), 'bilan');
+  assert(limited.truncated && limited.questions.length === 12,
+    'Legacy compatibility count');
+  for (const region of ['Thorax', 'Abdomen', 'Pelvis']) {
+    const count = limited.questions.filter(q =>
+      q.section.startsWith(region + ' · ')).length;
+    assert(count >= 3, region + ' must receive at least 3 questions in legacy');
+  }
+  assert(limited.questions.every((q,i)=>q.id==='q'+(i+1)), 'IDs sequential');
+  const comparative = [...full, {
+    ...full[0], id:'q'+(full.length+1),
+    section:'Comparaison',title:'Évolution ACTUELLE des anomalies antérieures ?',
+  }];
+  const older = compatibleQuestionSet(comparative, 12, 'bilan', true);
+  assert(older.questions.at(-1)?.section === 'Comparaison',
+    'Comparison retained at end');
+  for (const region of ['Thorax', 'Abdomen', 'Pelvis']) {
+    assert(older.questions.some(q => q.section.startsWith(region + ' · ')),
+      region + ' must remain even with comparison');
+  }
+});
