@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { confirmedObservations, unansweredWarnings, factualDraft } from './report_contract.ts';
 
 // Stateless radiology reporting assistant: no patient data are persisted here.
 // Each phase makes a single Groq request. Never run a medical "review" request.
@@ -185,30 +186,25 @@ du patient. Ne propose ni signe non évaluable par la modalité/protocole ni ima
 En comparatif, interroge sur l'évolution des lésions antérieurement décrites et les limites
 de comparabilité. Une question à la fois sera montrée par le client. Fournis une définition,
 des critères concrets et une requête d'image médicale de référence pour chaque question.`;
-const reportingPrompt = `Tu es radiologue senior rédigeant un compte rendu patient réel à partir
-des seules constatations explicitement apportées par le lecteur. Aucune interprétation d'image
-réelle n'est effectuée par toi. L'ancien rapport est du contexte HISTORIQUE et ne prouve
-jamais une observation actuelle.
-Réponds en JSON: {
-"report":{"indication":"...", "technique":"...", "results":"tirets objectifs détaillés",
-"conclusion":"tirets courts hiérarchisés et prudents"},
-"review":[{"sign":"...", "status":"présent|absent|non évalué|incertain",
-"definition":"...", "criteria":"...", "takeaway":"..."}],
-"quality_warnings":["éléments cliniquement importants non renseignés"]}.
-Respecte strictement INDICATION, TECHNIQUE, RÉSULTATS, CONCLUSION. Ne mets pas de conclusion
-dans les résultats. Formulations concises, descriptives, terminologie radiologique française.
-Ne complète JAMAIS les rubriques normales si elles n'ont pas été vérifiées.
-Ne transforme pas une réponse non renseignée en absence, ni une suspicion en certitude.
-Une QCM cochée = seulement les observations sélectionnées sont présentes ; les autres
-ne sont PAS nécessairement absentes. "Aucune" indique des signes explicitement recherchés absents.
-Signale non-évaluable ou incertain si important. Ne conclus à une stabilité/progression que
-sur les comparaisons ACTUELLEMENT renseignées par le radiologue. N'invente pas de mesures,
-contraste, protocoles, antériorités, dates, diagnostics ou examens. Si la technique n'est pas
-précisée, l'indiquer sobrement sans en inventer une.
-Le bilan pédagogique contient un item par question, dans le même ordre.\nLe bilan pédagogique doit lister les signes recherchés et leur statut réel
-(présent/absent/non évalué/incertain), définitions, critères et points clés.
-Le bilan est DISTINCT du compte rendu copiable.
-L'utilisateur est le médecin : le texte reste un projet à vérifier et valider.`;
+const reportingPrompt = `Tu es radiologue senior et rédacteur de comptes rendus.
+À partir EXCLUSIVEMENT des observations actuelles du radiologue et du contexte,
+retourne un objet JSON contenant : {"report":{"indication":"...",
+"technique":"...","results":"- ...\\n- ...","conclusion":"- ..."},
+"quality_warnings":[]}.
+INDICATION, TECHNIQUE, RÉSULTATS et CONCLUSION doivent être en français médical.
+Résultats descriptifs, objectifs, concis, organisés en tirets ; conclusion courte en tirets.
+Une observation "absent" est négative, "présent" est positive.
+Une observation "non_renseigne" n'est PAS normale et ne doit pas être décrite.
+Une observation "non_evaluable" ou "incertain" ne peut pas devenir normale ou pathologique.
+Pour les QCM, les propositions non sélectionnées sont INCONNUES, jamais négatives.
+Les comptes rendus antérieurs sont HISTORIQUES : ne pas transformer les signes anciens
+en signes actuels ni affirmer une stabilité sans comparaison actuelle documentée.
+Respecte les mentions de siège, dimension, unité, côté, injection et mesures
+explicitement fournies ; n'en invente aucune. Si le protocole manque, note qu'il
+n'est pas renseigné. N'ajoute aucune donnée non examinée.
+Ne rédige PAS le bilan pédagogique : il est assemblé par le logiciel à partir
+des réponses originales. Fournis uniquement les quatre champs du rapport
+et éventuellement de courtes alertes de qualité. Réponse JSON uniquement.`;
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
@@ -242,30 +238,60 @@ Deno.serve(async req => {
     const questions = normalizedQuestions(input.questions);
     if (!questions || !validateAnswers(questions, input.answers))
       return reply({ error: 'invalid_case_answers' }, 400);
+    const answers = object(input.answers);
+    // Send only concise confirmed observations to Groq, never 8-12 detailed
+    // definitions, criteria, external image searches or a long revision request.
+    const observations = confirmedObservations(questions, answers);
+    const review = groundedReview(questions, answers, []);
+    const gaps = unansweredWarnings(observations);
+    const degraded = (reason: string) => {
+      // Log only technical diagnostic codes, never patient information.
+      console.warn('radiology_report_factual_fallback', {
+        reason, question_count: questions.length,
+      });
+      return reply({
+        report: factualDraft({
+          indication: caseInput.indication, technique: caseInput.technique,
+        }, observations),
+        review,
+        generation_mode: 'fact_only',
+        quality_warnings: [
+          'Génération Groq indisponible : transcription factuelle des réponses, ' +
+          'sans reformulation IA. Relire et compléter la synthèse médicale.',
+          ...gaps,
+        ].slice(0, 18),
+      });
+    };
     const result = await groq(reportingPrompt, {
-      contexte: caseInput, questions, reponses: input.answers,
-      rappel: 'Ne rapporte que ce qui a été réellement observé et saisi. Une donnée non évaluée reste inconnue.',
-    }, 4000);
-    if (result.error) return result.error;
-    const r = object(result.data?.report);
+      contexte: caseInput,
+      observations,
+    }, 3200);
+    if (result.error) {
+      // Keep explicit quota/provider-configuration errors visible. For other
+      // technical failures, return a safe draft rather than an unrecoverable 502.
+      if (result.error.status === 429 || result.error.status === 503)
+        return result.error;
+      return degraded('groq_transport_or_output_error');
+    }
+    const payload = object(result.data);
+    const r = object(payload.report);
+    const resultLines = Array.isArray(r.results)
+      ? r.results.filter(x => typeof x === 'string')
+        .map(x => text(x, 700)).join('\\n')
+      : text(r.results, 8500);
     const report = {
-      indication: text(r.indication, 2000),
-      technique: text(r.technique, 2000),
-      results: text(r.results, 8500),
+      indication: text(r.indication, 2000) || caseInput.indication,
+      technique: text(r.technique, 2000) ||
+        caseInput.technique || 'Protocole non renseigné.',
+      results: resultLines,
       conclusion: text(r.conclusion, 1800),
     };
-    if (!report.indication || !report.technique || !report.results || !report.conclusion)
-      return reply({ error: 'invalid_generated_report' }, 502);
-    const answers = object(input.answers);
-    const review = groundedReview(questions, answers, result.data?.review);
-    const gaps = questions.filter(q =>
-      ['unanswered', 'not_evaluable', 'uncertain']
-        .includes(text(object(answers[q.id]).status, 30)))
-      .map(q => q.title + ' : non documenté ou non évaluable.');
+    if (!report.results || !report.conclusion)
+      return degraded('invalid_generated_report');
     return reply({
-      report, review,
+      report, review, generation_mode: 'groq',
       quality_warnings: [...new Set([
-        ...gaps, ...cleanArray(result.data?.quality_warnings, 15),
+        ...gaps, ...cleanArray(payload.quality_warnings, 15),
       ])].slice(0, 18),
     });
   }
