@@ -1,3 +1,5 @@
+import { indicationSemiology, type AnatomicSex } from './radiology_semiology.ts';
+
 // High-yield anatomical checklists, NOT patient results. No stored images or patient data.
 // Keep the systematic order even when a rare lesion is mentioned in the indication.
 export type GuidedQuestion = {
@@ -161,7 +163,7 @@ const catalogs: Record<string, Entry[]> = {
   'abdominal_ultrasound': ultraAbd,
 };
 export type ExamTemplate = { key: string; label: string; questions: GuidedQuestion[] };
-export function examTemplate(exam: string, region: string, indication = '', technique = ''): ExamTemplate | null {
+export function examTemplate(exam: string, region: string, indication = '', technique = '', sex: AnatomicSex = 'unknown', clinical = ''): ExamTemplate | null {
   const e = s(exam), r = s(region), ind = s(indication), tech = s(technique);
   let key = '';
   if (isTapCt(exam, region, technique)) key = 'tap_ct';
@@ -198,6 +200,36 @@ export function examTemplate(exam: string, region: string, indication = '', tech
       'Rapports du processus unciné et des cellules infra-orbitaires.',
       'Distinguer variante anatomique sans effet d’une obstruction fonctionnelle.',
       'Haller cell uncinate process CT']], exam));
+  }
+  // Every recognized symptom introduces pathology-specific discriminating
+  // radiological signs; anatomy is still read in full after them.
+  const focused = indicationSemiology({
+    exam, region, indication, clinical, technique, sex,
+  });
+  if (focused.entries.length) {
+    const focusedQuestions = q(focused.entries, exam);
+    // Keep a single systematic checklist, no extra Groq request for known
+    // indication syndromes and no assumption about image findings.
+    qs.unshift(...focusedQuestions);
+  }
+  // Generic pelvic organ question is NOT evidence for the actual adnexa:
+  // when the anatomy is specified, ask separately about the relevant organs.
+  if ((key === 'abdomen_ct' || key === 'tap_ct') && sex === 'female') {
+    const gyn: Entry[] = [
+      ['Pelvis · Annexes', 'Anomalie morphologique de l’utérus ou des annexes identifiables ?',
+        'Pas de lésion utéro-annexielle volumineuse évidente dans le champ évalué, sans exclure une pathologie gynécologique fonctionnelle ou vasculaire.',
+        'L’utérus et les annexes doivent être décrits distinctement lorsqu’ils sont présents et évaluables.',
+        'Décrire utérus, ovaires, masse/kyste, position, épanchement et limites TDM ; ne pas déclarer les ovaires normaux s’ils ne sont pas identifiés.',
+        'CT normal uterus ovaries adnexa pelvic anatomy'],
+    ];
+    qs.push(...q(gyn, exam));
+  }
+  if ((key === 'abdomen_ct' || key === 'tap_ct') && sex === 'male') {
+    qs.push(...q([['Pelvis · Prostate', 'Anomalie prostatique ou des vésicules séminales identifiables ?',
+      'Pas d’anomalie morphologique évidente de la prostate ou des vésicules séminales sur le champ évalué.',
+      'Analyse adaptée à une anatomie prostatique lorsqu’elle est présente.',
+      'Taille, contours, asymétries, masse ou infiltration visibles, en tenant compte des limites de la TDM.',
+      'CT prostate seminal vesicles normal anatomy']], exam));
   }
   qs.forEach((v, i) => v.id = 'q' + (i + 1));
   return { key, label: key === 'tap_ct' ? 'Scanner thoraco-abdomino-pelvien'
