@@ -287,6 +287,15 @@ Deno.serve(async req => {
       ...unansweredWarnings(observations),
       ...(modelDraft?.missing ?? []),
     ])];
+    // A fully checked normal exam has an evidence-gated radiological template.
+    // Avoid a costly Groq call that might introduce unrelated absent diseases.
+    if (modelDraft && observations.length > 0 &&
+        observations.every(o => o.status === 'absent')) {
+      return reply({
+        report: modelDraft, review, generation_mode: 'systematic_template',
+        quality_warnings: gaps.slice(0, 18),
+      });
+    }
     const degraded = (reason: string) => {
       // Log only technical diagnostic codes, never patient information.
       console.warn('radiology_report_factual_fallback', {
@@ -330,7 +339,12 @@ Deno.serve(async req => {
       // A checked, anatomical template is authoritative: do not accept
       // unverified additional Groq normality claims or a list of "X: absent".
       results: modelDraft ? modelDraft.results : resultLines,
-      conclusion: modelDraft ? modelDraft.conclusion : text(r.conclusion, 1800),
+      conclusion: modelDraft
+        ? (observations.some(o => o.status === 'présent') &&
+            text(r.conclusion, 1800).length > 8
+            ? text(r.conclusion, 1800)
+            : modelDraft.conclusion)
+        : text(r.conclusion, 1800),
     };
     if (!report.results || !report.conclusion)
       return degraded('invalid_generated_report');
