@@ -332,7 +332,7 @@ class RadiologyArchivedReportDetail extends StatefulWidget {
 class _RadiologyArchivedReportDetailState
     extends State<RadiologyArchivedReportDetail> {
   late final TextEditingController _text, _indication;
-  bool _saving = false, _dirty = false;
+  bool _saving = false, _dirty = false, _deleting = false;
   String? _error;
 
   @override
@@ -381,6 +381,46 @@ class _RadiologyArchivedReportDetailState
           _error = 'Enregistrement impossible : $e');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _deleteReport() async {
+    if (_saving || _deleting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce compte rendu ?'),
+        content: const Text('Cette suppression est définitive. '
+            'Le compte rendu sera effacé de votre bibliothèque privée.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Supprimer définitivement',
+              style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() { _deleting = true; _error = null; });
+    try {
+      await RadiologyReportArchiveService.instance
+          .deleteOwn(widget.report['id'] as String);
+      if (!mounted) return;
+      setState(() => _dirty = false);
+      // Wait for PopScope to rebuild with canPop=true after deletion.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
+    } catch (e) {
+      if (mounted) setState(() =>
+        _error = 'Suppression impossible : $e');
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -457,10 +497,18 @@ class _RadiologyArchivedReportDetailState
               const SizedBox(height: 14),
               Wrap(spacing: 9, runSpacing: 9, children: [
                 FilledButton.icon(
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || _deleting ? null : _save,
                   icon: const Icon(Icons.save_outlined),
                   label: Text(_saving ? 'Enregistrement…'
                     : 'Enregistrer les modifications'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving || _deleting ? null : _deleteReport,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Supprimer ce CR'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: () async {
