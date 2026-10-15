@@ -19,6 +19,7 @@ import 'practice_qcm_screen.dart';
 import 'practice_daily_screen.dart';
 import 'practice_progressive_cases_screen.dart';
 import 'practice_visceral_radio_screen.dart';
+import 'radiology_report_screen.dart';
 import 'practice_daily_gamification_screen.dart';
 import 'clinical_cases_screen.dart';
 import '../theme/screen_decor.dart';
@@ -400,6 +401,20 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 11),
+              _PracticePrimaryActionCard(
+                icon: Icons.medical_information_outlined,
+                title: 'Assistant CR Radiologie',
+                subtitle: 'Données cliniques · recherche guidée · compte rendu · révision',
+                meta: 'RADIOLOGIE · GROQ · COMPTES RENDUS',
+                accent: PracticeColors.accent,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RadiologyReportScreen(),
                   ),
                 ),
               ),
