@@ -181,7 +181,7 @@ function errorResponse(status:number,body:any,headers:Headers){
  // Do not misclassify a rate limit as a permanent bad request.
  if(status===413){
    const reason=String(body?.error?.code??'')+' '+String(body?.error?.type??'')+' '+String(body?.error?.message??'');
-   if(/rate_limit_exceeded|quota|tokens per (?:minute|day)|\\bTP[MD]\\b/i.test(reason))
+   if(/rate_limit_exceeded|quota|tokens per (?:minute|day)|\bTP[MD]\b/i.test(reason))
      return Object.assign(new Error('groq_rate_limited'),quotaInfo(body,headers));
    return new Error('groq_request_too_large');
  }
@@ -256,8 +256,8 @@ export async function generateJson(
          const phases=(offset:number)=>contract.phaseSequence
            ?' Pour ces cinq questions, phases obligatoires: '+contract.phaseSequence.slice(offset,offset+5).join(',')+'.'
            :'';
-         const first=await generateJson(half(0),prompt+'\\nTRANSPORT FRACTIONNÉ: générer UNIQUEMENT les questions 1 à 5, EXACTEMENT 5 questions.'+phases(0),settings);
-         const second=await generateJson(half(5),prompt+'\\nTRANSPORT FRACTIONNÉ: générer UNIQUEMENT les questions 6 à 10, EXACTEMENT 5 questions. Ne pas répéter: '+JSON.stringify(first.questions.map((q:any)=>q.statement))+phases(5),settings);
+         const first=await generateJson(half(0),prompt+'\nTRANSPORT FRACTIONNÉ: générer UNIQUEMENT les questions 1 à 5, EXACTEMENT 5 questions.'+phases(0),settings);
+         const second=await generateJson(half(5),prompt+'\nTRANSPORT FRACTIONNÉ: générer UNIQUEMENT les questions 6 à 10, EXACTEMENT 5 questions. Ne pas répéter: '+JSON.stringify(first.questions.map((q:any)=>q.statement))+phases(5),settings);
          const combined={questions:[...first.questions,...second.questions]};
          validateStructure(contract.schema,combined);
          return combined;
