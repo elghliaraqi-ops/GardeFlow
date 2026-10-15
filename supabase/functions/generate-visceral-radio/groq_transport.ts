@@ -20,7 +20,8 @@ const formatGuide={
  surgical_techniques:'JSON operative_techniques:[1 à 3 objects {name,indications,steps:[4 à 6 étapes]}].',
 };
 // Derive the actual provider instructions from the same schema used by validation.
-// JSON-object mode does not transmit a decoding schema: field names alone are insufficient.
+// Groq GPT-OSS supports strict schema decoding. Keep prose requirements in the prompt,
+// and send a decoder-safe subset of the same validation schema.
 export function schemaShape(schema:any):string {
  if(Array.isArray(schema.enum))return schema.enum.map((v:any)=>JSON.stringify(v)).join('|');
  if(schema.type==='object')return '{'+Object.entries(schema.properties??{}).map(([k,v])=>k+':'+schemaShape(v)).join(',')+'}';
@@ -29,6 +30,19 @@ export function schemaShape(schema:any):string {
     ' ('+(schema.minItems??0)+'..'+(schema.maxItems??'n')+')');
  return schema.type+(schema.type==='string'&&(schema.minLength||schema.maxLength)?
    '('+(schema.minLength??0)+'..'+(schema.maxLength??'n')+' caractères)':'');
+}
+// Constrained decoding supports only a subset of JSON Schema. We still validate
+// the complete original schema locally (including exact batch sizes).
+export function strictDecoderSchema(schema:any):any {
+ const base:any={type:schema.type};
+ if(Array.isArray(schema.enum))base.enum=schema.enum;
+ if(schema.type==='object'){
+   const properties=schema.properties??{};
+   base.properties=Object.fromEntries(Object.entries(properties).map(([key,value])=>[key,strictDecoderSchema(value)]));
+   base.required=Object.keys(properties);
+   base.additionalProperties=false;
+ }else if(schema.type==='array')base.items=strictDecoderSchema(schema.items);
+ return base;
 }
 export function formatInstructions(contract:GenerationContract):string {
  return formatGuide[contract.mode]+'\nTYPES ET VALEURS OBLIGATOIRES (notation descriptive, retourner un vrai objet JSON): '+
@@ -202,7 +216,11 @@ export async function generateJson(
    for(let attempt=0;attempt<2;attempt++){
      const body:any={model,messages:attempt?[...messages,{role:'user',content:'Erreur technique exacte: '+failureReason+'. Le décodage précédent était techniquement invalide. Génère de nouveau un objet JSON complet, avec toutes les clés, tous les chapitres/questions et les explications.'}]:messages,
        reasoning_effort:'low',temperature:0.2,max_completion_tokens:max,stream:false};
-     if(attempt===0)body.response_format={type:'json_object'};
+     // Never fall back to unconstrained prose: a 400 from JSON-object mode
+     // previously led to free text and then groq_invalid_structured_output.
+     body.response_format=attempt===0
+       ?{type:'json_schema',json_schema:{name:contract.name,strict:true,schema:strictDecoderSchema(contract.schema)}}
+       :{type:'json_object'};
      let response:Response;
      try{response=await fetcher(endpoint,{method:'POST',signal:controller.signal,
        headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
@@ -211,8 +229,9 @@ export async function generateJson(
      const data=await response.json().catch(()=>null);
      if(!response.ok){
        const code=String(data?.error?.code||data?.error?.type||'');
-       if(attempt===0&&response.status===400&&/json|schema|validat/i.test(code)){
-         console.warn('visceral_json_recovery',{mode:contract.mode,reason:'provider_json_400'});
+       const providerMessage=String(data?.error?.message??'');
+       if(attempt===0&&response.status===400&&/json|schema|validat|response_format/i.test(code+' '+providerMessage)){
+         console.warn('visceral_json_recovery',{mode:contract.mode,reason:'provider_schema_400',provider_code:code.slice(0,70)});
          continue;
        }
        if(response.status===429)console.warn('visceral_groq_quota',{mode:contract.mode,...quotaInfo(data,response.headers)});
@@ -229,7 +248,7 @@ export async function generateJson(
        failureReason=String((e as Error).message).slice(0,130);
        // A truncated ten-question answer cannot be repaired by repeating it at the same budget.
        // Regenerate two bounded halves, retaining all fifty clinical corrections.
-       if(failureReason==='groq_output_token_limit'&&contract.requestedCount===10){
+       if((failureReason==='groq_output_token_limit'||failureReason==='json_array_short:$.questions')&&contract.requestedCount===10){
          const qs=(contract.schema as any).properties.questions.items;
          const half=generationContract(contract.mode,{count:5,phases:qs.properties.phase.enum,courseKeys:qs.properties.course_section_key.enum??[]});
          const phases=prompt.match(/séquence obligatoire des phase par question: ([1-4,]+)/)?.[1].split(',');
