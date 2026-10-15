@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { confirmedObservations, unansweredWarnings, factualDraft } from './report_contract.ts';
 import { examTemplate, isTapCt } from './radiology_templates.ts';
+import { indicationSemiology, needsSymptomExpansion, type AnatomicSex } from './radiology_semiology.ts';
 import { structuredReport } from './structured_report.ts';
 import { clientQuestionCapacity, compatibleQuestionSet } from './question_compatibility.ts';
 
@@ -31,6 +32,7 @@ function cleanArray(value: unknown, max = 12): string[] {
 type ClinicalInput = {
   exam: string; region: string; indication: string; technique: string;
   clinical: string; comparative: boolean; oldReports: string;
+  sex: AnatomicSex;
 };
 function clinical(value: unknown): ClinicalInput | null {
   const v = object(value);
@@ -42,6 +44,8 @@ function clinical(value: unknown): ClinicalInput | null {
     clinical: text(v.clinical, 2400),
     comparative: v.comparative === true,
     oldReports: text(v.oldReports, 8500),
+    sex: ['female', 'male', 'other'].includes(String(v.sex))
+      ? v.sex as AnatomicSex : 'unknown' as AnatomicSex,
   };
   if (!result.exam || !result.region || !result.indication ||
       (result.comparative && !result.oldReports)) return null;
@@ -180,6 +184,9 @@ async function groq(system: string, user: unknown, budget: number) {
 }
 const planningPrompt = `Tu es radiologue senior francophone, niveau résidanat.
 Prépare un parcours systématique pour la modalité/région/protocole réellement demandé.
+Lis AUSSI chaque symptôme de l'indication, déduis les principales étiologies
+et diagnostics différentiels selon le contexte et le sexe anatomique,
+puis exige des questions de signes discriminants et pas seulement de l'anatomie.
 IMPORTANT : commence par les structures anatomiques habituelles et les signes
 fréquents ou incontournables, dans l'ordre de lecture d'un radiologue.
 Les diagnostics rares et traumatiques ne viennent qu'après le bilan de base,
@@ -203,6 +210,35 @@ Si comparatif, ajouter question sur évolution des signes historiques, qui ne
 sont jamais présumés présents actuellement.
 Ne réponds jamais à la place du médecin. Pas d'ostéome mucoïde ou pathologie
 rare systématique si un scanner des sinus est demandé.`;
+const differentialPrompt = `Tu es radiologue sénior chargé de la sémiologie.
+Le médecin a fourni une indication clinique, un contexte, le protocole et
+l'anatomie pelvienne. Lis TOUS les symptômes explicitement exprimés.
+À partir de sémiologie radiologique fiable, établis mentalement les
+étiologies principales, les urgences et les diagnostics différentiels
+correspondant au champ et à la modalité RÉELLEMENT réalisés.
+Retourne UNIQUEMENT des QUESTIONS D'OBSERVATION, pas des diagnostics posés.
+Une question = un signe discriminant vérifiable. Priorise les diagnostics
+urgents et fréquents, puis les principaux imitateurs, sans questions
+redondantes avec un contrôle global normal.
+Génère 5 à 8 questions ciblées. Pour chaque signe, définition claire,
+2-3 critères concrets, localisation, alternatives distinguées et
+requête d'image de référence médicale réelle.
+Pour toute anomalie non explorée avec ce protocole, préciser que le
+signe peut être non évaluable ; ne jamais inférer l'absence de maladie.
+Sexe anatomique féminin : rechercher explicitement annexes si pelvien ;
+ne jamais exclure GEU/torsion par seule TDM et rappeler échographie
+et test de grossesse si cliniquement pertinents.
+Format JSON {"questions":[{"kind":"qcu","section":"Indication · région",
+"title":"signe radiologique précis à vérifier ?",
+"definition":"étiologies et différences",
+"criteria":["critère 1","critère 2"],
+"options":[],"reference_query":"CT ou MRI nom du signe",
+"normal_text":"formulation strictement limitée au signe vérifié",
+"abnormal_text":"formulation objective descriptive"}]}.
+Ne pose aucune question hors champ, ni de signe qui ne peut pas
+être évalué par la modalité réalisée ; privilégie alors les limites
+du protocole dans les critères. Une réponse absente est constatée
+uniquement après vérification du médecin.`;
 const reportingPrompt = `Tu es radiologue senior rédacteur de comptes rendus
 français, utilisant des modèles de comptes rendus par région anatomique.
 Rédige sur la base EXCLUSIVE des constats effectués par le médecin.
@@ -247,9 +283,39 @@ Deno.serve(async req => {
   if (action === 'plan') {
     const capacity = clientQuestionCapacity(input.max_questions);
     const template = examTemplate(caseInput.exam, caseInput.region,
-      caseInput.indication, caseInput.technique);
+      caseInput.indication, caseInput.technique, caseInput.sex,
+      caseInput.clinical);
     if (template) {
-      const questions: Question[] = [...template.questions];
+      const semiology = indicationSemiology(caseInput);
+      let questions: Question[] = [...template.questions];
+      let clinicalCoverageWarning: string | null = null;
+      let enrichedWithGroq = false;
+      if (!semiology.matched &&
+          needsSymptomExpansion(caseInput.indication, caseInput.clinical)) {
+        // One Groq request only for uncatalogued clinical indications.
+        const supplement = await groq(differentialPrompt, {
+          contexte: caseInput,
+          lectureAnatomiqueDisponible: template.label,
+          instructions: 'Différencier les causes du motif clinique '
+            + 'dans le champ et le protocole réalisés.',
+        }, 2600);
+        if (supplement.error) {
+          clinicalCoverageWarning = 'Questions étiologiques non générées '
+            + '(service Groq indisponible ou quota atteint). '
+            + 'Complétez la lecture dirigée de l’indication.';
+        } else {
+          const targeted = normalizedQuestions(supplement.data?.questions);
+          if (targeted) {
+            questions = [...targeted, ...questions];
+            enrichedWithGroq = true;
+          } else {
+            clinicalCoverageWarning = 'Complément sémiologique invalide : '
+              + 'vérifier les diagnostics différentiels de l’indication.';
+          }
+        }
+      }
+      questions = questions.map((question, i) =>
+        ({ ...question, id: 'q' + (i + 1) }));
       if (caseInput.comparative) {
         questions.push({
           id: 'q' + (questions.length + 1), kind: 'texte',
@@ -267,7 +333,10 @@ Deno.serve(async req => {
         template_key: template.key,
         available_questions: compatible.available,
         limited_for_legacy_client: compatible.truncated,
-        generation_mode: 'systematic_checklist',
+        generation_mode: enrichedWithGroq
+          ? 'systematic_with_indication_differential'
+          : 'systematic_checklist',
+        clinical_coverage_warning: clinicalCoverageWarning,
       });
     }
     const result = await groq(planningPrompt, {
