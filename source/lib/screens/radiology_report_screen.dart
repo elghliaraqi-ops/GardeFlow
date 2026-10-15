@@ -48,6 +48,15 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     'technique': technique.text.trim(), 'comparative': comparison,
     'oldReports': comparison ? previous.text.trim() : '',
   };
+  String get reportTitle {
+    final r = region.text.toLowerCase();
+    final x = exam.toLowerCase();
+    if ((x.contains('tdm') || x.contains('scanner')) && r.contains('sinus')) {
+      return 'SCANNER DES SINUS';
+    }
+    return (exam + ' ' + region.text).trim().toUpperCase();
+  }
+
   @override
   void dispose() {
     for (final c in [region, indication, clinical, technique, previous, reportText]) {
@@ -92,7 +101,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       if (!mounted) return;
       if (action == 'plan') {
         final received = records(data['questions']);
-        if (received.length < 5 || received.length > 12) {
+        if (received.length < 5 || received.length > 24) {
           throw StateError('Questions reçues incomplètes.');
         }
         setState(() {
@@ -115,6 +124,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
                   .where((v) => v.isNotEmpty).toList()
               : [];
           reportText.text = [
+            reportTitle, '',
             'INDICATION', str(result['indication']), '',
             'TECHNIQUE', str(result['technique']), '',
             'RÉSULTATS', str(result['results']), '',
@@ -275,7 +285,14 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
       const SizedBox(height: 8),
       LinearProgressIndicator(value: (position + 1) / questions.length,
         minHeight: 5, color: mint, backgroundColor: line),
-      const SizedBox(height: 16),
+      const SizedBox(height: 10),
+      if (str(q['section']).isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 9),
+          child: Text(str(q['section']).toUpperCase(),
+            style: const TextStyle(color: Color(0xFFFFD166),
+              fontWeight: FontWeight.w800, letterSpacing: 0.7)),
+        ),
       title(str(q['title'])),
       const SizedBox(height: 12),
       const Text('DÉFINITION', style: TextStyle(

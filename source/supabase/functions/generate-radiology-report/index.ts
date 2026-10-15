@@ -1,5 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { confirmedObservations, unansweredWarnings, factualDraft } from './report_contract.ts';
+import { examTemplate } from './radiology_templates.ts';
+import { structuredReport } from './structured_report.ts';
 
 // Stateless radiology reporting assistant: no patient data are persisted here.
 // Each phase makes a single Groq request. Never run a medical "review" request.
@@ -50,9 +52,10 @@ type Question = {
   id: string; kind: 'qcu'|'qcm'|'texte'; title: string;
   definition: string; criteria: string[]; options: string[];
   reference_query: string;
+  section?: string; normal_text?: string; abnormal_text?: string;
 };
 function normalizedQuestions(raw: unknown): Question[] | null {
-  if (!Array.isArray(raw) || raw.length < 5 || raw.length > 12) return null;
+  if (!Array.isArray(raw) || raw.length < 5 || raw.length > 24) return null;
   const qs = raw.map((entry: unknown, i: number) => {
     const q = object(entry), kind = text(q.kind, 10);
     const options = cleanArray(q.options, 6);
@@ -69,6 +72,9 @@ function normalizedQuestions(raw: unknown): Question[] | null {
       options: kind === 'qcm' ? options : [],
       // Only anatomy/medical keywords; never patient-specific details.
       reference_query: text(q.reference_query, 200),
+      section: text(q.section, 100) || 'Constatations',
+      normal_text: text(q.normal_text, 400),
+      abnormal_text: text(q.abnormal_text, 280),
     };
   });
   if (qs.some(q => !q)) return null;
@@ -171,40 +177,53 @@ async function groq(system: string, user: unknown, budget: number) {
   try { return { data: object(JSON.parse(raw)) }; }
   catch (_) { return { error: reply({ error: 'groq_invalid_json_response' }, 502) }; }
 }
-const planningPrompt = `Tu es radiologue senior francophone et pédagogue du résidanat. Tu guides un médecin
-pendant la lecture d'un examen RÉEL, sans supposer les résultats de l'imagerie.
-Retourne {"questions":[5 à 12 objets {"kind":"qcu|qcm|texte",
-"title":"question d'observation précise","definition":"définition anatomique ou du signe",
-"criteria":["critères radiologiques objectifs et adaptés au protocole"],
-"options":["2 à 6 signes descriptifs distincts si qcm, sinon []"],
-"reference_query":"mots-clés anatomiques et signe radiologique sans données du patient"}]}.
-Fais une progression systématique, ciblée sur la région, modalité, indication et protocole.
-QCU = présence/absence du signe demandé. QCM = plusieurs observations pouvant être cochées,
-les non-cochées sont INCONNUES, pas automatiquement absentes. texte = mesures, localisation,
-extension ou description libre. N'inclus pas d'informations sur les réponses ou le diagnostic
-du patient. Ne propose ni signe non évaluable par la modalité/protocole ni image de patient inventée.
-En comparatif, interroge sur l'évolution des lésions antérieurement décrites et les limites
-de comparabilité. Une question à la fois sera montrée par le client. Fournis une définition,
-des critères concrets et une requête d'image médicale de référence pour chaque question.`;
-const reportingPrompt = `Tu es radiologue senior et rédacteur de comptes rendus.
-À partir EXCLUSIVEMENT des observations actuelles du radiologue et du contexte,
-retourne un objet JSON contenant : {"report":{"indication":"...",
-"technique":"...","results":"- ...\\n- ...","conclusion":"- ..."},
-"quality_warnings":[]}.
-INDICATION, TECHNIQUE, RÉSULTATS et CONCLUSION doivent être en français médical.
-Résultats descriptifs, objectifs, concis, organisés en tirets ; conclusion courte en tirets.
-Une observation "absent" est négative, "présent" est positive.
-Une observation "non_renseigne" n'est PAS normale et ne doit pas être décrite.
-Une observation "non_evaluable" ou "incertain" ne peut pas devenir normale ou pathologique.
-Pour les QCM, les propositions non sélectionnées sont INCONNUES, jamais négatives.
-Les comptes rendus antérieurs sont HISTORIQUES : ne pas transformer les signes anciens
-en signes actuels ni affirmer une stabilité sans comparaison actuelle documentée.
-Respecte les mentions de siège, dimension, unité, côté, injection et mesures
-explicitement fournies ; n'en invente aucune. Si le protocole manque, note qu'il
-n'est pas renseigné. N'ajoute aucune donnée non examinée.
-Ne rédige PAS le bilan pédagogique : il est assemblé par le logiciel à partir
-des réponses originales. Fournis uniquement les quatre champs du rapport
-et éventuellement de courtes alertes de qualité. Réponse JSON uniquement.`;
+const planningPrompt = `Tu es radiologue senior francophone, niveau résidanat.
+Prépare un parcours systématique pour la modalité/région/protocole réellement demandé.
+IMPORTANT : commence par les structures anatomiques habituelles et les signes
+fréquents ou incontournables, dans l'ordre de lecture d'un radiologue.
+Les diagnostics rares et traumatiques ne viennent qu'après le bilan de base,
+et uniquement si pertinents pour l'indication.
+Si possible 12 à 18 questions (minimum 5, maximum 20), une à la fois dans l'interface.
+Retours JSON {"questions":[{ "kind":"qcu|qcm|texte","section":"région anatomique",
+"title":"question précise sur un signe à chercher",
+"definition":"définition utile",
+"criteria":["2-3 critères radiologiques concrets"],
+"options":["choix descriptifs seulement si QCM, sinon []"],
+"reference_query":"signes anatomiques du même examen",
+"normal_text":"phrase radiologique complète à employer UNIQUEMENT si signe explicitement absent",
+"abnormal_text":"phrase descriptive neutre du signe s'il est présent"}]}.
+Conçois des questions QCU prioritaires (présent/absent), quelques QCM descriptifs
+quand plusieurs observations sont possibles, puis questions libres pour mesures.
+Le texte normal proposé pour chaque signe doit être exact et ne pas présumer
+de la normalité d'une autre structure non vérifiée.
+Inclure systématiquement les voies de drainage / os / vaisseaux / parenchymes
+selon l'examen ; ne pas demander de signe non évaluable sur la technique.
+Si comparatif, ajouter question sur évolution des signes historiques, qui ne
+sont jamais présumés présents actuellement.
+Ne réponds jamais à la place du médecin. Pas d'ostéome mucoïde ou pathologie
+rare systématique si un scanner des sinus est demandé.`;
+const reportingPrompt = `Tu es radiologue senior rédacteur de comptes rendus
+français, utilisant des modèles de comptes rendus par région anatomique.
+Rédige sur la base EXCLUSIVE des constats effectués par le médecin.
+Réponse JSON {"report":{"indication":"...", "technique":"...",
+"results":"...", "conclusion":"..."}, "quality_warnings":[]}.
+INDICATION, TECHNIQUE, RÉSULTATS, CONCLUSION.
+RÉSULTATS doit respecter les RUBRIQUES ANATOMIQUES fournies, dans l'ordre.
+Utilise des phrases radiologiques naturelles : "Sinus maxillaires aérés",
+"Voies de drainage libres", "Pas de niveau hydro-aérique" quand ces faits
+sont expressément vérifiés. Jamais "maladie X : absente" en inventaire.
+Regroupe les constatations normales pertinentes sans perdre les anomalies.
+Ne crée pas d'ostéome, de mucocèle ou de fracture si non recherché ou non vu.
+Aucune norme chiffrée ou interprétation "dans les normes" sans critère fourni.
+Conserve toutes mesures, unités, localisation, côtés et évolution documentées.
+Conclusion brève, informative, avec 1-3 tirets et seulement les hypothèses
+étayées ; si donnée insuffisante, explicite les limites.
+Interdit de transformer anciens résultats en constatations actuelles,
+les QCM non cochés en absences, ou non renseigné en normalité.
+Le brouillon descriptif "plan_base" fourni est le contrat FACTUEL :
+ne supprimer aucun fait vérifié et n'ajouter aucun résultat non documenté.
+Ne produis pas le bilan pédagogique.`;
+
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
@@ -225,14 +244,31 @@ Deno.serve(async req => {
   if (!caseInput) return reply({ error: 'invalid_clinical_context' }, 400);
   const action = text(input.action, 30);
   if (action === 'plan') {
+    const template = examTemplate(caseInput.exam, caseInput.region,
+      caseInput.indication, caseInput.technique);
+    if (template) {
+      const questions: Question[] = [...template.questions];
+      if (caseInput.comparative) {
+        questions.push({
+          id: 'q' + (questions.length + 1), kind: 'texte',
+          section: 'Comparaison',
+          title: 'Évolution ACTUELLE des anomalies décrites sur les examens antérieurs ?',
+          definition: 'Comparer uniquement les constatations effectivement vérifiées sur les images actuelles.',
+          criteria: ['Indiquer la date comparée, la topographie, les mesures et leur évolution lorsqu’elles sont disponibles.'],
+          options: [], reference_query: '', normal_text: '', abnormal_text: '',
+        });
+      }
+      return reply({ questions, template_key: template.key,
+        generation_mode: 'systematic_checklist' });
+    }
     const result = await groq(planningPrompt, {
       contexte: caseInput,
-      instructions: 'Adapte les questions, ne réponds pas à la place du radiologue.',
-    }, 3400);
+      instructions: 'Couverture anatomique systématique avant les diagnostics rares.',
+    }, 4800);
     if (result.error) return result.error;
     const questions = normalizedQuestions(result.data?.questions);
     if (!questions) return reply({ error: 'invalid_generated_questions' }, 502);
-    return reply({ questions });
+    return reply({ questions, generation_mode: 'groq_systematic' });
   }
   if (action === 'report') {
     const questions = normalizedQuestions(input.questions);
@@ -243,14 +279,30 @@ Deno.serve(async req => {
     // definitions, criteria, external image searches or a long revision request.
     const observations = confirmedObservations(questions, answers);
     const review = groundedReview(questions, answers, []);
-    const gaps = unansweredWarnings(observations);
+    const hasAnatomicalModel = questions.some(q => !!q.normal_text && !!q.section);
+    const modelDraft = hasAnatomicalModel
+      ? structuredReport(caseInput, questions, answers)
+      : null;
+    const gaps = [...new Set([
+      ...unansweredWarnings(observations),
+      ...(modelDraft?.missing ?? []),
+    ])];
+    // A fully checked normal exam has an evidence-gated radiological template.
+    // Avoid a costly Groq call that might introduce unrelated absent diseases.
+    if (modelDraft && observations.length > 0 &&
+        observations.every(o => o.status === 'absent')) {
+      return reply({
+        report: modelDraft, review, generation_mode: 'systematic_template',
+        quality_warnings: gaps.slice(0, 18),
+      });
+    }
     const degraded = (reason: string) => {
       // Log only technical diagnostic codes, never patient information.
       console.warn('radiology_report_factual_fallback', {
         reason, question_count: questions.length,
       });
       return reply({
-        report: factualDraft({
+        report: modelDraft ?? factualDraft({
           indication: caseInput.indication, technique: caseInput.technique,
         }, observations),
         review,
@@ -265,6 +317,8 @@ Deno.serve(async req => {
     const result = await groq(reportingPrompt, {
       contexte: caseInput,
       observations,
+      plan_base: modelDraft ? { results: modelDraft.results,
+        conclusion: modelDraft.conclusion, sections: modelDraft.coveredSections } : null,
     }, 3200);
     if (result.error) {
       // Keep explicit quota/provider-configuration errors visible. For other
@@ -280,11 +334,17 @@ Deno.serve(async req => {
         .map(x => text(x, 700)).join('\\n')
       : text(r.results, 8500);
     const report = {
-      indication: text(r.indication, 2000) || caseInput.indication,
-      technique: text(r.technique, 2000) ||
-        caseInput.technique || 'Protocole non renseigné.',
-      results: resultLines,
-      conclusion: text(r.conclusion, 1800),
+      indication: caseInput.indication,
+      technique: caseInput.technique || 'Protocole non renseigné.',
+      // A checked, anatomical template is authoritative: do not accept
+      // unverified additional Groq normality claims or a list of "X: absent".
+      results: modelDraft ? modelDraft.results : resultLines,
+      conclusion: modelDraft
+        ? (observations.some(o => o.status === 'présent') &&
+            text(r.conclusion, 1800).length > 8
+            ? text(r.conclusion, 1800)
+            : modelDraft.conclusion)
+        : text(r.conclusion, 1800),
     };
     if (!report.results || !report.conclusion)
       return degraded('invalid_generated_report');
