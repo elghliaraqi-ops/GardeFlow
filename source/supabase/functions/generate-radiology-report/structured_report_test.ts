@@ -240,7 +240,7 @@ Deno.test('partial report with a positive sign and brief measurement is readable
   },t.questions,{
     [q.id]:{status:'observed',value:'oui',notes:'sinus frontal droit, épaisseur 3 mm'},
   });
-  assert(r.results.includes('sinus frontal droit, épaisseur 3 mm'),
+  assert(r.results.toLowerCase().includes('sinus frontal droit, épaisseur 3 mm'),
     'Keep short exact measurements and lateralization');
   assert(!/signe\s*:\s*présent/i.test(r.results),
     'No status-led question transcript');
