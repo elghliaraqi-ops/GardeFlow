@@ -132,10 +132,10 @@ const catalogs: Record<string, Entry[]> = {
   'abdominal_ultrasound': ultraAbd,
 };
 export type ExamTemplate = { key: string; label: string; questions: GuidedQuestion[] };
-export function examTemplate(exam: string, region: string, indication = ''): ExamTemplate | null {
-  const e = s(exam), r = s(region), ind = s(indication);
+export function examTemplate(exam: string, region: string, indication = '', technique = ''): ExamTemplate | null {
+  const e = s(exam), r = s(region), ind = s(indication), tech = s(technique);
   let key = '';
-  if (/(sinus|rhin|naso.sinus)/.test(r) && /(tdm|ct|scanner)/.test(e)) key = 'sinus';
+  if (/(sinus|rhin|naso.sinus)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'sinus';
   else if (/(rocher|temporal|oreille)/.test(r) && /(tdm|ct|scanner)/.test(e)) key = 'temporal_ct';
   else if (/(uro|rein|urinaire|renal)/.test(r + ' ' + e) && /(tdm|ct|scanner)/.test(e)) key = 'urinary_ct';
   else if (/(cerveau|encephal|cranien|cerebral|tete)/.test(r) && /(tdm|ct|scanner)/.test(e)) key = 'brain_ct';
@@ -146,7 +146,14 @@ export function examTemplate(exam: string, region: string, indication = ''): Exa
   else if (/(rachis|cervical|lombaire|dorsal|medullaire)/.test(r) && /irm/.test(e)) key = 'spine_mri';
   else if (/(abdom|hepat|biliaire)/.test(r) && /(echo|ultra)/.test(e)) key = 'abdominal_ultrasound';
   if (!key) return null;
-  const qs = q(catalogs[key], exam);
+  const rows = catalogs[key].filter(row => {
+    if (key === 'brain_mri' && row[0] === 'Rehaussement')
+      return /(inject|gadolinium)/.test(tech) && !/(sans injection|non inject)/.test(tech);
+    if (key === 'urinary_ct' && row[3].includes('Phase excrétrice'))
+      return /(excret|tardive|urograph)/.test(tech);
+    return true;
+  });
+  const qs = q(rows, exam);
   if (key === 'sinus' && /(traum|fracture|choc)/.test(ind)) {
     qs.push(...q([['Parois osseuses', 'Fracture traumatique des parois sinusiennes ou orbitaires ?',
       'Pas de trait de fracture visible des parois sinusiennes et orbitaires examinées.',
