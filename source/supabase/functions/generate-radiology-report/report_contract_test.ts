@@ -63,3 +63,24 @@ Deno.test('uncertain and not evaluable signs are flagged', () => {
   check(draft.technique === 'Protocole non renseigné.',
     'Do not invent an acquisition technique');
 });
+
+Deno.test('Groq outage fallback uses medical prose rather than machine statuses', () => {
+  const obs = confirmedObservations(questions, {
+    q1: {status:'observed', value:'non'},
+    q2: {status:'observed', selected:['Hémosinus']},
+    q3: {status:'observed',value:'Décalage osseux inférieur de 4 mm.'},
+    q4: {status:'uncertain',notes:'Artéfacts de mouvement'},
+    q5: {status:'not_evaluable',notes:'Champ osseux incomplet'},
+  });
+  const draft = factualDraft({
+    indication:'Traumatisme orbitaire',technique:'TDM sans injection',
+  },obs);
+  check(!/:\s*(absent|présent|oui|non)\b/i.test(draft.results),
+    'Mechanical statuses forbidden in the final clinical report');
+  check(draft.results.includes('Absence de fracture'),
+    'Negative verified finding uses idiomatic radiology language');
+  check(draft.results.includes('Hémosinus'), 'QCM selected finding preserved');
+  check(draft.results.includes('4 mm'), 'Free measurement preserved');
+  check(draft.results.includes('non évaluable') &&
+    draft.results.includes('incertain'), 'Limitations must remain visible');
+});
