@@ -1,0 +1,35 @@
+name: Practice home dashboard - visual and navigation tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/screens/practice_screen.dart'
+      - 'source/lib/widgets/practice_hub_cards.dart'
+      - 'source/test/practice_home_layout_test.dart'
+      - '.github/workflows/practice-home-ui-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  practice-home-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Verify mobile navigation and visual card layouts
+        working-directory: source
+        run: flutter test test/practice_home_layout_test.dart
+      - name: Analyze Practice home widgets and hub
+        working-directory: source
+        run: flutter analyze lib/screens/practice_screen.dart lib/widgets/practice_hub_cards.dart test/practice_home_layout_test.dart --no-fatal-infos --no-fatal-warnings
