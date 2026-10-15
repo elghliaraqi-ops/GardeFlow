@@ -1,5 +1,5 @@
 import {generationContract} from './generation_contract.ts';
-import {generateJson,groqBudget,normalizeResponse,validateStructure,parseJSON,formatInstructions,quotaInfo} from './groq_transport.ts';
+import {generateJson,groqBudget,normalizeResponse,validateStructure,parseJSON,formatInstructions,strictDecoderSchema,quotaInfo} from './groq_transport.ts';
 
 function assert(ok:unknown,message:string){if(!ok)throw Error(message);}
 function fixture(mode:'fiche'|'course_qcms'|'case'){
@@ -49,10 +49,10 @@ Deno.test('one chat-completions JSON request for valid 10-section residency cour
  assert(got.sections.length===10,'ten chapters');
  assert(got.sections.every((s:any)=>s.content.length>=650),'chapters retain residency depth');
  assert(calls.length===1,'one request normally');
- assert(calls[0].response_format?.type==='json_object','first transport uses JSON-object decoder');
- assert(!('schema' in (calls[0].response_format||{})),'no oversized decoder schema');
+ assert(calls[0].response_format?.type==='json_schema'&&calls[0].response_format?.json_schema?.strict===true,'first transport uses strict schema decoder');
+ assert(calls[0].response_format.json_schema.schema.properties.sections.type==='array','decoder has the true course fields');
 });
-Deno.test('JSON HTTP400 uses one plain-chat recovery while preserving all chapters',async()=>{
+Deno.test('Schema HTTP400 uses JSON-object recovery while preserving all chapters',async()=>{
  const c=generationContract('fiche'),requests:any[]=[];
  const fetcher=(async (_url:unknown,opts:any)=>{
    requests.push(JSON.parse(String(opts.body)));
@@ -63,7 +63,7 @@ Deno.test('JSON HTTP400 uses one plain-chat recovery while preserving all chapte
  const data=await generateJson(c,'SUJET CENTRAL: péritonite',{apiKey:'test',fetcher});
  assert(data.sections.length===10,'all chapters recovered');
  assert(requests.length===2,'only one technical retry');
- assert(!requests[1].response_format,'fallback must bypass JSON mode entirely');
+ assert(requests[1].response_format?.type==='json_object','fallback keeps constrained JSON syntax');
 });
 Deno.test('10 QCM and 50 explained options stay aligned after JSON transport',async()=>{
  const c=generationContract('course_qcms',{count:10,courseKeys:Array.from({length:10},(_,i)=>'s'+i)});
@@ -233,4 +233,29 @@ Deno.test('phase one can omit imaging not yet performed without inventing future
  let calls=0;const fetcher=(async()=>{calls++;return answer({choices:[{message:{content:JSON.stringify(sample)},finish_reason:'stop'}]});}) as typeof fetch;
  const data=await generateJson(c,'cas progressif',{apiKey:'test',fetcher});
  assert(calls===1&&data.stages[0].imaging_findings==='','no unnecessary retry or invented exam');
+});
+
+Deno.test('decoder strips unsupported limits but preserves all medically significant fields',()=>{
+ const c=generationContract('case_qcms',{count:5,phases:[1,2,3,4,4],courseKeys:['s1','s2']});
+ const decoder=strictDecoderSchema(c.schema);
+ const q=decoder.properties.questions.items;
+ assert(decoder.additionalProperties===false&&q.additionalProperties===false,'every object is strict');
+ assert(q.required.includes('options')&&q.required.includes('teaching_point'),'clinical fields required');
+ assert(q.properties.options.items.required.includes('correct'),'answer boolean required');
+ assert(q.properties.options.items.properties.correct.type==='boolean','do not guess medical truth values');
+ assert(!('minItems' in decoder.properties.questions),'unsupported array cardinalities stripped');
+ assert(!('maxLength' in q.properties.teaching_point),'unsupported editorial lengths stripped');
+ assert(q.properties.phase.enum.includes(4),'phase enum retained');
+});
+Deno.test('short ten-question output recovers as two complete five-question batches',async()=>{
+ const c=generationContract('course_qcms');let calls=0;
+ const fetcher=(async()=>{
+   calls++;
+   const data=fixture('course_qcms') as any;
+   if(calls===1)data.questions=data.questions.slice(0,6);
+   else data.questions=data.questions.slice(calls===2?0:5,calls===2?5:10);
+   return answer({choices:[{message:{content:JSON.stringify(data)},finish_reason:'stop'}]});
+ }) as typeof fetch;
+ const got=await generateJson(c,'cours de résidanat',{apiKey:'test',fetcher});
+ assert(calls===3&&got.questions.length===10,'complete batch without repeating full generation');
 });
