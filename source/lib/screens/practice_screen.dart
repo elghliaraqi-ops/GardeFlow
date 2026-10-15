@@ -69,6 +69,8 @@ const practiceSpecialties = <String>[
   'Autre',
 ];
 
+enum _PracticeHomeTab { learning, guard, results }
+
 class PracticeScreen extends StatefulWidget {
   final AppState appState;
   const PracticeScreen({super.key, required this.appState});
@@ -78,6 +80,7 @@ class PracticeScreen extends StatefulWidget {
 }
 
 class _PracticeScreenState extends State<PracticeScreen> {
+  _PracticeHomeTab _selectedTab = _PracticeHomeTab.learning;
   final _service = PracticeService.instance;
   final _qcmService = ClinicalCaseService.instance;
   bool _loading = true;
@@ -346,6 +349,12 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 const SizedBox(height: 12),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
+              const SizedBox(height: 14),
+              _PracticeHubTabBar(
+                selected: _selectedTab,
+                onSelect: (next) => setState(() => _selectedTab = next),
+              ),
+              if (_selectedTab == _PracticeHomeTab.learning) ...[
               const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
                 number: '01',
@@ -507,10 +516,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 },
               ),
 
-              // 05. The guard tracker is a separate clinical workflow.
-              const SizedBox(height: 26),
+              ],
+              if (_selectedTab == _PracticeHomeTab.guard) ...[
+              const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
-                number: '05',
+                number: '01',
                 icon: Icons.emergency_rounded,
                 title: 'Ma garde',
                 subtitle: 'Patients, objectif personnel et historique',
@@ -549,11 +559,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 _EncouragementCard(text: _encouragement(guard)),
               ],
 
-              // 06. Progress is one compact area, not multiple competing
-              // hero banners with the same XP and QCM counters.
-              const SizedBox(height: 26),
+              ],
+              if (_selectedTab == _PracticeHomeTab.results) ...[
+              const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
-                number: '06',
+                number: '01',
                 icon: Icons.insights_rounded,
                 title: 'Ma progression',
                 subtitle: 'QCM, activité clinique et succès débloqués',
@@ -586,10 +596,9 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ),
               ),
 
-              // 07. Preferences and rankings are secondary destinations.
               const SizedBox(height: 26),
               const _PracticeHubSectionHeader(
-                number: '07',
+                number: '02',
                 icon: Icons.account_circle_rounded,
                 title: 'Mon profil et classements',
                 subtitle: 'Classements, badges et bilan de l’année',
@@ -644,6 +653,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              ],
             ],
           ),
         ),
