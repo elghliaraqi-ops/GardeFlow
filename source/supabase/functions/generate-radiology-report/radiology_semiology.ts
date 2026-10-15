@@ -1,3 +1,5 @@
+import { historyRiskSemiology } from './radiology_history.ts';
+
 /**
  * Symptom-oriented CT semiology, not diagnostic assertions. Each entry asks
  * whether a discriminating image sign was ACTUALLY observed. The reporting
@@ -206,7 +208,11 @@ const brain: SemiologyEntry[] = [
     'Taille ventricules, effacement citernes et sillons, déplacement ligne médiane.',
     'CT hydrocephalus intracranial mass effect'],
 ];
-export type SemiologyPlan = { matched: boolean; entries: SemiologyEntry[]; topics: string[] };
+export type SemiologyPlan = {
+  matched: boolean; symptomMatched: boolean;
+  historyMatched: boolean; historyFlagged: boolean;
+  entries: SemiologyEntry[]; topics: string[];
+};
 /**
  * Matches EVERY supplied symptom pattern, not merely the first. Unknown
  * indications are completed by a single Groq differential-planning request.
@@ -225,6 +231,14 @@ export function indicationSemiology(args: {
       if (!entries.some(x => x[1] === row[1])) entries.push(row);
     }
   };
+  // The past history is evaluated as an INDEPENDENT source of differential
+  // signs. E.g. ACFA warrants visceral embolic checks even when the indication
+  // merely says "right iliac fossa pain".
+  const history = historyRiskSemiology(args);
+  for (const row of history.entries) add('antécédent : ' +
+    history.topics.join(', '), [row]);
+  const historyMatched = history.matched, historyFlagged = history.flagged;
+  const historyCount = topics.length;
   const abdominal = isAbdominoPelvic(scope) || (isCt(scope) && isAbdominoPelvic(complaint));
   const thorax = isThoracic(scope);
   if (abdominal) {
@@ -257,7 +271,11 @@ export function indicationSemiology(args: {
     add('angioscanner pulmonaire', vascularThorax);
   if (isBrain(scope) && /(cephal|headache|deficit neurolog|hemipares|avc|confusion|convulsion|trouble vigilance)/.test(complaint))
     add('sémiologie neuroradiologique', brain);
-  return { matched: topics.length > 0, entries: entries.slice(0, 22), topics };
+  const symptomMatched = topics.length > historyCount;
+  return {
+    matched: topics.length > 0, symptomMatched, historyMatched,
+    historyFlagged, entries: entries.slice(0, 26), topics,
+  };
 }
 
 /** Nontrivial symptoms not found in curated patterns need a SINGLE targeted
