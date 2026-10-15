@@ -38,8 +38,9 @@ export function positiveDescription(
   let body = '';
   if (ambiguous) {
     // Choice of which alternative is present must be specified by the reader.
-    body = 'Anomalie visualisée parmi les signes recherchés (' +
-      rawTerm(question).toLocaleLowerCase('fr') + '), à caractériser';
+    body = 'Une anomalie correspondant à l’un des signes recherchés (' +
+      rawTerm(question).toLocaleLowerCase('fr') + ') est relevée ; ' +
+      'sa nature précise reste à décrire';
   } else if (/^infiltration\b/i.test(generic)) {
     body = 'On note une ' + lowerFirst(generic);
   } else if (/^(épaississement|epaississement|défaut|foyer|calcul|nodule|thrombus)\b/i.test(generic)) {
@@ -51,9 +52,9 @@ export function positiveDescription(
   } else if (/^appendice dilaté\b/i.test(generic)) {
     body = 'L’appendice apparaît dilaté' + generic.slice('Appendice dilaté'.length);
   } else if (/^(rate|foie|rein|pancréas|vessie|utérus|ovaire|appendice|artère|poumon|sinus)\b/i.test(generic)) {
-    body = 'On note : ' + lowerFirst(generic);
+    body = 'Une anomalie est décrite concernant ' + lowerFirst(generic);
   } else {
-    body = 'Le signe suivant est observé : ' + lowerFirst(generic);
+    body = 'Le lecteur relève une anomalie de type « ' + generic + ' »';
   }
   // Short notes such as "à droite", "10 mm" still follow the finding.
   return sentence(body + (n ? ' (' + n.replace(/\.+$/, '') + ')' : ''));
@@ -62,6 +63,9 @@ export function positiveDescription(
 export function negativeDescription(question: string): string {
   const name = rawTerm(question);
   if (!name) return '';
+  if (/^(intégrité|perméabilité|aspect normal|bonne aération)/i.test(name))
+    return sentence('La réponse négative concernant « ' + name +
+      ' » nécessite une formulation descriptive complémentaire');
   if (vague.test(name) || /[?？]/.test(name)) {
     return sentence('Pas de signe en faveur de l’une des anomalies recherchées : ' +
       lowerFirst(name));
@@ -69,7 +73,7 @@ export function negativeDescription(question: string): string {
   if (/^(présence de|mise en évidence de)\s+/i.test(name)) {
     return sentence('Absence de ' + lowerFirst(name).replace(/^(présence de|mise en évidence de)\s+/i, ''));
   }
-  return sentence('Pas de ' + lowerFirst(name) + ' identifié sur les structures évaluées');
+  return sentence('Absence de ' + lowerFirst(name) + ' sur les structures évaluées');
 }
 /** The "Indication/Antécédents" label is a teaching category, not an organ. */
 export function reportingSection(section: string, title: string): string {
