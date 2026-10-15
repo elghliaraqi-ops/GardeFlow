@@ -42,6 +42,15 @@ export function compatibleQuestionSet<T extends PlanQuestion>(
       }
     }
   }
+  // Keep explicit clinical indication questions even in old clients with a
+  // 12-item limit. Reserve the rest for the anatomical survey rather than
+  // crowding it out with differential questions (or vice versa).
+  const indications = questions.flatMap((q, i) =>
+    q.section?.startsWith('Indication · ') ? [i] : []);
+  const focusedBudget = Math.min(indications.length, Math.floor(capacity / 2));
+  for (let i = 0; i < focusedBudget && chosen.size < capacity; i++)
+    chosen.add(indications[i]);
+
   // A legacy 12-question browser must still examine ALL THREE TAP regions.
   // Otherwise the first 8 thoracic questions consume the budget and pelvis
   // silently vanishes. Round-robin selection preserves anatomical balance;
