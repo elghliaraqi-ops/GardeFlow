@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { confirmedObservations, unansweredWarnings, factualDraft } from './report_contract.ts';
 import { examTemplate } from './radiology_templates.ts';
 import { structuredReport } from './structured_report.ts';
+import { clientQuestionCapacity, compatibleQuestionSet } from './question_compatibility.ts';
 
 // Stateless radiology reporting assistant: no patient data are persisted here.
 // Each phase makes a single Groq request. Never run a medical "review" request.
@@ -55,7 +56,7 @@ type Question = {
   section?: string; normal_text?: string; abnormal_text?: string;
 };
 function normalizedQuestions(raw: unknown): Question[] | null {
-  if (!Array.isArray(raw) || raw.length < 5 || raw.length > 24) return null;
+  if (!Array.isArray(raw) || raw.length < 5 || raw.length > 48) return null;
   const qs = raw.map((entry: unknown, i: number) => {
     const q = object(entry), kind = text(q.kind, 10);
     const options = cleanArray(q.options, 6);
@@ -244,6 +245,7 @@ Deno.serve(async req => {
   if (!caseInput) return reply({ error: 'invalid_clinical_context' }, 400);
   const action = text(input.action, 30);
   if (action === 'plan') {
+    const capacity = clientQuestionCapacity(input.max_questions);
     const template = examTemplate(caseInput.exam, caseInput.region,
       caseInput.indication, caseInput.technique);
     if (template) {
@@ -258,8 +260,15 @@ Deno.serve(async req => {
           options: [], reference_query: '', normal_text: '', abnormal_text: '',
         });
       }
-      return reply({ questions, template_key: template.key,
-        generation_mode: 'systematic_checklist' });
+      const compatible = compatibleQuestionSet(
+        questions, capacity, caseInput.indication, caseInput.comparative);
+      return reply({
+        questions: compatible.questions,
+        template_key: template.key,
+        available_questions: compatible.available,
+        limited_for_legacy_client: compatible.truncated,
+        generation_mode: 'systematic_checklist',
+      });
     }
     const result = await groq(planningPrompt, {
       contexte: caseInput,
@@ -268,7 +277,14 @@ Deno.serve(async req => {
     if (result.error) return result.error;
     const questions = normalizedQuestions(result.data?.questions);
     if (!questions) return reply({ error: 'invalid_generated_questions' }, 502);
-    return reply({ questions, generation_mode: 'groq_systematic' });
+    const compatible = compatibleQuestionSet(
+      questions, capacity, caseInput.indication, caseInput.comparative);
+    return reply({
+      questions: compatible.questions,
+      available_questions: compatible.available,
+      limited_for_legacy_client: compatible.truncated,
+      generation_mode: 'groq_systematic',
+    });
   }
   if (action === 'report') {
     const questions = normalizedQuestions(input.questions);
