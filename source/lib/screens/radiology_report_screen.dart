@@ -333,6 +333,7 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         type: MaterialType.transparency,
         child: DropdownButtonFormField<String>(
           value: sexChosen ? sex : null,
+          isExpanded: true,
           dropdownColor: panel,
           decoration: decor('Sexe / anatomie pelvienne *',
             'Sélection utile pour les diagnostics différentiels'),
