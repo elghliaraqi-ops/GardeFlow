@@ -300,7 +300,7 @@ Deno.serve(async req => {
       ? structuredReport(caseInput, questions, answers)
       : null;
     const tapCoverageWarnings: string[] = [];
-    if (isTapCt(caseInput.exam, caseInput.region)) {
+    if (isTapCt(caseInput.exam, caseInput.region, caseInput.technique)) {
       // Surface missing anatomical regions BEFORE individual unanswered signs.
       // A thorax-only draft must never look like a completed whole TAP.
       for (const region of ['Thorax', 'Abdomen', 'Pelvis']) {
