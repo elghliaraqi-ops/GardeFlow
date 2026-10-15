@@ -517,14 +517,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 accent: PracticeColors.gamePink,
               ),
               const SizedBox(height: 11),
-              // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
-              const SizedBox(height: 22),
-              const _PracticeHubSectionHeader(
-                icon: Icons.emergency_rounded,
-                title: 'Ma garde',
-                subtitle: 'Patients, objectif personnel et historique de garde',
-              ),
-              const SizedBox(height: 9),
               if (guard == null)
                 _NoGuardCard(
                   onHistory: () => Navigator.push(
@@ -557,34 +549,23 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 _EncouragementCard(text: _encouragement(guard)),
               ],
 
-              // 3. Toutes les statistiques sont regroupées dans une seule zone.
-              const SizedBox(height: 22),
+              // 06. Progress is one compact area, not multiple competing
+              // hero banners with the same XP and QCM counters.
+              const SizedBox(height: 26),
               const _PracticeHubSectionHeader(
+                number: '06',
                 icon: Icons.insights_rounded,
-                title: 'Mes résultats',
-                subtitle: 'QCM, activité clinique et niveau au même endroit',
+                title: 'Ma progression',
+                subtitle: 'QCM, activité clinique et succès débloqués',
+                accent: PracticeColors.gameBlue,
               ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 11),
               _QcmCanonicalStatsStrip(
                 month: _qcmMonth,
                 total: _qcmAll,
                 loading: _loading,
               ),
-              const SizedBox(height: 9),
-              const SizedBox(height: 11),
-              const _PracticeHubSectionHeader(
-                icon: Icons.medical_information_outlined,
-                title: 'Progression clinique',
-                subtitle: 'XP et séries des activités Practice historiques',
-              ),
-              const SizedBox(height: 9),
-              _PracticeGameHeader(
-                level: level,
-                xp: _all.xp,
-                streak: _all.streak,
-                unlocked: unlocked,
-              ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 10),
               _PracticeHubProgressPanel(
                 month: _month,
                 year: _year,
@@ -592,15 +573,29 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 level: level,
                 loading: _loading,
               ),
-
-              // 4. Profil et réglages : utiles mais volontairement secondaires.
-              const SizedBox(height: 22),
-              const _PracticeHubSectionHeader(
-                icon: Icons.account_circle_rounded,
-                title: 'Mon profil Practice',
-                subtitle: 'Classement, succès et progression annuelle',
+              const SizedBox(height: 10),
+              PracticeAchievementsPreview(
+                achievements: _achievements,
+                loading: _loading,
+                onOpen: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PracticeAchievementsScreen(appState: widget.appState),
+                  ),
+                ),
               ),
-              const SizedBox(height: 9),
+
+              // 07. Preferences and rankings are secondary destinations.
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '07',
+                icon: Icons.account_circle_rounded,
+                title: 'Mon profil et classements',
+                subtitle: 'Classements, badges et bilan de l’année',
+                accent: PracticeColors.gameGold,
+              ),
+              const SizedBox(height: 11),
               _PracticeHubQuickActions(
                 rankLabel: rankLabel,
                 achievementLabel: '$unlocked/${_achievements.length}',
