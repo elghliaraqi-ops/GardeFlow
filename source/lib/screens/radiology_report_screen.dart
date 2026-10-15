@@ -356,7 +356,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         rows: 3, required: true, maxChars: 1800),
       field(technique, 'Protocole effectivement réalisé', rows: 2,
         hint: 'Avec/sans contraste, phases, séquences et limites'),
-      field(clinical, 'Contexte / antécédents / bilan utiles', rows: 3),
+      field(clinical, 'Antécédents / traitements / facteurs de risque', rows: 3,
+        hint: 'Ex. ACFA, anticoagulants, chirurgie antérieure, cancer, '
+          'immunodépression, pathologies chroniques, bilan biologique...'),
       Material(
         type: MaterialType.transparency,
         child: SwitchListTile.adaptive(
