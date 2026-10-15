@@ -15,13 +15,16 @@ class PracticeQuizCard extends StatelessWidget {
     required this.question,
     required this.options,
     this.beforeQuestion,
+    this.afterQuestion,
+    this.headerLabel = 'DÉFI',
     this.trailing = const [],
     this.submitting = false,
   });
   final int index, total;
   final String topic, question;
   final List<Widget> options, trailing;
-  final Widget? beforeQuestion;
+  final Widget? beforeQuestion, afterQuestion;
+  final String headerLabel;
   final bool submitting;
   @override
   Widget build(BuildContext context) => Container(
@@ -61,7 +64,7 @@ class PracticeQuizCard extends StatelessWidget {
             ),
             const SizedBox(width: 7),
             Text(
-              'DÉFI ${index + 1} / $total',
+              '$headerLabel ${index + 1} / $total',
               style: const TextStyle(
                 color: PracticeDailyVisualTheme.gold,
                 fontSize: 10,
@@ -122,6 +125,10 @@ class PracticeQuizCard extends StatelessWidget {
             ),
           ),
         ),
+        if (afterQuestion != null) ...[
+          const SizedBox(height: 12),
+          afterQuestion!,
+        ],
         const SizedBox(height: 12),
         for (var i = 0; i < options.length; i++) ...[
           options[i],
