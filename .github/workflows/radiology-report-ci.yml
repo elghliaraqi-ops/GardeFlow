@@ -46,5 +46,9 @@ jobs:
           deno-version: v2.x
       - name: Check Edge Function typing
         run: deno check source/supabase/functions/generate-radiology-report/index.ts
+      - name: Test factual observation logic and fallback
+        run: deno test source/supabase/functions/generate-radiology-report/report_contract_test.ts
       - name: Mirror stays identical
-        run: cmp source/supabase/functions/generate-radiology-report/index.ts supabase/functions/generate-radiology-report/index.ts
+        run: |
+          cmp source/supabase/functions/generate-radiology-report/index.ts supabase/functions/generate-radiology-report/index.ts
+          cmp source/supabase/functions/generate-radiology-report/report_contract.ts supabase/functions/generate-radiology-report/report_contract.ts
