@@ -34,9 +34,9 @@ class PracticeHomeNavigation extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: PracticeColors.surface.withOpacity(.94),
+        color: _Palette.surface.withOpacity(.94),
         borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: PracticeColors.line.withOpacity(.75)),
+        border: Border.all(color: _Palette.line.withOpacity(.75)),
       ),
       child: Row(
         children: [
@@ -49,7 +49,7 @@ class PracticeHomeNavigation extends StatelessWidget {
                 label: tabs[i].$2,
                 child: Material(
                   color: selected == tabs[i].$1
-                      ? PracticeColors.accent
+                      ? _Palette.mint
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
@@ -63,8 +63,8 @@ class PracticeHomeNavigation extends StatelessWidget {
                         children: [
                           Icon(tabs[i].$3,
                             color: selected == tabs[i].$1
-                                ? PracticeColors.background
-                                : PracticeColors.textSecondary,
+                                ? _Palette.bg
+                                : _Palette.secondary,
                             size: 16),
                           const SizedBox(width: 5),
                           Flexible(
@@ -74,8 +74,8 @@ class PracticeHomeNavigation extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: selected == tabs[i].$1
-                                    ? PracticeColors.background
-                                    : PracticeColors.textSecondary,
+                                    ? _Palette.bg
+                                    : _Palette.secondary,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w900,
                               ),
