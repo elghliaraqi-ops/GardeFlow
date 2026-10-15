@@ -36,6 +36,7 @@ void main() {
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('radiology-exam-picker')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('radiology-exam-picker')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('IRM').last);
@@ -66,7 +67,7 @@ void main() {
       find.byKey(const ValueKey('radiology-region-picker-TDM')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text(RadiologyExamRegions.customRegion).last,
+      find.text(RadiologyExamRegions.customRegion),
       300,
       scrollable: find.byType(Scrollable).last,
       maxScrolls: 20,
