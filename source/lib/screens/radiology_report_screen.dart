@@ -296,6 +296,21 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         onChanged: (x) => setState(() => exam = x ?? 'TDM'),
       ),
       const SizedBox(height: 10),
+      OutlinedButton.icon(
+        onPressed: chooseExamDate,
+        icon: const Icon(Icons.event_outlined),
+        label: Text(examDate == null
+            ? 'Date de l’examen (facultative)'
+            : 'Examen du ' + examDate!.day.toString().padLeft(2, '0') +
+              '/' + examDate!.month.toString().padLeft(2, '0') +
+              '/' + examDate!.year.toString()),
+      ),
+      if (examDate != null)
+        TextButton(
+          onPressed: () => setState(() => examDate = null),
+          child: const Text('Effacer la date'),
+        ),
+      const SizedBox(height: 10),
       field(region, 'Région anatomique *', required: true,
         hint: 'Ex. encéphale, thorax, abdomino-pelvien, rochers'),
       field(indication, 'Indication / question clinique *',
