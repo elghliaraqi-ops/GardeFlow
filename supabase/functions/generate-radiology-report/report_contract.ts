@@ -1,3 +1,4 @@
+import { sentence, positiveDescription, negativeDescription } from './radiology_prose.ts';
 // Radiology report transport: factual, de-identified observations only.
 // This module intentionally has no Groq calls and no patient-data persistence.
 export type AnswerStatus = 'observed' | 'absent' | 'not_evaluable' | 'uncertain' | 'unanswered';
@@ -78,17 +79,32 @@ export function factualDraft(
   const findings: string[] = [];
   for (const o of observations) {
     if (o.status === 'non_renseigne') continue;
+    const details = o.details;
+    const physicianNote = details.includes('Précisions du lecteur : ')
+      ? details.split('Précisions du lecteur : ').at(-1)?.trim() ?? ''
+      : '';
     if (o.status === 'présent') {
-      findings.push('- ' + o.question + ' : ' + (o.details || 'présent.'));
+      if (details.startsWith('Signes observés :')) {
+        const selected = details.replace(/^Signes observés :\s*/, '')
+          .split(' ; Propositions non sélectionnées')[0].trim();
+        findings.push('- ' + sentence(
+          'Les éléments suivants sont observés : ' + selected +
+          (physicianNote ? ' (' + physicianNote + ')' : '')));
+      } else if (details && !details.includes('Précisions du lecteur :')) {
+        findings.push('- ' + sentence(details));
+      } else {
+        findings.push('- ' + positiveDescription(o.question, '', physicianNote));
+      }
     } else if (o.status === 'absent') {
-      findings.push('- ' + o.question + ' : absent, selon les constatations du lecteur.' +
-        (o.details ? ' ' + o.details : ''));
+      findings.push('- ' + negativeDescription(o.question));
     } else if (o.status === 'incertain') {
-      findings.push('- ' + o.question + ' : incertain.' +
-        (o.details ? ' ' + o.details : ''));
+      findings.push('- ' + sentence(
+        'Évaluation incertaine du signe recherché (' + o.question + ')' +
+        (physicianNote ? ' ; ' + physicianNote : '')));
     } else if (o.status === 'non_evaluable') {
-      findings.push('- ' + o.question + ' : non évaluable.' +
-        (o.details ? ' ' + o.details : ''));
+      findings.push('- ' + sentence(
+        'Analyse non évaluable du signe recherché (' +
+        o.question + ')' + (physicianNote ? ' ; ' + physicianNote : '')));
     }
   }
   return {

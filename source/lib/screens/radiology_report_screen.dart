@@ -586,8 +586,9 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
               key: ValueKey('notes-' + qid(q)),
               initialValue: str(answer['notes']), maxLines: 3,
               style: const TextStyle(color: Colors.white),
-              decoration: decor('Précisions complémentaires',
-                'Mesures, topographie, rehaussement, comparaison...'),
+              decoration: decor('Phrase radiologique descriptive (facultative)',
+                'Ex. Appendice de 11 mm avec infiltration de la graisse ' 
+                'périappendiculaire en FID.'),
               onChanged: (v) => change(q, {'notes': v}),
             ),
             if (status == 'unanswered')
