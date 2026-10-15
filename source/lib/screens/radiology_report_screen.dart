@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../services/supabase_backend_service.dart';
 import '../widgets/practice_qcm_medical_illustration.dart';
+import '../widgets/practice_quiz_widgets.dart';
+import '../widgets/practice_keyword_text.dart';
+import 'practice_daily_visual_theme.dart';
 
 /// Guided observations are not scored quizzes. The physician validates every
 /// finding and the final report. Nothing is saved by this screen.
@@ -271,131 +274,252 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     style: const TextStyle(color: Colors.white, fontSize: 19,
       fontWeight: FontWeight.w900));
 
+  /// Same visual language as progressive clinical cases and Viscéral × Radio.
+  /// Only presentation is shared: radiological findings are never scored.
+  Widget _teachingPanel(Map<String, dynamic> q, List<String> criteria) =>
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: PracticeDailyVisualTheme.surface.withOpacity(.70),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(
+            color: PracticeDailyVisualTheme.blue.withOpacity(.32),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(children: [
+              Icon(Icons.menu_book_rounded,
+                color: PracticeDailyVisualTheme.gold, size: 17),
+              SizedBox(width: 7),
+              Text('DÉFINITION', style: TextStyle(
+                color: PracticeDailyVisualTheme.gold,
+                fontWeight: FontWeight.w900, fontSize: 11)),
+            ]),
+            const SizedBox(height: 7),
+            PracticeKeywordText(
+              str(q['definition']),
+              style: const TextStyle(
+                color: PracticeDailyVisualTheme.text, height: 1.45,
+                fontSize: 13),
+            ),
+            const SizedBox(height: 13),
+            const Row(children: [
+              Icon(Icons.fact_check_outlined,
+                color: PracticeDailyVisualTheme.gold, size: 17),
+              SizedBox(width: 7),
+              Expanded(child: Text('CRITÈRES RADIOLOGIQUES', style: TextStyle(
+                color: PracticeDailyVisualTheme.gold,
+                fontWeight: FontWeight.w900, fontSize: 11))),
+            ]),
+            const SizedBox(height: 6),
+            for (final criterion in criteria)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: PracticeKeywordText(
+                  '• ' + criterion,
+                  style: const TextStyle(
+                    color: PracticeDailyVisualTheme.muted, fontSize: 12.5,
+                    height: 1.4),
+                ),
+              ),
+            if (str(q['reference_query']).isNotEmpty)
+              PracticeQcmMedicalIllustration(
+                key: ValueKey(qid(q)),
+                correction: PracticeQcmImageMetadata.imagingCorrection(
+                  str(q['reference_query']), exam + ' ' + region.text),
+                question: str(q['title']),
+                caseContext: exam + ' ' + region.text,
+              ),
+          ],
+        ),
+      );
+
   Widget questionsView() {
-    final q = questions[position], a = response(q);
-    final status = str(a['status']), kind = str(q['kind']);
-    final checked = a['selected'] is List
-        ? List<String>.from(a['selected'] as List) : <String>[];
+    final q = questions[position], answer = response(q);
+    final status = str(answer['status']), kind = str(q['kind']);
+    final selected = answer['selected'] is List
+        ? List<String>.from(answer['selected'] as List) : <String>[];
     final choices = q['options'] is List
         ? (q['options'] as List).map(str).toList() : <String>[];
     final criteria = q['criteria'] is List
         ? (q['criteria'] as List).map(str).toList() : <String>[];
-    return block(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('2 · Question ' + (position + 1).toString() +
-        ' / ' + questions.length.toString(),
-        style: const TextStyle(color: mint, fontWeight: FontWeight.w900)),
-      const SizedBox(height: 8),
-      LinearProgressIndicator(value: (position + 1) / questions.length,
-        minHeight: 5, color: mint, backgroundColor: line),
-      const SizedBox(height: 10),
-      if (str(q['section']).isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 9),
-          child: Text(str(q['section']).toUpperCase(),
-            style: const TextStyle(color: Color(0xFFFFD166),
-              fontWeight: FontWeight.w800, letterSpacing: 0.7)),
-        ),
-      title(str(q['title'])),
-      const SizedBox(height: 12),
-      const Text('DÉFINITION', style: TextStyle(
-        color: Color(0xFFFFD166), fontWeight: FontWeight.w800)),
-      const SizedBox(height: 5),
-      Text(str(q['definition']), style: const TextStyle(color: Colors.white)),
-      const SizedBox(height: 12),
-      const Text('CRITÈRES RADIOLOGIQUES', style: TextStyle(
-        color: Color(0xFFFFD166), fontWeight: FontWeight.w800)),
-      for (final x in criteria)
-        Padding(padding: const EdgeInsets.only(top: 5),
-          child: Text('• ' + x, style: const TextStyle(color: muted))),
-      if (str(q['reference_query']).isNotEmpty)
-        PracticeQcmMedicalIllustration(
-          key: ValueKey(qid(q)),
-          correction: PracticeQcmImageMetadata.imagingCorrection(
-            str(q['reference_query']), exam + ' ' + region.text),
+    final topic = str(q['section']).trim();
+    final qcuChoices = <String>[
+      'Présent', 'Absent', 'Non évaluable', 'Incertain',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PracticeQuizCard(
+          index: position,
+          total: questions.length,
+          headerLabel: 'QUESTION',
+          topic: (kind == 'qcm' ? 'QCM · signes observés'
+              : kind == 'qcu' ? 'QCU · présence du signe'
+              : 'Constatations libres') +
+              (topic.isEmpty ? '' : ' · ' + topic),
           question: str(q['title']),
-          caseContext: exam + ' ' + region.text,
+          afterQuestion: _teachingPanel(q, criteria),
+          options: [
+            if (kind == 'qcu')
+              for (var i = 0; i < qcuChoices.length; i++)
+                PracticeQuizOption(
+                  index: i,
+                  label: qcuChoices[i],
+                  selected: i == 0
+                      ? status == 'observed' && answer['value'] == 'oui'
+                      : i == 1
+                      ? status == 'observed' && answer['value'] == 'non'
+                      : i == 2
+                      ? status == 'not_evaluable'
+                      : status == 'uncertain',
+                  showCorrection: false,
+                  isCorrect: false,
+                  onTap: busy ? null : () {
+                    if (i == 0 || i == 1) {
+                      change(q, {
+                        'status': 'observed',
+                        'value': i == 0 ? 'oui' : 'non',
+                      });
+                    } else {
+                      change(q, {
+                        'status': i == 2 ? 'not_evaluable' : 'uncertain',
+                        'value': '',
+                      });
+                    }
+                  },
+                ),
+            if (kind == 'qcm') ...[
+              for (var i = 0; i < choices.length; i++)
+                PracticeQuizOption(
+                  index: i,
+                  label: choices[i],
+                  selected: status == 'observed' &&
+                      selected.contains(choices[i]),
+                  showCorrection: false,
+                  isCorrect: false,
+                  onTap: busy ? null : () {
+                    final next = [...selected];
+                    if (next.contains(choices[i])) {
+                      next.remove(choices[i]);
+                    } else {
+                      next.add(choices[i]);
+                    }
+                    change(q, {
+                      'status': next.isEmpty ? 'unanswered' : 'observed',
+                      'selected': next,
+                    });
+                  },
+                ),
+            ],
+            if (kind == 'texte')
+              TextFormField(
+                key: ValueKey('free-' + qid(q)),
+                initialValue: str(answer['value']),
+                minLines: 2, maxLines: 6,
+                style: const TextStyle(color: Colors.white),
+                decoration: decor('Constatations / mesures',
+                  'Localisation, unités...'),
+                onChanged: (v) => change(q, {
+                  'status': v.trim().isEmpty ? 'unanswered' : 'observed',
+                  'value': v,
+                }),
+              ),
+          ],
+          trailing: [
+            const SizedBox(height: 13),
+            if (kind == 'qcm') ...[
+              const Text(
+                'Cochez uniquement les signes réellement présents.',
+                style: TextStyle(
+                  color: PracticeDailyVisualTheme.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 9),
+              Wrap(spacing: 7, runSpacing: 7, children: [
+                option('Aucun de ces signes', status == 'absent',
+                  () => change(q, {
+                    'status': 'absent', 'selected': <String>[],
+                  })),
+                option('Non évaluable', status == 'not_evaluable',
+                  () => change(q, {
+                    'status': 'not_evaluable', 'selected': <String>[],
+                  })),
+                option('Incertain', status == 'uncertain',
+                  () => change(q, {
+                    'status': 'uncertain', 'selected': <String>[],
+                  })),
+              ]),
+              const SizedBox(height: 6),
+              const Text(
+                'Une option non cochée ne signifie pas absence.',
+                style: TextStyle(
+                  color: PracticeDailyVisualTheme.muted, fontSize: 11),
+              ),
+            ],
+            if (kind == 'texte')
+              Wrap(spacing: 7, runSpacing: 7, children: [
+                option('Non évaluable', status == 'not_evaluable',
+                  () => change(q, {
+                    'status': 'not_evaluable', 'value': '',
+                  })),
+                option('Incertain', status == 'uncertain',
+                  () => change(q, {
+                    'status': 'uncertain', 'value': '',
+                  })),
+              ]),
+            const SizedBox(height: 13),
+            const Divider(color: PracticeDailyVisualTheme.border),
+            const SizedBox(height: 9),
+            TextFormField(
+              key: ValueKey('notes-' + qid(q)),
+              initialValue: str(answer['notes']), maxLines: 3,
+              style: const TextStyle(color: Colors.white),
+              decoration: decor('Précisions complémentaires',
+                'Mesures, topographie, rehaussement, comparaison...'),
+              onChanged: (v) => change(q, {'notes': v}),
+            ),
+            if (status == 'unanswered')
+              const Padding(
+                padding: EdgeInsets.only(top: 9),
+                child: Text(
+                  'Non renseigné : cette question ne sera pas '
+                  'considérée comme normale.',
+                  style: TextStyle(
+                    color: PracticeDailyVisualTheme.muted, fontSize: 12),
+                ),
+              ),
+          ],
         ),
-      const SizedBox(height: 12),
-      if (kind == 'qcu')
-        Wrap(spacing: 7, runSpacing: 7, children: [
-          option('Présent', status == 'observed' && a['value'] == 'oui',
-            () => change(q, {'status': 'observed', 'value': 'oui'})),
-          option('Absent', status == 'observed' && a['value'] == 'non',
-            () => change(q, {'status': 'observed', 'value': 'non'})),
-          option('Non évaluable', status == 'not_evaluable',
-            () => change(q, {'status': 'not_evaluable', 'value': ''})),
-          option('Incertain', status == 'uncertain',
-            () => change(q, {'status': 'uncertain', 'value': ''})),
-        ]),
-      if (kind == 'qcm') ...[
-        const Text('Cochez uniquement les signes effectivement observés :',
-          style: TextStyle(color: Colors.white)),
-        for (final x in choices)
-          Padding(padding: const EdgeInsets.only(top: 5),
-            child: option(x, status == 'observed' && checked.contains(x), () {
-              final next = [...checked];
-              if (next.contains(x)) { next.remove(x); } else { next.add(x); }
-              change(q, {'status': next.isEmpty ? 'unanswered' : 'observed',
-                'selected': next});
-            })),
-        Wrap(spacing: 7, runSpacing: 7, children: [
-          option('Aucun de ces signes', status == 'absent',
-            () => change(q, {'status': 'absent', 'selected': <String>[]})),
-          option('Non évaluable', status == 'not_evaluable',
-            () => change(q, {'status': 'not_evaluable', 'selected': <String>[]})),
-          option('Incertain', status == 'uncertain',
-            () => change(q, {'status': 'uncertain', 'selected': <String>[]})),
-        ]),
-        const Text('Une option non cochée ne signifie pas absence.',
-          style: TextStyle(color: muted, fontSize: 11)),
-      ],
-      if (kind == 'texte') ...[
-        TextFormField(
-          key: ValueKey('free-' + qid(q)),
-          initialValue: str(a['value']),
-          minLines: 2, maxLines: 6,
-          style: const TextStyle(color: Colors.white),
-          decoration: decor('Constatations / mesures', 'Localisation, unités...'),
-          onChanged: (v) => change(q, {
-            'status': v.trim().isEmpty ? 'unanswered' : 'observed', 'value': v,
-          }),
+        const SizedBox(height: 14),
+        PracticeQuizNavigation(
+          index: position,
+          // These are unscored observations; never display red/green
+          // correctness indicators as in educational QCMs.
+          results: List<bool?>.filled(questions.length, null),
+          onPrevious: position == 0
+              ? null : () => setState(() => position--),
+          onSelect: busy ? null : (i) => setState(() => position = i),
+          onNext: position + 1 < questions.length
+              ? () => setState(() => position++)
+              : null,
+          nextLabel: 'Question suivante',
         ),
-        Wrap(spacing: 7, runSpacing: 7, children: [
-          option('Non évaluable', status == 'not_evaluable',
-            () => change(q, {'status': 'not_evaluable', 'value': ''})),
-          option('Incertain', status == 'uncertain',
-            () => change(q, {'status': 'uncertain', 'value': ''})),
-        ]),
+        const SizedBox(height: 12),
+        if (position == 0)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: button('Modifier le contexte', () =>
+              setState(() => step = 0),
+              secondary: true, icon: Icons.edit_outlined),
+          ),
+        if (position == questions.length - 1)
+          button('Rédiger le compte rendu', () => generate('report'),
+            icon: Icons.description_outlined),
       ],
-      const SizedBox(height: 13),
-      TextFormField(
-        key: ValueKey('notes-' + qid(q)),
-        initialValue: str(a['notes']), maxLines: 3,
-        style: const TextStyle(color: Colors.white),
-        decoration: decor('Précisions complémentaires',
-          'Mesures, topographie, rehaussement, comparaison...'),
-        onChanged: (v) => change(q, {'notes': v}),
-      ),
-      const SizedBox(height: 13),
-      Wrap(spacing: 7, runSpacing: 7, children: [
-        button(position == 0 ? 'Modifier le contexte' : 'Précédent',
-          () => setState(() {
-            if (position == 0) { step = 0; } else { position--; }
-          }), secondary: true, icon: Icons.arrow_back_rounded),
-        button(position == questions.length - 1
-            ? 'Rédiger le compte rendu' : 'Suivante', () {
-          if (position == questions.length - 1) {
-            generate('report');
-          } else {
-            setState(() => position++);
-          }
-        }, icon: Icons.description_outlined),
-      ]),
-      if (status == 'unanswered') const Padding(
-        padding: EdgeInsets.only(top: 8),
-        child: Text('Non renseigné : cette question ne sera pas considérée '
-          'comme normale.', style: TextStyle(color: muted, fontSize: 12))),
-    ]));
+    );
   }
 
   Widget reportView() => Column(
@@ -477,7 +601,11 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
     backgroundColor: bg,
     appBar: AppBar(title: const Text('Assistant CR Radiologie'),
       backgroundColor: bg, foregroundColor: Colors.white),
-    body: SafeArea(child: ListView(
+    body: Container(
+      decoration: BoxDecoration(
+        gradient: step == 1 ? PracticeDailyVisualTheme.pageGradient : null,
+      ),
+      child: SafeArea(child: ListView(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
       children: [
         Row(children: [
@@ -508,5 +636,6 @@ class _RadiologyReportScreenState extends State<RadiologyReportScreen> {
         if (step == 3) reviewView(),
       ],
     )),
+    ),
   );
 }
