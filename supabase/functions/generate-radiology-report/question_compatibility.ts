@@ -42,6 +42,22 @@ export function compatibleQuestionSet<T extends PlanQuestion>(
       }
     }
   }
+  // A legacy 12-question browser must still examine ALL THREE TAP regions.
+  // Otherwise the first 8 thoracic questions consume the budget and pelvis
+  // silently vanishes. Round-robin selection preserves anatomical balance;
+  // the final returned questions are resorted into reporting order.
+  const tapGroups = ['Thorax', 'Abdomen', 'Pelvis'].map(region =>
+    questions.flatMap((q, i) =>
+      q.section?.startsWith(region + ' · ') ? [i] : []));
+  if (capacity >= 3 && tapGroups.every(group => group.length > 0)) {
+    for (let level = 0; chosen.size < capacity &&
+        tapGroups.some(group => group.length > level); level++) {
+      for (const group of tapGroups) {
+        if (chosen.size < capacity && group[level] !== undefined)
+          chosen.add(group[level]);
+      }
+    }
+  }
   for (let i = 0; i < questions.length && chosen.size < capacity; i++) {
     chosen.add(i);
   }
