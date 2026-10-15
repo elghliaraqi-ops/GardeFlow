@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { confirmedObservations, unansweredWarnings, factualDraft } from './report_contract.ts';
-import { examTemplate } from './radiology_templates.ts';
+import { examTemplate, isTapCt } from './radiology_templates.ts';
 import { structuredReport } from './structured_report.ts';
 import { clientQuestionCapacity, compatibleQuestionSet } from './question_compatibility.ts';
 
@@ -299,7 +299,29 @@ Deno.serve(async req => {
     const modelDraft = hasAnatomicalModel
       ? structuredReport(caseInput, questions, answers)
       : null;
+    const tapCoverageWarnings: string[] = [];
+    if (isTapCt(caseInput.exam, caseInput.region)) {
+      // Surface missing anatomical regions BEFORE individual unanswered signs.
+      // A thorax-only draft must never look like a completed whole TAP.
+      for (const region of ['Thorax', 'Abdomen', 'Pelvis']) {
+        const entries = questions.filter(q =>
+          q.section?.startsWith(region + ' · '));
+        const checked = entries.filter(q => {
+          const status = text(object(answers[q.id]).status, 30);
+          return status === 'observed' || status === 'absent';
+        }).length;
+        if (entries.length === 0 || checked === 0) {
+          tapCoverageWarnings.push('Scanner TAP : volet ' + region +
+            ' non documenté ; ne pas conclure à sa normalité.');
+        } else if (checked < entries.length) {
+          tapCoverageWarnings.push('Scanner TAP : volet ' + region +
+            ' incomplet (' + checked + '/' + entries.length +
+            ' éléments documentés).');
+        }
+      }
+    }
     const gaps = [...new Set([
+      ...tapCoverageWarnings,
       ...unansweredWarnings(observations),
       ...(modelDraft?.missing ?? []),
     ])];
