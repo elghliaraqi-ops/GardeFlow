@@ -318,8 +318,11 @@ class _PracticeScreenState extends State<PracticeScreen> {
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 34),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
             children: [
+              // The hero stays short and functional. The daily challenge,
+              // clinical training, radiology and documentation get their own
+              // semantic navigation groups instead of one mixed card stack.
               PracticeHomeHero(
                 answered: _qcmAll.answered,
                 accuracy: _qcmAll.accuracy,
@@ -339,19 +342,132 @@ class _PracticeScreenState extends State<PracticeScreen> {
                   MaterialPageRoute(builder: (_) => const PracticeQcmScreen()),
                 ),
               ),
-              const SizedBox(height: 12),
-              const PracticeDailyGameHubCard(),
               if (_error != null) ...[
-                const SizedBox(height: 11),
+                const SizedBox(height: 12),
                 _PracticeNotice(icon: Icons.cloud_off_rounded, text: _error!),
               ],
-              const SizedBox(height: 19),
+              const SizedBox(height: 24),
               const _PracticeHubSectionHeader(
-                icon: Icons.grid_view_rounded,
-                title: 'Explorer & s’entraîner',
-                subtitle: 'Des cas réels documentés et des simulations IA',
+                number: '01',
+                icon: Icons.bolt_rounded,
+                title: 'Défi du jour',
+                subtitle: 'Votre rendez-vous quotidien et vos défis',
+                accent: PracticeColors.gameGold,
+              ),
+              const SizedBox(height: 11),
+              const PracticeDailyGameHubCard(),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '02',
+                icon: Icons.school_rounded,
+                title: 'S’entraîner',
+                subtitle: 'Cas cliniques, QCM et simulations progressives',
+                accent: PracticeColors.gamePurple,
+              ),
+              const SizedBox(height: 11),
+              _PracticePrimaryActionCard(
+                icon: Icons.account_tree_rounded,
+                title: 'Simulation clinique progressive',
+                subtitle:
+                    'Un patient fictif · 4 étapes · 10 QCM contextualisés',
+                meta: 'SIMULATION CLINIQUE',
+                accent: PracticeColors.gamePurple,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
+              ),
+              if (_me?.id == 'a6ab90cd-aa2c-41f3-a5e8-be00aedd019c') ...[
+                const SizedBox(height: 10),
+                _PracticePrimaryActionCard(
+                  icon: Icons.biotech_rounded,
+                  title: 'Viscéral × Radio · espace privé',
+                  subtitle:
+                      'Fiche surprise · 20 QCM · cas clinique et QCM progressifs',
+                  meta: 'RÉSIDANAT',
+                  accent: PracticeColors.gameGold,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PracticeVisceralRadioScreen(),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              PracticeInlineNavigation(
+                icon: Icons.menu_book_rounded,
+                title: 'Bibliothèque de cas cliniques',
+                subtitle: 'Explorer les cas publiés et leurs QCM',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClinicalCasesScreen(onEditCase: _editPublishedCase),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9),
+              PracticeInlineNavigation(
+                icon: Icons.bookmark_added_outlined,
+                title: 'Reprendre une simulation',
+                subtitle: 'Retrouver un dossier progressif enregistré',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PracticeProgressiveCasesScreen(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '03',
+                icon: Icons.radar_rounded,
+                title: 'Radiologie',
+                subtitle: 'Lecture guidée, comptes rendus et archives',
+                accent: PracticeColors.accent,
+              ),
+              const SizedBox(height: 11),
+              _PracticePrimaryActionCard(
+                icon: Icons.medical_information_outlined,
+                title: 'Assistant CR Radiologie',
+                subtitle:
+                    'Recherche des signes · rédaction descriptive · révision',
+                meta: 'ASSISTANT RADIOLOGIQUE',
+                accent: PracticeColors.accent,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RadiologyReportScreen(),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
+              PracticeInlineNavigation(
+                icon: Icons.folder_copy_outlined,
+                title: 'Mes comptes rendus radiologiques',
+                subtitle: 'Rechercher, modifier ou supprimer un CR archivé',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RadiologyReportLibraryScreen(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '04',
+                icon: Icons.edit_note_rounded,
+                title: 'Créer et documenter',
+                subtitle: 'Rédiger un cas rencontré ou générer un cas IA',
+                accent: PracticeColors.gameBlue,
+              ),
+              const SizedBox(height: 11),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final modes = <Widget>[
@@ -372,7 +488,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                       onTap: _newRandomClinicalCase,
                     ),
                   ];
-                  return constraints.maxWidth >= 345
+                  return constraints.maxWidth >= 380
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -390,101 +506,17 @@ class _PracticeScreenState extends State<PracticeScreen> {
                         );
                 },
               ),
-              const SizedBox(height: 11),
-              _PracticePrimaryActionCard(
-                icon: Icons.account_tree_rounded,
-                title: 'Simulation clinique progressive',
-                subtitle:
-                    'Un patient fictif · 4 étapes · 10 QCM contextualisés',
-                meta: 'SIMULATION LIBRE · REPRENDRE UN DOSSIER',
-                accent: PracticeColors.gamePurple,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PracticeProgressiveCasesScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 11),
-              _PracticePrimaryActionCard(
-                icon: Icons.medical_information_outlined,
-                title: 'Assistant CR Radiologie',
-                subtitle: 'Données cliniques · recherche guidée · compte rendu · révision',
-                meta: 'RADIOLOGIE · GROQ · COMPTES RENDUS',
-                accent: PracticeColors.accent,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RadiologyReportScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              PracticeInlineNavigation(
-                icon: Icons.folder_copy_outlined,
-                title: 'Mes comptes rendus radiologiques',
-                subtitle: 'Archives privées · recherche par examen, date et indication',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RadiologyReportLibraryScreen(),
-                  ),
-                ),
-              ),
-              if (_me?.id == 'a6ab90cd-aa2c-41f3-a5e8-be00aedd019c') ...[
-                const SizedBox(height: 11),
-                _PracticePrimaryActionCard(
-                  icon: Icons.biotech_rounded,
-                  title: 'Viscéral × Radio · espace privé',
-                  subtitle: 'Fiche surprise · 20 QCM · cas clinique et QCM progressifs',
-                  meta: 'RÉSIDANAT · CHIRURGIE ET RADIOLOGIE',
-                  accent: PracticeColors.gameGold,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PracticeVisceralRadioScreen(),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 11),
-              PracticeInlineNavigation(
-                icon: Icons.menu_book_rounded,
-                title: 'Bibliothèque de cas cliniques',
-                subtitle: 'Parcourir les cas publiés et leurs QCM',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        ClinicalCasesScreen(onEditCase: _editPublishedCase),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              PracticeInlineNavigation(
-                icon: Icons.bookmark_added_outlined,
-                title: 'Reprendre une simulation enregistrée',
-                subtitle: 'Retrouver les cas progressifs et terminer leurs QCM',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PracticeProgressiveCasesScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              PracticeAchievementsPreview(
-                achievements: _achievements,
-                loading: _loading,
-                onOpen: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        PracticeAchievementsScreen(appState: widget.appState),
-                  ),
-                ),
-              ),
 
+              // 05. The guard tracker is a separate clinical workflow.
+              const SizedBox(height: 26),
+              const _PracticeHubSectionHeader(
+                number: '05',
+                icon: Icons.emergency_rounded,
+                title: 'Ma garde',
+                subtitle: 'Patients, objectif personnel et historique',
+                accent: PracticeColors.gamePink,
+              ),
+              const SizedBox(height: 11),
               // 2. Le suivi de garde vient ensuite : important, mais distinct de l'entraînement.
               const SizedBox(height: 22),
               const _PracticeHubSectionHeader(
