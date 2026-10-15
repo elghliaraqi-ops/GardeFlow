@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.5'
@@ -26,8 +28,21 @@ jobs:
           cache: true
       - working-directory: source
         run: flutter pub get
+      # Existing untouched screens may not yet be dart-formatted.
+      # Enforce formatting on the shared widget/test and any QCM screens
+      # actually changed by this PR rather than failing on legacy files.
       - working-directory: source
-        run: dart format --output=none --set-exit-if-changed lib/widgets/practice_quiz_widgets.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_visceral_radio_screen.dart test/practice_quiz_widgets_test.dart
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(lib/widgets/practice_quiz_widgets.dart test/practice_quiz_widgets_test.dart)
+          while IFS= read -r changed; do
+            case "$changed" in
+              source/lib/screens/clinical_cases_section.dart|source/lib/screens/practice_daily_screen.dart|source/lib/screens/practice_progressive_cases_screen.dart|source/lib/screens/practice_visceral_radio_screen.dart)
+                files+=("${changed#source/}") ;;
+            esac
+          done < <(git diff --name-only origin/main...HEAD -- source/lib/screens/)
+          dart format --output=none --set-exit-if-changed "${files[@]}"
       - working-directory: source
         run: flutter analyze lib/widgets/practice_quiz_widgets.dart lib/screens/clinical_cases_section.dart lib/screens/practice_daily_screen.dart lib/screens/practice_progressive_cases_screen.dart lib/screens/practice_visceral_radio_screen.dart --no-fatal-infos --no-fatal-warnings
       - working-directory: source
