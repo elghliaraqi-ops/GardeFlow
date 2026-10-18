@@ -6,6 +6,7 @@ on:
       - 'source/lib/main.dart'
       - 'source/lib/state/app_state.dart'
       - 'source/test/android_startup_resilience_test.dart'
+      - 'source/pubspec.yaml'
       - '.github/workflows/android-startup-emulator-ci.yml'
   workflow_dispatch:
 
@@ -25,6 +26,10 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: source
+      - name: Verify Android shared_preferences native plugin version
+        working-directory: source
+        run: |
+          grep -A 7 '^  shared_preferences_android:' pubspec.lock | grep -Fq 'version: "2.4.28"'
       - run: dart format --output=none lib/main.dart test/android_startup_resilience_test.dart
         working-directory: source
       - run: flutter test test/android_startup_resilience_test.dart
@@ -62,6 +67,7 @@ jobs:
           python3 tool/install_system_alarm_bridge.py
           python3 tool/harden_alarm_fallback.py
           flutter pub get
+          grep -A 7 '^  shared_preferences_android:' pubspec.lock | grep -Fq 'version: "2.4.28"'
           flutter build apk --release --build-name 12.0.7 --build-number 307
           test -s build/app/outputs/flutter-apk/app-release.apk
       - name: Enable emulator hardware acceleration

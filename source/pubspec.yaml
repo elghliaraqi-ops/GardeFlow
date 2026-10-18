@@ -35,6 +35,13 @@ dependencies:
   firebase_messaging: ^16.3.0
   flutter_svg: ^2.2.0
 
+# The 2.5.0 JNI implementation causes a release-only Android
+# NoSuchMethodError in SharedPreferencesApiRegistrar.getAll during Supabase
+# session bootstrap (emulator logcat run 39134193860, 2026-10-18).
+# Keep the pre-JNI implementation until the new ABI is verified on devices.
+dependency_overrides:
+  shared_preferences_android: 2.4.28
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
