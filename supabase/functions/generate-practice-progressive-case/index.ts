@@ -396,7 +396,7 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  // Image requests accompany the explanation as JSON metadata only.
  // Images are selected at view-time; no wrong or broken URLs are persisted.
  return output.map(item=>{
-  const shuffled=shuffleSingleAnswer(item.options,item.correct_index);
+  const shuffled=shuffleSingleAnswer(item.options as string[],Number(item.correct_index));
   const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
     .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
