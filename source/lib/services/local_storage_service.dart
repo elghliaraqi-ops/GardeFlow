@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persistance locale multiplateforme (Web, Android, iOS, desktop).
@@ -12,16 +13,22 @@ class LocalStorageService {
   static const _pushActiveUserKey = 'gardeflow_push_active_user_v1';
   static const _pushEnabledKey = 'gardeflow_push_enabled_v1';
 
+  /// Decode outside the UI isolate on Android/iOS. A broken snapshot is
+  /// reported to the caller, not treated as an empty state to overwrite.
   static Future<Map<String, dynamic>?> loadState() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_stateKey);
     if (raw == null || raw.isEmpty) return null;
-    try {
-      return jsonDecode(raw) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
+    // Photos may make the legacy SharedPreferences JSON excessively large.
+    // Keep its bytes untouched so a later export/recovery remains possible.
+    if (raw.length > 8 * 1024 * 1024) {
+      throw StateError('Local snapshot exceeds safe startup size');
     }
+    return compute(_decodeLocalSnapshot, raw);
   }
+
+  static Map<String, dynamic> _decodeLocalSnapshot(String raw) =>
+      Map<String, dynamic>.from(jsonDecode(raw) as Map);
 
   static Future<void> saveState(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();

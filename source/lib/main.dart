@@ -82,6 +82,17 @@ class _GardeFlowBootstrapState extends State<GardeFlowBootstrap> {
       setState(() => _state = state);
       if (widget.bootstrap == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (state.localSnapshotReadOnly) {
+            huimMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                duration: Duration(seconds: 12),
+                content: Text(
+                  'Mode protégé : les données locales n’ont pas pu être lues. '
+                  'Elles sont conservées ; évitez les modifications hors ligne.',
+                ),
+              ),
+            );
+          }
           unawaited(_initializeOptionalServices());
         });
       }
