@@ -14,5 +14,7 @@ assert 'await state._reloadFromBackend()' not in section
 assert 'await state._syncMyOfficialRosterIfNeeded()' not in section
 assert 'await state._activateNativeRemindersForCurrentUser()' not in section
 assert 'unawaited(state._restoreRemoteSession(sessionUserId))' in section
+assert 'resumeNativeRemindersAfterStartup()' in main
+assert 'resumeNativeRemindersAfterStartup()' in state
 assert 'LocalStorageService.loadState()' in section
 print('PASS startup visibly paints before remote roster and Android reminders')

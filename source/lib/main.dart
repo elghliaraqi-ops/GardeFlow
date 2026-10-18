@@ -99,6 +99,15 @@ class _GardeFlowBootstrapState extends State<GardeFlowBootstrap> {
     } catch (e) {
       debugPrint('Rappels facultatifs indisponibles: $e');
     }
+    final state = _state;
+    if (state != null) {
+      try {
+        await state.resumeNativeRemindersAfterStartup()
+            .timeout(const Duration(seconds: 18));
+      } catch (e) {
+        debugPrint('Rappels différés après premier affichage: $e');
+      }
+    }
     try {
       await PushNotificationService.instance.initializeFirebase()
           .timeout(const Duration(seconds: 10));

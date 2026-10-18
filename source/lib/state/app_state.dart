@@ -120,15 +120,13 @@ class AppState extends ChangeNotifier {
     }
     state._applyReminderPrefsForCurrentUser();
     state._refreshReminderStatuses();
-    // The reminder plugin can take a long time or fail on some Android devices.
-    // Its initialization is independent of the first visible app frame.
-    unawaited(state._activateNativeRemindersForCurrentUser().catchError(
-      (Object e, StackTrace st) {
-        debugPrint('Rappels démarrage différés: $e');
-      },
-    ));
     return state;
   }
+
+  /// Called only after NotificationService.initialize has completed and a
+  /// Flutter frame is visible. Prevents cancelAll from firing in early boot.
+  Future<void> resumeNativeRemindersAfterStartup() =>
+      _activateNativeRemindersForCurrentUser();
 
   Future<void> _restoreRemoteSession(String expectedUserId) async {
     final backend = SupabaseBackendService.instance;
