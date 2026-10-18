@@ -13,6 +13,10 @@ capture() {
 trap capture EXIT
 adb logcat -c
 adb install -r source/build/app/outputs/flutter-apk/app-release.apk
+# Android 13+ shows a system notification permission dialog on first launch.
+# Grant it only inside this ephemeral emulator so the smoke test validates
+# the app's login screen rather than the unrelated permission-controller UI.
+adb shell pm grant com.huim6.huim6_planning android.permission.POST_NOTIFICATIONS
 adb shell am start -n com.huim6.huim6_planning/.MainActivity
 success=0
 for i in $(seq 1 24); do
