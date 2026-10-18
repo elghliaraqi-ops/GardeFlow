@@ -82,7 +82,7 @@ class _GardeFlowBootstrapState extends State<GardeFlowBootstrap> {
       setState(() => _state = state);
       if (widget.bootstrap == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (restored.localSnapshotReadOnly) {
+          if (state.localSnapshotReadOnly) {
             huimMessengerKey.currentState?.showSnackBar(
               const SnackBar(
                 duration: Duration(seconds: 12),
