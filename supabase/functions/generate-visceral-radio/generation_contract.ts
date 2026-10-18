@@ -141,7 +141,8 @@ export function qcmSchema(count: number, phases: number[],courseKeys:string[]=[]
 // il a produit la fiche de référence « Hémorroïdes et complications ».
 export const residencyQcmStandard =
   'NIVEAU RÉSIDANAT STRICT : privilégier les décisions cliniques, radiologiques et opératoires argumentées, les critères discriminants, indications et alternatives selon gravité et terrain, pièges, complications et surveillance. '+
-  'Ni question élémentaire de simple restitution, ni distracteur gratuit. Chaque option A–E est expliquée par un fait effectivement enseigné, avec nuance clinique utile. ';
+  'Ni question élémentaire de simple restitution, ni distracteur gratuit. Chaque option A–E est expliquée par un fait effectivement enseigné, avec nuance clinique utile. '+
+  'Dans chaque explication, cite le CONTENU et jamais la lettre de la proposition : l ordre sera mélangé avant sauvegarde. ';
 
 const prescriptions: Record<GenerationMode, string> = {
   surgical_techniques: surgicalTeachingPolicy+' Retourne uniquement operative_techniques pour enrichir le chapitre 08 existant ; ni cours entier ni QCM.',

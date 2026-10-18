@@ -1,3 +1,4 @@
+import {shuffleSingleAnswer} from '../_shared/qcm_randomization.ts';
 import {radiologyAssistantContext} from './radiology_assistant.ts';
 import {fourOptionQcu} from './qcm_options.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
@@ -172,7 +173,8 @@ Deno.serve(async(req:Request)=>{
  // No randomly matched thumbnails or external URLs enter QCM corrections.
  const correction=(cor+medicalImageCorrectionSuffix(q.image_request,q.image_search_query)+
    '\n\n§SOURCES§\n'+uniqueRefs.map(x=>[x.kind,x.title,x.organization,x.year,x.url].join('|||')).join('\n')).slice(0,11000);
- proposed.push({position:proposed.length+1,question,options:opts,correct_index:q.correct_index,correction,topic:topics.includes(q.topic as typeof topics[number])?q.topic:'synthese'});
+ const shuffled=shuffleSingleAnswer(opts,q.correct_index);
+  proposed.push({position:proposed.length+1,question,options:shuffled.options,correct_index:shuffled.correctIndex,correction,topic:topics.includes(q.topic as typeof topics[number])?q.topic:'synthese'});
  }
  const staged=await admin.rpc('clinical_case_stage_qcm_preview',{p_post_id:postId,p_user_id:uid,p_qcms:proposed,p_difficulty:level});
  if(staged.error||!staged.data)throw Error('preview_staging_failed');

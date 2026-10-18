@@ -3,6 +3,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'supabase/functions/_shared/**'
+      - 'source/supabase/functions/_shared/**'
       - 'supabase/functions/generate-practice-daily-challenge/**'
       - 'supabase/functions/generate-practice-progressive-case/**'
       - 'supabase/functions/generate-clinical-case-qcm/**'
@@ -40,6 +42,7 @@ jobs:
           deno check supabase/functions/generate-clinical-case-qcm/medical_evidence_media.ts
           deno test supabase/functions/generate-practice-progressive-case/progressive_question_sequence_test.ts
           deno test supabase/functions/generate-practice-daily-challenge/daily_qcm_validation_test.ts
+          deno test supabase/functions/_shared/qcm_randomization_test.ts
       - name: Check all prompt/schema contracts remain aligned
         run: |
           node --input-type=module <<'NODE'

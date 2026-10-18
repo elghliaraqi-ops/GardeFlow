@@ -1,3 +1,4 @@
+import {shuffleSingleAnswer} from '../_shared/qcm_randomization.ts';
 import {radiologyAssistantContext} from './radiology_assistant.ts';
 import {fourOptionQcu} from './qcm_options.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
@@ -395,10 +396,11 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  // Image requests accompany the explanation as JSON metadata only.
  // Images are selected at view-time; no wrong or broken URLs are persisted.
  return output.map(item=>{
+  const shuffled=shuffleSingleAnswer(item.options as string[],Number(item.correct_index));
   const urls='\n\n§SOURCES§\n'+(item.references as Ref[])
     .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
-   question:item.question,options:item.options,correct_index:item.correct_index,
+   question:item.question,options:shuffled.options,correct_index:shuffled.correctIndex,
    axis:item.axis,topic:item.topic,
    correction:String(item.correction)+medicalImageCorrectionSuffix(item.image_request,String(item.illustration_query??''))+urls
   };

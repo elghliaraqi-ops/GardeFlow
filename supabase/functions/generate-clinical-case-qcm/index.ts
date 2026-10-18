@@ -1,3 +1,4 @@
+import {shuffleSingleAnswer} from '../_shared/qcm_randomization.ts';
 import {radiologyAssistantContext} from './radiology_assistant.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evidence_media.ts';
@@ -683,10 +684,12 @@ ${append?`\nQUESTIONS DÉJÀ PUBLIÉES (NE PAS RÉPÉTER, CRÉER CINQ QCM NOUVEA
 
       // No image file or URL is embedded into the generated QCM.
       // The medically constrained JSON description is used at display time.
-      const enriched=normalized.map(q=>({
-        ...q,
-        correction:correction(q.raw_correction,q.references,[],q.image_request,q.image_search_query)
-      }));
+      const enriched=normalized.map(q=>{
+        const shuffled=shuffleSingleAnswer(q.options,q.correct_index);
+        return {...q,options:shuffled.options,correct_index:shuffled.correctIndex,
+          correction:correction(q.raw_correction,q.references,[],q.image_request,q.image_search_query)
+        };
+      });
       const persisted=enriched.map(({axis:_axis,raw_correction:_raw,references:_refs,image_search_query:_imageQuery,image_request:_imageSpec,...q})=>q);
       const commit=await admin.rpc(append?'clinical_case_append_generated_qcms':'clinical_case_commit_generated_qcms',{
         p_post_id:post.id,

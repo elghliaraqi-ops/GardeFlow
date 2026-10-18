@@ -1,3 +1,4 @@
+import {shuffleMultipleAnswer} from '../_shared/qcm_randomization.ts';
 import {radiologyAssistantContext,radiologyPriorityPolicy} from './radiology_assistant.ts';
 import {hasSurgicalTechniques,addSurgicalTechniques,surgicalTeachingPolicy} from './surgical_techniques.ts';
 import { retrieveEmc, emcExcerpt } from './emc_context.ts';
@@ -209,6 +210,7 @@ Deno.serve(async(req)=>{
       expandQcmImages(produced.questions);
       validQuestions(produced,count);
       assertNewStatements(existing,produced.questions);
+      produced.questions.forEach((q:any)=>{q.options=shuffleMultipleAnswer(q.options);});
       patch.course_qcms=[...existing,...sanitized(produced.questions)];
       patch.medical_sources=evidence;
     }else if(action==='case'){
@@ -237,7 +239,7 @@ Deno.serve(async(req)=>{
       expandQcmImages(produced.questions);
       validQuestions(produced,count);
       assertNewStatements(existing,produced.questions);
-      produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];});
+      produced.questions.forEach((q:any,i:number)=>{q.phase=phaseSequence[i];q.options=shuffleMultipleAnswer(q.options);});
       patch.case_qcms=[...existing,...sanitized(produced.questions)];
       patch.medical_sources=evidence;
     }else if(action==='progress'){
