@@ -216,9 +216,6 @@ class AndroidWidgetService {
       'astreintes_subdetail': astreintesSubdetail,
       'practice_detail': practiceDetail,
       'practice_subdetail': practiceSubdetail,
-      'practice_answered': practiceAnswered.toString(),
-      'practice_progress': practiceAccuracy.clamp(0, 100).round().toString(),
-      'sync_label': 'Màj ${DateFormat('dd/MM HH:mm').format(now)}',
       'updated_at': now.toIso8601String(),
     };
   }
