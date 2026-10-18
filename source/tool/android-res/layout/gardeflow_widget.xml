@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
+    android:padding="11dp"
     android:background="@drawable/bg_widget_root">
 
     <LinearLayout
@@ -16,6 +16,17 @@
         android:paddingStart="3dp"
         android:paddingEnd="3dp"
         android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="29dp"
+            android:layout_height="29dp"
+            android:layout_marginEnd="8dp"
+            android:gravity="center"
+            android:background="@drawable/bg_widget_avatar"
+            android:text="✚"
+            android:textColor="#9FFFD8"
+            android:textSize="16sp"
+            android:importantForAccessibility="no" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -29,7 +40,7 @@
                 android:layout_height="wrap_content"
                 android:text="Bonjour Docteur"
                 android:textColor="#F6FAF8"
-                android:textSize="14.5sp"
+                android:textSize="12.8sp"
                 android:textStyle="bold"
                 android:maxLines="1"
                 android:ellipsize="end" />
@@ -40,7 +51,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="Repos aujourd’hui"
-                android:textColor="#9BB6A8"
+                android:textColor="#9FE0BE"
                 android:textSize="9.2sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
@@ -60,14 +71,14 @@
             android:textSize="8.2sp"
             android:textStyle="bold"
             android:maxLines="1"
-            android:background="@drawable/bg_widget_period_pill" />
+            android:background="@drawable/bg_widget_date_pill" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/widget_next_card"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1.28"
+        android:layout_weight="1.18"
         android:orientation="vertical"
         android:gravity="center_vertical"
         android:paddingStart="12dp"
@@ -86,7 +97,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="PROCHAINE GARDE"
+                android:text="✦  PROCHAINE GARDE"
                 android:textColor="#DCEBE4"
                 android:textSize="7.5sp"
                 android:textStyle="bold"
@@ -116,7 +127,7 @@
                 android:layout_weight="1"
                 android:text="SERVICE"
                 android:textColor="#FFFFFF"
-                android:textSize="15.5sp"
+                android:textSize="17.5sp"
                 android:textStyle="bold"
                 android:maxLines="1"
                 android:ellipsize="end" />
@@ -151,7 +162,12 @@
             android:id="@+id/widget_next_countdown"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_widget_countdown_pill"
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="4dp"
             android:text="Dans 2 j 4 h"
             android:textColor="#F5F8F6"
             android:textSize="9.3sp"
@@ -162,7 +178,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="0.72"
+        android:layout_weight="0.87"
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
@@ -180,7 +196,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="▦  PLANNING"
+                android:text="▦  PLANNING  ›"
                 android:textColor="#6FE1A8"
                 android:textSize="7.5sp"
                 android:textStyle="bold"
@@ -195,6 +211,16 @@
                 android:textColor="#F5FAF7"
                 android:textSize="8sp"
                 android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end" />
+            <TextView
+                android:id="@+id/widget_planning_subdetail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="26 oct. · URG JOUR"
+                android:textColor="#A9D9BF"
+                android:textSize="7.1sp"
                 android:maxLines="2"
                 android:ellipsize="end" />
         </LinearLayout>
@@ -214,7 +240,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="☎  ASTREINTES"
+                android:text="☎  ASTREINTES  ›"
                 android:textColor="#F2A66C"
                 android:textSize="7.2sp"
                 android:textStyle="bold"
@@ -229,6 +255,16 @@
                 android:textColor="#FFF7F1"
                 android:textSize="7.8sp"
                 android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end" />
+            <TextView
+                android:id="@+id/widget_astreintes_subdetail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Équipes de garde"
+                android:textColor="#ECC5A1"
+                android:textSize="7.1sp"
                 android:maxLines="2"
                 android:ellipsize="end" />
         </LinearLayout>
@@ -247,7 +283,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="✦  PRACTICE"
+                android:text="✦  PRACTICE  ›"
                 android:textColor="#BCA7FF"
                 android:textSize="7.5sp"
                 android:textStyle="bold"
@@ -264,6 +300,53 @@
                 android:textStyle="bold"
                 android:maxLines="2"
                 android:ellipsize="end" />
+            <TextView
+                android:id="@+id/widget_practice_subdetail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Taux de réussite"
+                android:textColor="#D4BFF2"
+                android:textSize="7.1sp"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <ProgressBar
+                android:id="@+id/widget_practice_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="4dp"
+                android:layout_marginTop="6dp"
+                android:indeterminate="false"
+                android:max="100"
+                android:progress="0"
+                android:progressDrawable="@drawable/bg_widget_practice_progress" />
         </LinearLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="GARDEFLOW  ·  VOTRE GARDE EN UN REGARD"
+            android:textColor="#79AD98"
+            android:textSize="6.4sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/widget_sync_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:text="À synchroniser"
+            android:textColor="#84B29D"
+            android:textSize="6.5sp"
+            android:maxLines="1" />
     </LinearLayout>
 </LinearLayout>

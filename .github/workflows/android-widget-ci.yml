@@ -1,0 +1,20 @@
+name: Native Android Widget Contract
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/tool/android-src/GardeFlowWidgetProvider.kt'
+      - 'source/tool/android-res/**'
+      - 'source/lib/services/android_widget_service.dart'
+      - 'ci/android_widget_contract_test.py'
+      - '.github/workflows/android-widget-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  widget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate widget layout / bindings / drawables
+        run: python3 ci/android_widget_contract_test.py
