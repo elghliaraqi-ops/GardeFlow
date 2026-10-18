@@ -9,7 +9,10 @@ import android.content.Intent
 import android.graphics.Color
 import android.view.View
 import android.widget.RemoteViews
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.max
 
 class GardeFlowWidgetProvider : AppWidgetProvider() {
@@ -39,7 +42,8 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
                 "today_status",
                 "Ouvrez GardeFlow pour synchroniser",
             ).orEmpty()
-            val dateLabel = prefs.getString("date_label", "").orEmpty()
+            val dateLabel = SimpleDateFormat("EEE d MMM", Locale.FRANCE)
+                .format(Date()).replaceFirstChar { it.titlecase(Locale.FRANCE) }
             val nextDetail = prefs.getString(
                 "next_detail",
                 "Planning non synchronisé",
@@ -47,12 +51,22 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
             val shiftId = prefs.getString("next_shift_id", "none").orEmpty()
 
             views.setTextViewText(R.id.widget_greeting, "$greeting $doctor")
-            views.setTextViewText(R.id.widget_today_status, today)
+            views.setTextViewText(R.id.widget_today_status, "●  $today")
+            views.setTextColor(
+                R.id.widget_today_status,
+                if (today.contains("Repos") || today.contains("Congé")) Color.rgb(159, 224, 190)
+                else Color.rgb(255, 213, 151),
+            )
             views.setTextViewText(R.id.widget_date, dateLabel)
             views.setTextViewText(R.id.widget_next_detail, nextDetail)
 
             val countdown = countdownLabel(prefs)
             views.setTextViewText(R.id.widget_next_countdown, countdown)
+            views.setTextViewText(
+                R.id.widget_next_eyebrow,
+                if (prefs.getString("next_active", "false") == "true") "●  GARDE EN COURS"
+                else "✦  PROCHAINE GARDE",
+            )
             views.setViewVisibility(
                 R.id.widget_next_countdown,
                 if (countdown.isBlank()) View.GONE else View.VISIBLE,
@@ -101,8 +115,11 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
             val visual = visualFor(shiftId)
             views.setInt(R.id.widget_next_card, "setBackgroundResource", visual.background)
             views.setTextViewText(R.id.widget_next_type, visual.typeLabel)
-            views.setTextViewText(R.id.widget_next_period, visual.periodLabel)
-            views.setTextViewText(R.id.widget_next_icon, visual.icon)
+            views.setTextViewText(
+                R.id.widget_next_period,
+                if (visual.periodLabel.isBlank()) "" else "${visual.icon}  ${visual.periodLabel}",
+            )
+            views.setTextViewText(R.id.widget_next_icon, "✚")
             views.setTextColor(R.id.widget_next_type, Color.WHITE)
             views.setTextColor(R.id.widget_next_detail, visual.detailColor)
             views.setTextColor(R.id.widget_next_countdown, visual.detailColor)

@@ -22,3 +22,9 @@ for key in ("planning_line_1","astreintes_subdetail","practice_subdetail",
     assert f'"{key}"' in kt
 assert "setProgressBar(R.id.widget_practice_progress, 100, accuracy, false)" in kt
 print("PASS: GardeFlow native widget resources & data bindings")
+
+# Live guard status and current date are handled in the native provider.
+assert "widget_next_eyebrow" in ids
+assert "GARDE EN COURS" in kt
+assert "SimpleDateFormat" in kt
+assert 'if (visual.periodLabel.isBlank())' in kt
