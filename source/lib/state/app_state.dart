@@ -91,7 +91,8 @@ class AppState extends ChangeNotifier {
     final backend = SupabaseBackendService.instance;
     if (backend.enabled && backend.client.auth.currentUser != null) {
       try {
-        final profile = await backend.fetchMyProfile();
+        final profile = await backend.fetchMyProfile()
+            .timeout(const Duration(seconds: 15));
         if (profile.accountStatus != AccountStatus.active) {
           await backend.signOut();
           state.currentUser = null;
@@ -103,10 +104,28 @@ class AppState extends ChangeNotifier {
           state._appearanceTheme = profile.appearanceTheme;
           await LocalStorageService.savePushActiveUserId(profile.id);
           state._applyReminderPrefsForCurrentUser();
-          await state._reloadFromBackend();
-          await state._syncMyOfficialRosterIfNeeded();
-          state._startRealtime();
+          // The remote roster, directory and official PDF synchronization can
+          // take many seconds. Keep the verified profile and cached planning
+          // immediately usable; refresh asynchronously after the first frame.
+          unawaited(() async {
+            try {
+              await state._reloadFromBackend()
+                  .timeout(const Duration(seconds: 25));
+              await state._syncMyOfficialRosterIfNeeded()
+                  .timeout(const Duration(seconds: 25));
+            } catch (e) {
+              debugPrint('Synchronisation de démarrage différée: $e');
+            } finally {
+              if (state.currentUser?.id == profile.id) {
+                state._startRealtime();
+              }
+            }
+          }());
         }
+      } on TimeoutException {
+        // A slow network is not proof of a revoked account: preserve saved
+        // credentials and let the visible startup screen offer Retry.
+        rethrow;
       } catch (_) {
         state.currentUser = null;
         await LocalStorageService.savePushActiveUserId(null);
@@ -126,7 +145,13 @@ class AppState extends ChangeNotifier {
     }
     state._applyReminderPrefsForCurrentUser();
     state._refreshReminderStatuses();
-    await state._activateNativeRemindersForCurrentUser();
+    // Reminder setup may involve dozens of Android platform calls. It should
+    // continue safely in the background rather than preventing first paint.
+    unawaited(state._activateNativeRemindersForCurrentUser().catchError(
+      (Object e, StackTrace stack) {
+        debugPrint('Initialisation des rappels différée: $e');
+      },
+    ));
     if (state.currentUser != null &&
         state.backendEnabled &&
         state._notificationsOn) {
