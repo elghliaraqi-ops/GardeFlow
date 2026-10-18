@@ -85,32 +85,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            set -eu
-            mkdir -p android-startup-report
-            adb logcat -c
-            adb install -r source/build/app/outputs/flutter-apk/app-release.apk
-            adb shell am start -n com.huim6.huim6_planning/.MainActivity
-            success=0
-            for i in $(seq 1 24); do
-              sleep 5
-              adb shell uiautomator dump /sdcard/gardeflow-ui.xml >/dev/null 2>&1 || true
-              adb shell cat /sdcard/gardeflow-ui.xml > /tmp/gardeflow-screen.xml 2>/dev/null || true
-              if grep -Eq 'Se connecter|Connexion|Numéro de téléphone' /tmp/gardeflow-screen.xml 2>/dev/null; then
-                success=1
-                break
-              fi
-            done
-            adb exec-out screencap -p > android-startup-report/screen.png || true
-            adb logcat -d -v threadtime > android-startup-report/logcat.txt || true
-            adb shell dumpsys activity activities > android-startup-report/activity.txt || true
-            cp /tmp/gardeflow-screen.xml android-startup-report/accessibility.xml 2>/dev/null || true
-            if [ "$success" != "1" ]; then
-              echo "Android 16 startup did not reach login within 120 s."\n              head -c 10000 /tmp/gardeflow-screen.xml || true
-              grep -E 'AndroidRuntime|FATAL EXCEPTION|GF_STARTUP|flutter|Flutter|E/.*' android-startup-report/logcat.txt | tail -n 180 || true
-              exit 1
-            fi
-            echo "PASS: release APK reached GardeFlow login without saved session."
+          script: bash ci/android_startup_smoke.sh
 
       - name: Upload startup diagnosis (emulator only)
         if: always()
