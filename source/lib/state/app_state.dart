@@ -76,23 +76,48 @@ class AppState extends ChangeNotifier {
 
   /// Restore local data immediately. Remote services refresh afterwards so
   /// a slow connection or an Android notification call cannot block launch.
-  static Future<AppState> load() async {
-    final state = AppState._();
-    final saved = await LocalStorageService.loadState();
-    if (saved == null) {
-      state._users.add(buildSeedAdmin());
-      state._rebuildDirectory();
-      await state._persistNow();
-    } else {
-      state._restore(saved);
-      if (!state._users.any((u) => u.role == UserRole.admin)) {
-        state._users.add(buildSeedAdmin());
-      }
-      state._rebuildDirectory();
+  bool _localSnapshotReadOnly = false;
+
+  /// True if local data could not safely be read. Never overwrite that cache.
+  bool get localSnapshotReadOnly => _localSnapshotReadOnly;
+
+  /// Restore data without a destructive reset when the stored snapshot is
+  /// malformed, too large or its platform read does not complete.
+  /// [skipExternalServices] allows isolated tests without a backend.
+  static Future<AppState> load({
+    Future<Map<String, dynamic>?> Function()? snapshotReader,
+    bool skipExternalServices = false,
+  }) async {
+    var state = AppState._();
+    Map<String, dynamic>? saved;
+    var readFailed = false;
+    try {
+      saved = await (snapshotReader ?? LocalStorageService.loadState)()
+          .timeout(const Duration(seconds: 9));
+    } catch (error) {
+      readFailed = true;
+      debugPrint('Local cache unavailable; original preserved: $error');
     }
+    if (saved != null && !readFailed) {
+      try {
+        state._restore(saved);
+      } catch (error) {
+        // A partially restored object must never replace the stored snapshot.
+        debugPrint('Local snapshot restoration failed: $error');
+        readFailed = true;
+        state = AppState._();
+      }
+    }
+    state._localSnapshotReadOnly = readFailed;
+    if (!state._users.any((u) => u.role == UserRole.admin)) {
+      state._users.add(buildSeedAdmin());
+    }
+    state._rebuildDirectory();
 
     final backend = SupabaseBackendService.instance;
-    if (backend.enabled && backend.client.auth.currentUser != null) {
+    if (!skipExternalServices &&
+        backend.enabled &&
+        backend.client.auth.currentUser != null) {
       final sessionUserId = backend.client.auth.currentUser!.id;
       // A locally cached, previously authenticated profile can display the
       // planning while Supabase is temporarily unavailable. Never use an
@@ -107,8 +132,9 @@ class AppState extends ChangeNotifier {
       }
       // No network request is awaited before rendering the main UI.
       unawaited(state._restoreRemoteSession(sessionUserId));
-    } else {
-      final sessionPhone = await LocalStorageService.loadSessionPhone();
+    } else if (!skipExternalServices) {
+      final sessionPhone = await LocalStorageService.loadSessionPhone()
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
       if (sessionPhone != null) {
         state.currentUser =
             state._users.where((u) => u.phone == sessionPhone).firstOrNull;
@@ -3071,7 +3097,12 @@ class AppState extends ChangeNotifier {
   }
 
   void _persist() => unawaited(_persistNow());
-  Future<void> _persistNow() => LocalStorageService.saveState(_toJson());
+  Future<void> _persistNow() {
+    // Recovering a damaged or inaccessible snapshot must never silently
+    // overwrite it with an empty seed state.
+    if (_localSnapshotReadOnly) return Future<void>.value();
+    return LocalStorageService.saveState(_toJson());
+  }
 }
 
 extension _FirstOrNull<T> on Iterable<T> {
