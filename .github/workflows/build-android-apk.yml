@@ -110,6 +110,13 @@ jobs:
           flutter clean
           flutter pub get
 
+      - name: Verify Android shared_preferences plugin (pre-JNI)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -A 7 '^  shared_preferences_android:' pubspec.lock | grep -Fq 'version: "2.4.28"'
+          echo 'Pinned shared_preferences_android 2.4.28 verified; incompatible JNI 2.5.0 excluded'
+
       - name: Run tests
         run: flutter test
 

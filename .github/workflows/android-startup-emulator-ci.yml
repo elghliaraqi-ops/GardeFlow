@@ -1,0 +1,103 @@
+name: Android Startup Emulator Smoke Test
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/lib/main.dart'
+      - 'source/lib/state/app_state.dart'
+      - 'source/test/android_startup_resilience_test.dart'
+      - 'source/pubspec.yaml'
+      - '.github/workflows/android-startup-emulator-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: source
+      - name: Verify Android shared_preferences native plugin version
+        working-directory: source
+        run: |
+          grep -A 7 '^  shared_preferences_android:' pubspec.lock | grep -Fq 'version: "2.4.28"'
+      - run: dart format --output=none lib/main.dart test/android_startup_resilience_test.dart
+        working-directory: source
+      - run: flutter test test/android_startup_resilience_test.dart
+        working-directory: source
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/state/app_state.dart test/android_startup_resilience_test.dart
+        working-directory: source
+
+  android-cold-start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Configure Firebase and native Android platform
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/gardeflow-android-config
+          unzip -q "$GITHUB_WORKSPACE/GardeFlow_android_v11_6_0_official_pdf_auto_import.zip" -d /tmp/gardeflow-android-config
+          GOOGLE_SERVICES="$(find /tmp/gardeflow-android-config -name google-services.json -type f -print -quit)"
+          test -n "$GOOGLE_SERVICES"
+          flutter create --no-pub --platforms=android --org com.huim6 --project-name huim6_planning .
+          cp "$GOOGLE_SERVICES" android/app/google-services.json
+          dart tool/configure_android.dart
+          python3 tool/install_alarm_activity.py
+          python3 tool/install_system_alarm_bridge.py
+          python3 tool/harden_alarm_fallback.py
+          flutter pub get
+          grep -A 7 '^  shared_preferences_android:' pubspec.lock | grep -Fq 'version: "2.4.28"'
+          flutter build apk --release --build-name 12.0.7 --build-number 307
+          test -s build/app/outputs/flutter-apk/app-release.apk
+      - name: Enable emulator hardware acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -c /dev/kvm ]; then
+            echo "::error::KVM is unavailable on this GitHub runner; cannot validate APK startup here."
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+          ls -l /dev/kvm
+
+      - name: Boot APK in Android emulator, assert login is reachable
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash ci/android_startup_smoke.sh
+
+      - name: Upload startup diagnosis (emulator only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gardeflow-android-startup-diagnostic
+          path: android-startup-report/
+          retention-days: 7
+          if-no-files-found: ignore
