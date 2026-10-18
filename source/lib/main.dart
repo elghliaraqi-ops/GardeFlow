@@ -72,24 +72,26 @@ class _GardeFlowBootstrapState extends State<GardeFlowBootstrap> {
     if (!mounted) return;
     final currentAttempt = ++_attempt;
     setState(() => _error = null);
-    Future<void>(() async {
-      try {
-        final loaded = await (widget.bootstrap?.call() ?? _restoreSession());
-        if (!mounted || currentAttempt != _attempt) return;
-        setState(() => _state = loaded);
-        // Notifications/Firebase must not delay the login or home screen.
-        if (widget.bootstrap == null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            unawaited(_initializeOptionalServices());
-          });
-        }
-      } catch (e, stack) {
-        debugPrint('GardeFlow startup failed: $e\\n$stack');
-        if (!mounted || currentAttempt != _attempt) return;
-        setState(() => _error =
-            'Impossible de terminer le démarrage. Vérifiez la connexion puis réessayez.');
+    unawaited(_bootstrapAttempt(currentAttempt));
+  }
+
+  Future<void> _bootstrapAttempt(int currentAttempt) async {
+    try {
+      final loaded = await (widget.bootstrap?.call() ?? _restoreSession());
+      if (!mounted || currentAttempt != _attempt) return;
+      setState(() => _state = loaded);
+      // Notifications/Firebase must not delay the login or home screen.
+      if (widget.bootstrap == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_initializeOptionalServices());
+        });
       }
-    });
+    } catch (e, stack) {
+      debugPrint('GardeFlow startup failed: $e\\n$stack');
+      if (!mounted || currentAttempt != _attempt) return;
+      setState(() => _error =
+          'Impossible de terminer le démarrage. Vérifiez la connexion puis réessayez.');
+    }
   }
 
   Future<void> _initializeOptionalServices() async {
