@@ -74,6 +74,8 @@ class AppState extends ChangeNotifier {
   bool _realtimeNeedsOfficialSync = false;
   int _sessionEpoch = 0;
 
+  /// Restore local data immediately. Remote services refresh afterwards so
+  /// a slow connection or an Android notification call cannot block launch.
   static Future<AppState> load() async {
     final state = AppState._();
     final saved = await LocalStorageService.loadState();
@@ -88,30 +90,23 @@ class AppState extends ChangeNotifier {
       }
       state._rebuildDirectory();
     }
+
     final backend = SupabaseBackendService.instance;
     if (backend.enabled && backend.client.auth.currentUser != null) {
-      try {
-        final profile = await backend.fetchMyProfile();
-        if (profile.accountStatus != AccountStatus.active) {
-          await backend.signOut();
-          state.currentUser = null;
-          await LocalStorageService.savePushActiveUserId(null);
-          await LocalStorageService.savePushEnabled(false);
-        } else {
-          state._sessionEpoch++;
-          state.currentUser = profile;
-          state._appearanceTheme = profile.appearanceTheme;
-          await LocalStorageService.savePushActiveUserId(profile.id);
-          state._applyReminderPrefsForCurrentUser();
-          await state._reloadFromBackend();
-          await state._syncMyOfficialRosterIfNeeded();
-          state._startRealtime();
-        }
-      } catch (_) {
-        state.currentUser = null;
-        await LocalStorageService.savePushActiveUserId(null);
-        await LocalStorageService.savePushEnabled(false);
+      final sessionUserId = backend.client.auth.currentUser!.id;
+      // A locally cached, previously authenticated profile can display the
+      // planning while Supabase is temporarily unavailable. Never use an
+      // unrelated cached user or a cached account without a backend session.
+      final cachedProfile = state._users
+          .where((u) => u.id == sessionUserId && u.accountStatus == AccountStatus.active)
+          .firstOrNull;
+      if (cachedProfile != null) {
+        state._sessionEpoch++;
+        state.currentUser = cachedProfile;
+        state._appearanceTheme = cachedProfile.appearanceTheme;
       }
+      // No network request is awaited before rendering the main UI.
+      unawaited(state._restoreRemoteSession(sessionUserId));
     } else {
       final sessionPhone = await LocalStorageService.loadSessionPhone();
       if (sessionPhone != null) {
@@ -121,18 +116,68 @@ class AppState extends ChangeNotifier {
           state._sessionEpoch++;
           state._appearanceTheme = state.currentUser!.appearanceTheme;
         }
-        state._applyReminderPrefsForCurrentUser();
       }
     }
     state._applyReminderPrefsForCurrentUser();
     state._refreshReminderStatuses();
-    await state._activateNativeRemindersForCurrentUser();
-    if (state.currentUser != null &&
-        state.backendEnabled &&
-        state._notificationsOn) {
-      unawaited(PushNotificationService.instance.activateForSignedInUser());
-    }
+    // The reminder plugin can take a long time or fail on some Android devices.
+    // Its initialization is independent of the first visible app frame.
+    unawaited(state._activateNativeRemindersForCurrentUser().catchError(
+      (Object e, StackTrace st) {
+        debugPrint('Rappels démarrage différés: $e');
+      },
+    ));
     return state;
+  }
+
+  Future<void> _restoreRemoteSession(String expectedUserId) async {
+    final backend = SupabaseBackendService.instance;
+    try {
+      final profile = await backend.fetchMyProfile()
+          .timeout(const Duration(seconds: 12));
+      if (backend.client.auth.currentUser?.id != expectedUserId) return;
+      if (profile.accountStatus != AccountStatus.active) {
+        await backend.signOut();
+        if (currentUser?.id == expectedUserId) {
+          _sessionEpoch++;
+          currentUser = null;
+          notifyListeners();
+        }
+        await LocalStorageService.savePushActiveUserId(null);
+        await LocalStorageService.savePushEnabled(false);
+        return;
+      }
+
+      if (currentUser?.id != profile.id) _sessionEpoch++;
+      currentUser = profile;
+      _appearanceTheme = profile.appearanceTheme;
+      _applyReminderPrefsForCurrentUser();
+      notifyListeners();
+      await LocalStorageService.savePushActiveUserId(profile.id);
+      // Neither a roster fetch nor the official PDF import gates startup.
+      try {
+        await _reloadFromBackend().timeout(const Duration(seconds: 20));
+        await _syncMyOfficialRosterIfNeeded()
+            .timeout(const Duration(seconds: 20));
+      } catch (e) {
+        debugPrint('Synchronisation distante différée: $e');
+      }
+      if (backend.client.auth.currentUser?.id == expectedUserId &&
+          currentUser?.id == expectedUserId) {
+        _startRealtime();
+        if (_notificationsOn) {
+          unawaited(PushNotificationService.instance.activateForSignedInUser()
+              .catchError((Object e) {
+            debugPrint('Notifications push différées: $e');
+          }));
+        }
+      }
+    } on TimeoutException catch (e) {
+      // Never erase saved user data or log out for a transient network timeout.
+      debugPrint('Profil distant indisponible au démarrage: $e');
+    } catch (e) {
+      debugPrint('Profil distant différé au démarrage: $e');
+    }
   }
 
   String _appearanceTheme = 'black';
