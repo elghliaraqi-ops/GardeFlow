@@ -19,7 +19,7 @@ void main() {
   });
 
   test('Oversized photo cache remains untouched, startup proceeds', () async {
-    final original = '{"astreinte":"NaN"}';
+    final original = '{"astreinte":"' + List<String>.filled(8 * 1024 * 1024 + 1, 'x').join() + '"}';
     SharedPreferences.setMockInitialValues(
         <String, Object>{'huim6_state_v5': original});
     final app = await AppState.load(skipExternalServices: true);
