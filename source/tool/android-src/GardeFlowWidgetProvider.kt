@@ -62,13 +62,40 @@ class GardeFlowWidgetProvider : AppWidgetProvider() {
                 R.id.widget_planning_detail,
                 prefs.getString("planning_detail", "Voir le mois").orEmpty(),
             )
+            val upcoming = prefs.getString("planning_line_1", "").orEmpty()
+            views.setTextViewText(
+                R.id.widget_planning_subdetail,
+                upcoming.ifBlank { "Ouvrir mon planning" },
+            )
             views.setTextViewText(
                 R.id.widget_astreintes_detail,
                 prefs.getString("astreintes_detail", "Aujourd’hui").orEmpty(),
             )
             views.setTextViewText(
+                R.id.widget_astreintes_subdetail,
+                prefs.getString("astreintes_subdetail", "Voir les équipes").orEmpty(),
+            )
+            views.setTextViewText(
                 R.id.widget_practice_detail,
-                prefs.getString("practice_detail", "Ce mois · QCM").orEmpty(),
+                prefs.getString("practice_detail", "Ce mois · QCM").orEmpty()
+                    .removePrefix("Ce mois · "),
+            )
+            views.setTextViewText(
+                R.id.widget_practice_subdetail,
+                prefs.getString("practice_subdetail", "Ouvrir Practice").orEmpty(),
+            )
+            val answered = prefs.getString("practice_answered", "0")
+                ?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+            val accuracy = prefs.getString("practice_progress", "0")
+                ?.toIntOrNull()?.coerceIn(0, 100) ?: 0
+            views.setProgressBar(R.id.widget_practice_progress, 100, accuracy, false)
+            views.setViewVisibility(
+                R.id.widget_practice_progress,
+                if (answered > 0) View.VISIBLE else View.GONE,
+            )
+            views.setTextViewText(
+                R.id.widget_sync_status,
+                prefs.getString("sync_label", "À synchroniser").orEmpty(),
             )
 
             val visual = visualFor(shiftId)
