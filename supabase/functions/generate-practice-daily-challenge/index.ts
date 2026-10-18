@@ -1,3 +1,4 @@
+import {shuffleSingleAnswer} from '../_shared/qcm_randomization.ts';
 import {radiologyAssistantContext} from './radiology_assistant.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {dailyQcmFingerprint,validateDailyBatch,validCachedDailyQuestion} from './daily_qcm_validation.ts';
@@ -146,10 +147,11 @@ async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<s
  // Image visuals are retrieved only when the learner opens a correction.
  // Never preselect a random book cover or persist image URLs in the QCM.
  return result.accepted.map(item=>{
+  const shuffled=shuffleSingleAnswer(item.options,item.correct_index);
   const urls='\n\n§SOURCES§\n'+item.references
     .map(r=>[r.kind,r.title,r.organization,r.year,r.url].join('|||')).join('\n');
   return {
-    question:item.question,options:item.options,correct_index:item.correct_index,
+    question:item.question,options:shuffled.options,correct_index:shuffled.correctIndex,
     topic:item.topic,
     correction:item.correction+medicalImageCorrectionSuffix(item.image_request,item.illustration_query)+urls
   };
