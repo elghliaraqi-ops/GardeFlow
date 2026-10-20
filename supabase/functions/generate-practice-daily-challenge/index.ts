@@ -6,7 +6,7 @@ import {medicalEvidencePolicy,findOpenverseMedicalPreview} from './medical_evide
 import {medicalImageSchema,medicalImagePrompt,emptyMedicalImageRequest,medicalImageCorrectionSuffix} from './medical_image_contract.ts';
 
 const topics=['motif','symptome','examen','imagerie','synthese','prise_en_charge','orientation','avis_specialise'];
-const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology'];
+const specialties=['cardiology','acute abdominal surgery','respiratory medicine','neurology','urology','gastroenterology','emergency medicine','infectious diseases','endocrinology','nephrology','pediatrics','obstetrics','orthopedics','critical care','hematology','dermatology','radiology','rheumatology','psychiatry','otorhinolaryngology'];
 // Prompts and data contract share one count and one set of fields.
 const referenceSchema={type:'object',additionalProperties:false,required:['url'],properties:{url:{type:'string'}}};
 const itemSchema={type:'object',additionalProperties:false,
@@ -20,12 +20,12 @@ function dailyBatchSchema(count:number){
  return {type:'object',additionalProperties:false,required:['qcms'],
   properties:{qcms:{type:'array',minItems:count,maxItems:count,items:itemSchema}}};
 }
-function dailyJsonContract(count:number):string{
+function dailyJsonContract(count:number,firstSourceId:number):string{
  const sample={qcms:Array.from({length:1},(_,i)=>({
   question:'REMPLACER par une vraie question médicale '+(i+1),
   options:['Proposition clinique A','Proposition clinique B','Proposition clinique C','Proposition clinique D'],
   correct_index:0,correction:'REMPLACER par une explication clinique conforme aux sources fournies.',
-  topic:'examen',references:[],source_ids:[1],image_search_query:'',image_request:emptyMedicalImageRequest}))};
+  topic:'examen',references:[],source_ids:[firstSourceId],image_search_query:'',image_request:emptyMedicalImageRequest}))};
  return 'CONTRAT JSON : '+count+' QCM dans un objet racine contenant uniquement qcms. '+
   'Champs exacts pour chaque QCM : '+Object.keys(itemSchema.properties).join(', ')+'. '+
   'references peut être [] car source_ids (1 à 3 indices de la bibliographie vérifiée) suffit. '+
@@ -43,6 +43,19 @@ function canon(value:unknown):string {
 }
 function cleanKey(value:string):string {return value.toLowerCase().replace(/\s+/g,' ').trim();}
 function numericSeed(s:string):number {let v=2166136261;for(const c of s){v^=c.charCodeAt(0);v=Math.imul(v,16777619);}return v>>>0;}
+function chooseSpecialties(day:string,mode:string):string[]{
+ // Five disjoint groups of four: adjacent dates never reuse the same specialty.
+ const dayNumber=Math.floor(Date.parse(day+'T00:00:00Z')/86400000);
+ const group=((dayNumber%5)+5)%5;
+ const picked=specialties.slice(group*4,group*4+4);
+ if(picked.length!==4)throw Error('specialty_schedule_invalid');
+ const shift=numericSeed(day+mode)%4;
+ return [...picked.slice(shift),...picked.slice(0,shift)];
+}
+function groupForQuestion(index:number):number {
+ if(index<0||index>=10)throw Error('question_index_invalid');
+ return index<3?0:index<6?1:index<8?2:3;
+}
 function cors(req:Request):HeadersInit {return {'Access-Control-Allow-Origin':req.headers.get('Origin')??'*','Access-Control-Allow-Headers':'authorization,apikey,content-type,x-client-info','Access-Control-Allow-Methods':'POST,OPTIONS'};}
 function send(req:Request,obj:Record<string,unknown>,status=200):Response {
  return new Response(JSON.stringify(obj),{status,headers:{...cors(req),'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -139,9 +152,9 @@ async function newGroqBatch(
  }finally{clearTimeout(timer);}
 }
 
-async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>)
+async function checkAndFormat(batch:Record<string,unknown>,refs:Ref[],seen:Set<string>,allowedByPosition:number[][])
  :Promise<Record<string,unknown>[]>{
- const result=validateDailyBatch(batch,refs,seen);
+ const result=validateDailyBatch(batch,refs,seen,allowedByPosition);
  for(const reason of result.rejected)
   console.warn('daily_ai_question_rejected',reason);
  // Image visuals are retrieved only when the learner opens a correction.
@@ -189,11 +202,20 @@ Deno.serve(async(req:Request)=>{
    let questions:Record<string,unknown>[]=[];
    let caseTitle='',caseStem='';
    let caseStages:{title:string;narrative:string}[]=[];
-   const specialty=specialties[numericSeed(date+mode)%specialties.length];
-   const refs=await literature(specialty);
-   if(!refs.length)throw Error('literature_unavailable');
-   const refList=refs.slice(0,8).map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url} | Résumé : ${r.abstract??''}`).join('\n');
-   const imagingContext=await radiologyAssistantContext(specialty+' '+refList.slice(0,1500));
+   const picked=chooseSpecialties(date,mode);
+   // Four parallel Europe PMC lookups, but still exactly ONE Groq call.
+   const literatureGroups=await Promise.all(picked.map(literature));
+   const refs:Ref[]=[];
+   const scopedSourceIds:number[][]=[];
+   for(const group of literatureGroups){
+    if(!group.length)throw Error('literature_unavailable');
+    const ids:number[]=[];
+    for(const reference of group.slice(0,2)){refs.push(reference);ids.push(refs.length);}
+    scopedSourceIds.push(ids);
+   }
+   // Eight sources maximum: preserve source_ids range 1..8 in the JSON contract.
+   const refList=refs.map((r,i)=>`[${i+1}] ${r.title} | ${r.year} | ${r.url} | Résumé : ${(r.abstract??'').slice(0,340)}`).join('\n');
+   const imagingContext=await radiologyAssistantContext(picked.join(' ')+' '+refList.slice(0,1200));
    const common=imagingContext+medicalEvidencePolicy+'\nSOURCES NUMÉROTÉES VÉRIFIÉES :\n'+refList+
     '\nChaque question est inédite, niveau internat, avec correction détaillée (3-5 phrases) '+ 
     'fondée sur ces sources et sans données personnelles. '+ 
@@ -224,17 +246,26 @@ Deno.serve(async(req:Request)=>{
     const missing=10-questions.length;
     if(missing>0){
      if(runtimeDeadline-Date.now()<20000)throw Error('generation_time_budget');
+     const plan=Array.from({length:missing},(_,i)=>{
+      const position=questions.length+i;
+      const group=groupForQuestion(position);
+      return {number:position+1,specialty:picked[group],sourceIds:scopedSourceIds[group]};
+     });
+     const planText=plan.map((entry,i)=>'QCM '+(i+1)+' (position '+entry.number+'/10) : spécialité UNIQUEMENT '+entry.specialty+
+       ', source_ids obligatoires parmi ['+entry.sourceIds.join(',')+'], references: [].').join('\n');
      const prompt='Crée EXACTEMENT '+missing+
-      ' QCM IA NOUVEAUX de cours, niveau internat, en français, discipline '+specialty+
-      '. EN UN SEUL LOT : questions 1 à 5 sur diagnostic, démarche clinique, examens et interprétation; '+
-      'questions 6 à 10 sur traitements, recommandations, complications et suivi. '+
-      'Varie les catégories et évite les doublons. Ne répète pas : '+
-      questions.map(q=>String(q.question)).join(' / ')+'. '+
-      common+'\\n'+dailyJsonContract(missing);
-     // Strictly one Groq request: no backup model, no silent automatic retry.
+      ' QCM IA NOUVEAUX de cours, niveau internat, en français, en UN SEUL LOT JSON. '+
+      'Respecte strictement cet ordre des spécialités sans mélange ni inversion. '+
+      'Une seule bonne réponse par QCM, correction de 3 à 5 phrases, '+
+      'et 1 à 2 source_ids du groupe assigné (jamais une autre spécialité). '+
+      'Diversifie diagnostic, examens, imagerie, traitements et suivi. '+
+      'PLAN QUESTION PAR QUESTION :\n'+planText+'\n'+
+      'Ne répète pas : '+questions.map(q=>String(q.question)).join(' / ')+'. '+
+      common+'\n'+dailyJsonContract(missing,plan[0].sourceIds[0]);
+     // One and only one Groq request; no extra retry, model or completion budget.
      const result=await newGroqBatch(prompt,dailyBatchSchema(missing),undefined,
       Math.min(82000,runtimeDeadline-Date.now()-2000));
-     const accepted=await checkAndFormat(result,refs,new Set(seen));
+     const accepted=await checkAndFormat(result,refs,new Set(seen),plan.map(p=>p.sourceIds));
      for(const q of accepted){
       const fp=dailyQcmFingerprint(q.question);
       if(seen.has(fp))continue;

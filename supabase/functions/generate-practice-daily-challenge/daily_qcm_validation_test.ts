@@ -82,3 +82,23 @@ Deno.test('lot de dix QCM validé en entier sans couper les deux derniers',()=>{
  assertEquals(result.accepted.length,10);
  assertEquals(result.rejected.length,0);
 });
+
+Deno.test('un lot multispécialité utilise les références de chaque discipline',()=>{
+ const result=validateDailyBatch({qcms:[q(1),{...q(2),source_ids:[2]}]},
+  references,new Set(),[[1],[2]]);
+ assertEquals(result.accepted.length,2);
+ assertEquals(result.rejected,[]);
+ assertEquals(result.accepted[1].references[0].url,references[1].url);
+});
+Deno.test('refuse les sources valides mais appartenant à une autre discipline',()=>{
+ const result=validateDailyBatch({qcms:[q(1),q(2)]},
+  references,new Set(),[[1],[2]]);
+ assertEquals(result.accepted.length,1);
+ assertEquals(result.rejected,[{position:2,reason:'specialty_source_mismatch'}]);
+});
+Deno.test('refuse les URLs bibliographiques hors spécialité',()=>{
+ const mixed={...q(1),references:[{url:references[1].url}]};
+ const result=validateDailyBatch({qcms:[mixed]},references,new Set(),[[1]]);
+ assertEquals(result.accepted.length,0);
+ assertEquals(result.rejected[0].reason,'specialty_source_mismatch');
+});

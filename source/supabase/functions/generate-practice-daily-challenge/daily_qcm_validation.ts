@@ -18,7 +18,7 @@ function canon(v:unknown):string{
 export function dailyQcmFingerprint(value:unknown):string{
  return String(value??'').toLowerCase().replace(/\s+/g,' ').trim();
 }
-export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>):{
+export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>,allowedByPosition?:number[][]):{
  accepted:DailyCandidate[];rejected:Rejection[]
 }{
  const input=raw&&typeof raw==='object'?raw as Record<string,unknown>:null;
@@ -52,12 +52,22 @@ export function validateDailyBatch(raw:unknown, refs:DailyRef[],seen:Set<string>
     permitted.push(refs[n-1]);
   }
   const references=[...new Map(permitted.map(r=>[canon(r.url),r])).values()].slice(0,3);
+  // Optional strict source scope for mixed-specialty QCMs; legacy callers unchanged.
+  const allowed=allowedByPosition?.[index];
+  const validScope=!allowed||(
+   refsById.length>=1&&refsById.every(id=>typeof id==='number'&&Number.isInteger(id)&&allowed.includes(id))&&
+   refsByUrl.every(source=>{
+    const u=source&&typeof source==='object'?(source as Record<string,unknown>).url:undefined;
+    return allowed.some(id=>canon(refs[id-1]?.url)===canon(u));
+   })
+  );
   const failure=question.length<12?'question_too_short':
    options.length!==4?'option_count':
    options.some(x=>x.length<1)?'empty_option':
    new Set(options.map(dailyQcmFingerprint)).size!==4?'duplicate_options':
    correction.length<25?'correction_too_short':
    !Number.isInteger(correct)||correct<0||correct>3?'invalid_answer_index':
+   !validScope?'specialty_source_mismatch':
    seen.has(fingerprint)?'duplicate_question':'';
   if(failure){rejected.push({position,reason:failure});continue;}
   if(accepted.length===10)break;
