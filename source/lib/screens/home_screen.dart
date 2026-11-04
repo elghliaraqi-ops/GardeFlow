@@ -4049,14 +4049,14 @@ class _MonthBar extends StatelessWidget {
         statusFg = Colors.white;
         break;
       case PlanningMonthStatus.submitted:
-        statusLabel = 'Soumis · en attente';
+        statusLabel = 'À finaliser';
         statusIcon = Icons.hourglass_top_rounded;
         statusBg = const Color(0xFFF3A712);
         statusFg = Colors.white;
         break;
       case PlanningMonthStatus.rejected:
         reopenReason = record?.rejectionReason?.trim();
-        statusLabel = 'À corriger';
+        statusLabel = 'À revalider';
         statusIcon = Icons.error_outline_rounded;
         statusBg = const Color(0xFFB3261E);
         statusFg = Colors.white;
@@ -4076,7 +4076,8 @@ class _MonthBar extends StatelessWidget {
     final canSubmit =
         !isPastMonth &&
         (status == PlanningMonthStatus.draft ||
-            status == PlanningMonthStatus.rejected);
+            status == PlanningMonthStatus.rejected ||
+            status == PlanningMonthStatus.submitted);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(10, 4, 10, 4),
@@ -4156,7 +4157,7 @@ class _MonthBar extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
-                  'Validation automatique : 7 jours après la publication ou le remplacement du planning officiel.',
+                  'Votre confirmation valide immédiatement le planning. Les demandes de congé restent soumises à une approbation séparée.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.inkSoft,
@@ -4186,22 +4187,22 @@ class _MonthBar extends StatelessWidget {
         detail = 'Le mois est verrouillé. Un administrateur peut supprimer une garde validée ou rouvrir le calendrier pour correction.';
         break;
       case PlanningMonthStatus.submitted:
-        title = 'Calendrier soumis';
-        detail = 'Le mois est figé en attente d’une validation finale par un administrateur. À défaut, l’auto-validation peut intervenir à J+7 du planning officiel.';
+        title = 'Ancien calendrier soumis';
+        detail = 'Ce mois a été soumis avant la nouvelle règle. Confirmez sa validation pour le rendre définitif sans intervention administrative.';
         break;
       case PlanningMonthStatus.rejected:
         title = 'Calendrier à corriger';
         detail =
-            'Motif : ${reopenReason?.isNotEmpty == true ? reopenReason : 'correction demandée par l’administration'}. Corrigez les tuiles puis soumettez à nouveau le mois.';
+            'Motif : ${reopenReason?.isNotEmpty == true ? reopenReason : 'correction demandée'}. Corrigez les tuiles puis validez à nouveau le mois.';
         break;
       case PlanningMonthStatus.draft:
         if (reopenReason != null && reopenReason.isNotEmpty) {
           title = 'Calendrier rouvert par un administrateur';
           detail =
-              'Motif : $reopenReason. Modifiez vos tuiles puis soumettez à nouveau le mois.';
+              'Motif : $reopenReason. Modifiez vos tuiles puis validez à nouveau le mois.';
         } else {
           title = 'Calendrier en préparation';
-          detail = 'Placez vos tuiles Service, Urgences et Congé puis soumettez le mois. Il sera ensuite validé par un administrateur ou automatiquement à J+7 du planning officiel.';
+          detail = 'Placez vos tuiles Service, Urgences et Congé, puis validez vous-même le mois. Le planning devient immédiatement officiel et verrouillé.';
         }
         break;
     }
@@ -4279,11 +4280,10 @@ class _ValidateButton extends StatelessWidget {
           final confirm = await showDialog<bool>(
             context: context,
             builder: (dialogContext) => AlertDialog(
-              title: const Text('Soumettre ce calendrier ?'),
+              title: const Text('Valider définitivement ce calendrier ?'),
               content: const Text(
-                'Après soumission, le mois sera figé en attente de validation finale. '
-                'Un administrateur pourra l’approuver ou demander une correction. '
-                'À défaut, l’auto-validation reste possible à J+7 du planning officiel. '
+                'Votre planning sera validé immédiatement et verrouillé, '
+                'sans approbation supplémentaire par un administrateur. '
                 'Les tuiles Congé seront envoyées séparément à l’administration pour approbation.',
               ),
               actions: [
@@ -4293,7 +4293,7 @@ class _ValidateButton extends StatelessWidget {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('Soumettre'),
+                  child: const Text('Valider'),
                 ),
               ],
             ),
@@ -4302,10 +4302,10 @@ class _ValidateButton extends StatelessWidget {
           final err = await appState.submitMyPlanningMonth(month);
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(err ?? 'Calendrier soumis à validation.')),
+            SnackBar(content: Text(err ?? 'Calendrier validé définitivement.')),
           );
         },
-        child: const Text('Soumettre'),
+        child: const Text('Valider'),
       ),
     );
   }
