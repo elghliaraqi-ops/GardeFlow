@@ -754,25 +754,6 @@ class SupabaseBackendService {
     return <String>[result.toString()];
   }
 
-  Future<void> reviewPlanningMonth({
-    required String ownerId,
-    required int year,
-    required int month,
-    required String action,
-    String? reason,
-  }) async {
-    await client.rpc(
-      'review_planning_month',
-      params: {
-        'p_owner_id': ownerId,
-        'p_year': year,
-        'p_month': month,
-        'p_action': action,
-        'p_reason': reason,
-      },
-    );
-  }
-
   Future<void> adminReopenPlanningMonth({
     required String ownerId,
     required int year,
