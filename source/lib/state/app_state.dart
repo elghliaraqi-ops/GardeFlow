@@ -648,8 +648,8 @@ class AppState extends ChangeNotifier {
       return false;
     }
     final status = myPlanningMonth(month)?.status ?? PlanningMonthStatus.draft;
-    // Un mois soumis est figé en attente de validation finale. Un mois
-    // rejeté redevient modifiable afin que le médecin puisse le corriger.
+    // Les anciens mois soumis restent verrouillés jusqu'à leur validation
+    // directe par le médecin. Un mois rejeté redevient modifiable.
     return status == PlanningMonthStatus.draft ||
         status == PlanningMonthStatus.rejected;
   }
@@ -1496,7 +1496,7 @@ class AppState extends ChangeNotifier {
     }
     final status = myPlanningMonth(date)?.status ?? PlanningMonthStatus.draft;
     if (status == PlanningMonthStatus.submitted)
-      return 'Ce calendrier est soumis et en attente de validation finale. Il ne peut plus être modifié.';
+      return 'Ce calendrier a déjà été soumis. Validez-le dans Mon planning avant toute autre modification.';
     if (status == PlanningMonthStatus.approved)
       return 'Ce calendrier est validé définitivement. Utilisez ensuite transfert/échange ou contactez un administrateur.';
     final existing = myEntryForDate(dateStr);
@@ -1585,7 +1585,7 @@ class AppState extends ChangeNotifier {
     final date = DateTime.parse(entry.dateStr);
     final status = myPlanningMonth(date)?.status ?? PlanningMonthStatus.draft;
     if (status == PlanningMonthStatus.submitted)
-      return 'Ce calendrier est soumis et en attente de validation finale. Il ne peut plus être modifié.';
+      return 'Ce calendrier a déjà été soumis. Validez-le dans Mon planning avant toute autre modification.';
     if (status == PlanningMonthStatus.approved)
       return 'Un calendrier validé ne peut plus être modifié directement. Seul un administrateur peut supprimer une garde validée.';
     if (isApprovedLeaveEntry(entry))
@@ -1623,8 +1623,8 @@ class AppState extends ChangeNotifier {
     if (first.isBefore(currentFirst))
       return 'Un calendrier d’un mois passé ne peut plus être validé.';
     final status = myPlanningMonth(month)?.status ?? PlanningMonthStatus.draft;
-    if (status == PlanningMonthStatus.submitted)
-      return 'Ce calendrier est déjà soumis et attend sa validation finale.';
+    // Les mois encore « soumis » sur d'anciens clients peuvent être
+    // finalisés directement par leur propriétaire.
     if (status == PlanningMonthStatus.approved)
       return 'Ce calendrier est déjà validé définitivement.';
     try {
@@ -1642,11 +1642,11 @@ class AppState extends ChangeNotifier {
           me.id,
           month.year,
           month.month,
-          PlanningMonthStatus.submitted,
+          PlanningMonthStatus.approved,
         );
         r.submittedAt = DateTime.now();
-        r.reviewedAt = null;
-        r.reviewedBy = null;
+        r.reviewedAt = DateTime.now();
+        r.reviewedBy = me.id;
         r.rejectionReason = null;
         final prefix =
             '${month.year}-${month.month.toString().padLeft(2, '0')}-';
@@ -1692,61 +1692,11 @@ class AppState extends ChangeNotifier {
         }
         _persist();
         rescheduleAllReminders();
-      }
-      return null;
-    } catch (e) {
-      return 'Soumission du calendrier impossible : $e';
-    }
-  }
-
-  Future<String?> reviewPlanningMonth(
-    AppUser doctor,
-    DateTime month, {
-    required bool approve,
-    String? reason,
-  }) async {
-    final me = currentUser;
-    if (me == null || me.role != UserRole.admin) {
-      return 'Action réservée à l’administrateur.';
-    }
-    final record = planningMonthForUser(doctor.id, month.year, month.month);
-    if (record?.status != PlanningMonthStatus.submitted) {
-      return 'Ce calendrier n’est plus en attente de validation.';
-    }
-    if (doctor.id == me.id || doctor.phone == me.phone) {
-      return 'Un administrateur ne peut pas valider ou rejeter son propre calendrier.';
-    }
-    final cleanReason = reason?.trim() ?? '';
-    if (!approve && cleanReason.length < 3) {
-      return 'Indiquez un motif de rejet.';
-    }
-    try {
-      if (backendEnabled) {
-        await SupabaseBackendService.instance.reviewPlanningMonth(
-          ownerId: doctor.id,
-          year: month.year,
-          month: month.month,
-          action: approve ? 'approve' : 'reject',
-          reason: approve ? null : cleanReason,
-        );
-        await _reloadFromBackend();
-        if (approve) await rescheduleAllReminders();
-      } else {
-        record!
-          ..status = approve
-              ? PlanningMonthStatus.approved
-              : PlanningMonthStatus.rejected
-          ..reviewedAt = DateTime.now()
-          ..reviewedBy = me.id
-          ..rejectionReason = approve ? null : cleanReason;
-        _persist();
         notifyListeners();
       }
       return null;
     } catch (e) {
-      return approve
-          ? 'Validation finale impossible : $e'
-          : 'Rejet du calendrier impossible : $e';
+      return 'Validation du calendrier impossible : $e';
     }
   }
 
