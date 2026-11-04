@@ -280,26 +280,6 @@ class _AdminScreenState extends State<AdminScreen> {
                 doctor: selectedDoctor,
                 month: _visibleMonth,
                 record: monthRecord,
-                onApprove:
-                    monthRecord?.status == PlanningMonthStatus.submitted &&
-                            selectedDoctor.id != appState.currentUser?.id
-                        ? () => _confirmReviewPlanningMonth(
-                              context,
-                              appState,
-                              selectedDoctor,
-                              approve: true,
-                            )
-                        : null,
-                onReject:
-                    monthRecord?.status == PlanningMonthStatus.submitted &&
-                            selectedDoctor.id != appState.currentUser?.id
-                        ? () => _confirmReviewPlanningMonth(
-                              context,
-                              appState,
-                              selectedDoctor,
-                              approve: false,
-                            )
-                        : null,
                 onReopen: monthRecord?.status == PlanningMonthStatus.approved &&
                         !DateTime(
                           _visibleMonth.year,
@@ -338,74 +318,6 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _confirmReviewPlanningMonth(
-    BuildContext context,
-    AppState appState,
-    AppUser doctor, {
-    required bool approve,
-  }) async {
-    if (_adminActionOpen) return;
-    _adminActionOpen = true;
-    final month = _visibleMonth;
-    final monthLabel = _capitalize(DateFormat.yMMMM('fr_FR').format(month));
-    try {
-      String? reason;
-      if (approve) {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Valider définitivement ce calendrier ?'),
-            content: Text(
-              '${doctor.fullName} · $monthLabel. Le mois sera verrouillé et les échanges/transferts pourront ensuite utiliser ses gardes validées.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Annuler'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Approuver'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed != true || !context.mounted) return;
-      } else {
-        reason = await showDialog<String>(
-          context: context,
-          builder: (_) => AdminReasonDialog(
-            title: 'Demander une correction ?',
-            subject: '${doctor.fullName} · $monthLabel',
-            explanation:
-                'Le calendrier redeviendra modifiable. Les demandes de congé encore en attente créées par cette soumission seront annulées et recréées à la prochaine soumission.',
-            actionLabel: 'Rejeter et rouvrir',
-          ),
-        );
-        if (reason == null || !context.mounted) return;
-      }
-      final error = await appState.reviewPlanningMonth(
-        doctor,
-        month,
-        approve: approve,
-        reason: reason,
-      );
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error ??
-                (approve
-                    ? 'Calendrier validé définitivement.'
-                    : 'Correction demandée au médecin.'),
-          ),
-        ),
-      );
-    } finally {
-      _adminActionOpen = false;
-    }
   }
 
   Future<void> _confirmReopenPlanningMonth(
@@ -1034,16 +946,12 @@ class _PlanningValidationBar extends StatelessWidget {
   final AppUser doctor;
   final DateTime month;
   final PlanningMonth? record;
-  final VoidCallback? onApprove;
-  final VoidCallback? onReject;
   final VoidCallback? onReopen;
 
   const _PlanningValidationBar({
     required this.doctor,
     required this.month,
     required this.record,
-    this.onApprove,
-    this.onReject,
     this.onReopen,
   });
 
@@ -1067,10 +975,8 @@ class _PlanningValidationBar extends StatelessWidget {
         fg = AppColors.congeText;
         break;
       case PlanningMonthStatus.submitted:
-        label = 'Calendrier soumis · validation requise';
-        detail = doctor.id == context.read<AppState>().currentUser?.id
-            ? 'Votre propre calendrier doit être validé par un autre administrateur ou par l’auto-validation J+7.'
-            : 'Vérifiez le mois puis approuvez-le ou demandez une correction.';
+        label = 'Ancien calendrier soumis · à finaliser';
+        detail = 'Le médecin doit confirmer la validation depuis Mon planning. Aucune approbation administrateur n’est requise.';
         icon = Icons.hourglass_top_rounded;
         bg = const Color(0xFFF3A712).withOpacity(0.16);
         fg = const Color(0xFF9A6200);
@@ -1090,7 +996,7 @@ class _PlanningValidationBar extends StatelessWidget {
             : 'Calendrier en préparation';
         detail = record?.rejectionReason?.trim().isNotEmpty == true
             ? 'Motif : ${record!.rejectionReason!.trim()}'
-            : '${doctor.fullName} peut encore modifier ses tuiles avant soumission.';
+            : '${doctor.fullName} peut encore modifier ses tuiles avant sa validation personnelle.';
         icon = Icons.edit_calendar_outlined;
         bg = AppColors.paperAlt;
         fg = AppColors.ink;
@@ -1120,29 +1026,6 @@ class _PlanningValidationBar extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(detail, style: Theme.of(context).textTheme.bodySmall),
-          if (status == PlanningMonthStatus.submitted &&
-              (onApprove != null || onReject != null)) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
-              children: [
-                if (onReject != null)
-                  OutlinedButton.icon(
-                    onPressed: onReject,
-                    icon: const Icon(Icons.edit_calendar_outlined, size: 16),
-                    label: const Text('Demander correction'),
-                  ),
-                if (onApprove != null)
-                  FilledButton.icon(
-                    onPressed: onApprove,
-                    icon: const Icon(Icons.verified_rounded, size: 16),
-                    label: const Text('Approuver'),
-                  ),
-              ],
-            ),
-          ],
           if (status == PlanningMonthStatus.approved && onReopen != null)
             Align(
               alignment: Alignment.centerRight,
